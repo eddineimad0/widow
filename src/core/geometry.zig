@@ -1,32 +1,3 @@
-// Failed Generic attempt.
-// pub fn WidowSize(comptime T: type) type {
-//     return struct {
-//         width: T,
-//         height: T,
-//
-//         const Self = @This();
-//
-//         pub fn init(width: T, height: T) !Self {
-//             if (width < 0 or height < 0) {
-//                 return WidowSizeError.NegativeSize;
-//             }
-//             return Self{
-//                 .width = width,
-//                 .height = height,
-//             };
-//         }
-//
-//         pub fn scale(self: *Self, scaler: f64) !void {
-//             if (scaler < 0.0) {
-//                 return WidowSizeError.NegativeScaler;
-//             }
-//             self.width = @ceil((@intToFloat(f64, self.width) * scaler));
-//             self.height = @ceil((@intToFloat(f64, self.height) * scaler));
-//         }
-//     };
-// }
-//
-
 pub const WidowPoint2D = struct {
     x: i32,
     y: i32,
@@ -90,5 +61,30 @@ pub const WidowFSize = struct {
     pub fn scale(self: *Self, scaler: f64) void {
         self.width = self.width * scaler;
         self.height = self.height * scaler;
+    }
+};
+
+pub const WidowArea = struct {
+    top_left: WidowPoint2D,
+    size: WidowSize,
+
+    const Self = @This();
+    pub fn init(x: i32, y: i32, width: i32, height: i32) Self {
+        return Self{
+            .top_left = WidowPoint2D.init(x, y),
+            .size = WidowSize.init(width, height),
+        };
+    }
+};
+
+pub const WidowFArea = struct {
+    top_left: WidowFPoint2D,
+    size: WidowFSize,
+    const Self = @This();
+    pub fn init(x: f64, y: f64, width: f64, height: f64) Self {
+        return Self{
+            .top_left = WidowFPoint2D.init(x, y),
+            .size = WidowFSize.init(width, height),
+        };
     }
 };
