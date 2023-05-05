@@ -1,8 +1,5 @@
 const std = @import("std");
-
-const deps = struct {
-    const Win32api = std.build.PkgConfigPkg{ .name = "win32api", .path = "./libs/zigwin32/win32.zig" };
-};
+const builting = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
@@ -17,7 +14,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lib = b.addStaticLibrary(.{
-        .name = "windowing",
+        .name = "widow",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/main.zig" },
@@ -25,19 +22,27 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    if (builting.os.tag == .windows) {
+        const win32api = b.createModule(.{
+            .source_file = .{ .path = "libs/zigwin32/win32.zig" },
+        });
+        lib.addModule("win32", win32api);
+    }
     lib.linkLibC();
     lib.install();
 
-    // Creates a step for unit testing.
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "src/test_aggregator.zig" },
         .target = target,
         .optimize = optimize,
     });
 
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build test`
-    // This will evaluate the `test` step rather than the default, which is "install".
+    if (builting.os.tag == .windows) {
+        const win32api = b.createModule(.{
+            .source_file = .{ .path = "libs/zigwin32/win32.zig" },
+        });
+        main_tests.addModule("win32", win32api);
+    }
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&main_tests.step);
 }
