@@ -12,22 +12,22 @@ const PROCESS_DPI_AWARENESS = win32api.ui.hi_dpi.PROCESS_DPI_AWARENESS;
 const DPI_AWARENESS_CONTEXT = win32api.ui.hi_dpi.DPI_AWARENESS_CONTEXT;
 const MONITOR_DPI_TYPE = win32api.ui.hi_dpi.MONITOR_DPI_TYPE;
 
-pub const proc_SetProcessDPIAware = *fn () callconv(winabi) BOOL;
-pub const proc_RtlVerifyVersionInfo = *fn (*OSVERSIONINFOEXW, u32, u64) callconv(winabi) NTSTATUS;
-pub const proc_SetProcessDpiAwareness = *fn (PROCESS_DPI_AWARENESS) callconv(winabi) HRESULT;
-pub const proc_SetProcessDpiAwarenessContext = *fn (DPI_AWARENESS_CONTEXT) callconv(winabi) HRESULT;
-pub const proc_GetDpiForMonitor = *fn (
+pub const proc_SetProcessDPIAware = *const fn () callconv(winabi) BOOL;
+pub const proc_RtlVerifyVersionInfo = *const fn (*OSVERSIONINFOEXW, u32, u64) callconv(winabi) NTSTATUS;
+pub const proc_SetProcessDpiAwareness = *const fn (PROCESS_DPI_AWARENESS) callconv(winabi) HRESULT;
+pub const proc_SetProcessDpiAwarenessContext = *const fn (DPI_AWARENESS_CONTEXT) callconv(winabi) HRESULT;
+pub const proc_GetDpiForMonitor = *const fn (
     HMONITOR,
     MONITOR_DPI_TYPE,
     *u32,
     *u32,
 ) callconv(winabi) HRESULT;
-pub const proc_GetDpiForWindow = *fn (HWND) callconv(winabi) u32;
-pub const proc_AdjustWindowRectExForDpi = *fn (
+pub const proc_GetDpiForWindow = *const fn (HWND) callconv(winabi) u32;
+pub const proc_AdjustWindowRectExForDpi = *const fn (
     *RECT,
     u32,
     i32,
     u32,
     u32,
 ) callconv(winabi) BOOL;
-pub const EnableNonClientDpiScaling = *fn (HWND) callconv(winabi) BOOL;
+pub const proc_EnableNonClientDpiScaling = *const fn (HWND) callconv(winabi) BOOL;
