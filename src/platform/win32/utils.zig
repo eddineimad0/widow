@@ -16,16 +16,19 @@ pub fn wide_strz_cmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
     return true;
 }
 
+pub fn str_cmp(str_a: []const u8, str_b: []const u8) bool {
+    return std.mem.eql(u8, str_a, str_b);
+}
+
 /// Returns a pointer to well formed Utf16 string for use with windows `Wide` api functions.
 pub fn utf8_to_wide(allocator: std.mem.Allocator, utf8_string: []const u8) ![:0]u16 {
     return try std.unicode.utf8ToUtf16LeWithNull(allocator, utf8_string);
 }
 
-/// Replacement for the `MAKEINTOATOM` macro in the windows api.
-pub fn make_into_atom(i: u16) ?[*:0]const u16 {
-    return @intToPtr(?[*:0]const u16, @intCast(usize, i));
-}
-
-pub fn str_cmp(str_a: []const u8, str_b: []const u8) bool {
-    return std.mem.eql(u8, str_a, str_b);
+/// Replacement for the `MAKEINTATOM` macro in the windows api.
+/// # Note
+/// Some functions signature in the zigwin32 library needed modification
+/// for this to work.
+pub fn make_int_atom(comptime T: type, atom: T) ?[*:0]align(1) const T {
+    return @intToPtr(?[*:0]align(1) const T, @as(usize, atom));
 }
