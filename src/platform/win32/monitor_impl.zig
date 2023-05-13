@@ -242,7 +242,7 @@ pub const MonitorImpl = struct {
 
     // For now it's easier to deallocate
     // the monitors if deinit takes a const pointer.
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: *Self) void {
         // Hack since both self.name and self.modes
         // use the same allocator.
         self.modes.allocator.free(self.name);
@@ -334,6 +334,18 @@ pub const MonitorImpl = struct {
         );
         self.mode_changed = false;
     }
+
+    pub fn debug_out(self: *Self) void {
+        std.debug.print("Handle:{}\n", .{@ptrToInt(self.handle)});
+        var adapter_name: [32 * 5]u8 = undefined;
+        _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
+        std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
+        std.debug.print("video modes:", .{});
+        for (self.modes.items) |*monitor| {
+            std.debug.print("{}", .{monitor.*});
+        }
+        std.debug.print("\n mode change : {}\n", .{self.mode_changed});
+    }
 };
 
 //
@@ -392,6 +404,7 @@ test "changing_primary_video_mode" {
         all_monitors.deinit();
     }
     var primary_monitor = &all_monitors.items[0];
+    primary_monitor.debug_out();
     const monitor_dpi = monitor_content_scale(primary_monitor.handle, null);
     std.debug.print("Monitor DPI:{}\n", .{monitor_dpi});
     std.debug.print("Current Video Mode: {}\n", .{primary_monitor.query_current_mode()});
