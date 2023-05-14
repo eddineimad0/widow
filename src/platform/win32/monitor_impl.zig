@@ -25,7 +25,6 @@ fn enum_monitor_proc(
     _: ?*win32_fndation.RECT,
     data: win32_fndation.LPARAM,
 ) callconv(win_abi) win32_fndation.BOOL {
-    // TODO: Code Smell.
     var data_ptr = @intToPtr(*LparamTuple, @intCast(usize, data));
     // the EnumDisplayMonitor function will return the handles of all poll_monitors
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
@@ -42,7 +41,6 @@ fn enum_monitor_proc(
 
 /// Returns the handle used by the system to identify the monitor.
 fn query_system_handle(display_adapter: []const u16) ?win32_gdi.HMONITOR {
-    // TODO: Code Smell.
     var dm: win32_gdi.DEVMODEW = undefined;
     dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
     dm.dmDriverExtra = 0;
@@ -68,11 +66,12 @@ pub fn poll_monitors(allocator: Allocator) !Arraylist(MonitorImpl) {
     var monitors = try Arraylist(MonitorImpl).initCapacity(allocator, 4);
     errdefer monitors.deinit();
     var display_device: win32_gdi.DISPLAY_DEVICEW = undefined;
+    display_device.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
     var display_adapter: win32_gdi.DISPLAY_DEVICEW = undefined;
+    display_adapter.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
     var i: u32 = 0;
     var j: u32 = undefined;
     while (true) {
-        display_adapter.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
         if (win32_gdi.EnumDisplayDevicesW(null, i, &display_adapter, 0) == 0) {
             // End of enumeration.
             break;
@@ -86,7 +85,6 @@ pub fn poll_monitors(allocator: Allocator) !Arraylist(MonitorImpl) {
 
         j = 0;
         while (true) {
-            display_device.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
             if (win32_gdi.EnumDisplayDevicesW(@ptrCast([*:0]const u16, &display_adapter.DeviceName), j, &display_device, 0) == 0) {
                 // End of enumeration.
                 break;
@@ -106,7 +104,9 @@ pub fn poll_monitors(allocator: Allocator) !Arraylist(MonitorImpl) {
             // Query for the video modes.
             var modes = try poll_video_modes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
-            var display_name = try std.unicode.utf16leToUtf8Alloc(allocator, &display_device.DeviceName);
+            std.debug.print("Device Name array {any}\n", .{display_device.DeviceName});
+            var display_name = try utils.wide_to_utf8(allocator, &display_device.DeviceName);
+            std.debug.print("Device Name slice {any}\n", .{display_name});
             errdefer allocator.free(display_name);
             try monitors.append(MonitorImpl.init(
                 handle,
@@ -337,7 +337,7 @@ pub const MonitorImpl = struct {
 
     pub fn debug_out(self: *Self) void {
         std.debug.print("Handle:{}\n", .{@ptrToInt(self.handle)});
-        var adapter_name: [32 * 5]u8 = undefined;
+        var adapter_name = std.mem.zeroes([32 * 3]u8);
         _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
         std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
         std.debug.print("video modes:", .{});
