@@ -177,7 +177,7 @@ const Internals = struct {
 
         errdefer {
             _ = win32_window_messaging.UnregisterClassW(
-                utils.make_into_atom(u16, self.win32.handles.main_class),
+                utils.make_int_atom(u16, self.win32.handles.main_class),
                 self.win32.handles.hinstance,
             );
         }
@@ -248,10 +248,11 @@ const Internals = struct {
         // Unregister the window class.
         if (self.win32.handles.main_class != 0) {
             _ = win32_window_messaging.UnregisterClassW(
-                utils.make_into_atom(u16, self.win32.handles.main_class),
+                utils.make_int_atom(u16, self.win32.handles.main_class),
                 self.win32.handles.hinstance,
             );
         }
+
         if (self.win32.handles.helper_class != 0) {
             if (self.win32.handles.helper_window != null) {
                 // Clear up the monitor map refrence
@@ -259,7 +260,7 @@ const Internals = struct {
                 _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
             }
             _ = win32_window_messaging.UnregisterClassW(
-                utils.make_into_atom(u16, self.win32.handles.helper_class),
+                utils.make_int_atom(u16, self.win32.handles.helper_class),
                 self.win32.handles.hinstance,
             );
         }
@@ -377,7 +378,7 @@ fn register_window_class(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
     const wide_class_name = try utils.utf8_to_wide(allocator, WINDOW_CLASS_NAME);
-    defer allocator.free(wide_class_name);
+    // defer allocator.free(wide_class_name); No need.
     window_class.lpszClassName = wide_class_name.ptr;
     window_class.hIcon = null;
     //     match icon_id {
@@ -426,7 +427,7 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
     const wide_class_name = try utils.utf8_to_wide(allocator, HELPER_CLASS_NAME);
-    defer allocator.free(wide_class_name);
+    // defer allocator.free(wide_class_name);
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
@@ -434,12 +435,12 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
     }
     errdefer {
         _ = win32_window_messaging.UnregisterClassW(
-            utils.make_into_atom(u16, helper_handle.*),
+            utils.make_int_atom(u16, helper_handle.*),
             hinstance,
         );
     }
     const helper_title = try utils.utf8_to_wide(allocator, HELPER_TITLE);
-    defer allocator.free(helper_title);
+    // defer allocator.free(helper_title);
     helper_window.* = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
         wide_class_name,
