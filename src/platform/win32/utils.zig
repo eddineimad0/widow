@@ -20,9 +20,25 @@ pub fn str_cmp(str_a: []const u8, str_b: []const u8) bool {
     return std.mem.eql(u8, str_a, str_b);
 }
 
-/// Returns a pointer to well formed Utf16 string for use with windows `Wide` api functions.
-pub fn utf8_to_wide(allocator: std.mem.Allocator, utf8_string: []const u8) ![:0]u16 {
-    return try std.unicode.utf8ToUtf16LeWithNull(allocator, utf8_string);
+/// Returns a slice to well formed Utf16 null terminated string.
+/// for use with windows `Wide` api functions.
+pub fn utf8_to_wide(allocator: std.mem.Allocator, utf8_str: []const u8) ![:0]u16 {
+    return std.unicode.utf8ToUtf16LeWithNull(allocator, utf8_str);
+}
+
+/// Returns a slice to a well formed utf8 string.
+pub fn wide_to_utf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
+    var zero_idx: usize = 0;
+    for (wide_str, 0..) |c, idx| {
+        if (c == 0) {
+            zero_idx = idx;
+            break;
+        }
+    }
+    if (zero_idx == 0) {
+        return error.MalformedWideString;
+    }
+    return std.unicode.utf16leToUtf8Alloc(allocator, wide_str.ptr[0..zero_idx]);
 }
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
