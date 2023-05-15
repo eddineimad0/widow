@@ -8,10 +8,12 @@ const Widow = struct {
     const Self = @This();
     pub fn init(allocator: std.mem.Allocator) !Self {
         var self: Self = undefined;
-        self.internals = try platform.internals.Internals.init(allocator);
+        self.internals = try platform.internals.Internals.init();
         errdefer self.internals.deinit();
         self.devices = try platform.internals.PhysicalDevices.init(allocator);
         self.allocator = allocator;
+
+        return self;
     }
 
     pub fn deinit(self: *Self) void {
