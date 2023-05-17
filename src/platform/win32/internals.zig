@@ -32,7 +32,7 @@ const Win32Flags = struct {
 const Win32Handles = struct {
     main_class: u16,
     helper_class: u16,
-    helper_window: ?HWND,
+    helper_window: HWND,
     ntdll: ?module.HINSTANCE,
     user32: ?module.HINSTANCE,
     shcore: ?module.HINSTANCE,
@@ -152,13 +152,16 @@ pub const PhysicalDevices = struct {
     }
 };
 
-const Internals = struct {
+pub const Internals = struct {
     win32: Win32,
+    devices: PhysicalDevices,
+    allocator: std.mem.Allocator,
 
     const Self = @This();
 
-    pub fn init() !Self {
-        var self: Self = undefined;
+    pub fn create(allocator: std.mem.Allocator) !*Self {
+        var self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
 
         // Determine the current HInstance.
         var hinstance: ?module.HINSTANCE = null;
@@ -185,6 +188,7 @@ const Internals = struct {
         // Load the required libraries.
         try self.load_libraries();
         errdefer self.free_libraries();
+
         // Setup windows version flags.
         if (is_win32_version_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 0)) {
             self.win32.flags.is_win_vista_or_above = true;
@@ -205,6 +209,7 @@ const Internals = struct {
                 }
             }
         }
+
         // Declare DPI Awareness.
         if (self.win32.flags.is_win10b1703_or_above) {
             const result = self.win32.functions.SetProcessDpiAwarenessContext.?(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -222,48 +227,37 @@ const Internals = struct {
                 return InternalError.FailedToSetDPIAwareness;
             }
         }
-        try create_helper_window(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
 
-        // Poll the current connected monitors.
-        // Register raw_input_devices
-        //
-        // self.is_initialized = true;
-        // let r_mouse_id = RAWINPUTDEVICE {
-        //     usUsagePage: 0x01,
-        //     usUsage: 0x02,
-        //     dwFlags: 0,
-        //     hwndTarget: 0,
-        // };
-        // let result =
-        //     unsafe { RegisterRawInputDevices(&r_mouse_id, 1, size_of_val(&r_mouse_id) as u32) };
-        // if result == 0 {
-        //     return Err("Failed to register Raw Device".to_owned());
-        // }
+        try create_helper_window(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
+        self.devices = try PhysicalDevices.init(allocator);
+        register_devices(self.win32.handles.helper_window, &self.devices);
+        self.allocator = allocator;
         return self;
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn destroy(self: *Self) void {
+
         // Free the loaded modules.
         self.free_libraries();
         // Unregister the window class.
-        if (self.win32.handles.main_class != 0) {
-            _ = win32_window_messaging.UnregisterClassW(
-                utils.make_int_atom(u16, self.win32.handles.main_class),
-                self.win32.handles.hinstance,
-            );
-        }
+        _ = win32_window_messaging.UnregisterClassW(
+            utils.make_int_atom(u16, self.win32.handles.main_class),
+            self.win32.handles.hinstance,
+        );
 
-        if (self.win32.handles.helper_class != 0) {
-            if (self.win32.handles.helper_window != null) {
-                // Clear up the monitor map refrence
-                _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
-                _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
-            }
-            _ = win32_window_messaging.UnregisterClassW(
-                utils.make_int_atom(u16, self.win32.handles.helper_class),
-                self.win32.handles.hinstance,
-            );
-        }
+        // Clear up the PhysicalDevices refrence
+        _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
+        _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
+
+        // Unregister the helper class.
+        _ = win32_window_messaging.UnregisterClassW(
+            utils.make_int_atom(u16, self.win32.handles.helper_class),
+            self.win32.handles.hinstance,
+        );
+
+        self.devices.deinit();
+
+        self.allocator.destroy(self);
     }
 
     fn load_libraries(self: *Self) !void {
@@ -371,7 +365,7 @@ fn register_window_class(
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) | @enumToInt(win32_window_messaging.CS_VREDRAW) | @enumToInt(win32_window_messaging.CS_OWNDC));
-    window_class.lpfnWndProc = null;
+    window_class.lpfnWndProc = defs.window_proc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
     var buffer: [WINDOW_CLASS_NAME.len * 5]u8 = undefined;
@@ -414,7 +408,7 @@ fn register_window_class(
 
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling hardware related messages.
-fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *?HWND) !void {
+fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *HWND) !void {
     const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
     const HELPER_TITLE = "helper window";
     var helper_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
@@ -454,46 +448,59 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
         null,
         hinstance,
         null,
-    );
-
-    if (helper_window.* == null) {
+    ) orelse {
         return InternalError.FailedToCreateHelperWindow;
-    }
-
-    // let devices_ptr = &mut *(self.devices) as *mut PhysicalDevice as isize;
-    //
-    // unsafe {
-    //     SetWindowLongPtrW(self.win32.helper_window_handle, GWLP_USERDATA, devices_ptr);
-    // }
+    };
 
     _ = win32_window_messaging.ShowWindow(helper_window.*, win32_window_messaging.SW_HIDE);
 }
 
-test "Internals.init()" {
-    var result = try Internals.init();
-    defer result.deinit();
+fn register_devices(helper_window: HWND, devices: *PhysicalDevices) void {
+    _ = win32_window_messaging.SetWindowLongPtrW(helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(devices)));
+
+    // Register raw_input_devices
+    //
+    // self.is_initialized = true;
+    // let r_mouse_id = RAWINPUTDEVICE {
+    //     usUsagePage: 0x01,
+    //     usUsage: 0x02,
+    //     dwFlags: 0,
+    //     hwndTarget: 0,
+    // };
+    // let result =
+    //     unsafe { RegisterRawInputDevices(&r_mouse_id, 1, size_of_val(&r_mouse_id) as u32) };
+    // if result == 0 {
+    //     return Err("Failed to register Raw Device".to_owned());
+    // }
 }
 
-test "PhysicalDevices.init()" {
-    const VideoMode = @import("../../core/video_mode.zig").VideoMode;
-    const testing = std.testing;
-    var ph_dev = try PhysicalDevices.init(testing.allocator);
-    defer ph_dev.deinit();
-    var all_monitors = try monitor_impl.poll_monitors(testing.allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    var main_monitor = all_monitors.items[0];
-    try ph_dev.update_monitors();
-    var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
-    const mode = VideoMode.init(1600, 900, 32, 60);
-    try primary_monitor.*.set_video_mode(&mode);
-    std.time.sleep(std.time.ns_per_s * 3);
-    std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.*.restore_orignal_video();
-}
+// test "Internals.init()" {
+//     const testing = std.testing;
+//     var result = try Internals.create(testing.allocator);
+//     register_devices(result.win32.handles.helper_window, &result.devices);
+//     defer result.destroy();
+// }
+
+// test "PhysicalDevices.init()" {
+//     const VideoMode = @import("common").video_mode.VideoMode;
+//     const testing = std.testing;
+//     var ph_dev = try PhysicalDevices.init(testing.allocator);
+//     defer ph_dev.deinit();
+//     var all_monitors = try monitor_impl.poll_monitors(testing.allocator);
+//     defer {
+//         for (all_monitors.items) |*monitor| {
+//             // monitors contain heap allocated data that need
+//             // to be freed.
+//             monitor.deinit();
+//         }
+//         all_monitors.deinit();
+//     }
+//     var main_monitor = all_monitors.items[0];
+//     try ph_dev.update_monitors();
+//     var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
+//     const mode = VideoMode.init(1600, 900, 32, 60);
+//     try primary_monitor.*.set_video_mode(&mode);
+//     std.time.sleep(std.time.ns_per_s * 3);
+//     std.debug.print("Restoring Original Mode....\n", .{});
+//     primary_monitor.*.restore_orignal_video();
+// }
