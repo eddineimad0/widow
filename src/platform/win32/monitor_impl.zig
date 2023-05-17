@@ -1,20 +1,20 @@
 // use windows_sys::Win32::{
 //     Foundation::{BOOL, FALSE, HWND, LPARAM, RECT, S_OK, TRUE},
 const std = @import("std");
-const Arraylist = std.ArrayList;
-const Allocator = std.mem.Allocator;
-const win_abi = std.os.windows.WINAPI;
 const win32api = @import("win32");
+const utils = @import("./utils.zig");
+const defs = @import("./defs.zig");
+const win_abi = std.os.windows.WINAPI;
 const MDT_EFFECTIVE_DPI = win32api.ui.hi_dpi.MDT_EFFECTIVE_DPI;
 const USER_DEFAULT_SCREEN_DPI = win32api.ui.windows_and_messaging.USER_DEFAULT_SCREEN_DPI;
 const win32_gdi = win32api.graphics.gdi;
 const win32_fndation = win32api.foundation;
-const VideoMode = @import("../../core/video_mode.zig").VideoMode;
-const utils = @import("./utils.zig");
-const WidowPoint2D = @import("../../core/geometry.zig").WidowPoint2D;
-const WidowSize = @import("../../core/geometry.zig").WidowSize;
-const WidowArea = @import("../../core/geometry.zig").WidowArea;
-const defs = @import("./defs.zig");
+const VideoMode = @import("common").video_mode.VideoMode;
+const WidowPoint2D = @import("common").geometry.WidowPoint2D;
+const WidowSize = @import("common").geometry.WidowSize;
+const WidowArea = @import("common").geometry.WidowArea;
+const Arraylist = std.ArrayList;
+const Allocator = std.mem.Allocator;
 
 /// We'll use this type to pass data to the `enum_monitor_proc` function.
 const LparamTuple = std.meta.Tuple(&.{ ?win32_gdi.HMONITOR, []const u16 });
@@ -104,9 +104,7 @@ pub fn poll_monitors(allocator: Allocator) !Arraylist(MonitorImpl) {
             // Query for the video modes.
             var modes = try poll_video_modes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
-            std.debug.print("Device Name array {any}\n", .{display_device.DeviceName});
             var display_name = try utils.wide_to_utf8(allocator, &display_device.DeviceName);
-            std.debug.print("Device Name slice {any}\n", .{display_name});
             errdefer allocator.free(display_name);
             try monitors.append(MonitorImpl.init(
                 handle,
