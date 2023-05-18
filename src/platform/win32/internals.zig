@@ -58,7 +58,6 @@ const Win32 = struct {
 
 pub const InternalError = error{
     FailedToGetModuleHandle,
-    FailedToSetDPIAwareness,
     FailedToCreateHelperWindow,
     FailedToRegisterWindowClass,
 };
@@ -67,7 +66,7 @@ pub const PhysicalDevices = struct {
     monitors_map: std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unwanted updates.
-    allocator: std.mem.Allocator,
+    // allocator: std.mem.Allocator,
     const Self = @This();
 
     /// Initialize the `PhysicalDevices` struct.
@@ -76,7 +75,6 @@ pub const PhysicalDevices = struct {
             .monitors_map = std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl).init(allocator),
             .used_monitors = 0,
             .expected_video_change = false,
-            .allocator = allocator,
         };
         var monitors = try monitor_impl.poll_monitors(allocator);
         defer monitors.deinit();
@@ -105,7 +103,7 @@ pub const PhysicalDevices = struct {
     /// Updates the monitor map by removing all disconnected monitors
     /// and adding new connected ones.
     pub fn update_monitors(self: *Self) !void {
-        const all_monitors = try monitor_impl.poll_monitors(self.allocator);
+        const all_monitors = try monitor_impl.poll_monitors(self.monitors_map.allocator);
         // used in case of an error to free the remaining monitors.
         var i: usize = 0;
         defer all_monitors.deinit();
@@ -155,7 +153,7 @@ pub const PhysicalDevices = struct {
 pub const Internals = struct {
     win32: Win32,
     devices: PhysicalDevices,
-    allocator: std.mem.Allocator,
+    // allocator: std.mem.Allocator,
 
     const Self = @This();
 
@@ -172,6 +170,7 @@ pub const Internals = struct {
         ) == 0) {
             return InternalError.FailedToGetModuleHandle;
         }
+
         self.win32.handles.hinstance = hinstance.?;
         // Register the window class
         self.win32.handles.main_class = try register_window_class(
@@ -212,33 +211,24 @@ pub const Internals = struct {
 
         // Declare DPI Awareness.
         if (self.win32.flags.is_win10b1703_or_above) {
-            const result = self.win32.functions.SetProcessDpiAwarenessContext.?(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-            if (result == 0) {
-                return InternalError.FailedToSetDPIAwareness;
-            }
+            _ = self.win32.functions.SetProcessDpiAwarenessContext.?(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         } else if (self.win32.flags.is_win8point1_or_above) {
-            const result = self.win32.functions.SetProcessDpiAwareness.?(PROCESS_PER_MONITOR_DPI_AWARE);
-            if (result != 0) {
-                return InternalError.FailedToSetDPIAwareness;
-            }
+            _ = self.win32.functions.SetProcessDpiAwareness.?(PROCESS_PER_MONITOR_DPI_AWARE);
         } else if (self.win32.flags.is_win_vista_or_above) {
-            const result = self.win32.functions.SetProcessDPIAware.?();
-            if (result == 0) {
-                return InternalError.FailedToSetDPIAwareness;
-            }
+            _ = self.win32.functions.SetProcessDPIAware.?();
         }
 
         try create_helper_window(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
         self.devices = try PhysicalDevices.init(allocator);
         register_devices(self.win32.handles.helper_window, &self.devices);
-        self.allocator = allocator;
         return self;
     }
 
-    pub fn destroy(self: *Self) void {
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
 
         // Free the loaded modules.
         self.free_libraries();
+
         // Unregister the window class.
         _ = win32_window_messaging.UnregisterClassW(
             utils.make_int_atom(u16, self.win32.handles.main_class),
@@ -247,6 +237,7 @@ pub const Internals = struct {
 
         // Clear up the PhysicalDevices refrence
         _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
+
         _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
 
         // Unregister the helper class.
@@ -257,7 +248,7 @@ pub const Internals = struct {
 
         self.devices.deinit();
 
-        self.allocator.destroy(self);
+        allocator.destroy(self);
     }
 
     fn load_libraries(self: *Self) !void {
@@ -372,7 +363,6 @@ fn register_window_class(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
     const wide_class_name = try utils.utf8_to_wide(allocator, WINDOW_CLASS_NAME);
-    // defer allocator.free(wide_class_name); No need.
     window_class.lpszClassName = wide_class_name.ptr;
     window_class.hIcon = null;
     //     match icon_id {
@@ -421,7 +411,6 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
     const wide_class_name = try utils.utf8_to_wide(allocator, HELPER_CLASS_NAME);
-    // defer allocator.free(wide_class_name);
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
@@ -434,7 +423,6 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
         );
     }
     const helper_title = try utils.utf8_to_wide(allocator, HELPER_TITLE);
-    // defer allocator.free(helper_title);
     helper_window.* = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
         wide_class_name,
@@ -478,9 +466,9 @@ fn register_devices(helper_window: HWND, devices: *PhysicalDevices) void {
 //     const testing = std.testing;
 //     var result = try Internals.create(testing.allocator);
 //     register_devices(result.win32.handles.helper_window, &result.devices);
-//     defer result.destroy();
+//     defer result.destroy(testing.allocator);
 // }
-
+//
 // test "PhysicalDevices.init()" {
 //     const VideoMode = @import("common").video_mode.VideoMode;
 //     const testing = std.testing;
