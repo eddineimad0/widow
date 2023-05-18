@@ -1,5 +1,3 @@
-// use windows_sys::Win32::{
-//     Foundation::{BOOL, FALSE, HWND, LPARAM, RECT, S_OK, TRUE},
 const std = @import("std");
 const win32api = @import("win32");
 const utils = @import("./utils.zig");
@@ -178,38 +176,32 @@ pub fn query_monitor_info(handle: win32_gdi.HMONITOR) win32_gdi.MONITORINFO {
     return mi;
 }
 
-pub fn monitor_content_scale(
+pub fn monitor_dpi(
     monitor_handle: win32_gdi.HMONITOR,
     proc: ?defs.proc_GetDpiForMonitor,
-) f32 {
-    var scale_x: u32 = undefined;
-    var scale_y: u32 = undefined;
+    win8point1_or_above: bool,
+) u32 {
+    var dpi_x: u32 = undefined;
+    var dpi_y: u32 = undefined;
 
-    if (proc) |GetDpiForMonitor| {
+    if (win8point1_or_above) {
         // [win32api docs]
         // This API is not DPI aware and should not be used if the calling thread is per-monitor DPI aware.
         // For the DPI-aware version of this API, see GetDpiForWindow.
-        if (GetDpiForMonitor(
-            monitor_handle,
-            MDT_EFFECTIVE_DPI,
-            &scale_x,
-            &scale_y,
-        ) != win32_fndation.S_OK) {
+        if (proc.?(monitor_handle, MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32_fndation.S_OK) {
             return 0.0;
         }
     } else {
         const device_cntxt = win32_gdi.GetDC(null);
-        scale_x = @intCast(u32, win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSX));
-        scale_y = @intCast(u32, win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSY));
+        dpi_x = @intCast(u32, win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSX));
+        dpi_y = @intCast(u32, win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSY));
         _ = win32_gdi.ReleaseDC(null, device_cntxt);
     }
     // [Winapi docs]
     // The values of *dpiX and *dpiY are identical.
     // You only need to record one of the values to
     // determine the DPI and respond appropriately.
-
-    return @intToFloat(f32, scale_x) / @intToFloat(f32, USER_DEFAULT_SCREEN_DPI);
-    //scale_y as f64 / USER_DEFAULT_SCREEN_DPI as f64,
+    return dpi_x;
 }
 
 pub const MonitorImpl = struct {
@@ -403,8 +395,6 @@ test "changing_primary_video_mode" {
     }
     var primary_monitor = &all_monitors.items[0];
     primary_monitor.debug_out();
-    const monitor_dpi = monitor_content_scale(primary_monitor.handle, null);
-    std.debug.print("Monitor DPI:{}\n", .{monitor_dpi});
     std.debug.print("Current Video Mode: {}\n", .{primary_monitor.query_current_mode()});
     std.debug.print("Full Resolution: {}\n", .{primary_monitor.fullscreen_area()});
     std.debug.print("Changing Video Mode....\n", .{});
