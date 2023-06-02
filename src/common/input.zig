@@ -238,20 +238,19 @@ pub const KeyModifiers = struct {
 pub const KeyAction = enum(u8) {
     Press,
     Release,
-    Hold,
+    const Self = @This();
+    pub inline fn isPress(self: *const Self) bool {
+        return self.* == KeyAction.Press;
+    }
+
+    pub inline fn isRelease(self: *const Self) bool {
+        return self.* == KeyAction.Release;
+    }
 };
 
 pub const MouseButtonAction = KeyAction;
 // impl KeyAction {
 //     #[inline]
-//     pub fn is_press(&self) -> bool {
-//         return *self == KeyAction::Press;
-//     }
-//
-//     #[inline]
-//     pub fn is_release(&self) -> bool {
-//         return !self.is_press();
-//     }
 // }
 
 pub const MouseButton = enum(u8) {
@@ -263,20 +262,18 @@ pub const MouseButton = enum(u8) {
     MOUSE_BUTTONS_NUMBER,
 };
 
-pub const MouseWheel = enum(u1) {
+pub const MouseWheel = enum(u8) {
     VerticalWheel,
     HorizontalWheel,
-};
+    const Self = @This();
+    pub inline fn isVertical(self: *const Self) bool {
+        return self.* == MouseWheel.VerticalWheel;
+    }
 
-//  MouseWheel {
-//     pub fn is_vertical(&self) -> bool {
-//         *self == MouseWheel::VerticalWheel
-//     }
-//
-//     pub fn is_horizontal(&self) -> bool {
-//         *self == MouseWheel::HorizontalWheel
-//     }
-// }
+    pub inline fn isHorizontal(self: *const Self) bool {
+        return self.* == MouseWheel.HorizontalWheel;
+    }
+};
 
 pub const InputState = struct {
     keys: [@enumToInt(ScanCode.NUMBER_OF_KEYS)]KeyAction,
@@ -284,18 +281,8 @@ pub const InputState = struct {
     const Self = @This();
     pub fn init() Self {
         return Self{
-            .keys = [@enumToInt(ScanCode.NUMBER_OF_KEYS)]KeyAction{KeyAction.Release},
-            .mouse_buttons = [@enumToInt(MouseButton.MOUSE_BUTTONS_NUMBER)]KeyAction{KeyAction.Release},
+            .keys = [1]KeyAction{KeyAction.Release} ** @enumToInt(ScanCode.NUMBER_OF_KEYS),
+            .mouse_buttons = [1]MouseButtonAction{MouseButtonAction.Release} ** @enumToInt(MouseButton.MOUSE_BUTTONS_NUMBER),
         };
     }
 };
-
-// impl Default for InputState {
-//     fn default() -> Self {
-//         Self {
-//             keys: [KeyAction::Release; NUMBER_OF_KEYS],
-//             mouse_buttons: [KeyAction::Release; MOUSE_BUTTONS_NUMBER],
-//         }
-//     }
-// }
-

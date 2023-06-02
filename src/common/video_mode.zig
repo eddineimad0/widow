@@ -25,7 +25,7 @@ pub const VideoMode = struct {
 
     /// this function returns the closest video mode to the `desired_mode`
     /// from a slice of supported video modes.
-    pub fn select_best_match(desired_mode: *const Self, modes: []const Self) *const Self {
+    pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) *const VideoMode {
         var ret_val = desired_mode;
         var size_diff: i32 = undefined;
         var width_diff: i32 = undefined;

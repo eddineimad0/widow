@@ -44,14 +44,14 @@ pub fn Queue(comptime T: type) type {
             current.next = node;
         }
 
-        /// Gets the first inserted item or returns `null` if there is none.
+        /// Gets the first item in the queue or returns `null` if there is none.
         pub fn get(self: *Self) ?*T {
             const head = self.head orelse return null;
             return &head.data;
         }
 
         /// Removes the first item from the queue, returns whether item was actually removed.
-        pub fn remove_front(self: *Self) bool {
+        pub fn removeFront(self: *Self) bool {
             const head = self.head orelse return false;
             self.head = head.next;
             self.allocator.destroy(head);
@@ -60,7 +60,7 @@ pub fn Queue(comptime T: type) type {
 
         /// Removes the first item in the queue and returns it's value,
         /// or returns `null` if there is none.
-        pub fn pop_front(self: *Self) ?T {
+        pub fn popFront(self: *Self) ?T {
             const first = self.get() orelse return null;
             const item = first.*;
             _ = self.remove_front();
@@ -80,9 +80,9 @@ test "Queue tests" {
     try int_queue.put(&int_array[4]);
     const first = int_queue.get();
     try testing.expect(first.?.* == 1);
-    const result = int_queue.remove_front();
+    const result = int_queue.removeFront();
     try testing.expect(result);
-    const second = int_queue.pop_front() orelse 0;
+    const second = int_queue.popFront() orelse 0;
     try testing.expect(second == 2);
     const third = int_queue.get();
     try testing.expect(third.?.* == 3);

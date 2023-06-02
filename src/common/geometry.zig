@@ -6,15 +6,6 @@ pub const WidowPoint2D = struct {
 pub const WidowFPoint2D = struct {
     x: f64,
     y: f64,
-
-    // const Self = @This();
-    //
-    // pub fn init(x: f64, y: f64) Self {
-    //     return Self{
-    //         .x = x,
-    //         .y = y,
-    //     };
-    // }
 };
 
 pub const WidowSize = struct {
@@ -23,16 +14,9 @@ pub const WidowSize = struct {
 
     const Self = @This();
 
-    // pub fn init(width: i32, height: i32) Self {
-    //     return Self{
-    //         .width = width,
-    //         .height = height,
-    //     };
-    // }
-
-    pub fn scale(self: *Self, comptime scaler: comptime_float) void {
-        self.width = @floatToInt(i32, (@intToFloat(@TypeOf(scaler), self.width) * scaler));
-        self.height = @floatToInt(i32, (@intToFloat(@TypeOf(scaler), self.height) * scaler));
+    pub fn scale(self: *Self, scaler: f64) void {
+        self.width = @floatToInt(i32, (@intToFloat(f64, self.width) * scaler));
+        self.height = @floatToInt(i32, (@intToFloat(f64, self.height) * scaler));
     }
 };
 
@@ -42,7 +26,7 @@ pub const WidowFSize = struct {
 
     const Self = @This();
 
-    pub fn scale(self: *Self, comptime scaler: comptime_float) void {
+    pub fn scale(self: *Self, comptime scaler: f64) void {
         self.width = self.width * scaler;
         self.height = self.height * scaler;
     }
@@ -72,3 +56,5 @@ pub const WidowFArea = struct {
         };
     }
 };
+
+pub const AspectRatio = WidowPoint2D;

@@ -1,11 +1,8 @@
-// use crate::platform::platform_impl;
-//     cursor::WidowCursor,
-//     input::InputState,
-//     types::{FullScreenMode, WidowPoint2D, WidowSize},
-
 const VideoMode = @import("./video_mode.zig").VideoMode;
 const WidowPoint2D = @import("./geometry.zig").WidowPoint2D;
 const WidowSize = @import("./geometry.zig").WidowSize;
+const InputState = @import("./input.zig").InputState;
+pub const AspectRatio = @import("./geometry.zig").AspectRatio;
 
 pub const WindowFlags = struct {
     is_visible: bool, // Does the window appear on screen or is it hidden from the user.
@@ -16,12 +13,38 @@ pub const WindowFlags = struct {
     is_topmost: bool, // Should the window be always on top of all active windows.
     is_focused: bool, // Does the window have keyboard and input focus.
     cursor_in_client: bool, // Is the cursor currently in client area.
+    allow_dpi_scaling: bool,
     accepts_raw_input: bool,
 };
 
 pub const FullScreenMode = enum(u8) {
     Borderless, // A fullScreen mode that simply resize the window.
     Exclusive, // A fullScreen mode with change in the display's video mode.
+};
+
+pub const CursorMode = enum(u8) {
+    Normal, // Default cursor mode.
+    Captured, // The cursor is restricted to the window area.
+    Disabled, // The cursor is disabled and hidden from the user.
+    const Self = @This();
+    pub inline fn isCaptured(self: *const Self) bool {
+        self.* == CursorMode.Captured;
+    }
+
+    pub inline fn isDisabled(self: *const Self) bool {
+        self.* == CursorMode.Disabled;
+    }
+};
+
+pub const CursorShape = enum(u8) {
+    Default, // Platform Default cursor.
+    Hand, // Hand with index pointing, used for links on web pages.
+    Crosshair, // Crosshair.
+    Help, // The `?` cursor.
+    Wait, // Indicate that the user should wait for program.
+    Loading, // Indicate that some processing is going on.
+    NotAllowed, // Indicate that the attempted action is not allowed.
+    Text, // Text input indicator.
 };
 
 pub const WindowData = struct {
@@ -31,11 +54,8 @@ pub const WindowData = struct {
     restore_point: ?WidowPoint2D, // Keeps track of where to restore the window when exiting
     min_size: ?WidowSize, // The minimum limits of the window's size.
     max_size: ?WidowSize, // The maximum limits of the window's size.
-    aspect_ratio: ?struct { i32, i32 }, // The (numerator,denominator) of the applied aspect ratio.
+    aspect_ratio: ?AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     fullscreen_mode: ?FullScreenMode,
-    // window.
-    // cursor: WidowCursor,              // The state of the window's cursor.
     flags: WindowFlags,
-    // input: InputState, // Both the keyboard and mouse buttons states.
-    // platform_data: platform_impl::platform_data::WindowData, // Platform specific
+    input: InputState, // Both the keyboard and mouse buttons states.
 };
