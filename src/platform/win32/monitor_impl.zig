@@ -262,11 +262,11 @@ pub const MonitorImpl = struct {
         );
     }
 
-    /// Return a WidowArea containing the total resolution
+    /// Sets the `area` parameter to the WidowArea containing the total resolution
     /// of the monitor.
-    pub inline fn fullscreen_area(self: *const Self) WidowArea {
+    pub inline fn fullscreenArea(self: *const Self, area: *WidowArea) void {
         var mi = queryMonitorInfo(self.handle);
-        return WidowArea.init(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top);
+        area.* = WidowArea.init(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top);
     }
 
     /// Determines if the desired VideoMode `mode` is possible with
@@ -283,30 +283,36 @@ pub const MonitorImpl = struct {
     /// Sets the monitor fullscreen video mode to the desired `mode`,
     /// or a mode close to it in case of the hardware not being compatible
     /// with the requested `mode`.
-    pub fn setVideoMode(self: *Self, mode: *const VideoMode) !void {
-        const possible_mode = if (self.is_mode_possible(mode) == true) mode else mode.selectBestMatch(self.modes.items);
+    /// # Note
+    /// if `mode` is null the monitor's original video mode is restored if it was changed.
+    pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
+        if (video_mode) |mode| {
+            const possible_mode = if (self.isModePossible(mode) == true) mode else mode.selectBestMatch(self.modes.items);
 
-        if (possible_mode.*.equals(&(self.query_current_mode()))) {
-            // the desired mode is already current.
-            return;
-        }
-
-        var dm: win32_gdi.DEVMODEW = undefined;
-        dm.dmDriverExtra = 0;
-        dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
-        dm.dmFields = win32_gdi.DM_PELSWIDTH | win32_gdi.DM_PELSHEIGHT | win32_gdi.DM_BITSPERPEL | win32_gdi.DM_DISPLAYFREQUENCY;
-        dm.dmPelsWidth = @intCast(u32, possible_mode.width);
-        dm.dmPelsHeight = @intCast(u32, possible_mode.height);
-        dm.dmBitsPerPel = @intCast(u32, possible_mode.color_depth);
-        dm.dmDisplayFrequency = @intCast(u32, possible_mode.frequency);
-        const result = win32_gdi.ChangeDisplaySettingsExW(@ptrCast([*:0]const u16, &self.adapter), &dm, null, win32_gdi.CDS_FULLSCREEN, null);
-
-        switch (result) {
-            win32_gdi.DISP_CHANGE_SUCCESSFUL => {
-                self.mode_changed = true;
+            if (possible_mode.*.equals(&(self.queryCurrentMode()))) {
+                // the desired mode is already current.
                 return;
-            },
-            else => return error.FailedToSwitchMonitorVideoMode,
+            }
+
+            var dm: win32_gdi.DEVMODEW = undefined;
+            dm.dmDriverExtra = 0;
+            dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
+            dm.dmFields = win32_gdi.DM_PELSWIDTH | win32_gdi.DM_PELSHEIGHT | win32_gdi.DM_BITSPERPEL | win32_gdi.DM_DISPLAYFREQUENCY;
+            dm.dmPelsWidth = @intCast(u32, possible_mode.width);
+            dm.dmPelsHeight = @intCast(u32, possible_mode.height);
+            dm.dmBitsPerPel = @intCast(u32, possible_mode.color_depth);
+            dm.dmDisplayFrequency = @intCast(u32, possible_mode.frequency);
+            const result = win32_gdi.ChangeDisplaySettingsExW(@ptrCast([*:0]const u16, &self.adapter), &dm, null, win32_gdi.CDS_FULLSCREEN, null);
+
+            switch (result) {
+                win32_gdi.DISP_CHANGE_SUCCESSFUL => {
+                    self.mode_changed = true;
+                    return;
+                },
+                else => return error.FailedToSwitchMonitorVideoMode,
+            }
+        } else if (self.mode_changed) {
+            self.restoreOrignalVideo();
         }
     }
 
@@ -327,13 +333,9 @@ pub const MonitorImpl = struct {
     /// Set the window Handle field
     pub fn setWindow(self: *Self, window: ?*WindowImpl) void {
         self.window = window;
-        if (window == null and self.mode_changed) {
-            self.restore_orignal_video();
-            self.mode_changed = false;
-        }
     }
 
-    pub fn debugOut(self: *Self) void {
+    pub fn debugInfos(self: *Self) void {
         std.debug.print("Handle:{}\n", .{@ptrToInt(self.handle)});
         var adapter_name = std.mem.zeroes([32 * 3]u8);
         _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
@@ -345,24 +347,6 @@ pub const MonitorImpl = struct {
         std.debug.print("\n mode change : {}\n", .{self.mode_changed});
     }
 };
-
-//
-//     #[inline]
-//     /// Notifies the window currently occupying the monitor
-//     /// to switch back to windowed mode.
-//     pub(super) fn notify_window_restore(&self) {
-//         match self.window_handle.get() {
-//             Some(handle) => {
-//                 const SC_RESTORE: u32 = 0xF120;
-//                 // the lparam parameter isn't used for SC_RESTORE
-//                 // we'll use it to figure out if the SC_RESTORE was triggred by us
-//                 unsafe { SendMessageW(handle, WM_SYSCOMMAND, SC_RESTORE as usize, -1) };
-//             }
-//             None => return,
-//         }
-//     }
-// }
-//
 
 test "monitor_impl_init_test" {
     const testing = std.testing;
@@ -392,13 +376,12 @@ test "changing_primary_video_mode" {
         all_monitors.deinit();
     }
     var primary_monitor = &all_monitors.items[0];
-    primary_monitor.debug_out();
-    std.debug.print("Current Video Mode: {}\n", .{primary_monitor.query_current_mode()});
-    std.debug.print("Full Resolution: {}\n", .{primary_monitor.fullscreen_area()});
+    primary_monitor.debugInfos();
+    std.debug.print("Current Video Mode: {}\n", .{primary_monitor.queryCurrentMode()});
     std.debug.print("Changing Video Mode....\n", .{});
     const mode = VideoMode.init(700, 400, 55, 24);
-    try primary_monitor.set_video_mode(&mode);
+    try primary_monitor.setVideoMode(&mode);
     std.time.sleep(std.time.ns_per_s * 3);
     std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.restore_orignal_video();
+    primary_monitor.restoreOrignalVideo();
 }
