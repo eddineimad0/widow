@@ -2,15 +2,12 @@ const std = @import("std");
 const winapi = @import("win32");
 const win32_system_data_exchange = winapi.system.data_exchange;
 const win32_system_memory = winapi.system.memory;
-const win32_globalization = winapi.globalization;
-const Internals = @import("internals.zig").Internals;
 const utf8ToWide = @import("utils.zig").utf8ToWide;
 const wideToUtf8 = @import("utils.zig").wideToUtf8;
 const HWND = winapi.foundation.HWND;
 const CF_UNICODETEXT: u32 = 13;
 
 pub const ClipboardError = error{
-    FailedToCopyClipboardText,
     FailedToOpenClipboard,
     FailedToAccessClipboardData,
     FailedToWriteToClipboard,
@@ -90,6 +87,7 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
 }
 
 test "clipboard_tests" {
+    const Internals = @import("internals.zig").Internals;
     const string = "Clipboard Test String 👌.";
     var internals = try Internals.create(std.testing.allocator);
     defer internals.destroy(std.testing.allocator);
