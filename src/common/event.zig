@@ -24,7 +24,7 @@ pub const EventType = enum(u8) {
 };
 
 pub const KeyEvent = struct {
-    virtualcode: input.VirtualKey,
+    virtualcode: input.VirtualCode,
     scancode: input.ScanCode,
     action: input.KeyAction,
     mods: input.KeyModifiers,
@@ -67,33 +67,41 @@ pub const Event = union(EventType) {
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
-    FileDrop: []std.fs.path,
+    FileDrop: std.ArrayList([]const u8),
 };
 
 pub inline fn createCloseEvent() Event {
     return Event.WindowClose;
 }
+
 pub inline fn createMaximizeEvent() Event {
     return Event.WindowMaximize;
 }
+
 pub inline fn createMinimizeEvent() Event {
     return Event.WindowMinimize;
 }
+
 pub inline fn createMouseEnterEvent() Event {
     return Event.MouseEnter;
 }
+
 pub inline fn createMouseLeftEvent() Event {
     return Event.MouseLeave;
 }
+
 pub inline fn createFocusEvent(focus: bool) Event {
     return Event{ .Focus = focus };
 }
+
 pub inline fn createResizeEvent(width: i32, height: i32) Event {
     return Event{ .WindowResize = geometry.WidowSize{ .width = width, .height = height } };
 }
+
 pub inline fn createMoveEvent(x: i32, y: i32) Event {
     return Event{ .WindowMove = geometry.WidowPoint2D{ .x = x, .y = y } };
 }
+
 pub inline fn createMouseMoveEvent(position: geometry.WidowPoint2D, raw: bool) Event {
     if (raw) {
         return Event{ .RawMouseMove = position };
@@ -101,18 +109,27 @@ pub inline fn createMouseMoveEvent(position: geometry.WidowPoint2D, raw: bool) E
         return Event{ .MouseMove = position };
     }
 }
+
 pub inline fn createMouseButtonEvent(button: input.MouseButton, action: input.MouseButtonAction, mods: input.KeyModifiers) Event {
     return Event{ .MouseButton = MouseButtonEvent{ .button = button, .action = action, .mods = mods } };
 }
-pub inline fn createKeyboardEvent(virtualcode: input.VirtualKey, scancode: input.ScanCode, action: input.KeyAction, mods: input.KeyModifiers) Event {
+
+pub inline fn createKeyboardEvent(virtualcode: input.VirtualCode, scancode: input.ScanCode, action: input.KeyAction, mods: input.KeyModifiers) Event {
     return Event{ .KeyBoard = KeyEvent{ .virtualcode = virtualcode, .scancode = scancode, .action = action, .mods = mods } };
 }
+
 pub inline fn createScrollEvent(wheel: input.MouseWheel, delta: f64) Event {
     return Event{ .MouseScroll = WheelEvent{ .wheel = wheel, .delta = delta } };
 }
+
 pub inline fn createDPIEvent(new_dpi: u32, new_scale: f64) Event {
     return Event{ .DPIChange = DPIChangeEvent{ .dpi = new_dpi, .scaler = new_scale } };
 }
+
 pub inline fn createCharEvent(codepoint: u32, mods: input.KeyModifiers) Event {
     return Event{ .Character = CharacterEvent{ .codepoint = @truncate(u21, codepoint), .mods = mods } };
+}
+
+pub inline fn createDropFileEvent(files_array: std.ArrayList([]const u8)) Event {
+    return Event{ .FileDrop = files_array };
 }

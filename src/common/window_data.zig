@@ -22,31 +22,6 @@ pub const FullScreenMode = enum(u8) {
     Exclusive, // A fullScreen mode with change in the display's video mode.
 };
 
-pub const CursorMode = enum(u8) {
-    Normal, // Default cursor mode.
-    Captured, // The cursor is restricted to the window area.
-    Disabled, // The cursor is disabled and hidden from the user.
-    const Self = @This();
-    pub inline fn isCaptured(self: *const Self) bool {
-        self.* == CursorMode.Captured;
-    }
-
-    pub inline fn isDisabled(self: *const Self) bool {
-        self.* == CursorMode.Disabled;
-    }
-};
-
-pub const CursorShape = enum(u8) {
-    Default, // Platform Default cursor.
-    Hand, // Hand with index pointing, used for links on web pages.
-    Crosshair, // Crosshair.
-    Help, // The `?` cursor.
-    Wait, // Indicate that the user should wait for program.
-    Loading, // Indicate that some processing is going on.
-    NotAllowed, // Indicate that the attempted action is not allowed.
-    Text, // Text input indicator.
-};
-
 pub const WindowData = struct {
     title: []const u8, // The window title.
     video: VideoMode, // The video mode of the window.

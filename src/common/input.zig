@@ -1,5 +1,5 @@
 /// The Symbolic name or representation of the keyboard key.
-pub const VirtualKey = enum(i32) {
+pub const VirtualCode = enum(i32) {
     Unknown, // Unknown key
     A, // The A key
     B, // The B key
@@ -41,7 +41,7 @@ pub const VirtualKey = enum(i32) {
     Control, // The left Control key
     Shift, // The left Shift key
     Alt, // The left Alt key
-    System, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    Meta, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
     LBracket, // The [ and { key
     RBracket, // The ] and } key
     Semicolon, // The ; and : key
@@ -149,11 +149,11 @@ pub const ScanCode = enum(i32) {
     LControl, // The left Control key
     LShift, // The left Shift key
     LAlt, // The left Alt key
-    LSystem, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    LMeta, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
     RControl, // The right Control key
     RShift, // The right Shift key
     RAlt, // The right Alt key
-    RSystem, // The right OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    RMeta, // The right OS specific key: window (Windows and Linux), apple (MacOS X), ...
     LBracket, // The [ and { key
     RBracket, // The ] and } key
     Semicolon, // The ; and : key
@@ -222,15 +222,14 @@ pub const ScanCode = enum(i32) {
     PrevTrack, // The |<< key
     PlayPause, // The play/pause key
     // END
-    NUMBER_OF_KEYS,
+    VALUES_COUNT,
 };
-// pub const NUMBER_OF_KEYS: usize = 112;
 
 pub const KeyModifiers = struct {
     shift: bool,
     ctrl: bool,
     alt: bool,
-    system_key: bool,
+    meta: bool,
     caps_lock: bool,
     num_lock: bool,
 };
@@ -249,9 +248,6 @@ pub const KeyAction = enum(u8) {
 };
 
 pub const MouseButtonAction = KeyAction;
-// impl KeyAction {
-//     #[inline]
-// }
 
 pub const MouseButton = enum(u8) {
     Left = 0, // Left Mouse Button.
@@ -259,7 +255,7 @@ pub const MouseButton = enum(u8) {
     Middle, // Middle Mouse Button.
     ExtraButton1, // Additional Mouse Button 1 (backward navigation).
     ExtraButton2, // Additional Mouse Button 2 (forward navigation).
-    MOUSE_BUTTONS_NUMBER,
+    VALUES_COUNT,
 };
 
 pub const MouseWheel = enum(u8) {
@@ -276,13 +272,13 @@ pub const MouseWheel = enum(u8) {
 };
 
 pub const InputState = struct {
-    keys: [@enumToInt(ScanCode.NUMBER_OF_KEYS)]KeyAction,
-    mouse_buttons: [@enumToInt(MouseButton.MOUSE_BUTTONS_NUMBER)]MouseButtonAction,
+    keys: [@enumToInt(ScanCode.VALUES_COUNT)]KeyAction,
+    mouse_buttons: [@enumToInt(MouseButton.VALUES_COUNT)]MouseButtonAction,
     const Self = @This();
     pub fn init() Self {
         return Self{
-            .keys = [1]KeyAction{KeyAction.Release} ** @enumToInt(ScanCode.NUMBER_OF_KEYS),
-            .mouse_buttons = [1]MouseButtonAction{MouseButtonAction.Release} ** @enumToInt(MouseButton.MOUSE_BUTTONS_NUMBER),
+            .keys = [1]KeyAction{KeyAction.Release} ** @enumToInt(ScanCode.VALUES_COUNT),
+            .mouse_buttons = [1]MouseButtonAction{MouseButtonAction.Release} ** @enumToInt(MouseButton.VALUES_COUNT),
         };
     }
 };

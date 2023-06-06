@@ -3,6 +3,9 @@ pub const WidowPoint2D = struct {
     y: i32,
 };
 
+// Shhhhhh.
+pub const AspectRatio = WidowPoint2D;
+
 pub const WidowFPoint2D = struct {
     x: f64,
     y: f64,
@@ -56,5 +59,3 @@ pub const WidowFArea = struct {
         };
     }
 };
-
-pub const AspectRatio = WidowPoint2D;
