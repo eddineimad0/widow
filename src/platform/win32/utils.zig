@@ -1,15 +1,15 @@
 const std = @import("std");
 const common = @import("common");
 const ScanCode = common.input.ScanCode;
-const VirtualKey = common.input.VirtualKey;
+const VirtualCode = common.input.VirtualCode;
 const KeyAction = common.input.KeyAction;
 const winapi = @import("win32");
 const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
 const win32_foundation = winapi.foundation;
 const window_impl = @import("window_impl.zig");
 
-/// For comparing c strings.
-pub fn wideStrzCmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
+/// For comparing wide c strings.
+pub fn wideStrZCmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
     var i: usize = 0;
     while (str_a[i] != 0 and str_b[i] != 0) {
         if (str_a[i] != str_b[i]) {
@@ -32,22 +32,29 @@ pub inline fn strCmp(str_a: []const u8, str_b: []const u8) bool {
 /// for use with windows `Wide` api functions.
 /// # Note
 /// The returned slice should be freed by the caller.
-pub fn utf8ToWide(allocator: std.mem.Allocator, utf8_str: []const u8) ![:0]u16 {
+pub inline fn utf8ToWideZ(allocator: std.mem.Allocator, utf8_str: []const u8) ![:0]u16 {
     return std.unicode.utf8ToUtf16LeWithNull(allocator, utf8_str);
+}
+
+/// Returns a slice to a well formed utf8 string.
+pub inline fn wideToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
+    return std.unicode.utf16leToUtf8Alloc(allocator, wide_str);
 }
 
 /// Returns a slice to a well formed utf8 string.
 /// # Note
 /// The returned slice should be freed by the caller.
-pub fn wideToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
-    var zero_idx: usize = 0;
-    while (wide_str[zero_idx] != 0) {
-        zero_idx += 1;
+/// If this function gets passed a non null terminated wide string,
+/// it will end up removing the last character.
+pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
+    var zero_indx: usize = 0;
+    while (wide_str.ptr[zero_indx] != 0) {
+        zero_indx += 1;
     }
     // utf16leToUtf8Alloc will allocate space for the null terminator,
     // and anything that comes after it in the slice
     // to save some memory indicate the new start and end of the slice
-    return std.unicode.utf16leToUtf8Alloc(allocator, wide_str.ptr[0..zero_idx]);
+    return wideToUtf8(allocator, wide_str.ptr[0..zero_indx]);
 }
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
@@ -86,12 +93,20 @@ pub inline fn isLowSurrogate(surrogate: u16) bool {
     return (surrogate >= 0xDC00 and surrogate <= 0xDFFF);
 }
 
+pub inline fn getLastError() u32 {
+    return @enumToInt(win32_foundation.GetLastError());
+}
+
+pub inline fn clearThreadError() void {
+    win32_foundation.SetLastError(@intToEnum(win32_foundation.WIN32_ERROR, 0));
+}
+
 pub fn getKeyModifiers() common.input.KeyModifiers {
     var mods = common.input.KeyModifiers{
         .shift = false,
         .ctrl = false,
         .alt = false,
-        .system_key = false,
+        .meta = false,
         .caps_lock = false,
         .num_lock = false,
     };
@@ -108,7 +123,7 @@ pub fn getKeyModifiers() common.input.KeyModifiers {
         (win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_LWIN)) | win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_RWIN))),
         15,
     )) {
-        mods.system_key = true;
+        mods.meta = true;
     }
     if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_CAPITAL)), 0)) {
         mods.caps_lock = true;
@@ -120,7 +135,7 @@ pub fn getKeyModifiers() common.input.KeyModifiers {
 }
 
 /// figure out the scancode and appropriate virtual key.
-pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualKey, ScanCode } {
+pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode } {
     const MAPVK_VK_TO_VSC = 0;
     // The extended bit is necessary to find the correct scancode
     var code: usize = @bitCast(usize, (lparam >> 16) & 0x1FF);
@@ -147,111 +162,111 @@ pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualKey, ScanCode } 
 }
 
 /// Maps a Windows virtual key code to a widow virtual Key Code.
-fn platformKeyToVirutal(keycode: u16) VirtualKey {
+fn platformKeyToVirutal(keycode: u16) VirtualCode {
     switch (keycode) {
-        @enumToInt(win32_keyboard_mouse.VK_SHIFT) => return VirtualKey.Shift,
-        @enumToInt(win32_keyboard_mouse.VK_CONTROL) => return VirtualKey.Control,
-        @enumToInt(win32_keyboard_mouse.VK_MENU) => return VirtualKey.Alt,
-        @enumToInt(win32_keyboard_mouse.VK_LWIN), @enumToInt(win32_keyboard_mouse.VK_RWIN) => return VirtualKey.System,
+        @enumToInt(win32_keyboard_mouse.VK_SHIFT) => return VirtualCode.Shift,
+        @enumToInt(win32_keyboard_mouse.VK_CONTROL) => return VirtualCode.Control,
+        @enumToInt(win32_keyboard_mouse.VK_MENU) => return VirtualCode.Alt,
+        @enumToInt(win32_keyboard_mouse.VK_LWIN), @enumToInt(win32_keyboard_mouse.VK_RWIN) => return VirtualCode.Meta,
         // Note: OEM keys are used for miscellanous characters
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
         @enumToInt(win32_keyboard_mouse.VK_OEM_1), @enumToInt(win32_keyboard_mouse.VK_OEM_2), @enumToInt(win32_keyboard_mouse.VK_OEM_3), @enumToInt(win32_keyboard_mouse.VK_OEM_4), @enumToInt(win32_keyboard_mouse.VK_OEM_5), @enumToInt(win32_keyboard_mouse.VK_OEM_6), @enumToInt(win32_keyboard_mouse.VK_OEM_7), @enumToInt(win32_keyboard_mouse.VK_OEM_102) => {
             return keyTextToVirtual(keycode);
         },
-        @enumToInt(win32_keyboard_mouse.VK_OEM_PLUS) => return VirtualKey.Equals,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_MINUS) => return VirtualKey.Hyphen,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_COMMA) => return VirtualKey.Comma,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_PERIOD) => return VirtualKey.Period,
-        @enumToInt(win32_keyboard_mouse.VK_ESCAPE) => return VirtualKey.Escape,
-        @enumToInt(win32_keyboard_mouse.VK_SPACE) => return VirtualKey.Space,
-        @enumToInt(win32_keyboard_mouse.VK_RETURN) => return VirtualKey.Return,
-        @enumToInt(win32_keyboard_mouse.VK_BACK) => return VirtualKey.Backspace,
-        @enumToInt(win32_keyboard_mouse.VK_TAB) => return VirtualKey.Tab,
-        @enumToInt(win32_keyboard_mouse.VK_CAPITAL) => return VirtualKey.CapsLock,
-        @enumToInt(win32_keyboard_mouse.VK_PRIOR) => return VirtualKey.PageUp,
-        @enumToInt(win32_keyboard_mouse.VK_NEXT) => return VirtualKey.PageDown,
-        @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT) => return VirtualKey.PrintScreen,
-        @enumToInt(win32_keyboard_mouse.VK_END) => return VirtualKey.End,
-        @enumToInt(win32_keyboard_mouse.VK_HOME) => return VirtualKey.Home,
-        @enumToInt(win32_keyboard_mouse.VK_INSERT) => return VirtualKey.Insert,
-        @enumToInt(win32_keyboard_mouse.VK_DELETE) => return VirtualKey.Delete,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_UP) => return VirtualKey.VolumeUp,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_DOWN) => return VirtualKey.VolumeDown,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_MUTE) => return VirtualKey.VolumeMute,
-        @enumToInt(win32_keyboard_mouse.VK_ADD) => return VirtualKey.Add,
-        @enumToInt(win32_keyboard_mouse.VK_SUBTRACT) => return VirtualKey.Substract,
-        @enumToInt(win32_keyboard_mouse.VK_MULTIPLY) => return VirtualKey.Multiply,
-        @enumToInt(win32_keyboard_mouse.VK_DIVIDE) => return VirtualKey.Divide,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_NEXT_TRACK) => return VirtualKey.NextTrack,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PREV_TRACK) => return VirtualKey.PrevTrack,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PLAY_PAUSE) => return VirtualKey.PlayPause,
-        @enumToInt(win32_keyboard_mouse.VK_F1) => return VirtualKey.F1,
-        @enumToInt(win32_keyboard_mouse.VK_F2) => return VirtualKey.F2,
-        @enumToInt(win32_keyboard_mouse.VK_F3) => return VirtualKey.F3,
-        @enumToInt(win32_keyboard_mouse.VK_F4) => return VirtualKey.F4,
-        @enumToInt(win32_keyboard_mouse.VK_F5) => return VirtualKey.F5,
-        @enumToInt(win32_keyboard_mouse.VK_F6) => return VirtualKey.F6,
-        @enumToInt(win32_keyboard_mouse.VK_F7) => return VirtualKey.F7,
-        @enumToInt(win32_keyboard_mouse.VK_F8) => return VirtualKey.F8,
-        @enumToInt(win32_keyboard_mouse.VK_F9) => return VirtualKey.F9,
-        @enumToInt(win32_keyboard_mouse.VK_F10) => return VirtualKey.F10,
-        @enumToInt(win32_keyboard_mouse.VK_F11) => return VirtualKey.F11,
-        @enumToInt(win32_keyboard_mouse.VK_F12) => return VirtualKey.F12,
-        @enumToInt(win32_keyboard_mouse.VK_LEFT) => return VirtualKey.Left,
-        @enumToInt(win32_keyboard_mouse.VK_RIGHT) => return VirtualKey.Right,
-        @enumToInt(win32_keyboard_mouse.VK_UP) => return VirtualKey.Up,
-        @enumToInt(win32_keyboard_mouse.VK_DOWN) => return VirtualKey.Down,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD0) => return VirtualKey.Numpad0,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD1) => return VirtualKey.Numpad1,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD2) => return VirtualKey.Numpad2,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD3) => return VirtualKey.Numpad3,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD4) => return VirtualKey.Numpad4,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD5) => return VirtualKey.Numpad5,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD6) => return VirtualKey.Numpad6,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD7) => return VirtualKey.Numpad7,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD8) => return VirtualKey.Numpad8,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD9) => return VirtualKey.Numpad9,
-        @enumToInt(win32_keyboard_mouse.VK_DECIMAL) => return VirtualKey.Period,
-        @enumToInt(win32_keyboard_mouse.VK_NUMLOCK) => return VirtualKey.NumLock,
-        @enumToInt(win32_keyboard_mouse.VK_SCROLL) => return VirtualKey.ScrollLock,
-        @enumToInt(win32_keyboard_mouse.VK_0) => return VirtualKey.Num0,
-        @enumToInt(win32_keyboard_mouse.VK_1) => return VirtualKey.Num1,
-        @enumToInt(win32_keyboard_mouse.VK_2) => return VirtualKey.Num2,
-        @enumToInt(win32_keyboard_mouse.VK_3) => return VirtualKey.Num3,
-        @enumToInt(win32_keyboard_mouse.VK_4) => return VirtualKey.Num4,
-        @enumToInt(win32_keyboard_mouse.VK_5) => return VirtualKey.Num5,
-        @enumToInt(win32_keyboard_mouse.VK_6) => return VirtualKey.Num6,
-        @enumToInt(win32_keyboard_mouse.VK_7) => return VirtualKey.Num7,
-        @enumToInt(win32_keyboard_mouse.VK_8) => return VirtualKey.Num8,
-        @enumToInt(win32_keyboard_mouse.VK_9) => return VirtualKey.Num9,
-        @enumToInt(win32_keyboard_mouse.VK_A) => return VirtualKey.A,
-        @enumToInt(win32_keyboard_mouse.VK_B) => return VirtualKey.B,
-        @enumToInt(win32_keyboard_mouse.VK_C) => return VirtualKey.C,
-        @enumToInt(win32_keyboard_mouse.VK_D) => return VirtualKey.D,
-        @enumToInt(win32_keyboard_mouse.VK_E) => return VirtualKey.E,
-        @enumToInt(win32_keyboard_mouse.VK_F) => return VirtualKey.F,
-        @enumToInt(win32_keyboard_mouse.VK_G) => return VirtualKey.G,
-        @enumToInt(win32_keyboard_mouse.VK_H) => return VirtualKey.H,
-        @enumToInt(win32_keyboard_mouse.VK_I) => return VirtualKey.I,
-        @enumToInt(win32_keyboard_mouse.VK_J) => return VirtualKey.J,
-        @enumToInt(win32_keyboard_mouse.VK_K) => return VirtualKey.K,
-        @enumToInt(win32_keyboard_mouse.VK_L) => return VirtualKey.L,
-        @enumToInt(win32_keyboard_mouse.VK_M) => return VirtualKey.M,
-        @enumToInt(win32_keyboard_mouse.VK_N) => return VirtualKey.N,
-        @enumToInt(win32_keyboard_mouse.VK_O) => return VirtualKey.O,
-        @enumToInt(win32_keyboard_mouse.VK_P) => return VirtualKey.P,
-        @enumToInt(win32_keyboard_mouse.VK_Q) => return VirtualKey.Q,
-        @enumToInt(win32_keyboard_mouse.VK_R) => return VirtualKey.R,
-        @enumToInt(win32_keyboard_mouse.VK_S) => return VirtualKey.S,
-        @enumToInt(win32_keyboard_mouse.VK_T) => return VirtualKey.T,
-        @enumToInt(win32_keyboard_mouse.VK_U) => return VirtualKey.U,
-        @enumToInt(win32_keyboard_mouse.VK_V) => return VirtualKey.V,
-        @enumToInt(win32_keyboard_mouse.VK_W) => return VirtualKey.W,
-        @enumToInt(win32_keyboard_mouse.VK_X) => return VirtualKey.X,
-        @enumToInt(win32_keyboard_mouse.VK_Y) => return VirtualKey.Y,
-        @enumToInt(win32_keyboard_mouse.VK_Z) => return VirtualKey.Z,
-        else => return VirtualKey.Unknown,
+        @enumToInt(win32_keyboard_mouse.VK_OEM_PLUS) => return VirtualCode.Equals,
+        @enumToInt(win32_keyboard_mouse.VK_OEM_MINUS) => return VirtualCode.Hyphen,
+        @enumToInt(win32_keyboard_mouse.VK_OEM_COMMA) => return VirtualCode.Comma,
+        @enumToInt(win32_keyboard_mouse.VK_OEM_PERIOD) => return VirtualCode.Period,
+        @enumToInt(win32_keyboard_mouse.VK_ESCAPE) => return VirtualCode.Escape,
+        @enumToInt(win32_keyboard_mouse.VK_SPACE) => return VirtualCode.Space,
+        @enumToInt(win32_keyboard_mouse.VK_RETURN) => return VirtualCode.Return,
+        @enumToInt(win32_keyboard_mouse.VK_BACK) => return VirtualCode.Backspace,
+        @enumToInt(win32_keyboard_mouse.VK_TAB) => return VirtualCode.Tab,
+        @enumToInt(win32_keyboard_mouse.VK_CAPITAL) => return VirtualCode.CapsLock,
+        @enumToInt(win32_keyboard_mouse.VK_PRIOR) => return VirtualCode.PageUp,
+        @enumToInt(win32_keyboard_mouse.VK_NEXT) => return VirtualCode.PageDown,
+        @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT) => return VirtualCode.PrintScreen,
+        @enumToInt(win32_keyboard_mouse.VK_END) => return VirtualCode.End,
+        @enumToInt(win32_keyboard_mouse.VK_HOME) => return VirtualCode.Home,
+        @enumToInt(win32_keyboard_mouse.VK_INSERT) => return VirtualCode.Insert,
+        @enumToInt(win32_keyboard_mouse.VK_DELETE) => return VirtualCode.Delete,
+        @enumToInt(win32_keyboard_mouse.VK_VOLUME_UP) => return VirtualCode.VolumeUp,
+        @enumToInt(win32_keyboard_mouse.VK_VOLUME_DOWN) => return VirtualCode.VolumeDown,
+        @enumToInt(win32_keyboard_mouse.VK_VOLUME_MUTE) => return VirtualCode.VolumeMute,
+        @enumToInt(win32_keyboard_mouse.VK_ADD) => return VirtualCode.Add,
+        @enumToInt(win32_keyboard_mouse.VK_SUBTRACT) => return VirtualCode.Substract,
+        @enumToInt(win32_keyboard_mouse.VK_MULTIPLY) => return VirtualCode.Multiply,
+        @enumToInt(win32_keyboard_mouse.VK_DIVIDE) => return VirtualCode.Divide,
+        @enumToInt(win32_keyboard_mouse.VK_MEDIA_NEXT_TRACK) => return VirtualCode.NextTrack,
+        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PREV_TRACK) => return VirtualCode.PrevTrack,
+        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PLAY_PAUSE) => return VirtualCode.PlayPause,
+        @enumToInt(win32_keyboard_mouse.VK_F1) => return VirtualCode.F1,
+        @enumToInt(win32_keyboard_mouse.VK_F2) => return VirtualCode.F2,
+        @enumToInt(win32_keyboard_mouse.VK_F3) => return VirtualCode.F3,
+        @enumToInt(win32_keyboard_mouse.VK_F4) => return VirtualCode.F4,
+        @enumToInt(win32_keyboard_mouse.VK_F5) => return VirtualCode.F5,
+        @enumToInt(win32_keyboard_mouse.VK_F6) => return VirtualCode.F6,
+        @enumToInt(win32_keyboard_mouse.VK_F7) => return VirtualCode.F7,
+        @enumToInt(win32_keyboard_mouse.VK_F8) => return VirtualCode.F8,
+        @enumToInt(win32_keyboard_mouse.VK_F9) => return VirtualCode.F9,
+        @enumToInt(win32_keyboard_mouse.VK_F10) => return VirtualCode.F10,
+        @enumToInt(win32_keyboard_mouse.VK_F11) => return VirtualCode.F11,
+        @enumToInt(win32_keyboard_mouse.VK_F12) => return VirtualCode.F12,
+        @enumToInt(win32_keyboard_mouse.VK_LEFT) => return VirtualCode.Left,
+        @enumToInt(win32_keyboard_mouse.VK_RIGHT) => return VirtualCode.Right,
+        @enumToInt(win32_keyboard_mouse.VK_UP) => return VirtualCode.Up,
+        @enumToInt(win32_keyboard_mouse.VK_DOWN) => return VirtualCode.Down,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD0) => return VirtualCode.Numpad0,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD1) => return VirtualCode.Numpad1,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD2) => return VirtualCode.Numpad2,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD3) => return VirtualCode.Numpad3,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD4) => return VirtualCode.Numpad4,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD5) => return VirtualCode.Numpad5,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD6) => return VirtualCode.Numpad6,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD7) => return VirtualCode.Numpad7,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD8) => return VirtualCode.Numpad8,
+        @enumToInt(win32_keyboard_mouse.VK_NUMPAD9) => return VirtualCode.Numpad9,
+        @enumToInt(win32_keyboard_mouse.VK_DECIMAL) => return VirtualCode.Period,
+        @enumToInt(win32_keyboard_mouse.VK_NUMLOCK) => return VirtualCode.NumLock,
+        @enumToInt(win32_keyboard_mouse.VK_SCROLL) => return VirtualCode.ScrollLock,
+        @enumToInt(win32_keyboard_mouse.VK_0) => return VirtualCode.Num0,
+        @enumToInt(win32_keyboard_mouse.VK_1) => return VirtualCode.Num1,
+        @enumToInt(win32_keyboard_mouse.VK_2) => return VirtualCode.Num2,
+        @enumToInt(win32_keyboard_mouse.VK_3) => return VirtualCode.Num3,
+        @enumToInt(win32_keyboard_mouse.VK_4) => return VirtualCode.Num4,
+        @enumToInt(win32_keyboard_mouse.VK_5) => return VirtualCode.Num5,
+        @enumToInt(win32_keyboard_mouse.VK_6) => return VirtualCode.Num6,
+        @enumToInt(win32_keyboard_mouse.VK_7) => return VirtualCode.Num7,
+        @enumToInt(win32_keyboard_mouse.VK_8) => return VirtualCode.Num8,
+        @enumToInt(win32_keyboard_mouse.VK_9) => return VirtualCode.Num9,
+        @enumToInt(win32_keyboard_mouse.VK_A) => return VirtualCode.A,
+        @enumToInt(win32_keyboard_mouse.VK_B) => return VirtualCode.B,
+        @enumToInt(win32_keyboard_mouse.VK_C) => return VirtualCode.C,
+        @enumToInt(win32_keyboard_mouse.VK_D) => return VirtualCode.D,
+        @enumToInt(win32_keyboard_mouse.VK_E) => return VirtualCode.E,
+        @enumToInt(win32_keyboard_mouse.VK_F) => return VirtualCode.F,
+        @enumToInt(win32_keyboard_mouse.VK_G) => return VirtualCode.G,
+        @enumToInt(win32_keyboard_mouse.VK_H) => return VirtualCode.H,
+        @enumToInt(win32_keyboard_mouse.VK_I) => return VirtualCode.I,
+        @enumToInt(win32_keyboard_mouse.VK_J) => return VirtualCode.J,
+        @enumToInt(win32_keyboard_mouse.VK_K) => return VirtualCode.K,
+        @enumToInt(win32_keyboard_mouse.VK_L) => return VirtualCode.L,
+        @enumToInt(win32_keyboard_mouse.VK_M) => return VirtualCode.M,
+        @enumToInt(win32_keyboard_mouse.VK_N) => return VirtualCode.N,
+        @enumToInt(win32_keyboard_mouse.VK_O) => return VirtualCode.O,
+        @enumToInt(win32_keyboard_mouse.VK_P) => return VirtualCode.P,
+        @enumToInt(win32_keyboard_mouse.VK_Q) => return VirtualCode.Q,
+        @enumToInt(win32_keyboard_mouse.VK_R) => return VirtualCode.R,
+        @enumToInt(win32_keyboard_mouse.VK_S) => return VirtualCode.S,
+        @enumToInt(win32_keyboard_mouse.VK_T) => return VirtualCode.T,
+        @enumToInt(win32_keyboard_mouse.VK_U) => return VirtualCode.U,
+        @enumToInt(win32_keyboard_mouse.VK_V) => return VirtualCode.V,
+        @enumToInt(win32_keyboard_mouse.VK_W) => return VirtualCode.W,
+        @enumToInt(win32_keyboard_mouse.VK_X) => return VirtualCode.X,
+        @enumToInt(win32_keyboard_mouse.VK_Y) => return VirtualCode.Y,
+        @enumToInt(win32_keyboard_mouse.VK_Z) => return VirtualCode.Z,
+        else => return VirtualCode.Unknown,
     }
 }
 pub fn processWindowsScancode(scancode: usize) ScanCode {
@@ -603,8 +618,8 @@ pub fn processWindowsScancode(scancode: usize) ScanCode {
         ScanCode.Unknown, //0x158
         ScanCode.Unknown, //0x159
         ScanCode.Unknown, //0x15A
-        ScanCode.LSystem, //0x15B
-        ScanCode.RSystem, //0x15C
+        ScanCode.LMeta, //0x15B
+        ScanCode.RMeta, //0x15C
         ScanCode.Menu, //0x15D
         ScanCode.Unknown, //0x15E
         ScanCode.Unknown, //0x15F
@@ -773,19 +788,19 @@ pub fn processWindowsScancode(scancode: usize) ScanCode {
     return WINDOWS_SCANCODE_TABLE[scancode];
 }
 
-fn keyTextToVirtual(keycode: u16) VirtualKey {
+fn keyTextToVirtual(keycode: u16) VirtualCode {
     const MAPVK_VK_TO_CHAR = 2;
     const key_text = win32_keyboard_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
     // const char = char.from_u32(key_text);
     switch (key_text) {
-        ';' => return VirtualKey.Semicolon,
-        '/' => return VirtualKey.Slash,
-        '`' => return VirtualKey.Grave,
-        '[' => return VirtualKey.LBracket,
-        '\\' => return VirtualKey.Backslash,
-        ']' => return VirtualKey.RBracket,
-        '\'' => return VirtualKey.Quote,
-        else => return VirtualKey.Unknown,
+        ';' => return VirtualCode.Semicolon,
+        '/' => return VirtualCode.Slash,
+        '`' => return VirtualCode.Grave,
+        '[' => return VirtualCode.LBracket,
+        '\\' => return VirtualCode.Backslash,
+        ']' => return VirtualCode.RBracket,
+        '\'' => return VirtualCode.Quote,
+        else => return VirtualCode.Unknown,
     }
 }
 
@@ -797,8 +812,8 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
     const codes = comptime [4]ScanCode{
         ScanCode.LShift,
         ScanCode.RShift,
-        ScanCode.LSystem,
-        ScanCode.RSystem,
+        ScanCode.LMeta,
+        ScanCode.RMeta,
     };
 
     const virtual_keys = comptime [4]win32_keyboard_mouse.VIRTUAL_KEY{
@@ -808,11 +823,11 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
         win32_keyboard_mouse.VK_RWIN,
     };
 
-    const virtual_codes = comptime [4]VirtualKey{
-        VirtualKey.Shift,
-        VirtualKey.Shift,
-        VirtualKey.System,
-        VirtualKey.System,
+    const virtual_codes = comptime [4]VirtualCode{
+        VirtualCode.Shift,
+        VirtualCode.Shift,
+        VirtualCode.Meta,
+        VirtualCode.Meta,
     };
 
     for (0..4) |index| {

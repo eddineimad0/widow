@@ -31,7 +31,7 @@ fn EnumMonitorProc(
     var mi: win32_gdi.MONITORINFOEXW = undefined;
     mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(win32_gdi.MONITORINFOEXW);
     if (win32_gdi.GetMonitorInfoW(handle, @ptrCast(*win32_gdi.MONITORINFO, &mi)) == 1) {
-        if (utils.wideStrzCmp(@ptrCast([*:0]const u16, &mi.szDevice), @ptrCast([*:0]const u16, data_ptr.*[1].ptr))) {
+        if (utils.wideStrZCmp(@ptrCast([*:0]const u16, &mi.szDevice), @ptrCast([*:0]const u16, data_ptr.*[1].ptr))) {
             data_ptr.*[0] = handle;
         }
     }
@@ -103,7 +103,7 @@ pub fn pollMonitors(allocator: Allocator) !Arraylist(MonitorImpl) {
             // Query for the video modes.
             var modes = try pollVideoModes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
-            var display_name = try utils.wideToUtf8(allocator, &display_device.DeviceName);
+            var display_name = try utils.wideZToUtf8(allocator, &display_device.DeviceName);
             errdefer allocator.free(display_name);
             try monitors.append(MonitorImpl.init(
                 handle,
