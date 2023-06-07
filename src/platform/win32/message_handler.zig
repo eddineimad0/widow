@@ -13,7 +13,6 @@ pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     // here.
     const event = common.event.createCloseEvent();
     window.queueEvent(&event);
-    window.close();
 }
 
 pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM, lparam: win32_foundation.LPARAM) void {
