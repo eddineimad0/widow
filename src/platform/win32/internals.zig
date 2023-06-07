@@ -2,10 +2,15 @@ const std = @import("std");
 const defs = @import("./defs.zig");
 const module = @import("./module.zig");
 const utils = @import("./utils.zig");
+const WindowImpl = @import("window_impl.zig").WindowImpl;
 const winapi = @import("win32");
 const monitor_impl = @import("./monitor_impl.zig");
+const clipboard = @import("./clipboard.zig");
+const common = @import("common");
+
 const win32_sysinfo = winapi.system.system_information;
 const win32_window_messaging = winapi.ui.windows_and_messaging;
+const win32_system_power = winapi.system.power;
 const GetModuleHandleExW = winapi.system.library_loader.GetModuleHandleExW;
 const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT =
     winapi.system.library_loader.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
@@ -62,21 +67,26 @@ pub const InternalError = error{
     FailedToRegisterWindowClass,
 };
 
-pub const PhysicalDevices = struct {
+pub const Win32Context = struct {
     monitors_map: std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unwanted updates.
-    // allocator: std.mem.Allocator,
+    previous_exec_state: win32_system_power.EXECUTION_STATE,
+    clipboard_change: bool,
+    next_clipboard_viewer: ?HWND,
     const Self = @This();
 
-    /// Initialize the `PhysicalDevices` struct.
+    /// Initialize the `Win32Context` struct.
     pub fn init(allocator: std.mem.Allocator) !Self {
         var self = Self{
             .monitors_map = std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl).init(allocator),
             .used_monitors = 0,
             .expected_video_change = false,
+            .previous_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
+            .next_clipboard_viewer = null,
+            .clipboard_change = false,
         };
-        var monitors = try monitor_impl.poll_monitors(allocator);
+        var monitors = try monitor_impl.pollMonitors(allocator);
         defer monitors.deinit();
         errdefer {
             for (monitors.items) |*monitor| {
@@ -91,7 +101,7 @@ pub const PhysicalDevices = struct {
         return self;
     }
 
-    /// Deinitialize the `PhysicalDevices` struct.
+    /// Deinitialize the `Win32Context` struct.
     /// this frees the monitors map and invalidate all monitors refrence.
     pub fn deinit(self: *Self) void {
         for (self.monitors_map.values()) |*monitor| {
@@ -102,8 +112,8 @@ pub const PhysicalDevices = struct {
 
     /// Updates the monitor map by removing all disconnected monitors
     /// and adding new connected ones.
-    pub fn update_monitors(self: *Self) !void {
-        const all_monitors = try monitor_impl.poll_monitors(self.monitors_map.allocator);
+    pub fn updateMonitors(self: *Self) !void {
+        const all_monitors = try monitor_impl.pollMonitors(self.monitors_map.allocator);
         // used in case of an error to free the remaining monitors.
         var i: usize = 0;
         defer all_monitors.deinit();
@@ -152,9 +162,8 @@ pub const PhysicalDevices = struct {
 
 pub const Internals = struct {
     win32: Win32,
-    devices: PhysicalDevices,
-    // allocator: std.mem.Allocator,
-
+    devices: Win32Context,
+    clipboard_text: ?[]u8,
     const Self = @This();
 
     pub fn create(allocator: std.mem.Allocator) !*Self {
@@ -173,35 +182,35 @@ pub const Internals = struct {
 
         self.win32.handles.hinstance = hinstance.?;
         // Register the window class
-        self.win32.handles.main_class = try register_window_class(
+        self.win32.handles.main_class = try registerWindowClass(
             self.win32.handles.hinstance,
         );
 
         errdefer {
             _ = win32_window_messaging.UnregisterClassW(
-                utils.make_int_atom(u16, self.win32.handles.main_class),
+                utils.makeIntAtom(u16, self.win32.handles.main_class),
                 self.win32.handles.hinstance,
             );
         }
 
         // Load the required libraries.
-        try self.load_libraries();
-        errdefer self.free_libraries();
+        try self.loadLibraries();
+        errdefer self.freeLibraries();
 
         // Setup windows version flags.
-        if (is_win32_version_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 0)) {
+        if (isWin32VersionMinimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 0)) {
             self.win32.flags.is_win_vista_or_above = true;
 
-            if (is_win32_version_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 1)) {
+            if (isWin32VersionMinimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 1)) {
                 self.win32.flags.is_win7_or_above = true;
 
-                if (is_win32_version_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 3)) {
+                if (isWin32VersionMinimum(self.win32.functions.RtlVerifyVersionInfo.?, 6, 3)) {
                     self.win32.flags.is_win8point1_or_above = true;
 
-                    if (is_win10_build_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 1607)) {
+                    if (isWin10BuildMinimum(self.win32.functions.RtlVerifyVersionInfo.?, 1607)) {
                         self.win32.flags.is_win10b1607_or_above = true;
 
-                        if (is_win10_build_minimum(self.win32.functions.RtlVerifyVersionInfo.?, 1703)) {
+                        if (isWin10BuildMinimum(self.win32.functions.RtlVerifyVersionInfo.?, 1703)) {
                             self.win32.flags.is_win10b1703_or_above = true;
                         }
                     }
@@ -218,43 +227,117 @@ pub const Internals = struct {
             _ = self.win32.functions.SetProcessDPIAware.?();
         }
 
-        try create_helper_window(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
-        self.devices = try PhysicalDevices.init(allocator);
-        register_devices(self.win32.handles.helper_window, &self.devices);
+        try createHelperWindow(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
+        self.devices = try Win32Context.init(allocator);
+        registerDevices(self.win32.handles.helper_window, &self.devices);
+        self.clipboard_text = null;
+        self.devices.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.win32.handles.helper_window);
         return self;
     }
 
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
 
         // Free the loaded modules.
-        self.free_libraries();
+        self.freeLibraries();
 
         // Unregister the window class.
         _ = win32_window_messaging.UnregisterClassW(
-            utils.make_int_atom(u16, self.win32.handles.main_class),
+            utils.makeIntAtom(u16, self.win32.handles.main_class),
             self.win32.handles.hinstance,
         );
 
-        // Clear up the PhysicalDevices refrence
+        // Clear up the Devices refrence
         _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
 
         _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
 
         // Unregister the helper class.
         _ = win32_window_messaging.UnregisterClassW(
-            utils.make_int_atom(u16, self.win32.handles.helper_class),
+            utils.makeIntAtom(u16, self.win32.handles.helper_class),
             self.win32.handles.hinstance,
         );
+
+        if (self.clipboard_text) |text| {
+            allocator.free(text);
+            self.clipboard_text = null;
+        }
+        clipboard.unregisterClipboardViewer(self.win32.handles.helper_window, self.devices.next_clipboard_viewer);
 
         self.devices.deinit();
 
         allocator.destroy(self);
     }
 
-    fn load_libraries(self: *Self) !void {
-        self.win32.handles.ntdll = module.load_win32_module("ntdll.dll");
+    pub inline fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
+        if (self.devices.clipboard_change or self.clipboard_text == null) {
+            // refetching clipboard data
+            self.clipboard_text = try clipboard.clipboardText(allocator, self.win32.handles.helper_window);
+            self.devices.clipboard_change = false;
+        }
+        return self.clipboard_text.?;
+    }
+
+    pub inline fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
+        // refetch on the next call to Internals.clipboardText.
+        return clipboard.setClipboardText(allocator, self.win32.handles.helper_window, text);
+    }
+
+    pub fn setMonitorWindow(
+        self: *Self,
+        monitor_handle: HMONITOR,
+        window: *WindowImpl,
+        mode: ?*const common.video_mode.VideoMode,
+        monitor_area: *common.geometry.WidowArea,
+    ) !void {
+        const monitor = self.devices.monitors_map.getPtr(monitor_handle) orelse {
+            return error.MonitorNotFound;
+        };
+
+        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
+        // We Set this here to avoid wastefully updating the monitors map.
+        self.devices.expected_video_change = true;
+        try monitor.setVideoMode(mode);
+        self.devices.expected_video_change = false;
+
+        if (self.devices.used_monitors == 0) {
+            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) | @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
+            // first time acquiring a  monitor
+            // prevent the system from entering sleep or turning off.
+            self.devices.previous_exec_state = win32_system_power.SetThreadExecutionState(@intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state));
+        } else {
+            if (monitor.window) |old_window| {
+                if (window.handle != old_window.handle) {
+                    old_window.requestRestore();
+                }
+                self.devices.used_monitors -= 1;
+            }
+        }
+
+        monitor.setWindow(window);
+        self.devices.used_monitors += 1;
+        monitor.fullscreenArea(monitor_area);
+    }
+
+    pub fn restoreMonitor(self: *Self, monitor_handle: HMONITOR) !void {
+        const monitor = self.devices.monitors_map.getPtr(monitor_handle) orelse {
+            return error.MonitorNotFound;
+        };
+        monitor.setWindow(null);
+        if (monitor.mode_changed) {
+            self.devices.expected_video_change = true;
+            monitor.restoreOrignalVideo();
+            self.devices.expected_video_change = false;
+        }
+        self.devices.used_monitors -= 1;
+        if (self.devices.used_monitors == 0) {
+            _ = win32_system_power.SetThreadExecutionState(self.devices.previous_exec_state);
+        }
+    }
+
+    fn loadLibraries(self: *Self) !void {
+        self.win32.handles.ntdll = module.loadWin32Module("ntdll.dll");
         if (self.win32.handles.ntdll) |*ntdll| {
-            self.win32.functions.RtlVerifyVersionInfo = @ptrCast(defs.proc_RtlVerifyVersionInfo, module.get_module_symbol(ntdll.*, "RtlVerifyVersionInfo"));
+            self.win32.functions.RtlVerifyVersionInfo = @ptrCast(defs.proc_RtlVerifyVersionInfo, module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"));
         } else {
             // It's important for this module to be loaded since
             // it has the necessary function for figuring out
@@ -263,34 +346,34 @@ pub const Internals = struct {
             // select which code we run in certain sections.
             return error.FailedToLoadNtdll;
         }
-        self.win32.handles.user32 = module.load_win32_module("user32.dll");
+        self.win32.handles.user32 = module.loadWin32Module("user32.dll");
         if (self.win32.handles.user32) |*user32| {
             self.win32.functions.SetProcessDPIAware =
-                @ptrCast(defs.proc_SetProcessDPIAware, module.get_module_symbol(user32.*, "SetProcessDPIAware"));
+                @ptrCast(defs.proc_SetProcessDPIAware, module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
             self.win32.functions.SetProcessDpiAwarenessContext =
-                @ptrCast(defs.proc_SetProcessDpiAwarenessContext, module.get_module_symbol(user32.*, "SetProcessDpiAwarenessContext"));
+                @ptrCast(defs.proc_SetProcessDpiAwarenessContext, module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"));
             self.win32.functions.GetDpiForWindow =
-                @ptrCast(defs.proc_GetDpiForWindow, module.get_module_symbol(user32.*, "GetDpiForWindow"));
+                @ptrCast(defs.proc_GetDpiForWindow, module.getModuleSymbol(user32.*, "GetDpiForWindow"));
             self.win32.functions.EnableNonClientDpiScaling =
-                @ptrCast(defs.proc_EnableNonClientDpiScaling, module.get_module_symbol(user32.*, "EnableNonClientDpiScaling"));
+                @ptrCast(defs.proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
             self.win32.functions.AdjustWindowRectExForDpi =
-                @ptrCast(defs.proc_AdjustWindowRectExForDpi, module.get_module_symbol(user32.*, "AdjustWindowRectExForDpi"));
+                @ptrCast(defs.proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
         }
-        self.win32.handles.shcore = module.load_win32_module("Shcore.dll");
+        self.win32.handles.shcore = module.loadWin32Module("Shcore.dll");
         if (self.win32.handles.shcore) |*shcore| {
-            self.win32.functions.GetDpiForMonitor = @ptrCast(defs.proc_GetDpiForMonitor, module.get_module_symbol(shcore.*, "GetDpiForMonitor"));
-            self.win32.functions.SetProcessDpiAwareness = @ptrCast(defs.proc_SetProcessDpiAwareness, module.get_module_symbol(shcore.*, "SetProcessDpiAwareness"));
+            self.win32.functions.GetDpiForMonitor = @ptrCast(defs.proc_GetDpiForMonitor, module.getModuleSymbol(shcore.*, "GetDpiForMonitor"));
+            self.win32.functions.SetProcessDpiAwareness = @ptrCast(defs.proc_SetProcessDpiAwareness, module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"));
         }
     }
 
-    fn free_libraries(self: *Self) void {
+    fn freeLibraries(self: *Self) void {
         if (self.win32.handles.ntdll) |*handle| {
-            module.free_win32_module(handle.*);
+            module.freeWin32Module(handle.*);
             self.win32.handles.ntdll = null;
             self.win32.functions.RtlVerifyVersionInfo = null;
         }
         if (self.win32.handles.user32) |*handle| {
-            module.free_win32_module(handle.*);
+            module.freeWin32Module(handle.*);
             self.win32.handles.user32 = null;
             self.win32.functions.SetProcessDPIAware = null;
             self.win32.functions.SetProcessDpiAwarenessContext = null;
@@ -299,7 +382,7 @@ pub const Internals = struct {
             self.win32.functions.AdjustWindowRectExForDpi = null;
         }
         if (self.win32.handles.shcore) |*handle| {
-            module.free_win32_module(handle.*);
+            module.freeWin32Module(handle.*);
             self.win32.handles.shcore = null;
             self.win32.functions.SetProcessDpiAwareness = null;
             self.win32.functions.GetDpiForMonitor = null;
@@ -307,7 +390,7 @@ pub const Internals = struct {
     }
 };
 
-fn is_win32_version_minimum(proc: defs.proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
+fn isWin32VersionMinimum(proc: defs.proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
     //If you must require a particular operating system,
     //be sure to use it as a minimum supported version,
     //rather than design the test for the one operating system.
@@ -334,7 +417,7 @@ fn is_win32_version_minimum(proc: defs.proc_RtlVerifyVersionInfo, major: u32, mi
     return proc(&vi, mask, cond_mask) == STATUS_SUCCESS;
 }
 
-fn is_win10_build_minimum(proc: defs.proc_RtlVerifyVersionInfo, build: u32) bool {
+fn isWin10BuildMinimum(proc: defs.proc_RtlVerifyVersionInfo, build: u32) bool {
     var vi: win32_sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwOSVersionInfoSize = @sizeOf(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = 10;
@@ -349,22 +432,23 @@ fn is_win10_build_minimum(proc: defs.proc_RtlVerifyVersionInfo, build: u32) bool
     return proc(&vi, mask, cond_mask) == STATUS_SUCCESS;
 }
 
-fn register_window_class(
+fn registerWindowClass(
     hinstance: module.HINSTANCE,
 ) !u16 {
     const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) | @enumToInt(win32_window_messaging.CS_VREDRAW) | @enumToInt(win32_window_messaging.CS_OWNDC));
-    window_class.lpfnWndProc = defs.window_proc;
+    window_class.lpfnWndProc = defs.windowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
     var buffer: [WINDOW_CLASS_NAME.len * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8_to_wide(allocator, WINDOW_CLASS_NAME);
+    const wide_class_name = try utils.utf8ToWideZ(allocator, WINDOW_CLASS_NAME);
     window_class.lpszClassName = wide_class_name.ptr;
     window_class.hIcon = null;
+    //     TODO
     //     match icon_id {
     //         // Load icon provided through application's resource definition.
     //         Some(name) => LoadImageW(
@@ -398,19 +482,19 @@ fn register_window_class(
 
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling hardware related messages.
-fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *HWND) !void {
+fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *HWND) !void {
     const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
     const HELPER_TITLE = "helper window";
     var helper_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     helper_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     helper_class.style = win32_window_messaging.CS_OWNDC;
-    helper_class.lpfnWndProc = defs.helper_event_proc;
+    helper_class.lpfnWndProc = defs.helperWindowProc;
     helper_class.hInstance = hinstance;
     // Estimate five times the curent utf8 string len.
     var buffer: [(HELPER_CLASS_NAME.len + HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8_to_wide(allocator, HELPER_CLASS_NAME);
+    const wide_class_name = try utils.utf8ToWideZ(allocator, HELPER_CLASS_NAME);
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
@@ -418,11 +502,11 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
     }
     errdefer {
         _ = win32_window_messaging.UnregisterClassW(
-            utils.make_int_atom(u16, helper_handle.*),
+            utils.makeIntAtom(u16, helper_handle.*),
             hinstance,
         );
     }
-    const helper_title = try utils.utf8_to_wide(allocator, HELPER_TITLE);
+    const helper_title = try utils.utf8ToWideZ(allocator, HELPER_TITLE);
     helper_window.* = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
         wide_class_name,
@@ -443,9 +527,10 @@ fn create_helper_window(hinstance: module.HINSTANCE, helper_handle: *u16, helper
     _ = win32_window_messaging.ShowWindow(helper_window.*, win32_window_messaging.SW_HIDE);
 }
 
-fn register_devices(helper_window: HWND, devices: *PhysicalDevices) void {
+fn registerDevices(helper_window: HWND, devices: *Win32Context) void {
     _ = win32_window_messaging.SetWindowLongPtrW(helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(devices)));
 
+    // TODO
     // Register raw_input_devices
     //
     // self.is_initialized = true;
@@ -465,14 +550,14 @@ fn register_devices(helper_window: HWND, devices: *PhysicalDevices) void {
 // test "Internals.init()" {
 //     const testing = std.testing;
 //     var result = try Internals.create(testing.allocator);
-//     register_devices(result.win32.handles.helper_window, &result.devices);
+//     registerDevices(result.win32.handles.helper_window, &result.devices);
 //     defer result.destroy(testing.allocator);
 // }
 //
-// test "PhysicalDevices.init()" {
+// test "Devices.init()" {
 //     const VideoMode = @import("common").video_mode.VideoMode;
 //     const testing = std.testing;
-//     var ph_dev = try PhysicalDevices.init(testing.allocator);
+//     var ph_dev = try Devices.init(testing.allocator);
 //     defer ph_dev.deinit();
 //     var all_monitors = try monitor_impl.poll_monitors(testing.allocator);
 //     defer {
