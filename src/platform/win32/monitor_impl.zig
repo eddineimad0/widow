@@ -178,7 +178,7 @@ pub fn queryMonitorInfo(handle: win32_gdi.HMONITOR) win32_gdi.MONITORINFO {
 }
 
 pub fn monitorDPI(
-    monitor_handle: ?win32_gdi.HMONITOR,
+    monitor_handle: win32_gdi.HMONITOR,
     GetDpiForMonitor: ?defs.proc_GetDpiForMonitor,
 ) u32 {
     var dpi_x: u32 = undefined;
