@@ -7,15 +7,15 @@ const LoadLibraryA = win32api.system.library_loader.LoadLibraryA;
 const FreeLibrary = win32api.system.library_loader.FreeLibrary;
 const GetProcAddress = win32api.system.library_loader.GetProcAddress;
 
-pub fn loadWin32Module(module_name: [:0]const u8) ?HINSTANCE {
+pub inline fn loadWin32Module(module_name: [:0]const u8) ?HINSTANCE {
     return LoadLibraryA(module_name.ptr);
 }
 
-pub fn freeWin32Module(module_handle: HINSTANCE) void {
+pub inline fn freeWin32Module(module_handle: HINSTANCE) void {
     _ = FreeLibrary(module_handle);
 }
 
-pub fn getModuleSymbol(module_handle: HINSTANCE, symbol_name: [:0]const u8) ?FARPROC {
+pub inline fn getModuleSymbol(module_handle: HINSTANCE, symbol_name: [:0]const u8) ?FARPROC {
     return GetProcAddress(module_handle, symbol_name.ptr);
 }
 
