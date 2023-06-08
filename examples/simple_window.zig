@@ -6,14 +6,14 @@ const CursorMode = widow.cursor.CursorMode;
 const allocator = std.heap.c_allocator;
 
 // pub const EventType = enum(u8) {
-//     FileDrop, // Some file was released in the window area.
 //     RawMouseMove, // For windows that enable raw mouse motion,the data specifes the
 // };
 
 pub fn main() !void {
     var context = try widow.WidowContext.init(allocator);
     defer context.deinit();
-    var window = try widow.window.WindowBuilder.init("creation_test", 800, 600, &context).build();
+    var builder = try widow.window.WindowBuilder.init("creation_test", 800, 600, &context);
+    var window = try builder.build();
     defer window.deinit();
     var event: widow.event.Event = undefined;
     event_loop: while (true) {
@@ -22,16 +22,20 @@ pub fn main() !void {
         }
         switch (event) {
             EventType.WindowClose => {
+                // The user has requested to close the window,
+                // and the application should proceed to calling deinit on the window instance.
+                // This is merely a notification nothing is done to window in the background,
+                // ignore it if you want to continue execution as normal.
                 break :event_loop;
             },
             EventType.KeyBoard => |*key| {
                 if (key.scancode == ScanCode.N and key.action.isPress()) {
                     if (key.mods.shift) {
-                        window.set_cursor_mode(CursorMode.Normal);
+                        window.setCursorMode(CursorMode.Normal);
                     } else if (key.mods.ctrl) {
-                        window.set_cursor_mode(CursorMode.Disabled);
+                        window.setCursorMode(CursorMode.Disabled);
                     } else {
-                        window.set_cursor_mode(CursorMode.Captured);
+                        window.setCursorMode(CursorMode.Captured);
                     }
                 }
             },
@@ -76,6 +80,13 @@ pub fn main() !void {
             },
             EventType.WindowResize => |*new_size| {
                 std.debug.print("new width:{} | new height:{}\n", .{ new_size.width, new_size.height });
+            },
+            EventType.FileDrop => |*files| {
+                for (files.items) |*file| {
+                    std.debug.print("File: {s} Dropped\n", .{file.*});
+                }
+                // Don't deinit the arraylist or free it's contained items
+                // All the pointers are invalidated during the next file drop
             },
             else => {
                 continue :event_loop;
