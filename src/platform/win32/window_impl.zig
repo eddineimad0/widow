@@ -11,6 +11,9 @@ const Queue = common.queue.Queue;
 const utils = @import("utils.zig");
 const Internals = @import("internals.zig").Internals;
 const monitor_impl = @import("monitor_impl.zig");
+const icon = @import("icon.zig");
+const Cursor = icon.Cursor;
+const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
 const FullScreenMode = common.window_data.FullScreenMode;
 
@@ -300,9 +303,6 @@ pub fn clientSize(handle: win32_foundation.HWND) common.geometry.WidowSize {
         .height = client.bottom,
     };
 }
-
-pub const Cursor = struct { handle: ?win32_window_messaging.HCURSOR, mode: common.cursor.CursorMode, shared: bool };
-pub const Icon = struct { sm_handle: ?win32_window_messaging.HICON, bg_handle: ?win32_window_messaging.HICON };
 
 pub const ExtraWin32Data = struct {
     cursor: Cursor,
@@ -996,36 +996,24 @@ pub const WindowImpl = struct {
             std.debug.print("Screen Mode: {}\n", .{value.*});
         }
     }
-};
 
-//     #[inline]
-//     pub fn use_cursor(self:*Self, cursor: WidowCursor) {
-//         self.data.cursor = cursor;
-//         if self.data.flags.cursor_in_client {
-//             updateCursor(self:*const Self.data.cursor);
-//         }
-//     }
-//
-//
-//
-//     pub(crate) fn set_window_icon(self:*Self, icon: Option<WidowIcon>) {
-//         let new_icon = match &icon {
-//             Some(value) => (value.0.bg_handle, value.0.sm_handle),
-//             None => unsafe {
-//                 // Load the icons specified by the Window Class.
-//                 let bg_icon = GetClassLongPtrW(self.handle, GCLP_HICON);
-//                 let sm_icon = GetClassLongPtrW(self.handle, GCLP_HICONSM);
-//                 (bg_icon as isize, sm_icon as isize)
-//             },
-//         };
-//         unsafe {
-//             SendMessageW(self.handle, WM_SETICON, ICON_BIG as usize, new_icon.0);
-//             SendMessageW(self.handle, WM_SETICON, ICON_SMALL as usize, new_icon.1);
-//         }
-//         self.icon = icon;
-//     }
-//
-//     pub(crate) fn enable_raw_mouse(self:*Self, enabled: bool) {
-//         self.data.flags.accepts_raw_input = enabled;
-//     }
-//
+    pub fn setCursorShape(self: *Self, new_cursor: *const Cursor) void {
+        icon.dropCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor.*;
+        if (self.data.flags.cursor_in_client) {
+            updateCursor(&self.win32.cursor);
+        }
+    }
+
+    pub fn setIcon(self: *Self, new_icon: *const Icon) void {
+        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null) .{ @ptrToInt(new_icon.bg_handle.?), @ptrToInt(new_icon.sm_handle.?) } else blk: {
+            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
+            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
+            break :blk .{ bg_icon, sm_icon };
+        };
+        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_BIG, @bitCast(isize, handles[0]));
+        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_SMALL, @bitCast(isize, handles[1]));
+        icon.dropIcon(&self.win32.icon);
+        self.win32.icon = new_icon.*;
+    }
+};
