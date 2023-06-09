@@ -1,8 +1,8 @@
 const std = @import("std");
 const common = @import("common");
-const ScanCode = common.input.ScanCode;
-const VirtualCode = common.input.VirtualCode;
-const KeyAction = common.input.KeyAction;
+const ScanCode = common.keyboard_and_mouse.ScanCode;
+const VirtualCode = common.keyboard_and_mouse.VirtualCode;
+const KeyAction = common.keyboard_and_mouse.KeyAction;
 const winapi = @import("win32");
 const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
 const win32_foundation = winapi.foundation;
@@ -101,8 +101,8 @@ pub inline fn clearThreadError() void {
     win32_foundation.SetLastError(@intToEnum(win32_foundation.WIN32_ERROR, 0));
 }
 
-pub fn getKeyModifiers() common.input.KeyModifiers {
-    var mods = common.input.KeyModifiers{
+pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
+    var mods = common.keyboard_and_mouse.KeyModifiers{
         .shift = false,
         .ctrl = false,
         .alt = false,

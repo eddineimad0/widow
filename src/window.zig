@@ -34,7 +34,7 @@ pub const WindowBuilder = struct {
                 .cursor_in_client = false,
                 .accepts_raw_input = false,
                 .allow_dpi_scaling = true,
-            }, .input = common.input.InputState.init() },
+            }, .input = common.keyboard_and_mouse.InputState.init() },
         };
     }
 

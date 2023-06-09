@@ -1,6 +1,6 @@
 const std = @import("std");
-const geometry = @import("./geometry.zig");
-const input = @import("./input.zig");
+const geometry = @import("geometry.zig");
+const input = @import("keyboard_and_mouse.zig");
 
 pub const EventType = enum(u8) {
     WindowClose, // The X on the window frame was pressed.

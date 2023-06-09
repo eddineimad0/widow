@@ -1,3 +1,6 @@
+pub const KeyAction = @import("hid.zig").ButtonState;
+pub const MouseButtonAction = KeyAction;
+
 /// The Symbolic name or representation of the keyboard key.
 pub const VirtualCode = enum(i32) {
     Unknown, // Unknown key
@@ -233,21 +236,6 @@ pub const KeyModifiers = struct {
     caps_lock: bool,
     num_lock: bool,
 };
-
-pub const KeyAction = enum(u8) {
-    Press,
-    Release,
-    const Self = @This();
-    pub inline fn isPress(self: *const Self) bool {
-        return self.* == KeyAction.Press;
-    }
-
-    pub inline fn isRelease(self: *const Self) bool {
-        return self.* == KeyAction.Release;
-    }
-};
-
-pub const MouseButtonAction = KeyAction;
 
 pub const MouseButton = enum(u8) {
     Left = 0, // Left Mouse Button.

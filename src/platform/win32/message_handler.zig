@@ -37,18 +37,18 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_found
 
     // Determine the action.
     var action = if (utils.hiWord(@bitCast(usize, lparam)) & win32_window_messaging.KF_UP == 0)
-        common.input.KeyAction.Press
+        common.keyboard_and_mouse.KeyAction.Press
     else
-        common.input.KeyAction.Release;
+        common.keyboard_and_mouse.KeyAction.Release;
 
-    if (keys[1] != common.input.ScanCode.Unknown) {
+    if (keys[1] != common.keyboard_and_mouse.ScanCode.Unknown) {
         // Update the key state array.
         window.data.input.keys[@intCast(usize, @enumToInt(keys[1]))] = action;
     }
 
     // Printscreen key only reports a release action.
     if (wparam == @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT)) {
-        const fake_event = common.event.createKeyboardEvent(keys[0], keys[1], common.input.KeyAction.Press, mods);
+        const fake_event = common.event.createKeyboardEvent(keys[0], keys[1], common.keyboard_and_mouse.KeyAction.Press, mods);
         window.queueEvent(&fake_event);
     }
 
@@ -58,25 +58,25 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_found
 
 pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wparam: win32_foundation.WPARAM) void {
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONUP => common.input.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONUP => common.input.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONUP => common.input.MouseButton.Middle,
+        win32_window_messaging.WM_LBUTTONUP => common.keyboard_and_mouse.MouseButton.Left,
+        win32_window_messaging.WM_RBUTTONUP => common.keyboard_and_mouse.MouseButton.Right,
+        win32_window_messaging.WM_MBUTTONUP => common.keyboard_and_mouse.MouseButton.Middle,
         else => if (utils.hiWord(wparam) & @enumToInt(win32_keyboard_mouse.VK_XBUTTON1) == 0)
-            common.input.MouseButton.ExtraButton2
+            common.keyboard_and_mouse.MouseButton.ExtraButton2
         else
-            common.input.MouseButton.ExtraButton1,
+            common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.input.KeyAction.Release, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyAction.Release, utils.getKeyModifiers());
 
     window.queueEvent(&event);
 
-    window.data.input.mouse_buttons[@enumToInt(button)] = common.input.KeyAction.Release;
+    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyAction.Release;
 
     // Release Capture if all keys are released.
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.input.KeyAction.Press) {
+        if (action.* == common.keyboard_and_mouse.KeyAction.Press) {
             any_button_pressed = true;
             break;
         }
@@ -90,7 +90,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpara
 pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: u32, wparam: win32_foundation.WPARAM) void {
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.input.KeyAction.Press) {
+        if (action.* == common.keyboard_and_mouse.KeyAction.Press) {
             any_button_pressed = true;
             break;
         }
@@ -106,22 +106,22 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpa
     }
 
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONDOWN => common.input.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONDOWN => common.input.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONDOWN => common.input.MouseButton.Middle,
+        win32_window_messaging.WM_LBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Left,
+        win32_window_messaging.WM_RBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Right,
+        win32_window_messaging.WM_MBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Middle,
         else => if (utils.hiWord(wparam) & @enumToInt(win32_keyboard_mouse.VK_XBUTTON1) == 0)
-            common.input.MouseButton.ExtraButton2
+            common.keyboard_and_mouse.MouseButton.ExtraButton2
         else
-            common.input.MouseButton.ExtraButton1,
+            common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.input.KeyAction.Press, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyAction.Press, utils.getKeyModifiers());
 
     window.queueEvent(&event);
-    window.data.input.mouse_buttons[@enumToInt(button)] = common.input.KeyAction.Press;
+    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyAction.Press;
 }
 
-pub inline fn mouseWheelMSGHandler(window: *window_impl.WindowImpl, wheel: common.input.MouseWheel, wheel_delta: f64) void {
+pub inline fn mouseWheelMSGHandler(window: *window_impl.WindowImpl, wheel: common.keyboard_and_mouse.MouseWheel, wheel_delta: f64) void {
     const event = common.event.createScrollEvent(wheel, wheel_delta);
     window.queueEvent(&event);
 }

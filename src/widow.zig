@@ -33,6 +33,43 @@ pub const WidowContext = struct {
     pub inline fn setClipboardText(self: *Self, text: []const u8) !void {
         return self.internals.setClipboardText(self.allocator, text);
     }
+
+    /// Sets  the window's icon to the RGBA pixels data.
+    /// # Note
+    /// This function expects non-premultiplied, 32-bits RGBA pixels
+    /// i.e. each channel's value should not be scaled by the alpha value, and should be
+    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
+    /// and the alpha.
+    pub inline fn setWindowIcon(target: *window.Window, pixels: []const u8, width: i32, height: i32) !void {
+        std.debug.assert(width > 0 and height > 0);
+        std.debug.assert(pixels.len == (width * height * 4));
+        try platform.internals.createIcon(target.impl, pixels, width, height);
+    }
+
+    /// Sets the Widow's cursor to an image from the RGBA pixels data.
+    /// # Note
+    /// Unlike [`WidowContext.setWindowIcon`] this function also takes the cooridnates of the
+    /// cursor hotspot which is the pixel that the system tracks to decide mouse click
+    /// target, the `xhot` and `yhot` parameters represent the x and y coordinates
+    /// of that pixel relative to the top left corner of the image, with the x axis directed
+    /// to the right and the y axis directed to the bottom.
+    /// This function expects non-premultiplied,32-bits RGBA pixels
+    /// i.e. each channel's value should not be scaled by the alpha value, and should be
+    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
+    /// and the alpha.
+    pub inline fn setWindowCursor(target: *window.Window, pixels: []const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+        std.debug.assert(width > 0 and height > 0);
+        std.debug.assert(pixels.len == (width * height * 4));
+        try platform.internals.createCursor(target.impl, pixels, width, height, xhot, yhot);
+    }
+
+    // /// Sets the Widow's cursor to an image from the system's standard cursors.
+    // /// # Note
+    // /// The new image used by the cursor is loaded by the system therefore,
+    // /// the appearance will vary between platforms.
+    // pub fn setWindowStdCursor(target: *window.Window, shape: cursor.CursorShape) !void {
+    //     try platform.internals.createStandardCursor(target.impl, shape);
+    // }
 };
 
 test "Widow.init" {
@@ -64,7 +101,7 @@ test "widow.clipboardText" {
 // Exports
 pub const window = @import("window.zig");
 pub const event = common.event;
-pub const input = common.input;
+pub const input = common.keyboard_and_mouse;
 pub const cursor = common.cursor;
 pub const geometry = common.geometry;
 pub const FullScreenMode = common.window_data.FullScreenMode;

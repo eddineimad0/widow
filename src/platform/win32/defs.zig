@@ -266,7 +266,7 @@ pub fn windowProc(
             // away from the user.
             // a negative value indicates that the wheel was rotated backward, toward the user.
             const wheel_delta = @intToFloat(f64, utils.getYLparam(wparam)) / @intToFloat(f64, win32_window_messaging.WHEEL_DELTA);
-            message_handler.mouseWheelMSGHandler(window, common.input.MouseWheel.VerticalWheel, wheel_delta);
+            message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.VerticalWheel, wheel_delta);
             return 0;
         },
 
@@ -275,7 +275,7 @@ pub fn windowProc(
             // A positive value indicates that the wheel was rotated left,
             // a negative value indicates that the wheel was rotated right.
             const wheel_delta = -(@intToFloat(f64, utils.getYLparam(wparam)) / @intToFloat(f64, win32_window_messaging.WHEEL_DELTA));
-            message_handler.mouseWheelMSGHandler(window, common.input.MouseWheel.HorizontalWheel, wheel_delta);
+            message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.HorizontalWheel, wheel_delta);
             return 0;
         },
 

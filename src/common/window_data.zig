@@ -1,7 +1,7 @@
 const VideoMode = @import("./video_mode.zig").VideoMode;
 const WidowPoint2D = @import("./geometry.zig").WidowPoint2D;
 const WidowSize = @import("./geometry.zig").WidowSize;
-const InputState = @import("./input.zig").InputState;
+const InputState = @import("./keyboard_and_mouse.zig").InputState;
 pub const AspectRatio = @import("./geometry.zig").AspectRatio;
 
 pub const WindowFlags = struct {

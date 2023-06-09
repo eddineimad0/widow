@@ -5,8 +5,10 @@ const utils = @import("./utils.zig");
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const winapi = @import("win32");
 const monitor_impl = @import("./monitor_impl.zig");
+const icon = @import("./icon.zig");
 const clipboard = @import("./clipboard.zig");
 const common = @import("common");
+const CursorShape = common.cursor.CursorShape;
 
 const win32_sysinfo = winapi.system.system_information;
 const win32_window_messaging = winapi.ui.windows_and_messaging;
@@ -545,6 +547,50 @@ fn registerDevices(helper_window: HWND, devices: *Win32Context) void {
     // if result == 0 {
     //     return Err("Failed to register Raw Device".to_owned());
     // }
+}
+
+pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
+    const cursor_id = switch (shape) {
+        CursorShape.PointingHand => win32_window_messaging.IDC_HAND,
+        CursorShape.Crosshair => win32_window_messaging.IDC_CROSS,
+        CursorShape.Text => win32_window_messaging.IDC_IBEAM,
+        CursorShape.Wait => win32_window_messaging.IDC_WAIT,
+        CursorShape.Help => win32_window_messaging.IDC_HELP,
+        CursorShape.Busy => win32_window_messaging.IDC_APPSTARTING,
+        CursorShape.Forbidden => win32_window_messaging.IDC_NO,
+        else => win32_window_messaging.IDC_ARROW,
+    };
+    // LoadCursorW takes a handle to an instance of the module
+    // whose executable file contains the cursor to be loaded.
+    const handle = win32_window_messaging.LoadCursorW(0, cursor_id);
+    if (handle == 0) {
+        // We failed.
+        return error.FailedToLoadStdCursor;
+    }
+    window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = true, .mode = common.cursor.CursorMode.Normal });
+}
+
+pub fn createIcon(
+    window: *WindowImpl,
+    pixels: []const u8,
+    width: i32,
+    height: i32,
+) !void {
+    const sm_handle = try icon.createIcon(pixels, width, height, null, null);
+    const bg_handle = try icon.createIcon(pixels, width, height, null, null);
+    window.setIcon(&icon.Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle });
+}
+
+pub fn createCursor(
+    window: *WindowImpl,
+    pixels: []const u8,
+    width: i32,
+    height: i32,
+    xhot: u32,
+    yhot: u32,
+) !void {
+    const handle = try icon.createIcon(pixels, width, height, xhot, yhot);
+    window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal });
 }
 
 // test "Internals.init()" {
