@@ -2,15 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-
     const optimize = b.standardOptimizeOption(.{});
-
-    const lib = b.addStaticLibrary(.{
-        .name = "widow",
-        .root_source_file = .{ .path = "src/widow.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
 
     // common module
     const common = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
@@ -29,29 +21,45 @@ pub fn build(b: *std.Build) void {
             @panic("Unsupported platform");
         },
     };
-    lib.addModule("platform", platform_module);
 
-    b.installArtifact(lib);
+    const deps = [2]std.build.ModuleDependency{
+        std.build.ModuleDependency{ .name = "common", .module = common },
+        std.build.ModuleDependency{ .name = "platform", .module = platform_module },
+    };
 
-    const test_step = b.step("test", "Run library tests");
+    const widow = b.createModule(.{ .source_file = .{ .path = "src/widow.zig" }, .dependencies = &deps });
+
+    const test_step = b.step("test", "Run all library tests");
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/window.zig" },
+        .root_source_file = .{ .path = "src/widow.zig" },
         .target = target,
         .optimize = optimize,
     });
-    main_tests.addModule("platform", platform_module);
-    main_tests.addModule("common", common);
+
+    main_tests.addModule("widow", widow);
     const run_main_test = b.addRunArtifact(main_tests);
     test_step.dependOn(&run_main_test.step);
 
     const example_step = b.step("example", "Compile example");
-    const example = b.addExecutable(.{
-        .name = "simple_window",
-        .root_source_file = .{ .path = "test/simple_window.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    example.linkLibrary(lib);
-    b.installArtifact(example);
-    example_step.dependOn(&example.step);
+
+    const examples = [_][]const u8{ "simple_window", "playing_with_inputs", "cursor_and_icon" };
+    for (examples) |example_name| {
+        const example = b.addExecutable(.{
+            .name = example_name,
+            .root_source_file = .{ .path = b.fmt("examples/{s}.zig", .{example_name}) },
+            .target = target,
+            .optimize = optimize,
+        });
+        example.addModule("widow", widow);
+        example.linkLibC();
+        const install_step = b.addInstallArtifact(example);
+        example_step.dependOn(&example.step);
+        example_step.dependOn(&install_step.step);
+    }
+
+    const all_step = b.step("all", "Build all examples and run all tests.");
+    all_step.dependOn(test_step);
+    all_step.dependOn(example_step);
+
+    b.default_step.dependOn(all_step);
 }

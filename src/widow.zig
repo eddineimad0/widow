@@ -72,6 +72,11 @@ pub const WidowContext = struct {
     // }
 };
 
+test "widow" {
+    const testing = std.testing;
+    testing.refAllDecls(@This());
+}
+
 test "Widow.init" {
     const testing = std.testing;
     var cntxt = try WidowContext.init(testing.allocator);
