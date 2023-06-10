@@ -273,6 +273,10 @@ pub const Internals = struct {
     pub inline fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
         if (self.devices.clipboard_change or self.clipboard_text == null) {
             // refetching clipboard data
+            if (self.clipboard_text) |text| {
+                allocator.free(text);
+                errdefer self.clipboard_text = null;
+            }
             self.clipboard_text = try clipboard.clipboardText(allocator, self.win32.handles.helper_window);
             self.devices.clipboard_change = false;
         }
@@ -593,33 +597,33 @@ pub fn createCursor(
     window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal });
 }
 
-// test "Internals.init()" {
-//     const testing = std.testing;
-//     var result = try Internals.create(testing.allocator);
-//     registerDevices(result.win32.handles.helper_window, &result.devices);
-//     defer result.destroy(testing.allocator);
-// }
-//
-// test "Devices.init()" {
-//     const VideoMode = @import("common").video_mode.VideoMode;
-//     const testing = std.testing;
-//     var ph_dev = try Devices.init(testing.allocator);
-//     defer ph_dev.deinit();
-//     var all_monitors = try monitor_impl.poll_monitors(testing.allocator);
-//     defer {
-//         for (all_monitors.items) |*monitor| {
-//             // monitors contain heap allocated data that need
-//             // to be freed.
-//             monitor.deinit();
-//         }
-//         all_monitors.deinit();
-//     }
-//     var main_monitor = all_monitors.items[0];
-//     try ph_dev.update_monitors();
-//     var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
-//     const mode = VideoMode.init(1600, 900, 32, 60);
-//     try primary_monitor.*.set_video_mode(&mode);
-//     std.time.sleep(std.time.ns_per_s * 3);
-//     std.debug.print("Restoring Original Mode....\n", .{});
-//     primary_monitor.*.restore_orignal_video();
-// }
+test "Internals.init()" {
+    const testing = std.testing;
+    var result = try Internals.create(testing.allocator);
+    registerDevices(result.win32.handles.helper_window, &result.devices);
+    defer result.destroy(testing.allocator);
+}
+
+test "Win32Context.init()" {
+    const VideoMode = @import("common").video_mode.VideoMode;
+    const testing = std.testing;
+    var ph_dev = try Win32Context.init(testing.allocator);
+    defer ph_dev.deinit();
+    var all_monitors = try monitor_impl.pollMonitors(testing.allocator);
+    defer {
+        for (all_monitors.items) |*monitor| {
+            // monitors contain heap allocated data that need
+            // to be freed.
+            monitor.deinit();
+        }
+        all_monitors.deinit();
+    }
+    var main_monitor = all_monitors.items[0];
+    try ph_dev.updateMonitors();
+    var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
+    const mode = VideoMode.init(1600, 900, 32, 60);
+    try primary_monitor.*.setVideoMode(&mode);
+    std.time.sleep(std.time.ns_per_s * 3);
+    std.debug.print("Restoring Original Mode....\n", .{});
+    primary_monitor.*.restoreOrignalVideo();
+}

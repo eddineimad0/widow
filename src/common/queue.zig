@@ -63,7 +63,7 @@ pub fn Queue(comptime T: type) type {
         pub fn popFront(self: *Self) ?T {
             const first = self.get() orelse return null;
             const item = first.*;
-            _ = self.remove_front();
+            _ = self.removeFront();
             return item;
         }
     };

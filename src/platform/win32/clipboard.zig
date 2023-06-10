@@ -19,7 +19,7 @@ pub const ClipboardError = error{
 /// # Note
 /// This function fails if the clipboard doesn't contain a proper unicode formatted string.
 /// The caller is responsible for freeing the returned string.
-pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ClipboardError![]u8 {
+pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
     if (win32_system_data_exchange.OpenClipboard(window_handle) != 0) {
         defer _ = win32_system_data_exchange.CloseClipboard();
         const handle = win32_system_data_exchange.GetClipboardData(CF_UNICODETEXT);
@@ -50,7 +50,7 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) Clipboar
 }
 
 /// Paste the given `text` to the system clipboard.
-pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text: []const u8) ClipboardError!void {
+pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text: []const u8) !void {
     if (win32_system_data_exchange.OpenClipboard(window_handle) == 0) {
         return ClipboardError.FailedToOpenClipboard;
     }
@@ -59,7 +59,7 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
         return ClipboardError.FailedToGainClipboardOwnership;
     }
 
-    const wide_text = try utils.utf8ToWide(allocator, text);
+    const wide_text = try utils.utf8ToWideZ(allocator, text);
     defer allocator.free(wide_text);
     const bytes_len = (wide_text.len + 1) << 1; // + 1 for the null terminator.
     const alloc_mem = win32_system_memory.GlobalAlloc(win32_system_memory.GMEM_MOVEABLE, bytes_len);
