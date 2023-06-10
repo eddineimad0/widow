@@ -72,17 +72,10 @@ pub const WidowContext = struct {
     // }
 };
 
-test "widow" {
-    const testing = std.testing;
-    testing.refAllDecls(@This());
-}
-
 test "Widow.init" {
     const testing = std.testing;
     var cntxt = try WidowContext.init(testing.allocator);
-    defer {
-        cntxt.deinit();
-    }
+    defer cntxt.deinit();
 }
 
 test "widow.clipboardText" {
@@ -96,11 +89,16 @@ test "widow.clipboardText" {
     std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
     const copied_string2 = try cntxt.clipboardText();
     std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
-    testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
+    try testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
     try cntxt.setClipboardText(string2);
     const copied_string3 = try cntxt.clipboardText();
-    testing.expect(copied_string3.ptr != copied_string.ptr);
+    try testing.expect(copied_string3.ptr != copied_string.ptr);
     std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
+}
+
+test "widow modules" {
+    const testing = std.testing;
+    testing.refAllDecls(@This());
 }
 
 // Exports
