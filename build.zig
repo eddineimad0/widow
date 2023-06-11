@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // common module
-    const common = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
+    const common_module = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
 
     var platform_module: *std.build.Module = switch (target.getOs().tag) {
         .windows => windows: {
@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
                 .source_file = .{ .path = "libs/zigwin32/win32.zig" },
             });
             var deps: [2]std.build.ModuleDependency = undefined;
-            deps[0] = std.build.ModuleDependency{ .name = "common", .module = common };
+            deps[0] = std.build.ModuleDependency{ .name = "common", .module = common_module };
             deps[1] = std.build.ModuleDependency{ .name = "win32", .module = win32api };
             break :windows b.createModule(.{ .source_file = .{ .path = "src/platform/win32/platform.zig" }, .dependencies = &deps });
         },
@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     };
 
     const deps = [2]std.build.ModuleDependency{
-        std.build.ModuleDependency{ .name = "common", .module = common },
+        std.build.ModuleDependency{ .name = "common", .module = common_module },
         std.build.ModuleDependency{ .name = "platform", .module = platform_module },
     };
 
@@ -36,7 +36,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    main_tests.addModule("widow", widow);
+    main_tests.addModule("common", common_module);
+    main_tests.addModule("platform", platform_module);
     const run_main_test = b.addRunArtifact(main_tests);
     test_step.dependOn(&run_main_test.step);
 

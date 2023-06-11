@@ -209,11 +209,15 @@ fn createPlatformWindow(
     else
         null;
 
+    var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME);
     const window_title = try utils.utf8ToWideZ(allocator, data.title);
     defer allocator.free(window_title);
     const window_handle = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]), // dwExStyles
-        utils.makeIntAtom(u16, internals.win32.handles.main_class), // Window Class Name
+        wide_class_name, // Window Class Name
+        // utils.makeIntAtom(u16, internals.win32.handles.main_class),
         window_title, // Window Name
         @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]), // dwStyles
         frame[0], // X

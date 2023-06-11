@@ -26,8 +26,6 @@ const HWND = winapi.foundation.HWND;
 const HMONITOR = winapi.graphics.gdi.HMONITOR;
 const CW_USEDEFAULT = win32_window_messaging.CW_USEDEFAULT;
 
-const WINDOW_CLASS_NAME = "WIDOW_CLASS";
-
 const Win32Flags = struct {
     is_win_vista_or_above: bool,
     is_win7_or_above: bool,
@@ -166,6 +164,9 @@ pub const Internals = struct {
     win32: Win32,
     devices: Win32Context,
     clipboard_text: ?[]u8,
+    pub const WINDOW_CLASS_NAME = "WIDOW_CLASS";
+    const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
+    const HELPER_TITLE = "helper window";
     const Self = @This();
 
     pub fn create(allocator: std.mem.Allocator) !*Self {
@@ -176,7 +177,7 @@ pub const Internals = struct {
         var hinstance: ?module.HINSTANCE = null;
         if (GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-            @intToPtr(?[*:0]const u16, @ptrToInt(&WINDOW_CLASS_NAME)),
+            @intToPtr(?[*:0]const u16, @ptrToInt(&Internals.WINDOW_CLASS_NAME)),
             &hinstance,
         ) == 0) {
             return InternalError.FailedToGetModuleHandle;
@@ -189,8 +190,13 @@ pub const Internals = struct {
         );
 
         errdefer {
+            var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            const fballocator = fba.allocator();
+            const wide_class_name = utils.utf8ToWideZ(fballocator, Internals.WINDOW_CLASS_NAME) catch unreachable;
             _ = win32_window_messaging.UnregisterClassW(
-                utils.makeIntAtom(u16, self.win32.handles.main_class),
+                // utils.makeIntAtom(u16, self.win32.handles.main_class),
+                wide_class_name,
                 self.win32.handles.hinstance,
             );
         }
@@ -242,20 +248,28 @@ pub const Internals = struct {
         // Free the loaded modules.
         self.freeLibraries();
 
-        // Unregister the window class.
-        _ = win32_window_messaging.UnregisterClassW(
-            utils.makeIntAtom(u16, self.win32.handles.main_class),
-            self.win32.handles.hinstance,
-        );
-
         // Clear up the Devices refrence
         _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
 
         _ = win32_window_messaging.DestroyWindow(self.win32.handles.helper_window);
 
+        var buffer: [(Internals.WINDOW_CLASS_NAME.len + Internals.HELPER_CLASS_NAME.len) * 5]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        const fballocator = fba.allocator();
+        const wide_class_name = utils.utf8ToWideZ(fballocator, Internals.WINDOW_CLASS_NAME) catch unreachable;
+        const helper_class_name = utils.utf8ToWideZ(fballocator, Internals.HELPER_CLASS_NAME) catch unreachable;
+
         // Unregister the helper class.
         _ = win32_window_messaging.UnregisterClassW(
-            utils.makeIntAtom(u16, self.win32.handles.helper_class),
+            // utils.makeIntAtom(u16, self.win32.handles.helper_class),
+            helper_class_name,
+            self.win32.handles.hinstance,
+        );
+
+        // Unregister the window class.
+        _ = win32_window_messaging.UnregisterClassW(
+            // utils.makeIntAtom(u16, self.win32.handles.main_class),
+            wide_class_name,
             self.win32.handles.hinstance,
         );
 
@@ -263,6 +277,7 @@ pub const Internals = struct {
             allocator.free(text);
             self.clipboard_text = null;
         }
+
         clipboard.unregisterClipboardViewer(self.win32.handles.helper_window, self.devices.next_clipboard_viewer);
 
         self.devices.deinit();
@@ -448,10 +463,10 @@ fn registerWindowClass(
     window_class.lpfnWndProc = defs.windowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
-    var buffer: [WINDOW_CLASS_NAME.len * 5]u8 = undefined;
+    var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8ToWideZ(allocator, WINDOW_CLASS_NAME);
+    const wide_class_name = try utils.utf8ToWideZ(allocator, Internals.WINDOW_CLASS_NAME);
     window_class.lpszClassName = wide_class_name.ptr;
     window_class.hIcon = null;
     //     TODO
@@ -489,18 +504,16 @@ fn registerWindowClass(
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling hardware related messages.
 fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *HWND) !void {
-    const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
-    const HELPER_TITLE = "helper window";
     var helper_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     helper_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     helper_class.style = win32_window_messaging.CS_OWNDC;
     helper_class.lpfnWndProc = defs.helperWindowProc;
     helper_class.hInstance = hinstance;
     // Estimate five times the curent utf8 string len.
-    var buffer: [(HELPER_CLASS_NAME.len + HELPER_TITLE.len) * 5]u8 = undefined;
+    var buffer: [(Internals.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8ToWideZ(allocator, HELPER_CLASS_NAME);
+    const wide_class_name = try utils.utf8ToWideZ(allocator, Internals.HELPER_CLASS_NAME);
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
@@ -508,11 +521,11 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     }
     errdefer {
         _ = win32_window_messaging.UnregisterClassW(
-            utils.makeIntAtom(u16, helper_handle.*),
+            wide_class_name,
             hinstance,
         );
     }
-    const helper_title = try utils.utf8ToWideZ(allocator, HELPER_TITLE);
+    const helper_title = try utils.utf8ToWideZ(allocator, Internals.HELPER_TITLE);
     helper_window.* = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
         wide_class_name,
