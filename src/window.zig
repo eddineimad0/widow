@@ -23,7 +23,7 @@ pub const WindowBuilder = struct {
                 .height = height,
                 .color_depth = 32,
                 .frequency = 60,
-            }, .position = null, .restore_point = null, .min_size = null, .max_size = null, .aspect_ratio = null, .fullscreen_mode = null, .flags = common.window_data.WindowFlags{
+            }, .position = platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION, .restore_point = null, .min_size = null, .max_size = null, .aspect_ratio = null, .fullscreen_mode = null, .flags = common.window_data.WindowFlags{
                 .is_visible = true,
                 .is_maximized = false,
                 .is_minimized = false,

@@ -25,7 +25,7 @@ pub const FullScreenMode = enum(u8) {
 pub const WindowData = struct {
     title: []const u8, // The window title.
     video: VideoMode, // The video mode of the window.
-    position: ?WidowPoint2D, // The current Position of the top left corner of the
+    position: WidowPoint2D, // The current Position of the top left corner of the
     restore_point: ?WidowPoint2D, // Keeps track of where to restore the window when exiting
     min_size: ?WidowSize, // The minimum limits of the window's size.
     max_size: ?WidowSize, // The maximum limits of the window's size.

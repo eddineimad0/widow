@@ -189,9 +189,11 @@ fn createPlatformWindow(
 
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
-    if (data.position) |point| {
-        frame_x = point.x + window_rect.left;
-        frame_y = point.y + window_rect.top;
+    if (data.position.x != win32_window_messaging.CW_USEDEFAULT and
+        data.position.y != win32_window_messaging.CW_USEDEFAULT)
+    {
+        frame_x = data.position.x + window_rect.left;
+        frame_y = data.position.y + window_rect.top;
     } else {
         frame_x = win32_window_messaging.CW_USEDEFAULT;
         frame_y = win32_window_messaging.CW_USEDEFAULT;
@@ -323,6 +325,10 @@ pub const WindowImpl = struct {
     handle: win32_foundation.HWND,
     events_queue: Queue(common.event.Event),
     win32: ExtraWin32Data,
+    pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
+        .x = win32_window_messaging.CW_USEDEFAULT,
+        .y = win32_window_messaging.CW_USEDEFAULT,
+    };
     const Self = @This();
 
     pub fn create(allocator: std.mem.Allocator, internals: *Internals, data: WindowData) !*Self {
@@ -610,7 +616,7 @@ pub const WindowImpl = struct {
     /// Could add thread safety with RWlock.
     pub fn position(self: *const Self) common.geometry.WidowPoint2D {
         // if minimized return last known position.
-        return self.data.position.?;
+        return self.data.position;
     }
 
     /// Moves the window's top left corner
@@ -986,9 +992,7 @@ pub const WindowImpl = struct {
         std.debug.print("title: {s}\n", .{self.data.title});
         std.debug.print("Video Mode: {}\n", .{self.data.video});
         std.debug.print("Flags Mode: {}\n", .{self.data.flags});
-        if (self.data.position) |*value| {
-            std.debug.print("Top Left Position: {}\n", .{value.*});
-        }
+        std.debug.print("Top Left Position: {}\n", .{self.data.position});
         if (self.data.min_size) |*value| {
             std.debug.print("Min Size: {}\n", .{value.*});
         }
