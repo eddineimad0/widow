@@ -62,5 +62,5 @@ pub fn build(b: *std.Build) void {
     all_step.dependOn(test_step);
     all_step.dependOn(example_step);
 
-    b.default_step.dependOn(all_step);
+    b.default_step.dependOn(example_step);
 }
