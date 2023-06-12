@@ -875,8 +875,8 @@ pub const WindowImpl = struct {
         self.data.aspect_ratio = ratio;
         if (ratio != null) {
             var rect: win32_foundation.RECT = undefined;
-            clientRect(self.handle, &rect);
-            self.applyAspectRatio(&rect, win32_window_messaging.WMSZ_TOPLEFT);
+            _ = win32_window_messaging.GetWindowRect(self.handle, &rect);
+            self.applyAspectRatio(&rect, win32_window_messaging.WMSZ_BOTTOMLEFT);
             _ = win32_window_messaging.MoveWindow(
                 self.handle,
                 rect.left,
@@ -889,7 +889,9 @@ pub const WindowImpl = struct {
     }
 
     pub fn applyAspectRatio(self: *const Self, client: *win32_foundation.RECT, edge: u32) void {
-        const ratio = @intToFloat(f64, self.data.aspect_ratio.?.x) / @intToFloat(f64, self.data.aspect_ratio.?.y); //(numer/denom)
+        //(numer/denom)
+        const ratio = @intToFloat(f64, self.data.aspect_ratio.?.x) / @intToFloat(f64, self.data.aspect_ratio.?.y);
+
         var rect = win32_foundation.RECT{
             .left = 0,
             .top = 0,
