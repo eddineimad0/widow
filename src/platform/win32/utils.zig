@@ -138,7 +138,7 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
 pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode } {
     const MAPVK_VK_TO_VSC = 0;
     // The extended bit is necessary to find the correct scancode
-    var code: usize = @bitCast(usize, (lparam >> 16) & 0x1FF);
+    var code: u32 = @truncate(u32, @bitCast(usize, (lparam >> 16) & 0x1FF));
     if (code == 0) {
         // scancode value shouldn't be zero
         code = win32_keyboard_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_VSC);
@@ -156,7 +156,7 @@ pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode }
 
     const virt_keycode = platformKeyToVirutal(keycode);
 
-    const scancode = processWindowsScancode(code);
+    const scancode = mapWindowsScancode(code);
 
     return .{ virt_keycode, scancode };
 }
@@ -441,7 +441,7 @@ fn platformKeyToVirutal(keycode: u16) VirtualCode {
         else => return WINDOWS_VK_TABLE[keycode],
     }
 }
-pub fn processWindowsScancode(scancode: usize) ScanCode {
+pub fn mapWindowsScancode(scancode: u32) ScanCode {
     const WINDOWS_SCANCODE_TABLE = comptime [512]ScanCode{
         ScanCode.Unknown, //0x000
         ScanCode.Escape, //0x001
