@@ -163,110 +163,282 @@ pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode }
 
 /// Maps a Windows virtual key code to a widow virtual Key Code.
 fn platformKeyToVirutal(keycode: u16) VirtualCode {
+    const WINDOWS_VK_TABLE = comptime [255]VirtualCode{
+        VirtualCode.Unknown, //0x00
+        VirtualCode.Unknown, //0x01
+        VirtualCode.Unknown, //0x02
+        VirtualCode.Unknown, //0x03
+        VirtualCode.Unknown, //0x04
+        VirtualCode.Unknown, //0x05
+        VirtualCode.Unknown, //0x06
+        VirtualCode.Unknown, //0x07
+        VirtualCode.Backspace, //0x08
+        VirtualCode.Tab, //0x09
+        VirtualCode.Unknown, //0x0A
+        VirtualCode.Unknown, //0x0B
+        VirtualCode.Unknown, //0x0C
+        VirtualCode.Return, //0x0D
+        VirtualCode.Unknown, //0x0E
+        VirtualCode.Unknown, //0x0F
+        VirtualCode.Shift, //0x10
+        VirtualCode.Control, //0x11
+        VirtualCode.Alt, //0x12
+        VirtualCode.Pause, //0x13
+        VirtualCode.CapsLock, //0x14
+        VirtualCode.Unknown, //0x15
+        VirtualCode.Unknown, //0x16
+        VirtualCode.Unknown, //0x17
+        VirtualCode.Unknown, //0x18
+        VirtualCode.Unknown, //0x19
+        VirtualCode.Unknown, //0x1A
+        VirtualCode.Escape, //0x1B
+        VirtualCode.Unknown, //0x1C
+        VirtualCode.Unknown, //0x1D
+        VirtualCode.Unknown, //0x1E
+        VirtualCode.Unknown, //0x1F
+        VirtualCode.Space, //0x20
+        VirtualCode.PageUp, //0x21
+        VirtualCode.PageDown, //0x22
+        VirtualCode.End, //0x23
+        VirtualCode.Home, //0x24
+        VirtualCode.Left, //0x25
+        VirtualCode.Up, //0x26
+        VirtualCode.Right, //0x27
+        VirtualCode.Down, //0x28
+        VirtualCode.Unknown, //0x29 VK_SELECT
+        VirtualCode.Unknown, //0x2A VK_PRINT
+        VirtualCode.Unknown, //0x2B //VK_EXECUTE
+        VirtualCode.PrintScreen, //0x2C
+        VirtualCode.Insert, //0x2D
+        VirtualCode.Delete, //0x2E
+        VirtualCode.Unknown, //0x2F VK_HELP
+        VirtualCode.Num0, //0x30
+        VirtualCode.Num1, //0x31
+        VirtualCode.Num2, //0x32
+        VirtualCode.Num3, //0x33
+        VirtualCode.Num4, //0x34
+        VirtualCode.Num5, //0x35
+        VirtualCode.Num6, //0x36
+        VirtualCode.Num7, //0x37
+        VirtualCode.Num8, //0x38
+        VirtualCode.Num9, //0x39
+        VirtualCode.Unknown, //0x3A
+        VirtualCode.Unknown, //0x3B
+        VirtualCode.Unknown, //0x3C
+        VirtualCode.Unknown, //0x3D
+        VirtualCode.Unknown, //0x3E
+        VirtualCode.Unknown, //0x3F
+        VirtualCode.Unknown, //0x40
+        VirtualCode.A, //0x41
+        VirtualCode.B, //0x42
+        VirtualCode.C, //0x43
+        VirtualCode.D, //0x44
+        VirtualCode.E, //0x45
+        VirtualCode.F, //0x46
+        VirtualCode.G, //0x47
+        VirtualCode.H, //0x48
+        VirtualCode.I, //0x49
+        VirtualCode.J, //0x4A
+        VirtualCode.K, //0x4B
+        VirtualCode.L, //0x4C
+        VirtualCode.M, //0x4D
+        VirtualCode.N, //0x4E
+        VirtualCode.O, //0x4F
+        VirtualCode.P, //0x50
+        VirtualCode.Q, //0x51
+        VirtualCode.R, //0x52
+        VirtualCode.S, //0x53
+        VirtualCode.T, //0x54
+        VirtualCode.U, //0x55
+        VirtualCode.V, //0x56
+        VirtualCode.W, //0x57
+        VirtualCode.X, //0x58
+        VirtualCode.Y, //0x59
+        VirtualCode.Z, //0x5A
+        VirtualCode.Meta, //0x5B
+        VirtualCode.Meta, //0x5C
+        VirtualCode.Unknown, //0x5D VK_APPS
+        VirtualCode.Unknown, //0x5E
+        VirtualCode.Unknown, //0x5F VK_SLEEP
+        VirtualCode.Numpad0, //0x60
+        VirtualCode.Numpad1, //0x61
+        VirtualCode.Numpad2, //0x62
+        VirtualCode.Numpad3, //0x63
+        VirtualCode.Numpad4, //0x64
+        VirtualCode.Numpad5, //0x65
+        VirtualCode.Numpad6, //0x66
+        VirtualCode.Numpad7, //0x67
+        VirtualCode.Numpad8, //0x68
+        VirtualCode.Numpad9, //0x69
+        VirtualCode.Multiply, //0x6A
+        VirtualCode.Add, //0x6B
+        VirtualCode.Unknown, //0x6C VK_SEPERATOR
+        VirtualCode.Substract, //0x6D
+        VirtualCode.Period, //0x6E
+        VirtualCode.Divide, //0x6F
+        VirtualCode.F1, //0x70
+        VirtualCode.F2, //0x71
+        VirtualCode.F3, //0x72
+        VirtualCode.F4, //0x73
+        VirtualCode.F5, //0x74
+        VirtualCode.F6, //0x75
+        VirtualCode.F7, //0x76
+        VirtualCode.F8, //0x77
+        VirtualCode.F9, //0x78
+        VirtualCode.F10, //0x79
+        VirtualCode.F11, //0x7A
+        VirtualCode.F12, //0x7B
+        // 0x7C - 0x87: F13-F24,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        // 0x88 - 0x8F: unassigned
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.NumLock, //0x90
+        VirtualCode.ScrollLock, //0x91
+        // 0x92 - 0x9F unassigned.
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        // 0xA0 - 0xAC : No mapped enum variant.
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.VolumeMute, //0xAD
+        VirtualCode.VolumeDown, //0xAE
+        VirtualCode.VolumeUp, //0xAF
+        VirtualCode.NextTrack, //0xB0
+        VirtualCode.PrevTrack, //0xB1
+        VirtualCode.Unknown, //0xB2 VK_MEDIA_STOP
+        VirtualCode.PlayPause, //0xB3
+        // 0xB4 - 0xBA: No enum variant.
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Equals, //0xBB
+        VirtualCode.Comma, //0xBC
+        VirtualCode.Hyphen, //0xBD
+        VirtualCode.Period, //0xBE
+        // 0xBF - 0xFF: Not mapped.
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+        VirtualCode.Unknown,
+    };
+
+    if (keycode >= 255) {
+        return VirtualCode.Unknown;
+    }
+
     switch (keycode) {
-        @enumToInt(win32_keyboard_mouse.VK_SHIFT) => return VirtualCode.Shift,
-        @enumToInt(win32_keyboard_mouse.VK_CONTROL) => return VirtualCode.Control,
-        @enumToInt(win32_keyboard_mouse.VK_MENU) => return VirtualCode.Alt,
-        @enumToInt(win32_keyboard_mouse.VK_LWIN), @enumToInt(win32_keyboard_mouse.VK_RWIN) => return VirtualCode.Meta,
         // Note: OEM keys are used for miscellanous characters
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
         @enumToInt(win32_keyboard_mouse.VK_OEM_1), @enumToInt(win32_keyboard_mouse.VK_OEM_2), @enumToInt(win32_keyboard_mouse.VK_OEM_3), @enumToInt(win32_keyboard_mouse.VK_OEM_4), @enumToInt(win32_keyboard_mouse.VK_OEM_5), @enumToInt(win32_keyboard_mouse.VK_OEM_6), @enumToInt(win32_keyboard_mouse.VK_OEM_7), @enumToInt(win32_keyboard_mouse.VK_OEM_102) => {
             return keyTextToVirtual(keycode);
         },
-        @enumToInt(win32_keyboard_mouse.VK_OEM_PLUS) => return VirtualCode.Equals,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_MINUS) => return VirtualCode.Hyphen,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_COMMA) => return VirtualCode.Comma,
-        @enumToInt(win32_keyboard_mouse.VK_OEM_PERIOD) => return VirtualCode.Period,
-        @enumToInt(win32_keyboard_mouse.VK_ESCAPE) => return VirtualCode.Escape,
-        @enumToInt(win32_keyboard_mouse.VK_SPACE) => return VirtualCode.Space,
-        @enumToInt(win32_keyboard_mouse.VK_RETURN) => return VirtualCode.Return,
-        @enumToInt(win32_keyboard_mouse.VK_BACK) => return VirtualCode.Backspace,
-        @enumToInt(win32_keyboard_mouse.VK_TAB) => return VirtualCode.Tab,
-        @enumToInt(win32_keyboard_mouse.VK_CAPITAL) => return VirtualCode.CapsLock,
-        @enumToInt(win32_keyboard_mouse.VK_PRIOR) => return VirtualCode.PageUp,
-        @enumToInt(win32_keyboard_mouse.VK_NEXT) => return VirtualCode.PageDown,
-        @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT) => return VirtualCode.PrintScreen,
-        @enumToInt(win32_keyboard_mouse.VK_END) => return VirtualCode.End,
-        @enumToInt(win32_keyboard_mouse.VK_HOME) => return VirtualCode.Home,
-        @enumToInt(win32_keyboard_mouse.VK_INSERT) => return VirtualCode.Insert,
-        @enumToInt(win32_keyboard_mouse.VK_DELETE) => return VirtualCode.Delete,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_UP) => return VirtualCode.VolumeUp,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_DOWN) => return VirtualCode.VolumeDown,
-        @enumToInt(win32_keyboard_mouse.VK_VOLUME_MUTE) => return VirtualCode.VolumeMute,
-        @enumToInt(win32_keyboard_mouse.VK_ADD) => return VirtualCode.Add,
-        @enumToInt(win32_keyboard_mouse.VK_SUBTRACT) => return VirtualCode.Substract,
-        @enumToInt(win32_keyboard_mouse.VK_MULTIPLY) => return VirtualCode.Multiply,
-        @enumToInt(win32_keyboard_mouse.VK_DIVIDE) => return VirtualCode.Divide,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_NEXT_TRACK) => return VirtualCode.NextTrack,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PREV_TRACK) => return VirtualCode.PrevTrack,
-        @enumToInt(win32_keyboard_mouse.VK_MEDIA_PLAY_PAUSE) => return VirtualCode.PlayPause,
-        @enumToInt(win32_keyboard_mouse.VK_F1) => return VirtualCode.F1,
-        @enumToInt(win32_keyboard_mouse.VK_F2) => return VirtualCode.F2,
-        @enumToInt(win32_keyboard_mouse.VK_F3) => return VirtualCode.F3,
-        @enumToInt(win32_keyboard_mouse.VK_F4) => return VirtualCode.F4,
-        @enumToInt(win32_keyboard_mouse.VK_F5) => return VirtualCode.F5,
-        @enumToInt(win32_keyboard_mouse.VK_F6) => return VirtualCode.F6,
-        @enumToInt(win32_keyboard_mouse.VK_F7) => return VirtualCode.F7,
-        @enumToInt(win32_keyboard_mouse.VK_F8) => return VirtualCode.F8,
-        @enumToInt(win32_keyboard_mouse.VK_F9) => return VirtualCode.F9,
-        @enumToInt(win32_keyboard_mouse.VK_F10) => return VirtualCode.F10,
-        @enumToInt(win32_keyboard_mouse.VK_F11) => return VirtualCode.F11,
-        @enumToInt(win32_keyboard_mouse.VK_F12) => return VirtualCode.F12,
-        @enumToInt(win32_keyboard_mouse.VK_LEFT) => return VirtualCode.Left,
-        @enumToInt(win32_keyboard_mouse.VK_RIGHT) => return VirtualCode.Right,
-        @enumToInt(win32_keyboard_mouse.VK_UP) => return VirtualCode.Up,
-        @enumToInt(win32_keyboard_mouse.VK_DOWN) => return VirtualCode.Down,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD0) => return VirtualCode.Numpad0,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD1) => return VirtualCode.Numpad1,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD2) => return VirtualCode.Numpad2,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD3) => return VirtualCode.Numpad3,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD4) => return VirtualCode.Numpad4,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD5) => return VirtualCode.Numpad5,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD6) => return VirtualCode.Numpad6,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD7) => return VirtualCode.Numpad7,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD8) => return VirtualCode.Numpad8,
-        @enumToInt(win32_keyboard_mouse.VK_NUMPAD9) => return VirtualCode.Numpad9,
-        @enumToInt(win32_keyboard_mouse.VK_DECIMAL) => return VirtualCode.Period,
-        @enumToInt(win32_keyboard_mouse.VK_NUMLOCK) => return VirtualCode.NumLock,
-        @enumToInt(win32_keyboard_mouse.VK_SCROLL) => return VirtualCode.ScrollLock,
-        @enumToInt(win32_keyboard_mouse.VK_0) => return VirtualCode.Num0,
-        @enumToInt(win32_keyboard_mouse.VK_1) => return VirtualCode.Num1,
-        @enumToInt(win32_keyboard_mouse.VK_2) => return VirtualCode.Num2,
-        @enumToInt(win32_keyboard_mouse.VK_3) => return VirtualCode.Num3,
-        @enumToInt(win32_keyboard_mouse.VK_4) => return VirtualCode.Num4,
-        @enumToInt(win32_keyboard_mouse.VK_5) => return VirtualCode.Num5,
-        @enumToInt(win32_keyboard_mouse.VK_6) => return VirtualCode.Num6,
-        @enumToInt(win32_keyboard_mouse.VK_7) => return VirtualCode.Num7,
-        @enumToInt(win32_keyboard_mouse.VK_8) => return VirtualCode.Num8,
-        @enumToInt(win32_keyboard_mouse.VK_9) => return VirtualCode.Num9,
-        @enumToInt(win32_keyboard_mouse.VK_A) => return VirtualCode.A,
-        @enumToInt(win32_keyboard_mouse.VK_B) => return VirtualCode.B,
-        @enumToInt(win32_keyboard_mouse.VK_C) => return VirtualCode.C,
-        @enumToInt(win32_keyboard_mouse.VK_D) => return VirtualCode.D,
-        @enumToInt(win32_keyboard_mouse.VK_E) => return VirtualCode.E,
-        @enumToInt(win32_keyboard_mouse.VK_F) => return VirtualCode.F,
-        @enumToInt(win32_keyboard_mouse.VK_G) => return VirtualCode.G,
-        @enumToInt(win32_keyboard_mouse.VK_H) => return VirtualCode.H,
-        @enumToInt(win32_keyboard_mouse.VK_I) => return VirtualCode.I,
-        @enumToInt(win32_keyboard_mouse.VK_J) => return VirtualCode.J,
-        @enumToInt(win32_keyboard_mouse.VK_K) => return VirtualCode.K,
-        @enumToInt(win32_keyboard_mouse.VK_L) => return VirtualCode.L,
-        @enumToInt(win32_keyboard_mouse.VK_M) => return VirtualCode.M,
-        @enumToInt(win32_keyboard_mouse.VK_N) => return VirtualCode.N,
-        @enumToInt(win32_keyboard_mouse.VK_O) => return VirtualCode.O,
-        @enumToInt(win32_keyboard_mouse.VK_P) => return VirtualCode.P,
-        @enumToInt(win32_keyboard_mouse.VK_Q) => return VirtualCode.Q,
-        @enumToInt(win32_keyboard_mouse.VK_R) => return VirtualCode.R,
-        @enumToInt(win32_keyboard_mouse.VK_S) => return VirtualCode.S,
-        @enumToInt(win32_keyboard_mouse.VK_T) => return VirtualCode.T,
-        @enumToInt(win32_keyboard_mouse.VK_U) => return VirtualCode.U,
-        @enumToInt(win32_keyboard_mouse.VK_V) => return VirtualCode.V,
-        @enumToInt(win32_keyboard_mouse.VK_W) => return VirtualCode.W,
-        @enumToInt(win32_keyboard_mouse.VK_X) => return VirtualCode.X,
-        @enumToInt(win32_keyboard_mouse.VK_Y) => return VirtualCode.Y,
-        @enumToInt(win32_keyboard_mouse.VK_Z) => return VirtualCode.Z,
-        else => return VirtualCode.Unknown,
+        else => return WINDOWS_VK_TABLE[keycode],
     }
 }
 pub fn processWindowsScancode(scancode: usize) ScanCode {
