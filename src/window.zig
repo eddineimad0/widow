@@ -10,6 +10,18 @@ pub const WindowBuilder = struct {
     window_config: common.window_data.WindowData,
     const Self = @This();
 
+    /// Creates a window builder instance.
+    /// The window builder wraps the creation attributes of the window,
+    /// and the functions necessary to changes those attributes.
+    /// # Parameter
+    /// `title`: the title to be displayed in the window's caption bar.
+    /// `width`: intial width of the window.
+    /// `height`: intial height of the window.
+    /// `context`: a pointer to the WidowContext instance.
+    /// # Note
+    /// The context parameter should point to an initialzed WidowContext instance that lives
+    /// as long as the window, i.e destroying the WidowContext instance before the window is destroyed
+    /// causes undefined behaviour.
     pub fn init(title: []const u8, width: i32, height: i32, context: *WidowContext) !Self {
         std.debug.assert(context.internals != undefined);
         std.debug.assert((width > 0 and height > 0));
@@ -38,7 +50,9 @@ pub const WindowBuilder = struct {
         };
     }
 
-    /// Returns the built window instance
+    /// Creates and returns the built window instance.
+    /// # Note
+    /// The user should deinitialize the Window instance when done.
     pub fn build(self: *const Self) !Window {
         return Window{
             .impl = try platform.window_impl.WindowImpl.create(self.allocator, self.platform_internals, self.window_config),
@@ -96,6 +110,8 @@ pub const WindowBuilder = struct {
         return self;
     }
 
+    /// Specify whether the window size should be scaled by the monitor Dpi .
+    /// scaling is applied by `default`.
     pub fn dpiScaled(self: *Self, value: bool) *Self {
         self.window_config.allow_dpi_scaling = value;
         return self;

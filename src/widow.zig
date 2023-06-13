@@ -8,6 +8,15 @@ pub const WidowContext = struct {
 
     const Self = @This();
 
+    /// Creates an instance of the WidowContext.
+    /// # Note
+    /// An instance of the WidowContext is necessary to use
+    /// the library, and is required to initialize a window
+    /// instance.
+    /// User should deinitialize the instance once done,
+    /// to free the allocated ressources.
+    /// There can only be one instance at a time trying
+    /// to initialize more would throw an error.
     pub fn init(allocator: std.mem.Allocator) !Self {
         return Self{
             .internals = try platform.internals.Internals.create(allocator),
@@ -15,6 +24,7 @@ pub const WidowContext = struct {
         };
     }
 
+    /// Free allocated ressources.
     pub fn deinit(self: *Self) void {
         self.internals.destroy(self.allocator);
         self.internals = undefined;
