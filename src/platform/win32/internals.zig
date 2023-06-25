@@ -3,6 +3,7 @@ const defs = @import("./defs.zig");
 const module = @import("./module.zig");
 const utils = @import("./utils.zig");
 const WindowImpl = @import("window_impl.zig").WindowImpl;
+const JoystickSubSystem = @import("joystick_impl.zig").JoystickSubSystem;
 const winapi = @import("win32");
 const monitor_impl = @import("./monitor_impl.zig");
 const icon = @import("./icon.zig");
@@ -13,11 +14,6 @@ const CursorShape = common.cursor.CursorShape;
 const win32_sysinfo = winapi.system.system_information;
 const win32_window_messaging = winapi.ui.windows_and_messaging;
 const win32_system_power = winapi.system.power;
-const GetModuleHandleExW = winapi.system.library_loader.GetModuleHandleExW;
-const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT =
-    winapi.system.library_loader.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
-const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS =
-    winapi.system.library_loader.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS;
 const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = winapi.ui.hi_dpi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
 const PROCESS_PER_MONITOR_DPI_AWARE = winapi.ui.hi_dpi.PROCESS_PER_MONITOR_DPI_AWARE;
 const VER_GREATER_EQUAL = winapi.system.system_services.VER_GREATER_EQUAL;
@@ -67,25 +63,24 @@ pub const InternalError = error{
     FailedToRegisterWindowClass,
 };
 
-pub const Win32Context = struct {
+pub const MonitorStore = struct {
     monitors_map: std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl),
     used_monitors: u8,
-    expected_video_change: bool, // For skipping unwanted updates.
-    previous_exec_state: win32_system_power.EXECUTION_STATE,
-    clipboard_change: bool,
-    next_clipboard_viewer: ?HWND,
+    expected_video_change: bool, // For skipping unnecessary updates.
+    prev_exec_state: win32_system_power.EXECUTION_STATE,
     const Self = @This();
 
-    /// Initialize the `Win32Context` struct.
-    pub fn init(allocator: std.mem.Allocator) !Self {
-        var self = Self{
+    /// Initialize the `MonitorStore` struct.
+    pub fn create(allocator: std.mem.Allocator) !*Self {
+        var self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
+        self.* = Self{
             .monitors_map = std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl).init(allocator),
             .used_monitors = 0,
             .expected_video_change = false,
-            .previous_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
-            .next_clipboard_viewer = null,
-            .clipboard_change = false,
+            .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
         };
+
         var monitors = try monitor_impl.pollMonitors(allocator);
         defer monitors.deinit();
         errdefer {
@@ -101,20 +96,30 @@ pub const Win32Context = struct {
         return self;
     }
 
-    /// Deinitialize the `Win32Context` struct.
+    /// Deinitialize the `MonitorStore` struct.
     /// this frees the monitors map and invalidate all monitors refrence.
-    pub fn deinit(self: *Self) void {
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+        self.expected_video_change = true;
         for (self.monitors_map.values()) |*monitor| {
+            if (monitor.window) |*window| {
+                window.*.requestRestore();
+            }
             monitor.deinit();
         }
         self.monitors_map.deinit();
+        allocator.destroy(self);
     }
 
     /// Updates the monitor map by removing all disconnected monitors
     /// and adding new connected ones.
+    /// # Note
+    /// the update is very slow but it's only triggered if a monitor was connected, or disconnected.
     pub fn updateMonitors(self: *Self) !void {
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+
         const all_monitors = try monitor_impl.pollMonitors(self.monitors_map.allocator);
-        // used in case of an error to free the remaining monitors.
+        // keep track of the index in case of an error to free the remaining monitors.
         var i: usize = 0;
         defer all_monitors.deinit();
         errdefer {
@@ -135,6 +140,9 @@ pub const Win32Context = struct {
             }
             if (disconnected) {
                 // Free the name pointer.
+                if (monitor.window) |*window| {
+                    window.*.requestRestore();
+                }
                 monitor.deinit();
                 _ = self.monitors_map.swapRemove(monitor.handle);
             }
@@ -158,15 +166,76 @@ pub const Win32Context = struct {
             i += 1;
         }
     }
+
+    pub fn setMonitorWindow(
+        self: *Self,
+        monitor_handle: HMONITOR,
+        window: *WindowImpl,
+        mode: ?*const common.video_mode.VideoMode,
+        monitor_area: *common.geometry.WidowArea,
+    ) !void {
+        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+            return error.MonitorNotFound;
+        };
+
+        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
+        // We Set this here to avoid wastefully updating the monitors map.
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+        try monitor.setVideoMode(mode);
+
+        if (self.used_monitors == 0) {
+            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) | @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
+            // first time acquiring a  monitor
+            // prevent the system from entering sleep or turning off.
+            self.prev_exec_state = win32_system_power.SetThreadExecutionState(@intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state));
+        } else {
+            if (monitor.window) |old_window| {
+                if (window.handle != old_window.handle) {
+                    old_window.requestRestore();
+                }
+                self.used_monitors -= 1;
+            }
+        }
+
+        monitor.setWindow(window);
+        self.used_monitors += 1;
+        monitor.fullscreenArea(monitor_area);
+    }
+
+    /// Called by the window instance to release any occupied monitor
+    pub fn restoreMonitor(self: *Self, monitor_handle: HMONITOR) !void {
+        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+            return error.MonitorNotFound;
+        };
+        monitor.setWindow(null);
+
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+        monitor.restoreOrignalVideo();
+
+        self.used_monitors -= 1;
+        if (self.used_monitors == 0) {
+            _ = win32_system_power.SetThreadExecutionState(self.prev_exec_state);
+        }
+    }
+};
+
+pub const DeviceContext = struct {
+    monitor_store: ?*MonitorStore,
+    joystick_store: ?*JoystickSubSystem,
+    clipboard_change: bool, // So we can cache the clipboard value until it changes.
+    next_clipboard_viewer: ?HWND, // we're using the old api to watch the clipboard.
 };
 
 pub const Internals = struct {
     win32: Win32,
-    devices: Win32Context,
+    devices: DeviceContext,
     clipboard_text: ?[]u8,
-    pub const WINDOW_CLASS_NAME = "WIDOW_CLASS";
+    // TODO: can we change this at comptime to a user comptime string.
+    pub const WINDOW_CLASS_NAME = "WIDOW";
     const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
-    const HELPER_TITLE = "helper window";
+    const HELPER_TITLE = "";
     const Self = @This();
 
     pub fn create(allocator: std.mem.Allocator) !*Self {
@@ -174,16 +243,7 @@ pub const Internals = struct {
         errdefer allocator.destroy(self);
 
         // Determine the current HInstance.
-        var hinstance: ?module.HINSTANCE = null;
-        if (GetModuleHandleExW(
-            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-            @intToPtr(?[*:0]const u16, @ptrToInt(&Internals.WINDOW_CLASS_NAME)),
-            &hinstance,
-        ) == 0) {
-            return InternalError.FailedToGetModuleHandle;
-        }
-
-        self.win32.handles.hinstance = hinstance.?;
+        self.win32.handles.hinstance = try module.getProcessHandle();
         // Register the window class
         self.win32.handles.main_class = try registerWindowClass(
             self.win32.handles.hinstance,
@@ -195,7 +255,7 @@ pub const Internals = struct {
             const fballocator = fba.allocator();
             const wide_class_name = utils.utf8ToWideZ(fballocator, Internals.WINDOW_CLASS_NAME) catch unreachable;
             _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u16, self.win32.handles.main_class),
+                // utils.makeIntAtom(u8, self.win32.handles.main_class),
                 wide_class_name,
                 self.win32.handles.hinstance,
             );
@@ -236,10 +296,12 @@ pub const Internals = struct {
         }
 
         try createHelperWindow(self.win32.handles.hinstance, &self.win32.handles.helper_class, &self.win32.handles.helper_window);
-        self.devices = try Win32Context.init(allocator);
-        registerDevices(self.win32.handles.helper_window, &self.devices);
-        self.clipboard_text = null;
+        self.devices.joystick_store = null;
+        self.devices.clipboard_change = false;
+        self.devices.monitor_store = null; // Should be set by the caller.
         self.devices.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.win32.handles.helper_window);
+        self.clipboard_text = null;
+        registerDevices(self.win32.handles.helper_window, &self.devices);
         return self;
     }
 
@@ -261,14 +323,14 @@ pub const Internals = struct {
 
         // Unregister the helper class.
         _ = win32_window_messaging.UnregisterClassW(
-            // utils.makeIntAtom(u16, self.win32.handles.helper_class),
+            // utils.makeIntAtom(u8, self.win32.handles.helper_class),
             helper_class_name,
             self.win32.handles.hinstance,
         );
 
         // Unregister the window class.
         _ = win32_window_messaging.UnregisterClassW(
-            // utils.makeIntAtom(u16, self.win32.handles.main_class),
+            // utils.makeIntAtom(u8, self.win32.handles.main_class),
             wide_class_name,
             self.win32.handles.hinstance,
         );
@@ -279,8 +341,6 @@ pub const Internals = struct {
         }
 
         clipboard.unregisterClipboardViewer(self.win32.handles.helper_window, self.devices.next_clipboard_viewer);
-
-        self.devices.deinit();
 
         allocator.destroy(self);
     }
@@ -301,58 +361,6 @@ pub const Internals = struct {
     pub inline fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
         // refetch on the next call to Internals.clipboardText.
         return clipboard.setClipboardText(allocator, self.win32.handles.helper_window, text);
-    }
-
-    pub fn setMonitorWindow(
-        self: *Self,
-        monitor_handle: HMONITOR,
-        window: *WindowImpl,
-        mode: ?*const common.video_mode.VideoMode,
-        monitor_area: *common.geometry.WidowArea,
-    ) !void {
-        const monitor = self.devices.monitors_map.getPtr(monitor_handle) orelse {
-            return error.MonitorNotFound;
-        };
-
-        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
-        // We Set this here to avoid wastefully updating the monitors map.
-        self.devices.expected_video_change = true;
-        try monitor.setVideoMode(mode);
-        self.devices.expected_video_change = false;
-
-        if (self.devices.used_monitors == 0) {
-            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) | @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
-            // first time acquiring a  monitor
-            // prevent the system from entering sleep or turning off.
-            self.devices.previous_exec_state = win32_system_power.SetThreadExecutionState(@intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state));
-        } else {
-            if (monitor.window) |old_window| {
-                if (window.handle != old_window.handle) {
-                    old_window.requestRestore();
-                }
-                self.devices.used_monitors -= 1;
-            }
-        }
-
-        monitor.setWindow(window);
-        self.devices.used_monitors += 1;
-        monitor.fullscreenArea(monitor_area);
-    }
-
-    pub fn restoreMonitor(self: *Self, monitor_handle: HMONITOR) !void {
-        const monitor = self.devices.monitors_map.getPtr(monitor_handle) orelse {
-            return error.MonitorNotFound;
-        };
-        monitor.setWindow(null);
-        if (monitor.mode_changed) {
-            self.devices.expected_video_change = true;
-            monitor.restoreOrignalVideo();
-            self.devices.expected_video_change = false;
-        }
-        self.devices.used_monitors -= 1;
-        if (self.devices.used_monitors == 0) {
-            _ = win32_system_power.SetThreadExecutionState(self.devices.previous_exec_state);
-        }
     }
 
     fn loadLibraries(self: *Self) !void {
@@ -465,24 +473,10 @@ fn registerWindowClass(
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
     var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8ToWideZ(allocator, Internals.WINDOW_CLASS_NAME);
-    window_class.lpszClassName = wide_class_name.ptr;
+    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME);
+    window_class.lpszClassName = wide_class_name;
+    // TODO :load ressource icon
     window_class.hIcon = null;
-    //     TODO
-    //     match icon_id {
-    //         // Load icon provided through application's resource definition.
-    //         Some(name) => LoadImageW(
-    //             hinstance,
-    //             utf8_to_wide(name).as_ptr(),
-    //             IMAGE_ICON,
-    //             0,
-    //             0,
-    //             LR_SHARED | LR_DEFAULTSIZE,
-    //         ),
-    //         None => 0,
-    //     }
-    // };
     if (window_class.hIcon == null) {
         // No Icon was provided or we failed.
         window_class.hIcon = @ptrCast(?win32_window_messaging.HICON, win32_window_messaging.LoadImageW(
@@ -512,8 +506,7 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     // Estimate five times the curent utf8 string len.
     var buffer: [(Internals.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const allocator = fba.allocator();
-    const wide_class_name = try utils.utf8ToWideZ(allocator, Internals.HELPER_CLASS_NAME);
+    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_CLASS_NAME);
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
@@ -521,14 +514,17 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     }
     errdefer {
         _ = win32_window_messaging.UnregisterClassW(
+            // utils.makeIntAtom(u16, helper_handle.*),
             wide_class_name,
             hinstance,
         );
     }
-    const helper_title = try utils.utf8ToWideZ(allocator, Internals.HELPER_TITLE);
+
+    const helper_title = try utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_TITLE);
     helper_window.* = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
         wide_class_name,
+        // utils.makeIntAtom(u16, helper_handle.*),
         helper_title,
         win32_window_messaging.WS_OVERLAPPED,
         CW_USEDEFAULT,
@@ -546,45 +542,8 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     _ = win32_window_messaging.ShowWindow(helper_window.*, win32_window_messaging.SW_HIDE);
 }
 
-fn registerDevices(helper_window: HWND, devices: *Win32Context) void {
+fn registerDevices(helper_window: HWND, devices: *DeviceContext) void {
     _ = win32_window_messaging.SetWindowLongPtrW(helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(devices)));
-
-    // TODO
-    // Register raw_input_devices
-    //
-    // self.is_initialized = true;
-    // let r_mouse_id = RAWINPUTDEVICE {
-    //     usUsagePage: 0x01,
-    //     usUsage: 0x02,
-    //     dwFlags: 0,
-    //     hwndTarget: 0,
-    // };
-    // let result =
-    //     unsafe { RegisterRawInputDevices(&r_mouse_id, 1, size_of_val(&r_mouse_id) as u32) };
-    // if result == 0 {
-    //     return Err("Failed to register Raw Device".to_owned());
-    // }
-}
-
-pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
-    const cursor_id = switch (shape) {
-        CursorShape.PointingHand => win32_window_messaging.IDC_HAND,
-        CursorShape.Crosshair => win32_window_messaging.IDC_CROSS,
-        CursorShape.Text => win32_window_messaging.IDC_IBEAM,
-        CursorShape.Wait => win32_window_messaging.IDC_WAIT,
-        CursorShape.Help => win32_window_messaging.IDC_HELP,
-        CursorShape.Busy => win32_window_messaging.IDC_APPSTARTING,
-        CursorShape.Forbidden => win32_window_messaging.IDC_NO,
-        else => win32_window_messaging.IDC_ARROW,
-    };
-    // LoadCursorW takes a handle to an instance of the module
-    // whose executable file contains the cursor to be loaded.
-    const handle = win32_window_messaging.LoadCursorW(0, cursor_id);
-    if (handle == 0) {
-        // We failed.
-        return error.FailedToLoadStdCursor;
-    }
-    window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = true, .mode = common.cursor.CursorMode.Normal });
 }
 
 pub fn createIcon(
@@ -610,33 +569,55 @@ pub fn createCursor(
     window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal });
 }
 
-test "Internals.init()" {
-    const testing = std.testing;
-    var result = try Internals.create(testing.allocator);
-    registerDevices(result.win32.handles.helper_window, &result.devices);
-    defer result.destroy(testing.allocator);
-}
+// Zigwin32 libary doesn't have definitions for IDC constants probably due to alignement issues.
+// pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
+//     const cursor_id = switch (shape) {
+//         CursorShape.PointingHand => win32_window_messaging.IDC_HAND,
+//         CursorShape.Crosshair => win32_window_messaging.IDC_CROSS,
+//         CursorShape.Text => win32_window_messaging.IDC_IBEAM,
+//         CursorShape.Wait => win32_window_messaging.IDC_WAIT,
+//         CursorShape.Help => win32_window_messaging.IDC_HELP,
+//         CursorShape.Busy => win32_window_messaging.IDC_APPSTARTING,
+//         CursorShape.Forbidden => win32_window_messaging.IDC_NO,
+//         else => win32_window_messaging.IDC_ARROW,
+//     };
+//     // LoadCursorW takes a handle to an instance of the module
+//     // whose executable file contains the cursor to be loaded.
+//     const handle = win32_window_messaging.LoadCursorW(0, cursor_id);
+//     if (handle == 0) {
+//         // We failed.
+//         return error.FailedToLoadStdCursor;
+//     }
+//     window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = true, .mode = common.cursor.CursorMode.Normal });
+// }
 
-test "Win32Context.init()" {
-    const VideoMode = @import("common").video_mode.VideoMode;
-    const testing = std.testing;
-    var ph_dev = try Win32Context.init(testing.allocator);
-    defer ph_dev.deinit();
-    var all_monitors = try monitor_impl.pollMonitors(testing.allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    var main_monitor = all_monitors.items[0];
-    try ph_dev.updateMonitors();
-    var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
-    const mode = VideoMode.init(1600, 900, 32, 60);
-    try primary_monitor.*.setVideoMode(&mode);
-    std.time.sleep(std.time.ns_per_s * 3);
-    std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.*.restoreOrignalVideo();
-}
+// test "Internals.init()" {
+//     const testing = std.testing;
+//     var result = try Internals.create(testing.allocator);
+//     registerDevices(result.win32.handles.helper_window, &result.devices);
+//     defer result.destroy(testing.allocator);
+// }
+//
+// test "MonitorStore.init()" {
+//     const VideoMode = @import("common").video_mode.VideoMode;
+//     const testing = std.testing;
+//     var ph_dev = try MonitorStore.create(testing.allocator);
+//     defer ph_dev.destroy();
+//     var all_monitors = try monitor_impl.pollMonitors(testing.allocator);
+//     defer {
+//         for (all_monitors.items) |*monitor| {
+//             // monitors contain heap allocated data that need
+//             // to be freed.
+//             monitor.deinit();
+//         }
+//         all_monitors.deinit();
+//     }
+//     var main_monitor = all_monitors.items[0];
+//     try ph_dev.updateMonitors();
+//     var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
+//     const mode = VideoMode.init(1600, 900, 32, 60);
+//     try primary_monitor.*.setVideoMode(&mode);
+//     std.time.sleep(std.time.ns_per_s * 3);
+//     std.debug.print("Restoring Original Mode....\n", .{});
+//     primary_monitor.*.restoreOrignalVideo();
+// }

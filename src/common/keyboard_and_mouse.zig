@@ -1,5 +1,17 @@
-pub const KeyAction = @import("hid.zig").ButtonState;
-pub const MouseButtonAction = KeyAction;
+pub const KeyState = enum(u8) {
+    Released = 0,
+    Pressed,
+
+    const Self = @This();
+    pub inline fn isPressed(self: *const Self) bool {
+        return self.* == Self.Pressed;
+    }
+
+    pub inline fn isReleased(self: *const Self) bool {
+        return self.* == Self.Released;
+    }
+};
+pub const MouseButtonState = KeyState;
 
 /// The Symbolic name or representation of the keyboard key.
 pub const VirtualCode = enum(i32) {
@@ -260,13 +272,13 @@ pub const MouseWheel = enum(u8) {
 };
 
 pub const InputState = struct {
-    keys: [@enumToInt(ScanCode.VALUES_COUNT)]KeyAction,
-    mouse_buttons: [@enumToInt(MouseButton.VALUES_COUNT)]MouseButtonAction,
+    keys: [@enumToInt(ScanCode.VALUES_COUNT)]KeyState,
+    mouse_buttons: [@enumToInt(MouseButton.VALUES_COUNT)]MouseButtonState,
     const Self = @This();
     pub fn init() Self {
         return Self{
-            .keys = [1]KeyAction{KeyAction.Release} ** @enumToInt(ScanCode.VALUES_COUNT),
-            .mouse_buttons = [1]MouseButtonAction{MouseButtonAction.Release} ** @enumToInt(MouseButton.VALUES_COUNT),
+            .keys = [1]KeyState{KeyState.Released} ** @enumToInt(ScanCode.VALUES_COUNT),
+            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** @enumToInt(MouseButton.VALUES_COUNT),
         };
     }
 };
