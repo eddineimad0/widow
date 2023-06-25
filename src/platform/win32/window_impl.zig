@@ -436,11 +436,7 @@ pub const WindowImpl = struct {
         // Get rid of the pointer to the window.
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, 0);
         _ = win32_window_messaging.DestroyWindow(self.handle);
-        const allocator = self.win32.dropped_files.allocator;
-        for (self.win32.dropped_files.items) |file| {
-            allocator.free(file);
-        }
-        self.win32.dropped_files.deinit();
+        self.freeDroppedFiles();
     }
 
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
@@ -523,6 +519,7 @@ pub const WindowImpl = struct {
         const STYLES_MASK: u32 = comptime @enumToInt(win32_window_messaging.WS_OVERLAPPEDWINDOW) | @enumToInt(win32_window_messaging.WS_POPUP) | @enumToInt(win32_window_messaging.WS_MAXIMIZE);
         const EX_STYLES_MASK: u32 = comptime @enumToInt(win32_window_messaging.WS_EX_WINDOWEDGE) | @enumToInt(win32_window_messaging.WS_EX_APPWINDOW) | @enumToInt(win32_window_messaging.WS_EX_TOPMOST);
         const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_FRAMECHANGED) | @enumToInt(win32_window_messaging.SWP_NOACTIVATE) | @enumToInt(win32_window_messaging.SWP_NOZORDER);
+
         const styles = windowStyles(&self.data);
         const ex_styles = windowExStyles(&self.data);
         var reg_styles = @bitCast(usize, win32_window_messaging.GetWindowLongPtrW(self.handle, win32_window_messaging.GWL_STYLE));
@@ -956,7 +953,7 @@ pub const WindowImpl = struct {
         };
         const mode = if (self.data.fullscreen_mode.? == FullScreenMode.Exclusive) &self.data.video else null;
         var mon_area: common.geometry.WidowArea = undefined;
-        try self.internals.setMonitorWindow(
+        try self.internals.devices.monitor_store.?.setMonitorWindow(
             monitor_handle,
             self,
             mode,
@@ -981,8 +978,42 @@ pub const WindowImpl = struct {
             std.debug.print("Null Monitor handle \n", .{});
             return;
         };
-        try self.internals
+        try self.internals.devices.monitor_store.?
             .restoreMonitor(monitor_handle);
+    }
+
+    pub fn setCursorShape(self: *Self, new_cursor: *const Cursor) void {
+        icon.dropCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor.*;
+        if (self.data.flags.cursor_in_client) {
+            updateCursor(&self.win32.cursor);
+        }
+    }
+
+    pub fn setIcon(self: *Self, new_icon: *const Icon) void {
+        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null) .{ @ptrToInt(new_icon.bg_handle.?), @ptrToInt(new_icon.sm_handle.?) } else blk: {
+            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
+            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
+            break :blk .{ bg_icon, sm_icon };
+        };
+        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_BIG, @bitCast(isize, handles[0]));
+        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_SMALL, @bitCast(isize, handles[1]));
+        icon.dropIcon(&self.win32.icon);
+        self.win32.icon = new_icon.*;
+    }
+
+    /// Returns a cached slice that contains the path(s) to the last dropped file(s).
+    pub fn droppedFiles(self: *const Self) [][]const u8 {
+        return self.win32.dropped_files.items;
+    }
+
+    /// Frees the allocated memory used to hold the file(s) path(s).
+    pub fn freeDroppedFiles(self: *Self) void {
+        const allocator = self.win32.dropped_files.allocator;
+        for (self.win32.dropped_files.items) |item| {
+            allocator.free(item);
+        }
+        self.win32.dropped_files.clearAndFree();
     }
 
     // DEBUG ONLY
@@ -1005,25 +1036,5 @@ pub const WindowImpl = struct {
         if (self.data.fullscreen_mode) |*value| {
             std.debug.print("Screen Mode: {}\n", .{value.*});
         }
-    }
-
-    pub fn setCursorShape(self: *Self, new_cursor: *const Cursor) void {
-        icon.dropCursor(&self.win32.cursor);
-        self.win32.cursor = new_cursor.*;
-        if (self.data.flags.cursor_in_client) {
-            updateCursor(&self.win32.cursor);
-        }
-    }
-
-    pub fn setIcon(self: *Self, new_icon: *const Icon) void {
-        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null) .{ @ptrToInt(new_icon.bg_handle.?), @ptrToInt(new_icon.sm_handle.?) } else blk: {
-            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
-            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
-            break :blk .{ bg_icon, sm_icon };
-        };
-        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_BIG, @bitCast(isize, handles[0]));
-        _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_SMALL, @bitCast(isize, handles[1]));
-        icon.dropIcon(&self.win32.icon);
-        self.win32.icon = new_icon.*;
     }
 };

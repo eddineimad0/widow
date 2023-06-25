@@ -7,6 +7,7 @@ const win32_window_messaging = winapi.ui.windows_and_messaging;
 const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
 const win32_gdi = winapi.graphics.gdi;
 const win32_foundation = winapi.foundation;
+const win32_shell = winapi.ui.shell;
 
 pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     // we can ask user for confirmation before closing
@@ -37,9 +38,9 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_found
 
     // Determine the action.
     var action = if (utils.hiWord(@bitCast(usize, lparam)) & win32_window_messaging.KF_UP == 0)
-        common.keyboard_and_mouse.KeyAction.Press
+        common.keyboard_and_mouse.KeyState.Pressed
     else
-        common.keyboard_and_mouse.KeyAction.Release;
+        common.keyboard_and_mouse.KeyState.Released;
 
     if (keys[1] != common.keyboard_and_mouse.ScanCode.Unknown) {
         // Update the key state array.
@@ -48,7 +49,7 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_found
 
     // Printscreen key only reports a release action.
     if (wparam == @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT)) {
-        const fake_event = common.event.createKeyboardEvent(keys[0], keys[1], common.keyboard_and_mouse.KeyAction.Press, mods);
+        const fake_event = common.event.createKeyboardEvent(keys[0], keys[1], common.keyboard_and_mouse.KeyState.Pressed, mods);
         window.queueEvent(&fake_event);
     }
 
@@ -67,16 +68,16 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpara
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyAction.Release, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyState.Released, utils.getKeyModifiers());
 
     window.queueEvent(&event);
 
-    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyAction.Release;
+    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Released;
 
     // Release Capture if all keys are released.
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.keyboard_and_mouse.KeyAction.Press) {
+        if (action.* == common.keyboard_and_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
         }
@@ -90,7 +91,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpara
 pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: u32, wparam: win32_foundation.WPARAM) void {
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.keyboard_and_mouse.KeyAction.Press) {
+        if (action.* == common.keyboard_and_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
         }
@@ -115,10 +116,10 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpa
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyAction.Press, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyState.Pressed, utils.getKeyModifiers());
 
     window.queueEvent(&event);
-    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyAction.Press;
+    window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Pressed;
 }
 
 pub inline fn mouseWheelMSGHandler(window: *window_impl.WindowImpl, wheel: common.keyboard_and_mouse.MouseWheel, wheel_delta: f64) void {
@@ -239,4 +240,61 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32_fo
             window.queueEvent(&event);
         }
     }
+}
+
+pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM) void {
+    // can we use a different allocator for better performance?
+    // free old files
+    const allocator = window.win32.dropped_files.allocator;
+    for (window.win32.dropped_files.items) |file| {
+        allocator.free(file);
+    }
+
+    var wide_slice: []u16 = undefined;
+    wide_slice.len = 0;
+    window.win32.dropped_files.clearRetainingCapacity();
+    const drop_handle = @intToPtr(win32_shell.HDROP, wparam);
+    const count = win32_shell.DragQueryFileW(drop_handle, 0xFFFFFFFF, null, 0);
+    if (count != 0) err_exit: {
+        if (window.win32.dropped_files.capacity < count) {
+            window.win32.dropped_files.ensureTotalCapacity(count) catch {
+                std.log.err("Failed to retrieve Dropped Files.\n", .{});
+                break :err_exit;
+            };
+        }
+        for (0..count) |index| {
+            const buffer_len = win32_shell.DragQueryFileW(drop_handle, @truncate(u32, index), null, 0);
+            if (buffer_len != 0) {
+                // the returned length doesn't account for the null terminator,
+                // however DragQueryFile will always write the null terminator even
+                // at the cost of not copying the entire data. so it's necessary to add 1
+                const buffer_lenz = buffer_len + 1;
+                if (wide_slice.len == 0) {
+                    wide_slice = allocator.alloc(u16, buffer_lenz) catch {
+                        std.log.err("Failed to allocate space for dropped Files.\n", .{});
+                        break :err_exit;
+                    };
+                } else if (wide_slice.len < buffer_lenz) {
+                    wide_slice = allocator.realloc(wide_slice, buffer_lenz) catch {
+                        std.log.err("Failed to reallocate space for dropped Files.\n", .{});
+                        continue;
+                    };
+                }
+                _ = win32_shell.DragQueryFileW(drop_handle, @truncate(u32, index), @ptrCast([*:0]u16, wide_slice.ptr), buffer_lenz);
+                const file_path = utils.wideToUtf8(allocator, wide_slice.ptr[0..buffer_len]) catch {
+                    std.log.err("Failed to retrieve dropped Files.\n", .{});
+                    continue;
+                };
+                window.win32.dropped_files.append(file_path) catch {
+                    std.log.err("Failed to copy dropped Files.\n", .{});
+                    allocator.free(file_path);
+                    continue;
+                };
+            }
+        }
+        const event = common.event.createDropFileEvent();
+        window.queueEvent(&event);
+        allocator.free(wide_slice);
+    }
+    win32_shell.DragFinish(drop_handle);
 }

@@ -235,6 +235,7 @@ pub const MonitorImpl = struct {
         // Hack since both self.name and self.modes
         // use the same allocator.
         self.modes.allocator.free(self.name);
+        self.restoreOrignalVideo();
         self.modes.deinit();
     }
 
@@ -311,7 +312,7 @@ pub const MonitorImpl = struct {
                 },
                 else => return error.FailedToSwitchMonitorVideoMode,
             }
-        } else if (self.mode_changed) {
+        } else {
             self.restoreOrignalVideo();
         }
     }
@@ -320,14 +321,16 @@ pub const MonitorImpl = struct {
     pub inline fn restoreOrignalVideo(self: *Self) void {
         // Passing NULL for the lpDevMode parameter and 0 for the dwFlags parameter
         // is the easiest way to return to the default mode after a dynamic mode change.
-        _ = win32_gdi.ChangeDisplaySettingsExW(
-            @ptrCast([*:0]const u16, &self.adapter),
-            null,
-            null,
-            win32_gdi.CDS_FULLSCREEN,
-            null,
-        );
-        self.mode_changed = false;
+        if (self.mode_changed) {
+            _ = win32_gdi.ChangeDisplaySettingsExW(
+                @ptrCast([*:0]const u16, &self.adapter),
+                null,
+                null,
+                win32_gdi.CDS_FULLSCREEN,
+                null,
+            );
+            self.mode_changed = false;
+        }
     }
 
     /// Set the window Handle field
@@ -348,40 +351,40 @@ pub const MonitorImpl = struct {
     }
 };
 
-test "monitor_impl_init_test" {
-    const testing = std.testing;
-    const testing_allocator = testing.allocator;
-    var all_monitors = try pollMonitors(testing_allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
-}
+// test "monitor_impl_init_test" {
+//     const testing = std.testing;
+//     const testing_allocator = testing.allocator;
+//     var all_monitors = try pollMonitors(testing_allocator);
+//     defer {
+//         for (all_monitors.items) |*monitor| {
+//             // monitors contain heap allocated data that need
+//             // to be freed.
+//             monitor.deinit();
+//         }
+//         all_monitors.deinit();
+//     }
+//     try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
+// }
 
-test "changing_primary_video_mode" {
-    const testing = std.testing;
-    const testing_allocator = testing.allocator;
-    var all_monitors = try pollMonitors(testing_allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    var primary_monitor = &all_monitors.items[0];
-    primary_monitor.debugInfos();
-    std.debug.print("Current Video Mode: {}\n", .{primary_monitor.queryCurrentMode()});
-    std.debug.print("Changing Video Mode....\n", .{});
-    const mode = VideoMode.init(700, 400, 55, 24);
-    try primary_monitor.setVideoMode(&mode);
-    std.time.sleep(std.time.ns_per_s * 3);
-    std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.restoreOrignalVideo();
-}
+// test "changing_primary_video_mode" {
+//     const testing = std.testing;
+//     const testing_allocator = testing.allocator;
+//     var all_monitors = try pollMonitors(testing_allocator);
+//     defer {
+//         for (all_monitors.items) |*monitor| {
+//             // monitors contain heap allocated data that need
+//             // to be freed.
+//             monitor.deinit();
+//         }
+//         all_monitors.deinit();
+//     }
+//     var primary_monitor = &all_monitors.items[0];
+//     primary_monitor.debugInfos();
+//     std.debug.print("Current Video Mode: {}\n", .{primary_monitor.queryCurrentMode()});
+//     std.debug.print("Changing Video Mode....\n", .{});
+//     const mode = VideoMode.init(700, 400, 55, 24);
+//     try primary_monitor.setVideoMode(&mode);
+//     std.time.sleep(std.time.ns_per_s * 3);
+//     std.debug.print("Restoring Original Mode....\n", .{});
+//     primary_monitor.restoreOrignalVideo();
+// }

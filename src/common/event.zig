@@ -3,7 +3,7 @@ const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
 
 pub const EventType = enum(u8) {
-    WindowClose, // The X on the window frame was pressed.
+    WindowClose, // The X icon on the window frame was pressed.
     WindowResize, // The window client area size was changed.
     Focus, // True/False if the window got keyboard focus.
     WindowMaximize, // The window was minimized.
@@ -11,28 +11,26 @@ pub const EventType = enum(u8) {
     WindowMove, // The window has been moved, the Point2D struct specify the
     // new coordinates for the top left corner of the window.
     FileDrop, // Some file was released in the window area.
-    KeyBoard, // A certain Keyboard action was performed.
-    MouseButton, // A certain Mouse button action was performed while the mouse is over the client area.
+    KeyBoard, // A certain Keyboard key action(press or release) was performed.
+    MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
     MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
     MouseMove, // The mouse position (relative to the client area's top left corner) changed.
-    RawMouseMove, // For windows that enable raw mouse motion,the data specifes the
-    // raw offset from the previous mouse position.
     MouseEnter, // The mouse entered the client area of the window.
     MouseLeave, // The mouse exited the client area of the window.
-    DPIChange, // DPI change.
-    Character, // The key pressed by the user maps to a character.
+    DPIChange, // DPI change due to the window being dragged to another monitor.
+    Character, // The key pressed by the user generated a character.
 };
 
 pub const KeyEvent = struct {
     virtualcode: input.VirtualCode,
     scancode: input.ScanCode,
-    action: input.KeyAction,
+    state: input.KeyState,
     mods: input.KeyModifiers,
 };
 
 pub const MouseButtonEvent = struct {
     button: input.MouseButton,
-    action: input.MouseButtonAction,
+    state: input.MouseButtonState,
     mods: input.KeyModifiers,
 };
 
@@ -57,17 +55,16 @@ pub const Event = union(EventType) {
     WindowMinimize: void,
     MouseEnter: void,
     MouseLeave: void,
+    FileDrop: void,
     Focus: bool,
     WindowResize: geometry.WidowSize,
     WindowMove: geometry.WidowPoint2D,
     MouseMove: geometry.WidowPoint2D,
-    RawMouseMove: geometry.WidowPoint2D,
     MouseButton: MouseButtonEvent,
     KeyBoard: KeyEvent,
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
-    FileDrop: std.ArrayList([]const u8),
 };
 
 pub inline fn createCloseEvent() Event {
@@ -90,6 +87,10 @@ pub inline fn createMouseLeftEvent() Event {
     return Event.MouseLeave;
 }
 
+pub inline fn createDropFileEvent() Event {
+    return Event.FileDrop;
+}
+
 pub inline fn createFocusEvent(focus: bool) Event {
     return Event{ .Focus = focus };
 }
@@ -102,20 +103,16 @@ pub inline fn createMoveEvent(x: i32, y: i32) Event {
     return Event{ .WindowMove = geometry.WidowPoint2D{ .x = x, .y = y } };
 }
 
-pub inline fn createMouseMoveEvent(position: geometry.WidowPoint2D, raw: bool) Event {
-    if (raw) {
-        return Event{ .RawMouseMove = position };
-    } else {
-        return Event{ .MouseMove = position };
-    }
+pub inline fn createMouseMoveEvent(position: geometry.WidowPoint2D) Event {
+    return Event{ .MouseMove = position };
 }
 
-pub inline fn createMouseButtonEvent(button: input.MouseButton, action: input.MouseButtonAction, mods: input.KeyModifiers) Event {
-    return Event{ .MouseButton = MouseButtonEvent{ .button = button, .action = action, .mods = mods } };
+pub inline fn createMouseButtonEvent(button: input.MouseButton, state: input.MouseButtonState, mods: input.KeyModifiers) Event {
+    return Event{ .MouseButton = MouseButtonEvent{ .button = button, .state = state, .mods = mods } };
 }
 
-pub inline fn createKeyboardEvent(virtualcode: input.VirtualCode, scancode: input.ScanCode, action: input.KeyAction, mods: input.KeyModifiers) Event {
-    return Event{ .KeyBoard = KeyEvent{ .virtualcode = virtualcode, .scancode = scancode, .action = action, .mods = mods } };
+pub inline fn createKeyboardEvent(virtualcode: input.VirtualCode, scancode: input.ScanCode, state: input.KeyState, mods: input.KeyModifiers) Event {
+    return Event{ .KeyBoard = KeyEvent{ .virtualcode = virtualcode, .scancode = scancode, .state = state, .mods = mods } };
 }
 
 pub inline fn createScrollEvent(wheel: input.MouseWheel, delta: f64) Event {
@@ -128,8 +125,4 @@ pub inline fn createDPIEvent(new_dpi: u32, new_scale: f64) Event {
 
 pub inline fn createCharEvent(codepoint: u32, mods: input.KeyModifiers) Event {
     return Event{ .Character = CharacterEvent{ .codepoint = @truncate(u21, codepoint), .mods = mods } };
-}
-
-pub inline fn createDropFileEvent(files_array: std.ArrayList([]const u8)) Event {
-    return Event{ .FileDrop = files_array };
 }

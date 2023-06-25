@@ -2,7 +2,7 @@ const std = @import("std");
 const common = @import("common");
 const ScanCode = common.keyboard_and_mouse.ScanCode;
 const VirtualCode = common.keyboard_and_mouse.VirtualCode;
-const KeyAction = common.keyboard_and_mouse.KeyAction;
+const KeyState = common.keyboard_and_mouse.KeyState;
 const winapi = @import("win32");
 const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
 const win32_foundation = winapi.foundation;
@@ -59,12 +59,13 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
 /// # Note
-/// Some functions signature in the zigwin32 library needed modification
-/// for this to work.
-pub inline fn makeIntAtom(comptime T: type, atom: T) ?[*:0]align(1) const T {
-    return @intToPtr(?[*:0]align(1) const T, @as(usize, atom));
+/// wide pointers([*:0]u16) returned by windows are not always properly aligned,
+/// therfore this function will randomly fail in debug mode.
+pub inline fn makeIntAtom(comptime T: type, atom: u16) ?[*:0]const T {
+    return @intToPtr(?[*:0]const T, @as(usize, atom));
 }
 
+// Some usefule windows.h Macros.
 pub inline fn hiWord(bits: usize) u16 {
     return @truncate(u16, (bits >> 16) & 0xFFFF);
 }
@@ -145,12 +146,14 @@ pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode }
     }
     // Notes:
     // According to windows
-    // SysRq key scan code is emmited on Alt+Print screen keystroke
+    // SysRq key scan code is emmited on Alt+Printscreen screen keystroke
     if (code == 0x54) {
+        // set it back to printscreen.
         code = 0x37;
     }
     // Break key scan code is emmited on Control+Pause keystroke
     if (code == 0x146) {
+        // set it back to pause.
         code = 0x45;
     }
 
@@ -1003,14 +1006,14 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
     };
 
     for (0..4) |index| {
-        if (window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] == KeyAction.Press) {
+        if (window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] == KeyState.Pressed) {
             const is_key_up = !isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(virtual_keys[index])), 15);
             if (is_key_up) {
-                window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] = KeyAction.Release;
+                window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] = KeyState.Released;
                 const fake_event = common.event.createKeyboardEvent(
                     virtual_codes[index],
                     codes[index],
-                    KeyAction.Release,
+                    KeyState.Released,
                     getKeyModifiers(),
                 );
                 window.queueEvent(&fake_event);

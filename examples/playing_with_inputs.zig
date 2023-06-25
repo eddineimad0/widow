@@ -14,7 +14,7 @@ pub fn main() void {
         return;
     };
     defer context.deinit();
-    var builder = widow.window.WindowBuilder.init("creation_test", 480, 640, &context) catch {
+    var builder = widow.window.WindowBuilder.init("Play with input", 480, 640, &context) catch {
         std.debug.print("Failed to create a WindowBuilder\n", .{});
         return;
     };
@@ -39,7 +39,7 @@ pub fn main() void {
                 break :event_loop;
             },
             EventType.KeyBoard => |*key| {
-                if (key.action.isPress()) {
+                if (key.state.isPressed()) {
                     switch (key.scancode) {
                         ScanCode.Q => {
                             if (key.mods.shift) {
