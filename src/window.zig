@@ -505,27 +505,6 @@ pub const Window = struct {
         }
     }
 
-    /// Changes the cursor used by the window.
-    /// Setting a new cursor automatically enables the cursor
-    /// if it was disabled and releases it if it was captured
-    /// by the window.
-    /// # Note
-    /// From the win32 Docs:
-    /// "The cursor is a shared resource.
-    /// A window should set the cursor shape only
-    /// when the cursor is in its client area or
-    /// when the window is capturing mouse input".
-    // to comply with this and for a better user experience
-    // this function won't change the cursor image unless
-    // it's on the client area.
-    //
-    // To create a cursor and retrieve the it's handle
-    // use [`WidowContext::create_platform_cursor`] or
-    // [`WidowContext::create_cursor`] functions.
-    // pub fn setCursor(self: *Self, cursor: WidowCursor) {
-    //     self.impl.?.use_cursor(cursor);
-    // }
-
     /// Sets the cursor's mode effectively caputring it,
     /// hiding it or releasing it.
     /// # Note
@@ -540,21 +519,26 @@ pub const Window = struct {
         self.impl.setCursorMode(mode);
     }
 
-    //     // Sets the window's icon.
-    //     // # Note
-    //     // To create a WindowIcon from raw RGBA pixels,
-    //     // use [`crate::WidowContext::create_icon`]
-    //     #[inline]
-    //     pub fn set_window_icon(self: *Self, icon: Option<WidowIcon>) {
-    //         self.impl.?.set_window_icon(icon);
-    //     }
+    /// Returns a slice that holds the path(s) to the latest dropped file(s)
+    /// # Note
+    /// User should only call this function when receiving a FileDrop event.
+    /// User shouldn't attempt to free or modify the returned slice and should instead
+    /// call [`Window.freeDroppedFiles`] if they wish to free it.
+    /// The returned slice may gets invalidated or mutated during the next file drop event
+    pub inline fn droppedFiles(self: *const Self) [][]const u8 {
+        return self.impl.droppedFiles();
+    }
 
-    //     #[inline]
-    //     pub fn enable_raw_mouse(self: *Self, enabled: bool) {
-    //         self.impl.?.enable_raw_mouse(enabled);
-    //     }
-    // }
-    //
+    /// Frees the memory used to hold the dropped file(s) path(s).
+    /// # Note
+    /// Each window keeps a cache of the last dropped file(s) path(s) in heap memory,
+    /// the allocated memory is reused whenever a new drop happens and may get resized
+    /// if more space is needed.
+    /// User may want to call this function to manage that memory as they see fit.
+    pub inline fn freeDroppedFiles(self: *Self) void {
+        return self.impl.freeDroppedFiles();
+    }
+
     pub fn debugInfos(self: *const Self) void {
         self.impl.debugInfos();
     }

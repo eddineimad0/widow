@@ -4,6 +4,8 @@ const common = @import("common");
 
 pub const WidowContext = struct {
     internals: *platform.internals.Internals,
+    monitors: *platform.internals.MonitorStore,
+    joysticks: ?*platform.joystick.JoystickSubSystem,
     allocator: std.mem.Allocator,
 
     const Self = @This();
@@ -18,16 +20,26 @@ pub const WidowContext = struct {
     /// There can only be one instance at a time trying
     /// to initialize more would throw an error.
     pub fn init(allocator: std.mem.Allocator) !Self {
-        return Self{
+        var self = Self{
+            .monitors = try platform.internals.MonitorStore.create(allocator),
             .internals = try platform.internals.Internals.create(allocator),
+            .joysticks = null,
             .allocator = allocator,
         };
+        self.internals.devices.monitor_store = self.monitors;
+        return self;
     }
 
     /// Free allocated ressources.
     pub fn deinit(self: *Self) void {
         self.internals.destroy(self.allocator);
         self.internals = undefined;
+        self.monitors.destroy(self.allocator);
+        self.monitors = undefined;
+        if (self.joysticks) |joys| {
+            joys.destroy(self.allocator);
+        }
+        self.joysticks = null;
     }
 
     /// returns the string contained inside the system clipboard.
@@ -80,6 +92,10 @@ pub const WidowContext = struct {
     // pub fn setWindowStdCursor(target: *window.Window, shape: cursor.CursorShape) !void {
     //     try platform.internals.createStandardCursor(target.impl, shape);
     // }
+
+    pub fn initJoystickSubSyst(self: *Self, on_connection_change: common.hid.JoystickConnectCallBack) !void {
+        self.joysticks = try platform.joystick.JoystickSubSystem.create(self.allocator, on_connection_change);
+    }
 };
 
 test "Widow.init" {

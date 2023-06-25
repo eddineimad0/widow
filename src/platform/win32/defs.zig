@@ -5,8 +5,8 @@ const utils = @import("./utils.zig");
 const common = @import("common");
 const win32_window_messaging = winapi.ui.windows_and_messaging;
 const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
-const win32_shell = winapi.ui.shell;
-const Win32Context = @import("./internals.zig").Win32Context;
+const win32_sys_service = winapi.system.system_services;
+const DeviceContext = @import("./internals.zig").DeviceContext;
 const window_impl = @import("./window_impl.zig");
 
 const winabi = windows.WINAPI;
@@ -63,22 +63,24 @@ pub fn helperWindowProc(
 ) callconv(winabi) isize {
     const user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
     if (user_data != 0) {
-        var devices = @intToPtr(*Win32Context, @intCast(usize, user_data));
+        var devices = @intToPtr(*DeviceContext, @intCast(usize, user_data));
         switch (msg) {
             win32_window_messaging.WM_DISPLAYCHANGE => {
                 // Monitor the win32_window_messaging.WM_DISPLAYCHANGE notification
                 // to detect when settings change or when a
                 // display is added or removed.
-                if (!devices.expected_video_change) {
-                    devices.updateMonitors() catch {
-                        std.debug.print("Failed to update monitors\n", .{});
-                    };
+                if (devices.monitor_store) |store| {
+                    if (!store.expected_video_change) {
+                        store.updateMonitors() catch {
+                            std.log.err("Failed to update monitors\n", .{});
+                        };
+                    }
                 }
             },
             win32_window_messaging.WM_DRAWCLIPBOARD => {
                 // Sent When The clipboard content gets updated.
                 devices.clipboard_change = true;
-                std.debug.print("Clipboard got drawn\n", .{});
+                std.debug.print("Clipboard was updated\n", .{});
                 if (devices.next_clipboard_viewer) |viewer| {
                     std.debug.print("Forwarding msg to next viewer\n", .{});
                     _ = win32_window_messaging.SendMessage(viewer, msg, wparam, lparam);
@@ -96,9 +98,31 @@ pub fn helperWindowProc(
                 // last in the chain.
                 return 0;
             },
-            // win32_window_messaging.WM_DEVICECHANGE => {
-            //     // I/O hardware
-            // }
+            win32_window_messaging.WM_DEVICECHANGE => exit_point: {
+                // Notifies an application of a change to the hardware configuration
+                // of a device or the computer.
+                const jss = devices.joystick_store orelse break :exit_point;
+                const dbh_ptr = @intToPtr(?*win32_sys_service.DEV_BROADCAST_HDR, @bitCast(usize, lparam));
+                switch (wparam) {
+                    win32_sys_service.DBT_DEVICEARRIVAL => {
+                        if (dbh_ptr) |ptr| {
+                            if (ptr.dbch_devicetype == win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE) {
+                                jss.queryConnectedJoys();
+                            }
+                        }
+                    },
+                    win32_sys_service.DBT_DEVICEREMOVECOMPLETE => {
+                        if (dbh_ptr) |ptr| {
+                            if (ptr.dbch_devicetype == win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE) {
+                                jss.queryDisconnectedJoys();
+                            }
+                        }
+                    },
+                    else => {
+                        break :exit_point;
+                    },
+                }
+            },
             else => {},
         }
     }
@@ -248,14 +272,8 @@ pub fn windowProc(
                 window.data.flags.cursor_in_client = true;
             }
             const new_pos = utils.getMousePosition(lparam);
-            // if (window.data.flags.accepts_raw_input and window.data.cursor.is_disabled()) {
-            //     // send raw delta.
-            //     new_pos.x -= window.data.platform_data.last_raw_pos.x;
-            //     new_pos.y -= window.data.platform_data.last_raw_pos.y;
-            // }
-            const event = common.event.createMouseMoveEvent(new_pos, false);
+            const event = common.event.createMouseMoveEvent(new_pos);
             window.queueEvent(&event);
-            // window.data.platform_data.last_raw_pos = new_pos;
             return 0;
         },
 
@@ -506,106 +524,9 @@ pub fn windowProc(
         },
 
         win32_window_messaging.WM_DROPFILES => {
-            // can we use a different allocator for better performance?
-            // free old files
-            const allocator = window.win32.dropped_files.allocator;
-            for (window.win32.dropped_files.items) |file| {
-                allocator.free(file);
-            }
-
-            var wide_slice: []u16 = undefined;
-            wide_slice.len = 0;
-            window.win32.dropped_files.clearRetainingCapacity();
-            const drop_handle = @intToPtr(win32_shell.HDROP, wparam);
-            const count = win32_shell.DragQueryFileW(drop_handle, 0xFFFFFFFF, null, 0);
-            if (count != 0) err_exit: {
-                if (window.win32.dropped_files.capacity < count) {
-                    window.win32.dropped_files.ensureTotalCapacity(count) catch {
-                        std.log.err("Failed to retrieve Dropped Files.\n", .{});
-                        break :err_exit;
-                    };
-                }
-                for (0..count) |index| {
-                    const buffer_len = win32_shell.DragQueryFileW(drop_handle, @truncate(u32, index), null, 0);
-                    if (buffer_len != 0) {
-                        // the returned length doesn't account for the null terminator,
-                        // however DragQueryFile will always write the null terminator even
-                        // at the cost of no copying the entire data. so it's necessary to add 1
-                        const buffer_lenz = buffer_len + 1;
-                        if (wide_slice.len == 0) {
-                            wide_slice = allocator.alloc(u16, buffer_lenz) catch {
-                                std.log.err("Failed to retrieve Dropped Files.\n", .{});
-                                break :err_exit;
-                            };
-                        } else if (wide_slice.len < buffer_lenz) {
-                            wide_slice = allocator.realloc(wide_slice, buffer_lenz) catch {
-                                std.log.err("Failed to retrieve Dropped Files.\n", .{});
-                                continue;
-                            };
-                        }
-                        _ = win32_shell.DragQueryFileW(drop_handle, @truncate(u32, index), @ptrCast([*:0]u16, wide_slice.ptr), buffer_lenz);
-                        const file_path = utils.wideToUtf8(allocator, wide_slice.ptr[0..buffer_len]) catch {
-                            std.log.err("Failed to retrieve Dropped Files.\n", .{});
-                            continue;
-                        };
-                        window.win32.dropped_files.append(file_path) catch {
-                            std.log.err("Failed to retrieve Dropped Files.\n", .{});
-                            allocator.free(file_path);
-                            continue;
-                        };
-                    }
-                }
-                // std.debug.print("dropped_files {?}\n", .{window.win32.dropped_files});
-                const event = common.event.createDropFileEvent(window.win32.dropped_files);
-                window.queueEvent(&event);
-                allocator.free(wide_slice);
-            }
-            win32_shell.DragFinish(drop_handle);
+            message_handler.dropEventHandler(window, wparam);
             return 0;
         },
-        //     win32_window_messaging.WM_INPUT => {
-        //         if window.data.flags.accepts_raw_input && window.data.cursor.is_disabled() {
-        //             const RAW_HEADER_SIZE: u32 = std::mem::size_of::<RAWINPUTHEADER>() as u32;
-        //             let mut data_size: u32 = 0;
-        //             GetRawInputData(
-        //                 lparam as HRAWINPUT,
-        //                 RID_INPUT,
-        //                 std::ptr::null_mut(),
-        //                 &mut data_size,
-        //                 RAW_HEADER_SIZE,
-        //             );
-        //             let mut input_buffer: Vec<u8> = vec![0; data_size as usize];
-        //             if GetRawInputData(
-        //                 lparam as HRAWINPUT,
-        //                 RID_INPUT,
-        //                 input_buffer.as_mut_ptr() as *mut _,
-        //                 &mut data_size,
-        //                 RAW_HEADER_SIZE,
-        //             ) != data_size
-        //             {
-        //                 debug_println!("Error copying RAWINPUT data");
-        //                 return 0;
-        //             }
-        //             let data_ptr: *const RAWINPUT = input_buffer.as_ptr() as _;
-        //             let (pos_x, pos_y) = if ((*data_ptr).data.mouse.usFlags
-        //                 & MOUSE_MOVE_ABSOLUTE as u16)
-        //                 != 0
-        //             {
-        //                 // For games we need the raw delta offset from the last position.
-        //                 (
-        //                     (*data_ptr).data.mouse.lLastX - window.data.platform_data.last_raw_pos.x,
-        //                     (*data_ptr).data.mouse.lLastY - window.data.platform_data.last_raw_pos.y,
-        //                 )
-        //             } else {
-        //                 // The movement is already relative.
-        //                 ((*data_ptr).data.mouse.lLastX, (*data_ptr).data.mouse.lLastY)
-        //             };
-        //             window.data.platform_data.last_raw_pos.x += pos_x;
-        //             window.data.platform_data.last_raw_pos.y += pos_y;
-        //             let event = Event::create_raw_mouse_event(pos_x, pos_y);
-        //             window.queueEvent(event);
-        //         }
-        //     }
         else => {},
     }
     return win32_window_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
