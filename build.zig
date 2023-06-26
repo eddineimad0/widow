@@ -43,7 +43,12 @@ pub fn build(b: *std.Build) void {
 
     const example_step = b.step("example", "Compile example");
 
-    const examples = [_][]const u8{ "simple_window", "playing_with_inputs", "cursor_and_icon" };
+    const examples = [_][]const u8{
+        "simple_window",
+        "playing_with_inputs",
+        "cursor_and_icon",
+        "window_joystick",
+    };
     for (examples) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
