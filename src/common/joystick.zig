@@ -14,6 +14,10 @@ const HIDData = struct {
 pub const JoystickType = enum(u8) {
     Generic = 0,
     Xbox,
+    const Self = @This();
+    pub inline fn isGamepad(self: *Self) bool {
+        return (self.* != Self.Generic);
+    }
 };
 
 pub const GenericButton = enum(u8) {
@@ -91,6 +95,15 @@ pub const XboxAxis = enum(u8) {
     RTrigger,
 };
 
+pub const BatteryInfo = enum(u8) {
+    PowerUnkown,
+    PowerEmpty,
+    PowerLow,
+    PowerMedium,
+    PowerFull,
+    WirePowered,
+};
+
 pub const Joystick = struct {
     axes: std.ArrayList(f64),
     buttons: std.ArrayList(ButtonState),
@@ -108,7 +121,6 @@ pub const Joystick = struct {
             .hats_count = h_count,
         };
         errdefer allocator.free(self.hid_data.name);
-        std.debug.print("acount:{},bcount:{},hcount:{}\n", .{ a_count, b_count, h_count });
         self.axes = try std.ArrayList(f64).initCapacity(allocator, a_count);
         errdefer self.axes.deinit();
         // consider 4 buttons for each hat.
@@ -132,17 +144,20 @@ pub const Joystick = struct {
         self.connected = false;
     }
 
-    pub fn setAxis(self: *Self, axis: u8, value: f64) void {
+    pub fn setAxis(self: *Self, axis: u8, value: f64) bool {
         std.debug.assert(axis < self.hid_data.axis_count and axis < AXES_COUNT);
         self.axes.items[axis] = value;
+        return true;
     }
 
-    pub inline fn setButton(self: *Self, button: u8, value: ButtonState) void {
+    pub inline fn setButton(self: *Self, button: u8, value: ButtonState) bool {
         std.debug.assert(button < self.hid_data.buttons_count and button < BUTTONS_COUNT);
+        const old_value = self.buttons.items[button];
         self.buttons.items[button] = value;
+        return (old_value != value);
     }
 
-    pub fn setHat(self: *Self, hat: u8, value: u8) void {
+    pub fn setHat(self: *Self, hat: u8, value: u8) bool {
         std.debug.assert(hat < self.hid_data.hats_count and hat < HATS_COUNT);
         const base = self.hid_data.buttons_count + (hat << 2);
         std.debug.assert(base < self.buttons.items.len - 3);
@@ -154,7 +169,27 @@ pub const Joystick = struct {
         self.buttons.items[base + 2] = if (value & 0x04 != 0) ButtonState.Pressed else ButtonState.Released;
         // LEFT
         self.buttons.items[base + 3] = if (value & 0x08 != 0) ButtonState.Pressed else ButtonState.Released;
+        return true;
     }
 };
 
-pub const JoystickConnectCallBack = *const fn (joy_id: u8, name: []const u8, connected: bool, user_ptr: ?*anyopaque) void;
+pub const joyAxisEvent = struct {
+    id: u8,
+    axis: GenericAxis,
+    value: f64,
+};
+
+pub const joyHatEvent = struct {
+    id: u8,
+    hat: GenericHat,
+    state: HatState,
+};
+
+pub const joyButtonEvent = struct {
+    id: u8,
+    button: GenericButton,
+    state: ButtonState,
+};
+
+pub const GamepadAxisEvent = joyAxisEvent;
+pub const GamepadButtonEvent = joyButtonEvent;

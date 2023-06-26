@@ -1,6 +1,7 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
+const joystick = @import("joystick.zig");
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -19,6 +20,15 @@ pub const EventType = enum(u8) {
     MouseLeave, // The mouse exited the client area of the window.
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
+    JoystickConnected, // Device inserted into the system.
+    JoystickRemoved, // Device removed from the system.
+    JoystickButtonAction, // Device button was pressed or released.
+    JoystickAxisMotion, // Device Axis value changed.
+    JoystickHatMotion, // Device hat position changed.
+    GamepadConnected, // Gamepad inserted.
+    GamepadRemoved, // Gamepad removed.
+    GamepadButtonAction, // Gamepad button was pressed or released.
+    GamepadAxisMotion, // Gamepad axis value changed
 };
 
 pub const KeyEvent = struct {
@@ -65,6 +75,15 @@ pub const Event = union(EventType) {
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
+    JoystickConnected: u8, // Device inserted into the system.
+    JoystickRemoved: u8, // Device removed from the system.
+    JoystickButtonAction: joystick.joyButtonEvent, // Device button was pressed or released.
+    JoystickAxisMotion: joystick.joyAxisEvent, // Device Axis value changed.
+    JoystickHatMotion: joystick.joyHatEvent, // Device hat position changed.
+    GamepadConnected: u8, // Gamepad inserted.
+    GamepadRemoved: u8, // Gamepad removed.
+    GamepadButtonAction: joystick.GamepadButtonEvent, // Gamepad button was pressed or released.
+    GamepadAxisMotion: joystick.GamepadAxisEvent, // Gamepad axis value changed
 };
 
 pub inline fn createCloseEvent() Event {
@@ -125,4 +144,52 @@ pub inline fn createDPIEvent(new_dpi: u32, new_scale: f64) Event {
 
 pub inline fn createCharEvent(codepoint: u32, mods: input.KeyModifiers) Event {
     return Event{ .Character = CharacterEvent{ .codepoint = @truncate(u21, codepoint), .mods = mods } };
+}
+
+pub inline fn createJoyConnectEvent(id: u8, gamepad: bool) Event {
+    return if (gamepad) Event{ .GamepadConnected = id } else Event{ .JoystickConnected = id };
+}
+
+pub inline fn createJoyRemoveEvent(id: u8, gamepad: bool) Event {
+    return if (gamepad) Event{ .GamepadRemoved = id } else Event{ .JoystickRemoved = id };
+}
+
+pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f64, gamepad: bool) Event {
+    if (gamepad) {
+        return Event{ .GamepadAxisMotion = joystick.GamepadAxisEvent{
+            .id = id,
+            .axis = @intToEnum(joystick.GenericAxis, axis),
+            .value = value,
+        } };
+    } else {
+        return Event{ .JoystickAxisMotion = joystick.joyAxisEvent{
+            .id = id,
+            .axis = @intToEnum(joystick.GenericAxis, axis),
+            .value = value,
+        } };
+    }
+}
+
+pub inline fn createJoyButtonEvent(id: u8, button: u8, state: joystick.ButtonState, gamepad: bool) Event {
+    if (gamepad) {
+        return Event{ .GamepadButtonAction = joystick.GamepadButtonEvent{
+            .id = id,
+            .button = @intToEnum(joystick.GenericButton, button),
+            .state = state,
+        } };
+    } else {
+        return Event{ .JoystickButtonAction = joystick.joyButtonEvent{
+            .id = id,
+            .button = @intToEnum(joystick.GenericButton, button),
+            .state = state,
+        } };
+    }
+}
+
+pub inline fn createJoyHatEvent(id: u8, hat: u8, state: joystick.HatState) Event {
+    return Event{ .JoystickHatMotion = joystick.joyHatEvent{
+        .id = id,
+        .hat = @intToEnum(joystick.GenericHat, hat),
+        .state = state,
+    } };
 }
