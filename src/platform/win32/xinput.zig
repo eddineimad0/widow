@@ -1,6 +1,7 @@
 const std = @import("std");
 const module = @import("module.zig");
 const joystick = @import("common").joystick;
+const event = @import("common").event;
 const windows = std.os.windows;
 const winapi = @import("win32");
 const xinput = winapi.ui.input.xbox_controller;
@@ -12,23 +13,32 @@ const Win32JoyData = @import("joystick_impl.zig").Win32JoyData;
 const Joystick = joystick.Joystick;
 const win32_error = winapi.foundation.WIN32_ERROR;
 const DWORD = u32;
+const BYTE = u8;
 const proc_XInputGetState = *const fn (DWORD, *xinput.XINPUT_STATE) callconv(winabi) DWORD;
 const proc_XInputSetState = *const fn (DWORD, *xinput.XINPUT_VIBRATION) callconv(winabi) DWORD;
 const proc_XInputGetCapabilities = *const fn (DWORD, DWORD, *xinput.XINPUT_CAPABILITIES) callconv(winabi) DWORD;
+const proc_XInputGetBatteryInformation = *const fn (DWORD, BYTE, *xinput.XINPUT_BATTERY_INFORMATION) callconv(winabi) DWORD;
 const GUID = winapi.zig.Guid;
 const XINPUT_GAMEPAD_GUIDE = @as(u32, 0x0400);
 
+/// Holds XInput API data for each controller it enumerate.
 pub const XInputData = struct {
     packet_number: u32,
     id: u8,
+    wirless: bool,
+    ffb_support: bool,
 };
 
+/// XInput api interface.
+/// encapsulate all the modules and function necessary for the api to work.
 pub const XInputInterface = struct {
     handle: module.HINSTANCE,
     legacy: bool,
     getState: proc_XInputGetState,
     setState: proc_XInputSetState,
     getCaps: proc_XInputGetCapabilities,
+    // Not all api versions support this.
+    getBatteryInfo: ?proc_XInputGetBatteryInformation,
     const Self = @This();
 
     pub fn init() !Self {
@@ -65,6 +75,7 @@ pub const XInputInterface = struct {
             module.freeWin32Module(self.handle);
             return XInputError.FailedToLoadLibraryFunc;
         };
+        self.getBatteryInfo = @ptrCast(?proc_XInputGetBatteryInformation, module.getModuleSymbol(self.handle, "XInputGetBatteryInformation"));
         return self;
     }
 
@@ -78,7 +89,12 @@ pub const XInputInterface = struct {
 };
 
 // Taken from The GLFW library.
+// https://github.com/glfw/glfw/blob/master/src/win32_joystick.c#L195
 // The method propsed in MSDN looks too complexe.
+/// Verfiy if the device with the corresponding guid is XINPUT compatible.
+/// # Note
+/// This function is used by other apis to determine if they should ignore the corresponding
+/// device.
 fn isXInputDevice(guid: *GUID) bool {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -136,6 +152,8 @@ fn isXInputDevice(guid: *GUID) bool {
     return false;
 }
 
+/// Detect if any xinput compatible pad is connected and initialize
+/// a corresponding joystick instance.
 pub fn pollPadsConnection(jss: *JoystickSubSystem) void {
     var i: u8 = 0;
     while (i < xinput.XUSER_MAX_COUNT) {
@@ -178,9 +196,12 @@ pub fn pollPadsConnection(jss: *JoystickSubSystem) void {
                 jss.joys_exdata[slot] = Win32JoyData{ .XInput = XInputData{
                     .id = i,
                     .packet_number = 0,
+                    .ffb_support = if (xcaps.Flags & xinput.XINPUT_CAPS_FFB_SUPPORTED != 0) true else false,
+                    .wirless = if (xcaps.Flags & xinput.XINPUT_CAPS_WIRELESS != 0) true else false,
                 } };
                 // Notify user.
-                jss.on_connection_change(slot, joy.hid_data.name, true, null);
+                const ev = event.createJoyConnectEvent(slot, true);
+                jss.notifyListeners(&ev);
             } else {
                 // Failed to init joystick due to lack of memory space.
                 break;
@@ -207,6 +228,7 @@ inline fn initJoystick(allocator: std.mem.Allocator, joy: *Joystick, id: u8) boo
     return true;
 }
 
+/// Poll for gamepad state changes.
 pub fn pollPadState(xapi: *const XInputInterface, joy: *Joystick, xdata: *XInputData) bool {
     const buttons = comptime [10]u32{
         xinput.XINPUT_GAMEPAD_A,
@@ -264,29 +286,42 @@ pub fn pollPadState(xapi: *const XInputInterface, joy: *Joystick, xdata: *XInput
     return true;
 }
 
-// pub fn vibrate(self: *Self) XInputError!void {
-//     if (self.connected) {
-//         const vibration = xinput.XINPUT_VIBRATION{
-//             .wLeftMotorSpeed = 65535,
-//             .wRightMotorSpeed = 65535,
-//         };
-//         // ERROR_SUCCESS;
-//         if (self.set_state_fun(self.gid, &vibration) != 0) {
-//             return XInputError.FailedToSetState;
-//         }
-//     }
-// }
-//
-// pub fn stopVibration(self: *Self) XInputError!void {
-//     if (self.connected) {
-//         const vibration = xinput.XINPUT_VIBRATION{
-//             .wLeftMotorSpeed = 0,
-//             .wRightMotorSpeed = 0,
-//         };
-//         // ERROR_SUCCESS;
-//         if (self.set_state_fun(self.gid, &vibration) != 0) {
-//             return XInputError.FailedToSetState;
-//         }
-//     }
-// }
-pub const XInputError = error{ FailedToLoadDLL, FailedToLoadLibraryFunc };
+/// Vibrate the controller
+pub fn rumble(api: *const XInputInterface, xdata: *const XInputData, low_freq: u16, hi_freq: u16) XInputError!void {
+    if (!xdata.ffb_support) {
+        return XInputError.NonCapableDevice;
+    }
+    var vibration = xinput.XINPUT_VIBRATION{
+        .wLeftMotorSpeed = low_freq,
+        .wRightMotorSpeed = hi_freq,
+    };
+
+    if (api.setState(xdata.id, &vibration) != @enumToInt(win32_error.NO_ERROR)) {
+        return XInputError.FailedToSetState;
+    }
+}
+
+/// stop controller vibration
+pub inline fn stopRumble(api: *const XInputInterface, xdata: *const XInputData) XInputError!void {
+    try rumble(api, xdata, 0, 0);
+}
+
+pub fn batteryInfo(api: *const XInputInterface, xdata: *const XInputData) XInputError!joystick.BatteryInfo {
+    if (api.legacy) {
+        return XInputError.UnsupportedFunctionality;
+    }
+    if (!xdata.wirless) {
+        return joystick.BatteryInfo.WirePowered;
+    }
+    var bi: xinput.XINPUT_BATTERY_INFORMATION = undefined;
+    _ = api.getBatteryInfo.?(xdata.id, xinput.BATTERY_DEVTYPE_GAMEPAD, &bi);
+    switch (bi.BatteryLevel) {
+        xinput.BATTERY_LEVEL_LOW => return joystick.BatteryInfo.PowerLow,
+        xinput.BATTERY_LEVEL_MEDIUM => return joystick.BatteryInfo.PowerMedium,
+        xinput.BATTERY_LEVEL_FULL => return joystick.BatteryInfo.PowerFull,
+        xinput.BATTERY_LEVEL_EMPTY => return joystick.BatteryInfo.PowerEmpty,
+        else => return joystick.BatteryInfo.PowerUnkown,
+    }
+}
+
+pub const XInputError = error{ FailedToLoadDLL, FailedToLoadLibraryFunc, FailedToSetState, UnsupportedFunctionality, NonCapableDevice };

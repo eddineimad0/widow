@@ -7,7 +7,7 @@ const DragAcceptFiles = winapi.ui.shell.DragAcceptFiles;
 const SetFocus = winapi.ui.input.keyboard_and_mouse.SetFocus;
 const defs = @import("defs.zig");
 const common = @import("common");
-const Queue = common.queue.Queue;
+const Queue = common.list.Queue;
 const utils = @import("utils.zig");
 const Internals = @import("internals.zig").Internals;
 const monitor_impl = @import("monitor_impl.zig");
@@ -601,7 +601,7 @@ pub const WindowImpl = struct {
     /// Add an event to the window's Events Queue.
     /// possible to make thread safe.
     pub fn queueEvent(self: *Self, event: *const common.event.Event) void {
-        self.events_queue.put(event) catch |err| {
+        self.events_queue.append(event) catch |err| {
             std.debug.print("[ERROR]: Failed to queue event:{}", .{err});
         };
     }
