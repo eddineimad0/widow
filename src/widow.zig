@@ -93,8 +93,18 @@ pub const WidowContext = struct {
     //     try platform.internals.createStandardCursor(target.impl, shape);
     // }
 
-    pub fn initJoystickSubSyst(self: *Self, on_connection_change: common.hid.JoystickConnectCallBack) !void {
-        self.joysticks = try platform.joystick.JoystickSubSystem.create(self.allocator, on_connection_change);
+    pub fn initJoystickSubSyst(self: *Self) !void {
+        self.joysticks = try platform.joystick.JoystickSubSystem.create(self.allocator);
+        // We assign it here so we can access it in the helper window procedure.
+        self.internals.devices.joystick_store = self.joysticks;
+    }
+
+    pub fn addJoystickListener(self: *Self, window_ptr: *window.Window) !void {
+        try self.joysticks.?.addListener(window_ptr.impl);
+    }
+
+    pub fn removeJoystickListener(self: *Self, window_ptr: *window.Window) bool {
+        return self.joysticks.?.removeListener(window_ptr.impl);
     }
 };
 

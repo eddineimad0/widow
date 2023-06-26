@@ -9,11 +9,13 @@ const monitor_impl = @import("./monitor_impl.zig");
 const icon = @import("./icon.zig");
 const clipboard = @import("./clipboard.zig");
 const common = @import("common");
+const GUID = winapi.zig.Guid;
 const CursorShape = common.cursor.CursorShape;
 
 const win32_sysinfo = winapi.system.system_information;
 const win32_window_messaging = winapi.ui.windows_and_messaging;
 const win32_system_power = winapi.system.power;
+const win32_sys_service = winapi.system.system_services;
 const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = winapi.ui.hi_dpi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
 const PROCESS_PER_MONITOR_DPI_AWARE = winapi.ui.hi_dpi.PROCESS_PER_MONITOR_DPI_AWARE;
 const VER_GREATER_EQUAL = winapi.system.system_services.VER_GREATER_EQUAL;
@@ -21,6 +23,7 @@ const STATUS_SUCCESS = winapi.foundation.STATUS_SUCCESS;
 const HWND = winapi.foundation.HWND;
 const HMONITOR = winapi.graphics.gdi.HMONITOR;
 const CW_USEDEFAULT = win32_window_messaging.CW_USEDEFAULT;
+const DEVICE_NOTIFY_WINDOW_HANDLE = winapi.system.power.DEVICE_NOTIFY_WINDOW_HANDLE;
 
 const Win32Flags = struct {
     is_win_vista_or_above: bool,
@@ -34,6 +37,7 @@ const Win32Handles = struct {
     main_class: u16,
     helper_class: u16,
     helper_window: HWND,
+    dev_notif: *anyopaque,
     ntdll: ?module.HINSTANCE,
     user32: ?module.HINSTANCE,
     shcore: ?module.HINSTANCE,
@@ -226,13 +230,13 @@ pub const DeviceContext = struct {
     joystick_store: ?*JoystickSubSystem,
     clipboard_change: bool, // So we can cache the clipboard value until it changes.
     next_clipboard_viewer: ?HWND, // we're using the old api to watch the clipboard.
+    clipboard_text: ?[]u8,
 };
 
 pub const Internals = struct {
     win32: Win32,
     devices: DeviceContext,
-    clipboard_text: ?[]u8,
-    // TODO: can we change this at comptime to a user comptime string.
+    // TODO: can we change this to a user comptime string.
     pub const WINDOW_CLASS_NAME = "WIDOW";
     const HELPER_CLASS_NAME = WINDOW_CLASS_NAME ++ "_HELPER";
     const HELPER_TITLE = "";
@@ -300,8 +304,8 @@ pub const Internals = struct {
         self.devices.clipboard_change = false;
         self.devices.monitor_store = null; // Should be set by the caller.
         self.devices.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.win32.handles.helper_window);
-        self.clipboard_text = null;
-        registerDevices(self.win32.handles.helper_window, &self.devices);
+        self.devices.clipboard_text = null;
+        registerDevices(self.win32.handles.helper_window, &self.win32.handles.dev_notif, &self.devices);
         return self;
     }
 
@@ -309,6 +313,8 @@ pub const Internals = struct {
 
         // Free the loaded modules.
         self.freeLibraries();
+
+        _ = win32_sys_service.UnregisterDeviceNotification(self.win32.handles.dev_notif);
 
         // Clear up the Devices refrence
         _ = win32_window_messaging.SetWindowLongPtrW(self.win32.handles.helper_window, win32_window_messaging.GWLP_USERDATA, 0);
@@ -335,9 +341,9 @@ pub const Internals = struct {
             self.win32.handles.hinstance,
         );
 
-        if (self.clipboard_text) |text| {
+        if (self.devices.clipboard_text) |text| {
             allocator.free(text);
-            self.clipboard_text = null;
+            self.devices.clipboard_text = null;
         }
 
         clipboard.unregisterClipboardViewer(self.win32.handles.helper_window, self.devices.next_clipboard_viewer);
@@ -346,16 +352,16 @@ pub const Internals = struct {
     }
 
     pub inline fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
-        if (self.devices.clipboard_change or self.clipboard_text == null) {
+        if (self.devices.clipboard_change or self.devices.clipboard_text == null) {
             // refetching clipboard data
-            if (self.clipboard_text) |text| {
+            if (self.devices.clipboard_text) |text| {
                 allocator.free(text);
-                errdefer self.clipboard_text = null;
+                errdefer self.devices.clipboard_text = null;
             }
-            self.clipboard_text = try clipboard.clipboardText(allocator, self.win32.handles.helper_window);
+            self.devices.clipboard_text = try clipboard.clipboardText(allocator, self.win32.handles.helper_window);
             self.devices.clipboard_change = false;
         }
-        return self.clipboard_text.?;
+        return self.devices.clipboard_text.?;
     }
 
     pub inline fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
@@ -542,8 +548,23 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     _ = win32_window_messaging.ShowWindow(helper_window.*, win32_window_messaging.SW_HIDE);
 }
 
-fn registerDevices(helper_window: HWND, devices: *DeviceContext) void {
+fn registerDevices(helper_window: HWND, dbi_handle: **anyopaque, devices: *DeviceContext) void {
+    // Drivers for HID collections register instances of this device interface
+    // class to notify the operating system and applications of the presence of HID collections.
+    const GUID_DEVINTERFACE_HID = comptime GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
+
     _ = win32_window_messaging.SetWindowLongPtrW(helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(devices)));
+
+    // Register window to recieve HID notification
+    var dbi: win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A = undefined;
+    dbi.dbcc_size = @sizeOf(win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A);
+    dbi.dbcc_devicetype = @enumToInt(win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE);
+    dbi.dbcc_classguid = GUID_DEVINTERFACE_HID;
+    dbi_handle.* = win32_window_messaging.RegisterDeviceNotificationW(
+        helper_window,
+        @ptrCast(*anyopaque, &dbi),
+        DEVICE_NOTIFY_WINDOW_HANDLE,
+    ) orelse unreachable; // Should always succeed.
 }
 
 pub fn createIcon(
