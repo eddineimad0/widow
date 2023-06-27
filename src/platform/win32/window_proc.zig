@@ -1,66 +1,22 @@
 const std = @import("std");
-const windows = @import("std").os.windows;
-const winapi = @import("win32");
+const win32 = @import("win32.zig");
+const zigwin32 = @import("zigwin32");
 const utils = @import("./utils.zig");
 const common = @import("common");
-const win32_window_messaging = winapi.ui.windows_and_messaging;
-const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
-const win32_sys_service = winapi.system.system_services;
 const DeviceContext = @import("./internals.zig").DeviceContext;
+const proc_EnableNonClientDpiScaling = @import("./internals.zig").proc_EnableNonClientDpiScaling;
 const window_impl = @import("./window_impl.zig");
-
-const winabi = windows.WINAPI;
-const HRESULT = windows.HRESULT;
-const NTSTATUS = winapi.foundation.NTSTATUS;
-const BOOL = winapi.foundation.BOOL;
-const HWND = winapi.foundation.HWND;
-const RECT = winapi.foundation.RECT;
-const LPARAM = winapi.foundation.LPARAM;
-const WPARAM = winapi.foundation.WPARAM;
-const OSVERSIONINFOEXW = winapi.system.system_information.OSVERSIONINFOEXW;
-const HMONITOR = winapi.graphics.gdi.HMONITOR;
-const PROCESS_DPI_AWARENESS = winapi.ui.hi_dpi.PROCESS_DPI_AWARENESS;
-const DPI_AWARENESS_CONTEXT = winapi.ui.hi_dpi.DPI_AWARENESS_CONTEXT;
-const MONITOR_DPI_TYPE = winapi.ui.hi_dpi.MONITOR_DPI_TYPE;
-const SC_SCREENSAVE = winapi.graphics.gdi.SC_SCREENSAVE;
-const TRUE = 1;
-const FALSE = 0;
-const WM_UNICHAR = @as(u32, 0x0109);
-
-pub const proc_SetProcessDPIAware = *const fn () callconv(winabi) BOOL;
-
-pub const proc_RtlVerifyVersionInfo = *const fn (*OSVERSIONINFOEXW, u32, u64) callconv(winabi) NTSTATUS;
-
-pub const proc_SetProcessDpiAwareness = *const fn (PROCESS_DPI_AWARENESS) callconv(winabi) HRESULT;
-
-pub const proc_SetProcessDpiAwarenessContext = *const fn (DPI_AWARENESS_CONTEXT) callconv(winabi) HRESULT;
-
-pub const proc_EnableNonClientDpiScaling = *const fn (HWND) callconv(winabi) BOOL;
-
-pub const proc_GetDpiForWindow = *const fn (HWND) callconv(winabi) u32;
-
-pub const proc_GetDpiForMonitor = *const fn (
-    HMONITOR,
-    MONITOR_DPI_TYPE,
-    *u32,
-    *u32,
-) callconv(winabi) HRESULT;
-
-pub const proc_AdjustWindowRectExForDpi = *const fn (
-    *RECT,
-    u32,
-    i32,
-    u32,
-    u32,
-) callconv(winabi) BOOL;
+const win32_window_messaging = zigwin32.ui.windows_and_messaging;
+const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
+const win32_sys_service = zigwin32.system.system_services;
 
 /// The procedure function for the helper window
 pub fn helperWindowProc(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) callconv(winabi) isize {
+    hwnd: win32.HWND,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) callconv(win32.WINAPI) isize {
     const user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
     if (user_data != 0) {
         var devices = @intToPtr(*DeviceContext, @intCast(usize, user_data));
@@ -90,7 +46,7 @@ pub fn helperWindowProc(
                 // Sent When one of the clipboard viewers is getting removed.
                 if (devices.next_clipboard_viewer) |viewer| {
                     if (wparam == @ptrToInt(viewer)) {
-                        devices.next_clipboard_viewer = @intToPtr(?HWND, @bitCast(usize, lparam));
+                        devices.next_clipboard_viewer = @intToPtr(?win32.HWND, @bitCast(usize, lparam));
                     } else {
                         _ = win32_window_messaging.SendMessage(devices.next_clipboard_viewer, msg, wparam, lparam);
                     }
@@ -132,11 +88,11 @@ pub fn helperWindowProc(
 const message_handler = @import("./message_handler.zig");
 /// The Window Procedure function.
 pub fn windowProc(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) callconv(winabi) isize {
+    hwnd: win32.HWND,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) callconv(win32.WINAPI) isize {
 
     // Get a mutable refrence to the corresponding WindowImpl Structure.
     const window_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
@@ -215,7 +171,7 @@ pub fn windowProc(
             }
         },
 
-        win32_window_messaging.WM_MOUSELEAVE => {
+        win32.WM_MOUSELEAVE => {
             // Posted to a window when the cursor leaves the client area
             // of the window specified in a prior call to TrackMouseEvent.
             window.data.flags.cursor_in_client = false;
@@ -234,7 +190,7 @@ pub fn windowProc(
             // while the cursor is in the client area of a window.
             message_handler.mouseUpMSGHandler(window, msg, wparam);
             if (msg == win32_window_messaging.WM_XBUTTONUP) {
-                return TRUE;
+                return win32.TRUE;
             }
             return 0;
         },
@@ -248,7 +204,7 @@ pub fn windowProc(
             // while the cursor is in the client area of a window.
             message_handler.mouseDownMSGHandler(window, msg, wparam);
             if (msg == win32_window_messaging.WM_XBUTTONDOWN) {
-                return TRUE;
+                return win32.TRUE;
             }
             return 0;
         },
@@ -301,7 +257,7 @@ pub fn windowProc(
             // The message is sent to prepare an invalidated portion of a window for painting.
             // An application should return nonzero in response to win32_window_messaging.WM_ERASEBKGND
             // if it processes the message and erases the background.
-            return TRUE;
+            return win32.TRUE;
         },
 
         win32_window_messaging.WM_GETDPISCALEDSIZE => {
@@ -309,15 +265,15 @@ pub fn windowProc(
             // the window to compute its desired size for the pending DPI change.
             // this is only useful in scenarios where the window wants to scale non-linearly.
             if (message_handler.dpiScaledSizeHandler(window, wparam, lparam)) {
-                return TRUE;
+                return win32.TRUE;
             }
-            return FALSE;
+            return win32.FALSE;
         },
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
             if (window.data.fullscreen_mode == null and window.internals.win32.flags.is_win10b1703_or_above) {
-                const rect_ref: *RECT = @intToPtr(*RECT, @bitCast(usize, lparam));
+                const rect_ref: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
                 const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
                     @enumToInt(win32_window_messaging.SWP_NOZORDER) |
                     @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
@@ -351,10 +307,10 @@ pub fn windowProc(
         win32_window_messaging.WM_SIZING => {
             // Sent to a window that the user is resizing.
             if (window.data.aspect_ratio != null) {
-                const drag_rect_ptr = @intToPtr(*RECT, @bitCast(usize, lparam));
+                const drag_rect_ptr = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
                 window.applyAspectRatio(drag_rect_ptr, @truncate(u32, wparam));
             }
-            return TRUE;
+            return win32.TRUE;
         },
 
         win32_window_messaging.WM_SIZE => {
@@ -409,7 +365,7 @@ pub fn windowProc(
                 // the mouse just moved into the client area
                 // update the cursor image acording to the current mode;
                 window_impl.updateCursor(&window.win32.cursor);
-                return TRUE;
+                return win32.TRUE;
             }
         },
 
@@ -449,14 +405,14 @@ pub fn windowProc(
             // In win32_window_messaging.WM_SYSCOMMAND messages, the four low-order bits of the wParam
             // parameter are used internally by the system.
             switch (wparam & 0xFFF0) {
-                SC_SCREENSAVE, win32_window_messaging.SC_MONITORPOWER => {
+                win32.SC_SCREENSAVE, win32.SC_MONITORPOWER => {
                     if (window.data.fullscreen_mode != null) {
                         // No screen saver for fullscreen mode
                         return 0;
                     }
                 },
 
-                win32_window_messaging.SC_KEYMENU => {
+                win32.SC_KEYMENU => {
                     // User pressed alt to access the window's keymenu
                     if (!window.win32.keymenu) {
                         return 0;
@@ -469,14 +425,14 @@ pub fn windowProc(
             }
         },
 
-        WM_UNICHAR => {
+        win32.WM_UNICHAR => {
             // The win32_window_messaging.WM_UNICHAR message can be used by an application
             // to post input to other windows.
             // (Test whether a target app can process win32_window_messaging.WM_UNICHAR messages
             // by sending the message with wParam set to UNICODE_NOCHAR.)
             if (wparam == win32_window_messaging.UNICODE_NOCHAR) {
                 // If wParam is UNICODE_NOCHAR and the application support this message,
-                return TRUE;
+                return win32.TRUE;
             }
             // The win32_window_messaging.WM_UNICHAR message is similar to WM_CHAR,
             // but it uses Unicode Transformation Format (UTF)-32
