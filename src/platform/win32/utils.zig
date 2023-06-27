@@ -1,12 +1,13 @@
 const std = @import("std");
 const common = @import("common");
+const zigwin32 = @import("zigwin32");
+const win32 = @import("win32.zig");
+const window_impl = @import("window_impl.zig");
+const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
+const win32_foundation = zigwin32.foundation;
 const ScanCode = common.keyboard_and_mouse.ScanCode;
 const VirtualCode = common.keyboard_and_mouse.VirtualCode;
 const KeyState = common.keyboard_and_mouse.KeyState;
-const winapi = @import("win32");
-const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
-const win32_foundation = winapi.foundation;
-const window_impl = @import("window_impl.zig");
 
 /// For comparing wide c strings.
 pub fn wideStrZCmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
@@ -29,7 +30,7 @@ pub inline fn strCmp(str_a: []const u8, str_b: []const u8) bool {
 }
 
 /// Returns a slice to well formed Utf16 null terminated string.
-/// for use with windows `Wide` api functions.
+/// for use with windows `W(ide)` api functions.
 /// # Note
 /// The returned slice should be freed by the caller.
 pub inline fn utf8ToWideZ(allocator: std.mem.Allocator, utf8_str: []const u8) ![:0]u16 {
@@ -61,6 +62,7 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
 /// # Note
 /// wide pointers([*:0]u16) returned by windows are not always properly aligned,
 /// therfore this function will randomly fail in debug mode.
+/// As of now this function is not used anywhere.
 pub inline fn makeIntAtom(comptime T: type, atom: u16) ?[*:0]const T {
     return @intToPtr(?[*:0]const T, @as(usize, atom));
 }
@@ -94,12 +96,12 @@ pub inline fn isLowSurrogate(surrogate: u16) bool {
     return (surrogate >= 0xDC00 and surrogate <= 0xDFFF);
 }
 
-pub inline fn getLastError() u32 {
-    return @enumToInt(win32_foundation.GetLastError());
+pub inline fn getLastError() win32.WIN32_ERROR {
+    return win32_foundation.GetLastError();
 }
 
 pub inline fn clearThreadError() void {
-    win32_foundation.SetLastError(@intToEnum(win32_foundation.WIN32_ERROR, 0));
+    win32_foundation.SetLastError(win32.WIN32_ERROR.NO_ERROR); // 0
 }
 
 pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
@@ -136,7 +138,7 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
 }
 
 /// figure out the scancode and appropriate virtual key.
-pub fn getKeyCodes(keycode: u16, lparam: isize) struct { VirtualCode, ScanCode } {
+pub fn getKeyCodes(keycode: u16, lparam: win32.LPARAM) struct { VirtualCode, ScanCode } {
     const MAPVK_VK_TO_VSC = 0;
     // The extended bit is necessary to find the correct scancode
     var code: u32 = @truncate(u32, @bitCast(usize, (lparam >> 16) & 0x1FF));
@@ -439,11 +441,13 @@ fn platformKeyToVirutal(keycode: u16) VirtualCode {
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
         @enumToInt(win32_keyboard_mouse.VK_OEM_1), @enumToInt(win32_keyboard_mouse.VK_OEM_2), @enumToInt(win32_keyboard_mouse.VK_OEM_3), @enumToInt(win32_keyboard_mouse.VK_OEM_4), @enumToInt(win32_keyboard_mouse.VK_OEM_5), @enumToInt(win32_keyboard_mouse.VK_OEM_6), @enumToInt(win32_keyboard_mouse.VK_OEM_7), @enumToInt(win32_keyboard_mouse.VK_OEM_102) => {
+            // Use the key text to identify it.
             return keyTextToVirtual(keycode);
         },
         else => return WINDOWS_VK_TABLE[keycode],
     }
 }
+
 pub fn mapWindowsScancode(scancode: u32) ScanCode {
     const WINDOWS_SCANCODE_TABLE = comptime [512]ScanCode{
         ScanCode.Unknown, //0x000
@@ -966,7 +970,6 @@ pub fn mapWindowsScancode(scancode: u32) ScanCode {
 fn keyTextToVirtual(keycode: u16) VirtualCode {
     const MAPVK_VK_TO_CHAR = 2;
     const key_text = win32_keyboard_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
-    // const char = char.from_u32(key_text);
     switch (key_text) {
         ';' => return VirtualCode.Semicolon,
         '/' => return VirtualCode.Slash,
@@ -1022,7 +1025,7 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
     }
 }
 
-pub inline fn getMousePosition(lparam: win32_foundation.LPARAM) common.geometry.WidowPoint2D {
+pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.WidowPoint2D {
     const xpos = getXLparam(@bitCast(usize, lparam));
     const ypos = getYLparam(@bitCast(usize, lparam));
     return common.geometry.WidowPoint2D{ .x = xpos, .y = ypos };
