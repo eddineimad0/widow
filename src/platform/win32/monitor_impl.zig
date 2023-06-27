@@ -178,7 +178,7 @@ pub fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void
     // Always succeed.
     _ = win32_gdi.GetMonitorInfoW(
         handle,
-        &mi,
+        mi,
     );
 }
 
@@ -277,7 +277,8 @@ pub const MonitorImpl = struct {
 
     /// Populate the `area` with the total resolution of the monitor.
     pub inline fn fullscreenArea(self: *const Self, area: *WidowArea) void {
-        var mi = queryMonitorInfo(self.handle);
+        var mi: win32_gdi.MONITORINFO = undefined;
+        queryMonitorInfo(self.handle, &mi);
         area.* = WidowArea.init(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top);
     }
 
