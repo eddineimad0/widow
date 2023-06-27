@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
             });
             var deps: [2]std.build.ModuleDependency = undefined;
             deps[0] = std.build.ModuleDependency{ .name = "common", .module = common_module };
-            deps[1] = std.build.ModuleDependency{ .name = "win32", .module = win32api };
+            deps[1] = std.build.ModuleDependency{ .name = "zigwin32", .module = win32api };
             break :windows b.createModule(.{ .source_file = .{ .path = "src/platform/win32/platform.zig" }, .dependencies = &deps });
         },
         else => {
