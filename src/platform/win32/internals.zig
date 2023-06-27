@@ -1,29 +1,47 @@
 const std = @import("std");
-const defs = @import("./defs.zig");
+const window_proc = @import("./window_proc.zig");
 const module = @import("./module.zig");
 const utils = @import("./utils.zig");
-const WindowImpl = @import("window_impl.zig").WindowImpl;
-const JoystickSubSystem = @import("joystick_impl.zig").JoystickSubSystem;
-const winapi = @import("win32");
+const zigwin32 = @import("zigwin32");
+const win32 = @import("win32.zig");
 const monitor_impl = @import("./monitor_impl.zig");
 const icon = @import("./icon.zig");
 const clipboard = @import("./clipboard.zig");
 const common = @import("common");
-const GUID = winapi.zig.Guid;
+const win32_sysinfo = zigwin32.system.system_information;
+const win32_window_messaging = zigwin32.ui.windows_and_messaging;
+const win32_system_power = zigwin32.system.power;
+const win32_sys_service = zigwin32.system.system_services;
+const WindowImpl = @import("window_impl.zig").WindowImpl;
+const JoystickSubSystem = @import("joystick_impl.zig").JoystickSubSystem;
 const CursorShape = common.cursor.CursorShape;
 
-const win32_sysinfo = winapi.system.system_information;
-const win32_window_messaging = winapi.ui.windows_and_messaging;
-const win32_system_power = winapi.system.power;
-const win32_sys_service = winapi.system.system_services;
-const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = winapi.ui.hi_dpi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
-const PROCESS_PER_MONITOR_DPI_AWARE = winapi.ui.hi_dpi.PROCESS_PER_MONITOR_DPI_AWARE;
-const VER_GREATER_EQUAL = winapi.system.system_services.VER_GREATER_EQUAL;
-const STATUS_SUCCESS = winapi.foundation.STATUS_SUCCESS;
-const HWND = winapi.foundation.HWND;
-const HMONITOR = winapi.graphics.gdi.HMONITOR;
-const CW_USEDEFAULT = win32_window_messaging.CW_USEDEFAULT;
-const DEVICE_NOTIFY_WINDOW_HANDLE = winapi.system.power.DEVICE_NOTIFY_WINDOW_HANDLE;
+const proc_SetProcessDPIAware = *const fn () callconv(win32.WINAPI) win32.BOOL;
+
+const proc_RtlVerifyVersionInfo = *const fn (*win32.OSVERSIONINFOEXW, u32, u64) callconv(win32.WINAPI) win32.NTSTATUS;
+
+const proc_SetProcessDpiAwareness = *const fn (win32.PROCESS_DPI_AWARENESS) callconv(win32.WINAPI) win32.HRESULT;
+
+const proc_SetProcessDpiAwarenessContext = *const fn (win32.DPI_AWARENESS_CONTEXT) callconv(win32.WINAPI) win32.HRESULT;
+
+pub const proc_EnableNonClientDpiScaling = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
+
+pub const proc_GetDpiForWindow = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
+
+pub const proc_GetDpiForMonitor = *const fn (
+    win32.HMONITOR,
+    win32.MONITOR_DPI_TYPE,
+    *u32,
+    *u32,
+) callconv(win32.WINAPI) win32.HRESULT;
+
+pub const proc_AdjustWindowRectExForDpi = *const fn (
+    *win32.RECT,
+    u32,
+    i32,
+    u32,
+    u32,
+) callconv(win32.WINAPI) win32.BOOL;
 
 const Win32Flags = struct {
     is_win_vista_or_above: bool,
@@ -36,23 +54,23 @@ const Win32Flags = struct {
 const Win32Handles = struct {
     main_class: u16,
     helper_class: u16,
-    helper_window: HWND,
+    helper_window: win32.HWND,
     dev_notif: *anyopaque,
-    ntdll: ?module.HINSTANCE,
-    user32: ?module.HINSTANCE,
-    shcore: ?module.HINSTANCE,
-    hinstance: module.HINSTANCE, // the hinstance of the process
+    ntdll: ?win32.HINSTANCE,
+    user32: ?win32.HINSTANCE,
+    shcore: ?win32.HINSTANCE,
+    hinstance: win32.HINSTANCE, // the hinstance of the process
 };
 
 const LoadedFunctions = struct {
-    RtlVerifyVersionInfo: ?defs.proc_RtlVerifyVersionInfo,
-    SetProcessDPIAware: ?defs.proc_SetProcessDPIAware,
-    SetProcessDpiAwareness: ?defs.proc_SetProcessDpiAwareness,
-    SetProcessDpiAwarenessContext: ?defs.proc_SetProcessDpiAwarenessContext,
-    GetDpiForMonitor: ?defs.proc_GetDpiForMonitor,
-    GetDpiForWindow: ?defs.proc_GetDpiForWindow,
-    AdjustWindowRectExForDpi: ?defs.proc_AdjustWindowRectExForDpi,
-    EnableNonClientDpiScaling: ?defs.proc_EnableNonClientDpiScaling,
+    RtlVerifyVersionInfo: ?proc_RtlVerifyVersionInfo,
+    SetProcessDPIAware: ?proc_SetProcessDPIAware,
+    SetProcessDpiAwareness: ?proc_SetProcessDpiAwareness,
+    SetProcessDpiAwarenessContext: ?proc_SetProcessDpiAwarenessContext,
+    GetDpiForMonitor: ?proc_GetDpiForMonitor,
+    GetDpiForWindow: ?proc_GetDpiForWindow,
+    AdjustWindowRectExForDpi: ?proc_AdjustWindowRectExForDpi,
+    EnableNonClientDpiScaling: ?proc_EnableNonClientDpiScaling,
 };
 
 const Win32 = struct {
@@ -62,13 +80,14 @@ const Win32 = struct {
 };
 
 pub const InternalError = error{
-    FailedToGetModuleHandle,
-    FailedToCreateHelperWindow,
-    FailedToRegisterWindowClass,
+    WNDCLASSNotRegistered,
+    MonitorNotFound,
+    FailedToLoadNtdll,
+    FailedToCreateHelper,
 };
 
 pub const MonitorStore = struct {
-    monitors_map: std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl),
+    monitors_map: std.AutoArrayHashMap(win32.HMONITOR, monitor_impl.MonitorImpl),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
     prev_exec_state: win32_system_power.EXECUTION_STATE,
@@ -79,7 +98,7 @@ pub const MonitorStore = struct {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.* = Self{
-            .monitors_map = std.AutoArrayHashMap(HMONITOR, monitor_impl.MonitorImpl).init(allocator),
+            .monitors_map = std.AutoArrayHashMap(win32.HMONITOR, monitor_impl.MonitorImpl).init(allocator),
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
@@ -173,13 +192,13 @@ pub const MonitorStore = struct {
 
     pub fn setMonitorWindow(
         self: *Self,
-        monitor_handle: HMONITOR,
+        monitor_handle: win32.HMONITOR,
         window: *WindowImpl,
         mode: ?*const common.video_mode.VideoMode,
         monitor_area: *common.geometry.WidowArea,
     ) !void {
         const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
-            return error.MonitorNotFound;
+            return;
         };
 
         // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
@@ -208,9 +227,9 @@ pub const MonitorStore = struct {
     }
 
     /// Called by the window instance to release any occupied monitor
-    pub fn restoreMonitor(self: *Self, monitor_handle: HMONITOR) !void {
+    pub fn restoreMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
-            return error.MonitorNotFound;
+            return InternalError.MonitorNotFound;
         };
         monitor.setWindow(null);
 
@@ -229,7 +248,7 @@ pub const DeviceContext = struct {
     monitor_store: ?*MonitorStore,
     joystick_store: ?*JoystickSubSystem,
     clipboard_change: bool, // So we can cache the clipboard value until it changes.
-    next_clipboard_viewer: ?HWND, // we're using the old api to watch the clipboard.
+    next_clipboard_viewer: ?win32.HWND, // we're using the old api to watch the clipboard.
     clipboard_text: ?[]u8,
 };
 
@@ -291,10 +310,11 @@ pub const Internals = struct {
         }
 
         // Declare DPI Awareness.
+        // TODO handle errors.
         if (self.win32.flags.is_win10b1703_or_above) {
-            _ = self.win32.functions.SetProcessDpiAwarenessContext.?(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            _ = self.win32.functions.SetProcessDpiAwarenessContext.?(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         } else if (self.win32.flags.is_win8point1_or_above) {
-            _ = self.win32.functions.SetProcessDpiAwareness.?(PROCESS_PER_MONITOR_DPI_AWARE);
+            _ = self.win32.functions.SetProcessDpiAwareness.?(win32.PROCESS_PER_MONITOR_DPI_AWARE);
         } else if (self.win32.flags.is_win_vista_or_above) {
             _ = self.win32.functions.SetProcessDPIAware.?();
         }
@@ -372,32 +392,32 @@ pub const Internals = struct {
     fn loadLibraries(self: *Self) !void {
         self.win32.handles.ntdll = module.loadWin32Module("ntdll.dll");
         if (self.win32.handles.ntdll) |*ntdll| {
-            self.win32.functions.RtlVerifyVersionInfo = @ptrCast(defs.proc_RtlVerifyVersionInfo, module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"));
+            self.win32.functions.RtlVerifyVersionInfo = @ptrCast(proc_RtlVerifyVersionInfo, module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"));
         } else {
             // It's important for this module to be loaded since
             // it has the necessary function for figuring out
             // what windows version the system is runing
             // said version is used later to dynamically
             // select which code we run in certain sections.
-            return error.FailedToLoadNtdll;
+            return InternalError.FailedToLoadNtdll;
         }
         self.win32.handles.user32 = module.loadWin32Module("user32.dll");
         if (self.win32.handles.user32) |*user32| {
             self.win32.functions.SetProcessDPIAware =
-                @ptrCast(defs.proc_SetProcessDPIAware, module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
+                @ptrCast(proc_SetProcessDPIAware, module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
             self.win32.functions.SetProcessDpiAwarenessContext =
-                @ptrCast(defs.proc_SetProcessDpiAwarenessContext, module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"));
+                @ptrCast(proc_SetProcessDpiAwarenessContext, module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"));
             self.win32.functions.GetDpiForWindow =
-                @ptrCast(defs.proc_GetDpiForWindow, module.getModuleSymbol(user32.*, "GetDpiForWindow"));
+                @ptrCast(proc_GetDpiForWindow, module.getModuleSymbol(user32.*, "GetDpiForWindow"));
             self.win32.functions.EnableNonClientDpiScaling =
-                @ptrCast(defs.proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
+                @ptrCast(proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
             self.win32.functions.AdjustWindowRectExForDpi =
-                @ptrCast(defs.proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
+                @ptrCast(proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
         }
         self.win32.handles.shcore = module.loadWin32Module("Shcore.dll");
         if (self.win32.handles.shcore) |*shcore| {
-            self.win32.functions.GetDpiForMonitor = @ptrCast(defs.proc_GetDpiForMonitor, module.getModuleSymbol(shcore.*, "GetDpiForMonitor"));
-            self.win32.functions.SetProcessDpiAwareness = @ptrCast(defs.proc_SetProcessDpiAwareness, module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"));
+            self.win32.functions.GetDpiForMonitor = @ptrCast(proc_GetDpiForMonitor, module.getModuleSymbol(shcore.*, "GetDpiForMonitor"));
+            self.win32.functions.SetProcessDpiAwareness = @ptrCast(proc_SetProcessDpiAwareness, module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"));
         }
     }
 
@@ -425,7 +445,7 @@ pub const Internals = struct {
     }
 };
 
-fn isWin32VersionMinimum(proc: defs.proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
+fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
     //If you must require a particular operating system,
     //be sure to use it as a minimum supported version,
     //rather than design the test for the one operating system.
@@ -440,19 +460,35 @@ fn isWin32VersionMinimum(proc: defs.proc_RtlVerifyVersionInfo, major: u32, minor
         @enumToInt(win32_sysinfo.VER_SERVICEPACKMAJOR) |
         @enumToInt(win32_sysinfo.VER_SERVICEPACKMINOR);
     var cond_mask: u64 = 0;
-    cond_mask = win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_MAJORVERSION, VER_GREATER_EQUAL);
-    cond_mask = win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_MINORVERSION, VER_GREATER_EQUAL);
+    cond_mask = win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_MAJORVERSION,
+        win32.VER_GREATER_EQUAL,
+    );
+    cond_mask = win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_MINORVERSION,
+        win32.VER_GREATER_EQUAL,
+    );
     cond_mask =
-        win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_SERVICEPACKMAJOR, VER_GREATER_EQUAL);
+        win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_SERVICEPACKMAJOR,
+        win32.VER_GREATER_EQUAL,
+    );
     cond_mask =
-        win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_SERVICEPACKMINOR, VER_GREATER_EQUAL);
-    // VerifyVersionInfoW(&mut vi, mask, cond_mask) == TRUE
+        win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_SERVICEPACKMINOR,
+        win32.VER_GREATER_EQUAL,
+    );
+    // `VerifyVersionInfoW(&mut vi, mask, cond_mask) == TRUE`
     // Subject to windows manifestation on 8.1 or above
     // thus reporting false information for compatibility with older software.
-    return proc(&vi, mask, cond_mask) == STATUS_SUCCESS;
+    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS; // STATUS_SUCCESS
 }
 
-fn isWin10BuildMinimum(proc: defs.proc_RtlVerifyVersionInfo, build: u32) bool {
+fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
     var vi: win32_sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwOSVersionInfoSize = @sizeOf(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = 10;
@@ -461,20 +497,32 @@ fn isWin10BuildMinimum(proc: defs.proc_RtlVerifyVersionInfo, build: u32) bool {
     const mask = @enumToInt(win32_sysinfo.VER_MAJORVERSION) | @enumToInt(win32_sysinfo.VER_MINORVERSION) |
         @enumToInt(win32_sysinfo.VER_BUILDNUMBER);
     var cond_mask: u64 = 0;
-    cond_mask = win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_MAJORVERSION, VER_GREATER_EQUAL);
-    cond_mask = win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_MINORVERSION, VER_GREATER_EQUAL);
-    cond_mask = win32_sysinfo.VerSetConditionMask(cond_mask, win32_sysinfo.VER_BUILDNUMBER, VER_GREATER_EQUAL);
-    return proc(&vi, mask, cond_mask) == STATUS_SUCCESS;
+    cond_mask = win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_MAJORVERSION,
+        win32.VER_GREATER_EQUAL,
+    );
+    cond_mask = win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_MINORVERSION,
+        win32.VER_GREATER_EQUAL,
+    );
+    cond_mask = win32_sysinfo.VerSetConditionMask(
+        cond_mask,
+        win32_sysinfo.VER_BUILDNUMBER,
+        win32.VER_GREATER_EQUAL,
+    );
+    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS; // STATUS_SUCCESS
 }
 
 fn registerWindowClass(
-    hinstance: module.HINSTANCE,
+    hinstance: win32.HINSTANCE,
 ) !u16 {
     const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) | @enumToInt(win32_window_messaging.CS_VREDRAW) | @enumToInt(win32_window_messaging.CS_OWNDC));
-    window_class.lpfnWndProc = defs.windowProc;
+    window_class.lpfnWndProc = window_proc.windowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
     var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
@@ -496,18 +544,18 @@ fn registerWindowClass(
     }
     const class = win32_window_messaging.RegisterClassExW(&window_class);
     if (class == 0) {
-        return InternalError.FailedToRegisterWindowClass;
+        return InternalError.WNDCLASSNotRegistered;
     }
     return class;
 }
 
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling hardware related messages.
-fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_window: *HWND) !void {
+fn createHelperWindow(hinstance: win32.HINSTANCE, helper_handle: *u16, helper_window: *win32.HWND) !void {
     var helper_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     helper_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     helper_class.style = win32_window_messaging.CS_OWNDC;
-    helper_class.lpfnWndProc = defs.helperWindowProc;
+    helper_class.lpfnWndProc = window_proc.helperWindowProc;
     helper_class.hInstance = hinstance;
     // Estimate five times the curent utf8 string len.
     var buffer: [(Internals.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 5]u8 = undefined;
@@ -516,7 +564,7 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
-        return InternalError.FailedToCreateHelperWindow;
+        return InternalError.FailedToCreateHelper;
     }
     errdefer {
         _ = win32_window_messaging.UnregisterClassW(
@@ -533,25 +581,24 @@ fn createHelperWindow(hinstance: module.HINSTANCE, helper_handle: *u16, helper_w
         // utils.makeIntAtom(u16, helper_handle.*),
         helper_title,
         win32_window_messaging.WS_OVERLAPPED,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
         null,
         null,
         hinstance,
         null,
     ) orelse {
-        return InternalError.FailedToCreateHelperWindow;
+        return InternalError.FailedToCreateHelper;
     };
 
     _ = win32_window_messaging.ShowWindow(helper_window.*, win32_window_messaging.SW_HIDE);
 }
 
-fn registerDevices(helper_window: HWND, dbi_handle: **anyopaque, devices: *DeviceContext) void {
+fn registerDevices(helper_window: win32.HWND, dbi_handle: **anyopaque, devices: *DeviceContext) void {
     // Drivers for HID collections register instances of this device interface
     // class to notify the operating system and applications of the presence of HID collections.
-    const GUID_DEVINTERFACE_HID = comptime GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
 
     _ = win32_window_messaging.SetWindowLongPtrW(helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(devices)));
 
@@ -559,11 +606,11 @@ fn registerDevices(helper_window: HWND, dbi_handle: **anyopaque, devices: *Devic
     var dbi: win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A = undefined;
     dbi.dbcc_size = @sizeOf(win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A);
     dbi.dbcc_devicetype = @enumToInt(win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE);
-    dbi.dbcc_classguid = GUID_DEVINTERFACE_HID;
+    dbi.dbcc_classguid = win32.GUID_DEVINTERFACE_HID;
     dbi_handle.* = win32_window_messaging.RegisterDeviceNotificationW(
         helper_window,
         @ptrCast(*anyopaque, &dbi),
-        DEVICE_NOTIFY_WINDOW_HANDLE,
+        win32.DEVICE_NOTIFY_WINDOW_HANDLE,
     ) orelse unreachable; // Should always succeed.
 }
 
@@ -591,6 +638,7 @@ pub fn createCursor(
 }
 
 // Zigwin32 libary doesn't have definitions for IDC constants probably due to alignement issues.
+// TODO try OCR_
 // pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
 //     const cursor_id = switch (shape) {
 //         CursorShape.PointingHand => win32_window_messaging.IDC_HAND,
