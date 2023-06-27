@@ -1,9 +1,9 @@
 const std = @import("std");
-const winapi = @import("win32");
+const zigwin32 = @import("zigwin32");
 const common = @import("common");
-const win32_window_messaging = winapi.ui.windows_and_messaging;
-const win32_foundation = winapi.foundation;
-const win32_gdi = winapi.graphics.gdi;
+const win32_window_messaging = zigwin32.ui.windows_and_messaging;
+const win32_foundation = zigwin32.foundation;
+const win32_gdi = zigwin32.graphics.gdi;
 
 pub fn createIcon(
     pixels: []const u8,
