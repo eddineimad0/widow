@@ -1,13 +1,14 @@
 const std = @import("std");
-const winapi = @import("win32");
+const zigwin32 = @import("zigwin32");
+const win32 = @import("win32.zig");
 const window_impl = @import("./window_impl.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
-const win32_window_messaging = winapi.ui.windows_and_messaging;
-const win32_keyboard_mouse = winapi.ui.input.keyboard_and_mouse;
-const win32_gdi = winapi.graphics.gdi;
-const win32_foundation = winapi.foundation;
-const win32_shell = winapi.ui.shell;
+const win32_window_messaging = zigwin32.ui.windows_and_messaging;
+const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
+const win32_foundation = zigwin32.foundation;
+const win32_gdi = zigwin32.graphics.gdi;
+const win32_shell = zigwin32.ui.shell;
 
 pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     // we can ask user for confirmation before closing
@@ -16,7 +17,7 @@ pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     window.queueEvent(&event);
 }
 
-pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM, lparam: win32_foundation.LPARAM) void {
+pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
     // Note: the right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
@@ -57,7 +58,7 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32_found
     window.queueEvent(&event);
 }
 
-pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wparam: win32_foundation.WPARAM) void {
+pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
     const button = switch (msg) {
         win32_window_messaging.WM_LBUTTONUP => common.keyboard_and_mouse.MouseButton.Left,
         win32_window_messaging.WM_RBUTTONUP => common.keyboard_and_mouse.MouseButton.Right,
@@ -88,7 +89,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: u32, wpara
     }
 }
 
-pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: u32, wparam: win32_foundation.WPARAM) void {
+pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
         if (action.* == common.keyboard_and_mouse.KeyState.Pressed) {
@@ -127,11 +128,11 @@ pub inline fn mouseWheelMSGHandler(window: *window_impl.WindowImpl, wheel: commo
     window.queueEvent(&event);
 }
 
-pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32_foundation.LPARAM) void {
+pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.LPARAM) void {
     const styles = window_impl.windowStyles(&window.data);
     const ex_styles = window_impl.windowExStyles(&window.data);
     const info: *win32_window_messaging.MINMAXINFO = @intToPtr(*win32_window_messaging.MINMAXINFO, @bitCast(usize, lparam));
-    var rect = win32_foundation.RECT{
+    var rect = win32.RECT{
         .left = 0,
         .top = 0,
         .right = 0,
@@ -173,9 +174,9 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32_f
 }
 
 //**
-pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM, lparam: win32_foundation.LPARAM) bool {
+pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) bool {
     if (window.internals.win32.flags.is_win10b1607_or_above) {
-        var pending_size = win32_foundation.RECT{
+        var pending_size = win32.RECT{
             .left = 0,
             .top = 0,
             .right = 0,
@@ -195,7 +196,7 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
             new_dpi,
         );
 
-        var desired_size = win32_foundation.RECT{
+        var desired_size = win32.RECT{
             .left = 0,
             .top = 0,
             .right = 0,
@@ -218,7 +219,7 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
     return false;
 }
 
-pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM) void {
+pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
     const surrogate = @truncate(u16, wparam);
     if (utils.isHighSurrogate(surrogate)) {
         window.win32.high_surrogate = surrogate;
@@ -242,7 +243,7 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32_fo
     }
 }
 
-pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32_foundation.WPARAM) void {
+pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
     // can we use a different allocator for better performance?
     // free old files
     const allocator = window.win32.dropped_files.allocator;
