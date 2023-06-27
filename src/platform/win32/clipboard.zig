@@ -1,18 +1,18 @@
 const std = @import("std");
-const winapi = @import("win32");
+const zigwin32 = @import("zigwin32");
+const win32 = @import("win32.zig");
 const utils = @import("utils.zig");
-const win32_system_data_exchange = winapi.system.data_exchange;
-const win32_system_memory = winapi.system.memory;
-const HWND = winapi.foundation.HWND;
-const CF_UNICODETEXT: u32 = 13;
+const win32_system_data_exchange = zigwin32.system.data_exchange;
+const win32_system_memory = zigwin32.system.memory;
+const HWND = win32.HWND;
 
 pub const ClipboardError = error{
-    FailedToOpenClipboard,
-    FailedToAccessClipboardData,
-    FailedToWriteToClipboard,
-    FailedToAllocateClipboardMemory,
-    FailedToGainClipboardOwnership,
-    FailedToRegisterClipboardViewer,
+    FailedToOpen,
+    AccessDenied,
+    FailedToUpdate,
+    AllocationFailure,
+    OwnershipDenied,
+    FailedToRegisterViewer,
 };
 
 /// Copy the string contained inside the system clipboard.
@@ -22,10 +22,11 @@ pub const ClipboardError = error{
 pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
     if (win32_system_data_exchange.OpenClipboard(window_handle) != 0) {
         defer _ = win32_system_data_exchange.CloseClipboard();
-        const handle = win32_system_data_exchange.GetClipboardData(CF_UNICODETEXT);
+        // Might Fail if the data format is different than CF_UNICODETEXT.
+        const handle = win32_system_data_exchange.GetClipboardData(win32.CF_UNICODETEXT);
         if (handle != null) {
             // Pointer returned by windows do not respect data types alignment.
-            // we'll copy the data to an aligned ptr for this one, so we can use it with std function.
+            // we'll copy the data to an aligned ptr for this one, so we can use it with std functions.
             const buffer = @ptrCast(?[*]const u8, win32_system_memory.GlobalLock(@bitCast(isize, @ptrToInt(handle))));
             if (buffer) |wide_buffer| {
                 defer _ = win32_system_memory.GlobalUnlock(@bitCast(isize, @ptrToInt(handle)));
@@ -35,7 +36,8 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
                     null_flag = @intCast(u16, wide_buffer[buffer_size]) << 8 | wide_buffer[buffer_size + 1];
                     buffer_size += 2;
                 }
-                var utf16_buffer = try allocator.alloc(u16, (buffer_size >> 1) - 1); // no null terminator;
+                // no null terminator;
+                var utf16_buffer = try allocator.alloc(u16, (buffer_size >> 1) - 1);
                 defer allocator.free(utf16_buffer);
                 var dest_buffer = @ptrCast([*]u8, utf16_buffer.ptr);
                 for (0..buffer_size - 2) |i| {
@@ -44,19 +46,19 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
                 return utils.wideToUtf8(allocator, utf16_buffer);
             }
         }
-        return ClipboardError.FailedToAccessClipboardData;
+        return ClipboardError.AccessDenied;
     }
-    return ClipboardError.FailedToOpenClipboard;
+    return ClipboardError.FailedToOpen;
 }
 
 /// Paste the given `text` to the system clipboard.
 pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text: []const u8) !void {
     if (win32_system_data_exchange.OpenClipboard(window_handle) == 0) {
-        return ClipboardError.FailedToOpenClipboard;
+        return ClipboardError.FailedToOpen;
     }
 
     if (win32_system_data_exchange.EmptyClipboard() == 0) {
-        return ClipboardError.FailedToGainClipboardOwnership;
+        return ClipboardError.OwnershipDenied;
     }
 
     const wide_text = try utils.utf8ToWideZ(allocator, text);
@@ -64,12 +66,12 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
     const bytes_len = (wide_text.len + 1) << 1; // + 1 for the null terminator.
     const alloc_mem = win32_system_memory.GlobalAlloc(win32_system_memory.GMEM_MOVEABLE, bytes_len);
     if (alloc_mem == 0) {
-        return ClipboardError.FailedToAllocateClipboardMemory;
+        return ClipboardError.AllocationFailure;
     }
 
     var buffer = win32_system_memory.GlobalLock(alloc_mem);
     if (buffer == null) {
-        return ClipboardError.FailedToAllocateClipboardMemory;
+        return ClipboardError.AllocationFailure;
     }
 
     // Hack to deal with alignement BS.
@@ -80,23 +82,23 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
     }
     _ = win32_system_memory.GlobalUnlock(alloc_mem);
 
-    if (win32_system_data_exchange.SetClipboardData(CF_UNICODETEXT, @intToPtr(*anyopaque, @bitCast(usize, alloc_mem))) == null) {
-        return ClipboardError.FailedToWriteToClipboard;
+    if (win32_system_data_exchange.SetClipboardData(win32.CF_UNICODETEXT, @intToPtr(*anyopaque, @bitCast(usize, alloc_mem))) == null) {
+        return ClipboardError.FailedToUpdate;
     }
     _ = win32_system_data_exchange.CloseClipboard();
 }
 
 /// Register a window as clipboard viewer, so it can be notified on
 /// clipboard value changes.
-/// # Notes
+/// # Note
 /// This api is supported by all versions of window, it's messages are nonqueued
 /// and deliverd immediately by the system.
 pub fn registerClipboardViewer(viewer: HWND) ClipboardError!?HWND {
     utils.clearThreadError();
     const next_viewer = win32_system_data_exchange.SetClipboardViewer(viewer);
     if (next_viewer == null) {
-        if (utils.getLastError() != 0) {
-            return ClipboardError.FailedToRegisterClipboardViewer;
+        if (utils.getLastError() != win32.WIN32_ERROR.NO_ERROR) {
+            return ClipboardError.FailedToRegisterViewer;
         }
     }
     return next_viewer;
