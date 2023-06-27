@@ -1,15 +1,16 @@
 const std = @import("std");
-const winapi = @import("win32");
-const win32_window_messaging = winapi.ui.windows_and_messaging;
-const win32_foundation = winapi.foundation;
-const win32_gdi = winapi.graphics.gdi;
-const DragAcceptFiles = winapi.ui.shell.DragAcceptFiles;
-const SetFocus = winapi.ui.input.keyboard_and_mouse.SetFocus;
-const defs = @import("defs.zig");
+const zigwin32 = @import("zigwin32");
+const win32 = @import("win32.zig");
+const win32_window_messaging = zigwin32.ui.windows_and_messaging;
+const win32_foundation = zigwin32.foundation;
+const win32_gdi = zigwin32.graphics.gdi;
+const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
+const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 const common = @import("common");
 const Queue = common.list.Queue;
 const utils = @import("utils.zig");
 const Internals = @import("internals.zig").Internals;
+const proc_AdjustWindowRectExForDpi = @import("internals.zig").proc_AdjustWindowRectExForDpi;
 const monitor_impl = @import("monitor_impl.zig");
 const icon = @import("icon.zig");
 const Cursor = icon.Cursor;
@@ -30,6 +31,10 @@ const STYLE_NORMAL: u32 = @enumToInt(win32_window_messaging.WS_OVERLAPPED) |
     @enumToInt(win32_window_messaging.WS_MINIMIZEBOX) |
     @enumToInt(win32_window_messaging.WS_SYSMENU) |
     @enumToInt(win32_window_messaging.WS_CAPTION);
+
+const WindowError = error{
+    FailedToCreate,
+};
 
 pub fn windowStyles(data: *const WindowData) u32 {
     // Styles.
@@ -78,8 +83,8 @@ pub fn windowExStyles(data: *const WindowData) u32 {
 /// that encloses completely both client and non client(titlebar...)
 /// areas
 pub fn adjustWindowRect(
-    rect: *win32_foundation.RECT,
-    AdjustWindowRectExForDpi: ?defs.proc_AdjustWindowRectExForDpi,
+    rect: *win32.RECT,
+    AdjustWindowRectExForDpi: ?proc_AdjustWindowRectExForDpi,
     styles: u32,
     ex_styles: u32,
     dpi: u32,
@@ -101,7 +106,7 @@ pub fn adjustWindowRect(
 ///# Note
 /// If the doesn't have the WS_EX_TOOLWINDOW style then the coordinates
 /// of the WINDOWPLACEMENT fields will be in workspace coordinates and not screen coordinates
-fn windowPlacement(handle: win32_foundation.HWND, wp: *win32_window_messaging.WINDOWPLACEMENT) void {
+fn windowPlacement(handle: win32.HWND, wp: *win32_window_messaging.WINDOWPLACEMENT) void {
     wp.length = @sizeOf(win32_window_messaging.WINDOWPLACEMENT);
     _ = win32_window_messaging.GetWindowPlacement(handle, wp);
 }
@@ -113,13 +118,13 @@ fn windowPlacement(handle: win32_foundation.HWND, wp: *win32_window_messaging.WI
 /// are always (0,0), and do not reflect it's actual position on the screen
 /// pass the returned rect to client_to_screen function to get the true upperleft
 /// coordinates.
-inline fn clientRect(window_handle: win32_foundation.HWND, rect: *win32_foundation.RECT) void {
+inline fn clientRect(window_handle: win32.HWND, rect: *win32.RECT) void {
     _ = win32_window_messaging.GetClientRect(window_handle, rect);
 }
 
 /// Thread safe
 /// Converts client coordinate of a RECT structure to screen coordinate.
-fn clientToScreen(window_handle: win32_foundation.HWND, rect: *win32_foundation.RECT) void {
+fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
     var upper_left = win32_foundation.POINT{
         .x = rect.left,
         .y = rect.top,
@@ -128,9 +133,11 @@ fn clientToScreen(window_handle: win32_foundation.HWND, rect: *win32_foundation.
         .x = rect.right,
         .y = rect.bottom,
     };
+
     _ = win32_gdi.ClientToScreen(window_handle, &upper_left);
     _ = win32_gdi.ClientToScreen(window_handle, &lower_right);
-    rect.* = win32_foundation.RECT{
+
+    rect.* = win32.RECT{
         .left = upper_left.x,
         .top = upper_left.y,
         .right = lower_right.x,
@@ -140,8 +147,8 @@ fn clientToScreen(window_handle: win32_foundation.HWND, rect: *win32_foundation.
 
 /// Returns the (width,height) of the window
 /// thread safe.
-pub fn windowSize(window_handle: win32_foundation.HWND) common.geometry.WidowSize {
-    var rect: win32_foundation.RECT = undefined;
+pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
+    var rect: win32.RECT = undefined;
     // Calling GetWindowRect will have different behavior
     // depending on whether the window has ever been shown or not.
     // If the window has not been shown before,
@@ -154,7 +161,7 @@ pub fn windowSize(window_handle: win32_foundation.HWND) common.geometry.WidowSiz
     return size;
 }
 
-fn setWindowPositionIntern(window_handle: win32_foundation.HWND, top: ?win32_foundation.HWND, flags: u32, x: i32, y: i32, size: *const common.geometry.WidowSize) void {
+fn setWindowPositionIntern(window_handle: win32.HWND, top: ?win32.HWND, flags: u32, x: i32, y: i32, size: *const common.geometry.WidowSize) void {
     _ = win32_window_messaging.SetWindowPos(
         window_handle,
         top,
@@ -171,8 +178,8 @@ fn createPlatformWindow(
     internals: *Internals,
     data: *const WindowData,
     styles: struct { u32, u32 },
-) !win32_foundation.HWND {
-    var window_rect = win32_foundation.RECT{
+) !win32.HWND {
+    var window_rect = win32.RECT{
         .left = 0,
         .top = 0,
         .right = data.video.width,
@@ -181,11 +188,7 @@ fn createPlatformWindow(
 
     // Calculates the required size of the window rectangle,
     // based on the desired client-rectangle size.
-    const res = win32_window_messaging.AdjustWindowRectEx(&window_rect, @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]), 0, @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]));
-
-    if (res == 0) {
-        return error.FailedToAdjustWindowRect;
-    }
+    _ = win32_window_messaging.AdjustWindowRectEx(&window_rect, @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]), 0, @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]));
 
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
@@ -206,14 +209,11 @@ fn createPlatformWindow(
         window_rect.bottom - window_rect.top,
     };
 
-    const creation_lparm = if (internals.win32.flags.is_win10b1607_or_above)
-        internals.win32.functions.EnableNonClientDpiScaling.?
-    else
-        null;
+    const creation_lparm = internals.win32.functions.EnableNonClientDpiScaling;
 
     var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME);
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME) catch unreachable;
     const window_title = try utils.utf8ToWideZ(allocator, data.title);
     defer allocator.free(window_title);
     const window_handle = win32_window_messaging.CreateWindowExW(
@@ -231,7 +231,7 @@ fn createPlatformWindow(
         internals.win32.handles.hinstance, // hInstance
         @ptrCast(?*anyopaque, @constCast(creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
-        return error.FailedToCreateWindow;
+        return WindowError.FailedToCreate;
     };
 
     return window_handle;
@@ -250,8 +250,8 @@ pub fn updateCursor(cursor: *const Cursor) void {
     }
 }
 
-pub inline fn captureCursor(window_handle: win32_foundation.HWND) void {
-    var clip_rect: win32_foundation.RECT = undefined;
+pub inline fn captureCursor(window_handle: win32.HWND) void {
+    var clip_rect: win32.RECT = undefined;
     clientRect(window_handle, &clip_rect);
     // ClipCursor expects screen coordinates.
     clientToScreen(window_handle, &clip_rect);
@@ -262,7 +262,7 @@ pub inline fn releaseCursor() void {
     _ = win32_window_messaging.ClipCursor(null);
 }
 
-pub fn disableCursor(window_handle: win32_foundation.HWND, cursor: *const Cursor) void {
+pub fn disableCursor(window_handle: win32.HWND, cursor: *const Cursor) void {
     captureCursor(window_handle);
     centerCursor(window_handle);
     updateCursor(cursor);
@@ -275,11 +275,11 @@ pub fn enableCursor(cursor: *const Cursor) void {
 
 // This function should only be called after capturing the cursor,
 // otherwise the cursor will end up in an unkown position.
-pub inline fn centerCursor(window_handle: win32_foundation.HWND) void {
+pub inline fn centerCursor(window_handle: win32.HWND) void {
     // The cursor is a shared resource.
     // A window should move the cursor only when the cursor
     // is in the window's client area.
-    var rect: win32_foundation.RECT = undefined;
+    var rect: win32.RECT = undefined;
     clientRect(window_handle, &rect);
     _ = win32_window_messaging.SetCursorPos(@divExact(rect.right, 2), @divExact(rect.bottom, 2));
 }
@@ -287,7 +287,7 @@ pub inline fn centerCursor(window_handle: win32_foundation.HWND) void {
 /// Returns the position of the top left corner of the client area.
 /// in screen coordinates.
 /// thread safe.
-pub inline fn windowClientPosition(handle: win32_foundation.HWND) common.geometry.WidowPoint2D {
+pub inline fn windowClientPosition(handle: win32.HWND) common.geometry.WidowPoint2D {
     // the client's top left acts as the origin in client
     // coordinates (0,0).
     // if minimized return last_known_pos.
@@ -300,9 +300,9 @@ pub inline fn windowClientPosition(handle: win32_foundation.HWND) common.geometr
 }
 
 /// Returns the Size of the window's client area
-pub fn clientSize(handle: win32_foundation.HWND) common.geometry.WidowSize {
+pub fn clientSize(handle: win32.HWND) common.geometry.WidowSize {
     // handle minimized case.
-    var client: win32_foundation.RECT = undefined;
+    var client: win32.RECT = undefined;
     clientRect(handle, &client);
     return common.geometry.WidowSize{
         .width = client.right,
@@ -360,7 +360,7 @@ pub const WindowImpl = struct {
 
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(self)));
 
-        var window_rect: win32_foundation.RECT = undefined;
+        var window_rect: win32.RECT = undefined;
         clientRect(self.handle, &window_rect);
         var dpi_scale: f64 = undefined;
         const dpi = self.scalingDPI(&dpi_scale);
@@ -389,17 +389,29 @@ pub const WindowImpl = struct {
         window_placement.rcNormalPosition = window_rect;
         window_placement.showCmd = win32_window_messaging.SW_HIDE;
 
-        _ = win32_window_messaging.SetWindowPlacement(self.handle, &window_placement);
+        _ = win32_window_messaging.SetWindowPlacement(
+            self.handle,
+            &window_placement,
+        );
 
         // Allow Drag & Drop messages.
         if (internals.win32.flags.is_win7_or_above) {
-            const WM_COPYGLOBALDATA: u32 = 0x0049;
             // Sent when the user drops a file on the window [Windows XP minimum]
-            _ = win32_window_messaging.ChangeWindowMessageFilterEx(self.handle, win32_window_messaging.WM_DROPFILES, win32_window_messaging.MSGFLT_ALLOW, null);
-            _ = win32_window_messaging.ChangeWindowMessageFilterEx(self.handle, win32_window_messaging.WM_COPYDATA, win32_window_messaging.MSGFLT_ALLOW, null);
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
                 self.handle,
-                WM_COPYGLOBALDATA,
+                win32_window_messaging.WM_DROPFILES,
+                win32_window_messaging.MSGFLT_ALLOW,
+                null,
+            );
+            _ = win32_window_messaging.ChangeWindowMessageFilterEx(
+                self.handle,
+                win32_window_messaging.WM_COPYDATA,
+                win32_window_messaging.MSGFLT_ALLOW,
+                null,
+            );
+            _ = win32_window_messaging.ChangeWindowMessageFilterEx(
+                self.handle,
+                win32.WM_COPYGLOBALDATA,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
@@ -460,7 +472,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn scalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        var dpi: u32 = win32_window_messaging.USER_DEFAULT_SCREEN_DPI;
+        var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         if (self.data.flags.allow_dpi_scaling) err_exit: {
             if (self.internals.win32.functions.GetDpiForWindow) |proc| {
                 dpi = proc(self.handle);
@@ -470,7 +482,7 @@ pub const WindowImpl = struct {
             }
         }
         if (scaler) |ptr| {
-            ptr.* = (@intToFloat(f64, dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI));
+            ptr.* = (@intToFloat(f64, dpi) / @intToFloat(f64, win32.USER_DEFAULT_SCREEN_DPI));
         }
         return dpi;
     }
@@ -877,7 +889,7 @@ pub const WindowImpl = struct {
     pub fn setAspectRatio(self: *Self, ratio: ?common.window_data.AspectRatio) void {
         self.data.aspect_ratio = ratio;
         if (ratio != null) {
-            var rect: win32_foundation.RECT = undefined;
+            var rect: win32.RECT = undefined;
             _ = win32_window_messaging.GetWindowRect(self.handle, &rect);
             self.applyAspectRatio(&rect, win32_window_messaging.WMSZ_BOTTOMLEFT);
             _ = win32_window_messaging.MoveWindow(
@@ -1017,7 +1029,6 @@ pub const WindowImpl = struct {
     }
 
     // DEBUG ONLY
-
     pub fn debugInfos(self: *const Self) void {
         std.debug.print("0==========================0\n", .{});
         std.debug.print("title: {s}\n", .{self.data.title});

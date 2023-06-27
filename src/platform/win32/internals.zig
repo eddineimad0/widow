@@ -276,6 +276,7 @@ pub const Internals = struct {
             var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
             var fba = std.heap.FixedBufferAllocator.init(&buffer);
             const fballocator = fba.allocator();
+            // Shoudln't fail since the buffer is big enough.
             const wide_class_name = utils.utf8ToWideZ(fballocator, Internals.WINDOW_CLASS_NAME) catch unreachable;
             _ = win32_window_messaging.UnregisterClassW(
                 // utils.makeIntAtom(u8, self.win32.handles.main_class),
@@ -344,7 +345,9 @@ pub const Internals = struct {
         var buffer: [(Internals.WINDOW_CLASS_NAME.len + Internals.HELPER_CLASS_NAME.len) * 5]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
         const fballocator = fba.allocator();
+        // Shoudln't fail since the buffer is big enough.
         const wide_class_name = utils.utf8ToWideZ(fballocator, Internals.WINDOW_CLASS_NAME) catch unreachable;
+        // Shoudln't fail since the buffer is big enough.
         const helper_class_name = utils.utf8ToWideZ(fballocator, Internals.HELPER_CLASS_NAME) catch unreachable;
 
         // Unregister the helper class.
@@ -527,7 +530,8 @@ fn registerWindowClass(
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
     var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME);
+    // Shoudln't fail since the buffer is big enough.
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME) catch unreachable;
     window_class.lpszClassName = wide_class_name;
     // TODO :load ressource icon
     window_class.hIcon = null;
@@ -560,7 +564,8 @@ fn createHelperWindow(hinstance: win32.HINSTANCE, helper_handle: *u16, helper_wi
     // Estimate five times the curent utf8 string len.
     var buffer: [(Internals.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = try utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_CLASS_NAME);
+    // Shoudln't fail since the buffer is big enough.
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_CLASS_NAME) catch unreachable;
     helper_class.lpszClassName = wide_class_name;
     helper_handle.* = win32_window_messaging.RegisterClassExW(&helper_class);
     if (helper_handle.* == 0) {
