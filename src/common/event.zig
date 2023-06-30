@@ -24,7 +24,6 @@ pub const EventType = enum(u8) {
     JoystickRemoved, // Device removed from the system.
     JoystickButtonAction, // Device button was pressed or released.
     JoystickAxisMotion, // Device Axis value changed.
-    JoystickHatMotion, // Device hat position changed.
     GamepadConnected, // Gamepad inserted.
     GamepadRemoved, // Gamepad removed.
     GamepadButtonAction, // Gamepad button was pressed or released.
@@ -77,9 +76,8 @@ pub const Event = union(EventType) {
     Character: CharacterEvent,
     JoystickConnected: u8, // Device inserted into the system.
     JoystickRemoved: u8, // Device removed from the system.
-    JoystickButtonAction: joystick.joyButtonEvent, // Device button was pressed or released.
-    JoystickAxisMotion: joystick.joyAxisEvent, // Device Axis value changed.
-    JoystickHatMotion: joystick.joyHatEvent, // Device hat position changed.
+    JoystickButtonAction: joystick.JoyButtonEvent, // Device button was pressed or released.
+    JoystickAxisMotion: joystick.JoyAxisEvent, // Device Axis value changed.
     GamepadConnected: u8, // Gamepad inserted.
     GamepadRemoved: u8, // Gamepad removed.
     GamepadButtonAction: joystick.GamepadButtonEvent, // Gamepad button was pressed or released.
@@ -154,17 +152,17 @@ pub inline fn createJoyRemoveEvent(id: u8, gamepad: bool) Event {
     return if (gamepad) Event{ .GamepadRemoved = id } else Event{ .JoystickRemoved = id };
 }
 
-pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f64, gamepad: bool) Event {
+pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f32, gamepad: bool) Event {
     if (gamepad) {
         return Event{ .GamepadAxisMotion = joystick.GamepadAxisEvent{
-            .id = id,
-            .axis = @intToEnum(joystick.GenericAxis, axis),
+            .joy_id = id,
+            .axis = axis,
             .value = value,
         } };
     } else {
-        return Event{ .JoystickAxisMotion = joystick.joyAxisEvent{
-            .id = id,
-            .axis = @intToEnum(joystick.GenericAxis, axis),
+        return Event{ .JoystickAxisMotion = joystick.JoyAxisEvent{
+            .joy_id = id,
+            .axis = axis,
             .value = value,
         } };
     }
@@ -173,23 +171,15 @@ pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f64, gamepad: bool) Ev
 pub inline fn createJoyButtonEvent(id: u8, button: u8, state: joystick.ButtonState, gamepad: bool) Event {
     if (gamepad) {
         return Event{ .GamepadButtonAction = joystick.GamepadButtonEvent{
-            .id = id,
-            .button = @intToEnum(joystick.GenericButton, button),
+            .joy_id = id,
+            .button = button,
             .state = state,
         } };
     } else {
-        return Event{ .JoystickButtonAction = joystick.joyButtonEvent{
-            .id = id,
-            .button = @intToEnum(joystick.GenericButton, button),
+        return Event{ .JoystickButtonAction = joystick.JoyButtonEvent{
+            .joy_id = id,
+            .button = button,
             .state = state,
         } };
     }
-}
-
-pub inline fn createJoyHatEvent(id: u8, hat: u8, state: joystick.HatState) Event {
-    return Event{ .JoystickHatMotion = joystick.joyHatEvent{
-        .id = id,
-        .hat = @intToEnum(joystick.GenericHat, hat),
-        .state = state,
-    } };
 }

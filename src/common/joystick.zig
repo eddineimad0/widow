@@ -8,16 +8,6 @@ const HIDData = struct {
     name: []u8, // device name
     buttons_count: u8,
     axis_count: u8,
-    hats_count: u8,
-};
-
-pub const JoystickType = enum(u8) {
-    Generic = 0,
-    Xbox,
-    const Self = @This();
-    pub inline fn isGamepad(self: *Self) bool {
-        return (self.* != Self.Generic);
-    }
 };
 
 pub const GenericButton = enum(u8) {
@@ -52,23 +42,6 @@ pub const GenericAxis = enum(u8) {
 
 const AXES_COUNT = 6;
 
-pub const GenericHat = enum(u8) {
-    Hat1 = 0, // Usually the POV Hat or Dpad.
-    Hat2,
-    Hat3,
-    Hat4,
-};
-
-const HATS_COUNT = 4;
-
-pub const HatState = enum(u8) {
-    Center = 0,
-    Up = 1,
-    Right = 2,
-    Down = 4,
-    Left = 8,
-};
-
 pub const XboxButton = enum(u8) {
     A = 0,
     B,
@@ -81,9 +54,9 @@ pub const XboxButton = enum(u8) {
     LStickButton,
     RStickButton,
     DpadUp,
-    DpadLeft,
-    DpadDown,
     DpadRight,
+    DpadDown,
+    DpadLeft,
 };
 
 pub const XboxAxis = enum(u8) {
@@ -105,33 +78,38 @@ pub const BatteryInfo = enum(u8) {
 };
 
 pub const Joystick = struct {
-    axes: std.ArrayList(f64),
+    axes: std.ArrayList(f32),
     buttons: std.ArrayList(ButtonState),
-    connected: bool,
-    type: JoystickType,
+    // type: JoystickType,
     hid_data: HIDData,
+    connected: bool,
+    is_gamepad: bool,
     const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator, name: []const u8, joy_type: JoystickType, a_count: u8, b_count: u8, h_count: u8) !Self {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        a_count: u8,
+        b_count: u8,
+        is_gamepad: bool,
+    ) !Self {
         var self: Self = undefined;
         self.hid_data = HIDData{
             .name = try allocator.alloc(u8, name.len),
             .axis_count = a_count,
             .buttons_count = b_count,
-            .hats_count = h_count,
         };
         errdefer allocator.free(self.hid_data.name);
-        self.axes = try std.ArrayList(f64).initCapacity(allocator, a_count);
+        self.axes = try std.ArrayList(f32).initCapacity(allocator, a_count);
         errdefer self.axes.deinit();
-        // consider 4 buttons for each hat.
-        self.buttons = try std.ArrayList(ButtonState).initCapacity(allocator, b_count + (h_count << 2));
+        self.buttons = try std.ArrayList(ButtonState).initCapacity(allocator, b_count);
         @memcpy(self.hid_data.name, name);
         @memset(self.axes.items, 0.0);
         @memset(self.buttons.items, ButtonState.Released);
-        // So we can assign be index without panics.
+        // So we can assign by index without panics.
         self.axes.resize(self.axes.capacity) catch unreachable;
         self.buttons.resize(self.buttons.capacity) catch unreachable;
-        self.type = joy_type;
+        self.is_gamepad = is_gamepad;
         self.connected = true;
         return self;
     }
@@ -144,52 +122,37 @@ pub const Joystick = struct {
         self.connected = false;
     }
 
-    pub fn setAxis(self: *Self, axis: u8, value: f64) bool {
+    pub fn setAxis(self: *Self, axis: u8, value: f32) bool {
         std.debug.assert(axis < self.hid_data.axis_count and axis < AXES_COUNT);
+
+        if (std.math.fabs(self.axes.items[axis] - value) < std.math.f32_epsilon) {
+            return false;
+        }
         self.axes.items[axis] = value;
         return true;
     }
 
     pub inline fn setButton(self: *Self, button: u8, value: ButtonState) bool {
         std.debug.assert(button < self.hid_data.buttons_count and button < BUTTONS_COUNT);
-        const old_value = self.buttons.items[button];
+        if (self.buttons.items[button] == value) {
+            return false;
+        }
         self.buttons.items[button] = value;
-        return (old_value != value);
-    }
-
-    pub fn setHat(self: *Self, hat: u8, value: u8) bool {
-        std.debug.assert(hat < self.hid_data.hats_count and hat < HATS_COUNT);
-        const base = self.hid_data.buttons_count + (hat << 2);
-        std.debug.assert(base < self.buttons.items.len - 3);
-        // UP
-        self.buttons.items[base] = if (value & 0x01 != 0) ButtonState.Pressed else ButtonState.Released;
-        // RIGHT
-        self.buttons.items[base + 1] = if (value & 0x02 != 0) ButtonState.Pressed else ButtonState.Released;
-        // DOWN
-        self.buttons.items[base + 2] = if (value & 0x04 != 0) ButtonState.Pressed else ButtonState.Released;
-        // LEFT
-        self.buttons.items[base + 3] = if (value & 0x08 != 0) ButtonState.Pressed else ButtonState.Released;
         return true;
     }
 };
 
-pub const joyAxisEvent = struct {
-    id: u8,
-    axis: GenericAxis,
-    value: f64,
+pub const JoyAxisEvent = struct {
+    joy_id: u8,
+    axis: u8,
+    value: f32,
 };
 
-pub const joyHatEvent = struct {
-    id: u8,
-    hat: GenericHat,
-    state: HatState,
-};
-
-pub const joyButtonEvent = struct {
-    id: u8,
-    button: GenericButton,
+pub const JoyButtonEvent = struct {
+    joy_id: u8,
+    button: u8,
     state: ButtonState,
 };
 
-pub const GamepadAxisEvent = joyAxisEvent;
-pub const GamepadButtonEvent = joyButtonEvent;
+pub const GamepadAxisEvent = JoyAxisEvent;
+pub const GamepadButtonEvent = JoyButtonEvent;
