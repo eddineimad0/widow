@@ -93,18 +93,68 @@ pub const WidowContext = struct {
     //     try platform.internals.createStandardCursor(target.impl, shape);
     // }
 
-    pub fn initJoystickSubSyst(self: *Self) !void {
+    // Joystick interface.
+
+    /// Initialize the joystick sub system.
+    pub inline fn initJoystickSubSyst(self: *Self) !void {
         self.joysticks = try platform.joystick.JoystickSubSystem.create(self.allocator);
         // We assign it here so we can access it in the helper window procedure.
         self.internals.devices.joystick_store = self.joysticks;
+        // First poll to detect joystick that are already present.
+        self.joysticks.?.queryConnectedJoys();
     }
 
-    pub fn addJoystickListener(self: *Self, window_ptr: *window.Window) !void {
-        try self.joysticks.?.addListener(window_ptr.impl);
+    // /// Adds a window refrence to the listener list of the joystick sub system.
+    // /// # Note
+    // /// Only windows registered as listener receives joystick/gamepad events
+    // /// (connection,disconnection...).
+    // /// Any window added should be removed with `removeJoystickListener` before
+    // /// the window gets deinitialized.
+    // pub inline fn addJoystickListener(self: *Self, window_ptr: *window.Window) !void {
+    //     try self.joysticks.?.addListener(window_ptr.impl);
+    // }
+    //
+    // /// Removes a window refrence from the listener list of the joystick sub system.
+    // /// # Note
+    // /// It's necessary for a window to be unregistered from the list before it gets
+    // /// deinitialized, otherwise the joystick sub system would be working with invalid
+    // /// pointers and causing Undefined behaviour.
+    // pub inline fn removeJoystickListener(self: *Self, window_ptr: *window.Window) void {
+    //     self.joysticks.?.removeListener(window_ptr.impl);
+    // }
+    //
+    pub inline fn updateJoystick(self: *Self, joy_id: u8) void {
+        _ = self.joysticks.?.updateJoystickState(joy_id);
     }
 
-    pub fn removeJoystickListener(self: *Self, window_ptr: *window.Window) bool {
-        return self.joysticks.?.removeListener(window_ptr.impl);
+    pub inline fn pollJoyEvent(self: *Self, ev: *event.Event) bool {
+        return self.joysticks.?.pollEvent(ev);
+    }
+
+    /// Returns a slice containing the name for the joystick that corresponds
+    /// to the given joy_id.
+    /// # Note
+    /// If no joystick corresponds to the given id, or if the joystick
+    /// is disconnected null is returned.
+    /// The returned slice is managed by the library and the user shouldn't free it.
+    /// The returned slice is only valid until the joystick is disconnected.
+    pub inline fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
+        return self.joysticks.?.joystickName(joy_id);
+    }
+
+    /// Applys force rumble to the given joystick if it supports it.
+    /// not all joysticks support this feature so the function returns
+    /// true on success and false on fail.
+    pub inline fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
+        return self.joysticks.?.rumbleJoystick(joy_id, magnitude);
+    }
+
+    /// Returns the state of the joystick battery.
+    /// # Note
+    /// If the device is wired it returns `BatteryInfo.WirePowered`.
+    /// If it fails to retrieve the battery state it returns `BatteryInfo.PowerUnknown`.
+    pub inline fn joystickBattery(self: *Self, joy_id: u8) common.joystick.BatteryInfo {
+        return self.joysticks.?.joystickBatteryInfo(joy_id);
     }
 };
 
@@ -138,9 +188,11 @@ test "widow modules" {
 }
 
 // Exports
+// TODO more restriction on the exports.
 pub const window = @import("window.zig");
 pub const event = common.event;
 pub const input = common.keyboard_and_mouse;
 pub const cursor = common.cursor;
 pub const geometry = common.geometry;
+pub const joystick = common.joystick;
 pub const FullScreenMode = common.window_data.FullScreenMode;
