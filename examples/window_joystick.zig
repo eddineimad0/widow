@@ -16,48 +16,67 @@ pub fn main() !void {
     // and can only be deinitialized during context.deinit().
     try context.initJoystickSubSyst();
 
-    // Only windows registered as listeners may receive joystick events.
-    try context.addJoystickListener(&window);
-
-    // The window should unsubscribe from the joystick listeners before it gets deinitialized.
-    // and destroyed, otherwise we'll be working with non-valid pointers i.e undefined behaviour.
-    defer _ = context.removeJoystickListener(&window);
-
     var event: widow.event.Event = undefined;
     event_loop: while (true) {
-        if (!window.pollEvent(&event)) {
-            continue :event_loop;
+        context.updateJoystick(0);
+        while (context.pollJoyEvent(&event)) {
+            // Possible joystick events.
+            // `JoystickConnected` // Device inserted into the system.
+            // `JoystickRemoved` // Device removed from the system.
+            // `JoystickButtonAction` // Device button was pressed or released.
+            // `JoystickAxisMotion` // Device Axis value changed.
+            // `GamepadConnected` // Gamepad inserted.
+            // `GamepadRemoved` // Gamepad removed.
+            // `GamepadButtonAction` // Gamepad button was pressed or released.
+            // `GamepadAxisMotion` // Gamepad axis value changed
+            switch (event) {
+                EventType.GamepadButtonAction => |*button_event| {
+                    std.debug.print("\nJoy Id :{}\n", .{button_event.joy_id});
+                    std.debug.print("\nButton number :{}\n", .{button_event.button});
+                    std.debug.print("\nButton state :{}\n", .{button_event.state});
+                },
+                EventType.GamepadAxisMotion => |*axis_event| {
+                    const analog_dead_zone = 0.2;
+                    if (axis_event.value < analog_dead_zone and axis_event.value > -0.2) {
+                        continue;
+                    }
+                    std.debug.print("\nJoy Id :{}\n", .{axis_event.joy_id});
+                    std.debug.print("\nAxis number :{}\n", .{axis_event.axis});
+                    std.debug.print("\nAxis value :{d}\n", .{axis_event.value});
+                },
+                EventType.GamepadConnected => |id| {
+                    const name = context.joystickName(id) orelse unreachable;
+                    std.debug.print("\n{s} #{}  Connected\n", .{ name, id });
+                },
+                EventType.GamepadRemoved => |id| {
+                    std.debug.print("\n Gamepad #{} Removed\n", .{id});
+                },
+                else => {
+                    continue;
+                },
+            }
         }
 
-        // Possible joystick events.
-        // `JoystickConnected` // Device inserted into the system.
-        // `JoystickRemoved` // Device removed from the system.
-        // `JoystickButtonAction` // Device button was pressed or released.
-        // `JoystickAxisMotion` // Device Axis value changed.
-        // `JoystickHatMotion` // Device hat position changed.
-        // `GamepadConnected` // Gamepad inserted.
-        // `GamepadRemoved` // Gamepad removed.
-        // `GamepadButtonAction` // Gamepad button was pressed or released.
-        // `GamepadAxisMotion` // Gamepad axis value changed
-        switch (event) {
-            EventType.WindowClose => {
-                // The user has requested to close the window,
-                // and the application should proceed to calling deinit on the window instance.
-                // This is merely a notification nothing is done to window in the background,
-                // ignore it if you want to continue execution as normal.
-                break :event_loop;
-            },
-            EventType.GamepadConnected => |id| {
-                std.debug.print("\nGamepad #{} Connected\n", .{id});
-                // TODO add methods for interfacing with joystick
-            },
-            EventType.GamepadRemoved => |id| {
-                std.debug.print("\nGamepad #{} Removed\n", .{id});
-                // TODO add methods for interfacing with joystick
-            },
-            else => {
-                continue :event_loop;
-            },
+        while (window.pollEvent(&event)) {
+            switch (event) {
+                EventType.WindowClose => {
+                    // The user has requested to close the window,
+                    // and the application should proceed to calling deinit on the window instance.
+                    // This is merely a notification nothing is done to window in the background,
+                    // ignore it if you want to continue execution as normal.
+                    break :event_loop;
+                },
+                EventType.GamepadConnected => |id| {
+                    const name = context.joystickName(id) orelse unreachable;
+                    std.debug.print("\n{s} #{}  Connected\n", .{ name, id });
+                },
+                EventType.GamepadRemoved => |id| {
+                    std.debug.print("\n Gamepad #{} Removed\n", .{id});
+                },
+                else => {
+                    continue :event_loop;
+                },
+            }
         }
     }
 }
