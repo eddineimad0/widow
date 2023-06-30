@@ -1,10 +1,9 @@
 const std = @import("std");
 const joystick = @import("common").joystick;
 const common_event = @import("common").event;
-const LinkedList = @import("common").list.LinkedList;
+const Queue = @import("common").list.Queue;
 const dinput = @import("dinput.zig");
 const xinput = @import("xinput.zig");
-const WindowImpl = @import("window_impl.zig").WindowImpl;
 
 pub const JoystickAPI = enum { XInput, DInput };
 
@@ -16,8 +15,6 @@ pub const Win32JoyData = union(JoystickAPI) {
     XInput: xinput.XInputData,
 };
 
-pub const JoystickError = error{BadId};
-
 /// Provides an interface for managing connected joysticks.
 pub const JoystickSubSystem = struct {
     allocator: std.mem.Allocator, // For initializing joysticks
@@ -25,9 +22,7 @@ pub const JoystickSubSystem = struct {
     xapi: xinput.XInputInterface,
     joys: [joystick.JOYSTICK_MAX_COUNT]joystick.Joystick,
     joys_exdata: [joystick.JOYSTICK_MAX_COUNT]Win32JoyData,
-    listeners: LinkedList(*WindowImpl),
-    pub const JOYSTICK_AXIS_MAX = 32767;
-    pub const JOYSTICK_AXIS_MIN = -32768;
+    events_queue: Queue(common_event.Event),
     const Self = @This();
 
     fn deinitJoystick(self: *Self, joy_id: u8) void {
@@ -39,14 +34,10 @@ pub const JoystickSubSystem = struct {
             },
             else => {},
         }
-        // Notify
-        const event = common_event.createJoyRemoveEvent(joy_id, self.joys[joy_id].type.isGamepad());
-        self.notifyListeners(&event);
         self.joys[joy_id].deinit();
-    }
-
-    fn cmpListeners(window_a: *const *WindowImpl, window_b: *const *WindowImpl) bool {
-        return window_a.* == window_b.*;
+        // create the event.
+        const event = common_event.createJoyRemoveEvent(joy_id, self.joys[joy_id].is_gamepad);
+        self.queueEvent(&event);
     }
 
     pub fn create(allocator: std.mem.Allocator) !*Self {
@@ -60,7 +51,7 @@ pub const JoystickSubSystem = struct {
             // the connected flag is checked before use to avoid using undefined data.
             joy.connected = false;
         }
-        self.listeners = LinkedList(*WindowImpl).init(allocator);
+        self.events_queue = Queue(common_event.Event).init(allocator);
         self.allocator = allocator;
         return self;
     }
@@ -73,25 +64,32 @@ pub const JoystickSubSystem = struct {
         }
         dinput.releaseInterface(self.dapi);
         self.xapi.deinit();
-        self.listeners.deinit();
+        self.events_queue.deinit();
         allocator.destroy(self);
     }
 
-    pub fn addListener(self: *Self, window: *WindowImpl) !void {
-        try self.listeners.append(&window);
-    }
+    // pub fn addListener(self: *Self, window: *WindowImpl) !void {
+    //     try self.listeners.append(&window);
+    //     // New listeners should be notified of connected joysticks.
+    //     for (0..joystick.JOYSTICK_MAX_COUNT) |i| {
+    //         if (self.joys[i].connected) {
+    //             const ev = common_event.createJoyConnectEvent(@truncate(u8, i), self.joys[i].type.isGamepad());
+    //             window.queueEvent(&ev);
+    //         }
+    //     }
+    // }
 
-    pub fn removeListener(self: *Self, window: *WindowImpl) bool {
-        const index = self.listeners.find(&window, &cmpListeners) orelse return false;
-        return self.listeners.removeAt(index);
-    }
-
-    pub fn notifyListeners(self: *Self, event: *const common_event.Event) void {
-        for (0..self.listeners.len) |i| {
-            const listener = self.listeners.getAt(i).?.*;
-            listener.queueEvent(event);
-        }
-    }
+    // pub fn removeListener(self: *Self, window: *WindowImpl) void {
+    //     const index = self.listeners.find(&window, &cmpListeners) orelse return;
+    //     _ = self.listeners.removeAt(index);
+    // }
+    //
+    // pub fn notifyListeners(self: *Self, event: *const common_event.Event) void {
+    //     for (0..self.listeners.len) |i| {
+    //         const listener = self.listeners.getAt(i).?.*;
+    //         listener.queueEvent(event);
+    //     }
+    // }
 
     /// Returns an index to an empty slot in the joysticks array, null if the array is full
     /// # Note
@@ -108,6 +106,20 @@ pub const JoystickSubSystem = struct {
         return null;
     }
 
+    pub inline fn queueEvent(self: *Self, event: *const common_event.Event) void {
+        self.events_queue.append(event) catch |err| {
+            std.log.err("[Joystick]: Failed to queue event,{}", .{err});
+        };
+    }
+
+    pub fn pollEvent(self: *Self, event: *common_event.Event) bool {
+        const oldest_event = self.events_queue.get() orelse return false;
+        event.* = oldest_event.*;
+
+        // always return true.
+        return self.events_queue.removeFront();
+    }
+
     /// Detect any new connected joystick.
     pub fn queryConnectedJoys(self: *Self) void {
         // XInput polling.
@@ -118,22 +130,36 @@ pub const JoystickSubSystem = struct {
 
     /// Detect if any old joystick was disconnected.
     pub fn queryDisconnectedJoys(self: *Self) void {
-        _ = self;
-        // TODO:
+        for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
+            if (self.joys[joy_id].connected) {
+                switch (self.joys_exdata[joy_id]) {
+                    JoystickAPI.XInput => |*xdata| {
+                        if (!xinput.pollPadPresence(&self.xapi, xdata.id)) {
+                            self.deinitJoystick(@truncate(u8, joy_id));
+                        }
+                    },
+                    JoystickAPI.DInput => |_| {
+                        // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
+                        //     // Failed to get state device is disconnected.
+                        //     self.deinitJoystick(joy_id);
+                        // }
+                    },
+                }
+            }
+        }
     }
 
     /// Update the state for the given joystick id.
-    pub fn queryJoystickState(self: *Self, joy_id: u8) void {
+    pub fn updateJoystickState(self: *Self, joy_id: u8) bool {
         if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
-            return;
+            std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
+            return false;
         }
 
-        const joy = &self.joys[joy_id];
+        // const joy = &self.joys[joy_id];
         switch (self.joys_exdata[joy_id]) {
             JoystickAPI.XInput => |*xdata| {
-                if (!xinput.pollPadState(&self.xapi, joy, xdata)) {
-                    self.deinitJoystick(joy_id);
-                }
+                xinput.pollPadState(self, joy_id, xdata);
             },
             JoystickAPI.DInput => |_| {
                 // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
@@ -142,11 +168,21 @@ pub const JoystickSubSystem = struct {
                 // }
             },
         }
+        return true;
     }
 
-    pub fn queryJoystickBattery(self: *Self, joy_id: u8) !joystick.BatteryInfo {
+    pub fn joystickName(self: *Self, joy_id: u8) ?[]const u8 {
         if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
-            return JoystickError.BadId;
+            std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
+            return null;
+        }
+        return self.joys[joy_id].hid_data.name;
+    }
+
+    pub fn joystickBatteryInfo(self: *Self, joy_id: u8) joystick.BatteryInfo {
+        if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
+            std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
+            return joystick.BatteryInfo.PowerUnkown;
         }
 
         switch (self.joys_exdata[joy_id]) {
@@ -160,17 +196,16 @@ pub const JoystickSubSystem = struct {
                 // }
             },
         }
-        return error.NonCapableDevice;
     }
 
-    pub fn rumbleJoystick(self: *Self, joy_id: u8, low_freq: u16, hi_freq: u16) !void {
+    pub fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
         if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
-            return JoystickError.BadId;
+            return false;
         }
 
         switch (self.joys_exdata[joy_id]) {
             JoystickAPI.XInput => |*xdata| {
-                return xinput.rumble(&self.xapi, xdata, low_freq, hi_freq);
+                xinput.rumble(&self.xapi, xdata, magnitude) catch return false;
             },
             JoystickAPI.DInput => |_| {
                 // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
@@ -179,7 +214,8 @@ pub const JoystickSubSystem = struct {
                 // }
             },
         }
-        return error.NonCapableDevice;
+
+        return true;
     }
 };
 
@@ -196,26 +232,14 @@ test "Joystick sub system" {
             if (!joy.connected) {
                 break;
             }
-            jss.queryJoystickState(@truncate(u8, id));
+            const start = std.time.nanoTimestamp();
+            _ = jss.updateJoystickState(@truncate(u8, id));
+            const end = std.time.nanoTimestamp();
             std.debug.print("--------joy:{}------\n", .{id});
-            std.debug.print("buttons:{any}\n", .{joy.buttons});
             std.debug.print("axis L:{d}|{d}\n", .{ joy.axes.items[0], joy.axes.items[1] });
             std.debug.print("axis R:{d}|{d}\n", .{ joy.axes.items[2], joy.axes.items[3] });
             std.debug.print("axis T:{d}|{d}\n", .{ joy.axes.items[4], joy.axes.items[5] });
-            const button_a = joy.buttons.items[@enumToInt(joystick.XboxButton.A)];
-            const button_b = joy.buttons.items[@enumToInt(joystick.XboxButton.B)];
-            if (button_a.isPressed()) {
-                jss.rumbleJoystick(@truncate(u8, id), 69, 420) catch {
-                    std.debug.print("\nrumble feature unsupported\n", .{});
-                };
-            }
-            if (button_b.isPressed()) {
-                const state = jss.queryJoystickBattery(@truncate(u8, id)) catch {
-                    std.debug.print("\nBattery info feature unsupported\n", .{});
-                    continue;
-                };
-                std.debug.print("\nBattery state for controller {} is {}\n", .{ id, state });
-            }
+            std.debug.print("Update time :{}ns\n", .{end - start});
             std.time.sleep(std.time.ns_per_s * 1);
         }
     }
