@@ -1,6 +1,7 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const common = @import("common");
+const IconError = @import("errors.zig").IconError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
@@ -41,14 +42,14 @@ pub fn createIcon(
     );
     _ = win32_gdi.ReleaseDC(null, dc);
     if (color_mask == null) {
-        return error.NullColorMask;
+        return IconError.NullColorMask;
     }
     defer _ = win32_gdi.DeleteObject(color_mask);
 
     // create a monochrome bitmap with undefined content
     const monochrome_mask = win32_gdi.CreateBitmap(width, height, 1, 1, null);
     if (monochrome_mask == null) {
-        return error.NullMonochromeMask;
+        return IconError.NullMonochromeMask;
     }
     defer _ = win32_gdi.DeleteObject(monochrome_mask);
 
@@ -84,7 +85,7 @@ pub fn createIcon(
     if (icon_handle) |handle| {
         return handle;
     }
-    return error.FailedToCreateIcon;
+    return IconError.FailedToCreateIcon;
 }
 
 pub const Cursor = struct {

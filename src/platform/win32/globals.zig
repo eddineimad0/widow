@@ -1,6 +1,7 @@
 const std = @import("std");
 const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
+const WidowError = @import("errors.zig").WidowWin32Error;
 const mainWindowProc = @import("./window_proc.zig").mainWindowProc;
 const module = @import("./module.zig");
 const utils = @import("./utils.zig");
@@ -105,21 +106,6 @@ pub const Win32Context = struct {
         var self: Self = undefined;
         // Determine the current HInstance.
         self.handles.hinstance = try module.getProcessHandle();
-        // Register the window class
-        self.handles.main_class = try registerMainClass(self.handles.hinstance);
-
-        errdefer {
-            var buffer: [Self.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
-            var fba = std.heap.FixedBufferAllocator.init(&buffer);
-            const fballocator = fba.allocator();
-            // Shoudln't fail since the buffer is big enough.
-            const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
-            _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.win32.handles.main_class),
-                wide_class_name,
-                self.handles.hinstance,
-            );
-        }
 
         // Load the required libraries.
         try self.loadLibraries();
@@ -145,6 +131,8 @@ pub const Win32Context = struct {
                 }
             }
         }
+        // Register the window class
+        self.handles.main_class = try registerMainClass(self.handles.hinstance);
 
         // Declare Process DPI Awareness.
         if (self.flags.is_win10b1703_or_above) {
@@ -169,7 +157,7 @@ pub const Win32Context = struct {
             // what windows version the system is runing
             // said version is used later to dynamically
             // select which code we run in certain sections.
-            return error.FailedToLoadNtdll;
+            return WidowError.NtdllNotFound;
         }
         self.handles.user32 = module.loadWin32Module("user32.dll");
         if (self.handles.user32) |*user32| {
@@ -183,6 +171,8 @@ pub const Win32Context = struct {
                 @ptrCast(proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
             self.functions.AdjustWindowRectExForDpi =
                 @ptrCast(proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
+        } else {
+            return WidowError.User32DLLNotFound;
         }
         self.handles.shcore = module.loadWin32Module("Shcore.dll");
         if (self.handles.shcore) |*shcore| {
@@ -206,7 +196,7 @@ pub const Win32Context = struct {
             self.functions.EnableNonClientDpiScaling = null;
             self.functions.AdjustWindowRectExForDpi = null;
         }
-        if (self.win32.handles.shcore) |*handle| {
+        if (self.handles.shcore) |*handle| {
             module.freeWin32Module(handle.*);
             self.handles.shcore = null;
             self.functions.SetProcessDpiAwareness = null;
@@ -214,7 +204,8 @@ pub const Win32Context = struct {
         }
     }
 
-    pub inline fn singleton() ?*Self {
+    // Enfoce readonly.
+    pub inline fn singleton() ?*const Self {
         if (!Self.global_instance.initialzied) {
             Self.global_instance = init() catch |err| {
                 std.log.err("[Win32]: Failed to init singelton,{}\n", .{err});
@@ -224,22 +215,23 @@ pub const Win32Context = struct {
         return &Self.global_instance;
     }
 
-    pub fn deinitSingelton() void {
-        freeLibraries(&Self.global_instance);
+    pub fn deinitSingleton() void {
+        if (Self.global_instance.initialzied) {
+            freeLibraries(&Self.global_instance);
+            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 4]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            const fballocator = fba.allocator();
+            // Shoudln't fail since the buffer is big enough.
+            const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
 
-        var buffer: [(Self.WINDOW_CLASS_NAME.len) * 4]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&buffer);
-        const fballocator = fba.allocator();
-        // Shoudln't fail since the buffer is big enough.
-        const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
-
-        // Unregister the window class.
-        _ = win32_window_messaging.UnregisterClassW(
-            // utils.makeIntAtom(u8, self.handles.main_class),
-            wide_class_name,
-            Self.global_instance.handles.hinstance,
-        );
-        Self.global_instance.initialzied = false;
+            // Unregister the window class.
+            _ = win32_window_messaging.UnregisterClassW(
+                // utils.makeIntAtom(u8, self.handles.main_class),
+                wide_class_name,
+                Self.global_instance.handles.hinstance,
+            );
+            Self.global_instance.initialzied = false;
+        }
     }
 };
 
@@ -271,7 +263,7 @@ fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
     }
     const class = win32_window_messaging.RegisterClassExW(&window_class);
     if (class == 0) {
-        return error.WNDCLASSNotRegistered;
+        return WidowError.FailedToRegisterWNDCLASS;
     }
     return class;
 }
@@ -351,4 +343,5 @@ test "Win32Context singelton" {
     const singleton = Win32Context.singleton();
     testing.expect(singleton != null);
     std.debug.print("Win32 Execution context:{}\n", .{singleton.?});
+    Win32Context.deinitSingleton();
 }

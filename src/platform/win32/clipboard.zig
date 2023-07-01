@@ -2,18 +2,10 @@ const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
+const ClipboardError = @import("errors.zig").ClipboardError;
 const win32_system_data_exchange = zigwin32.system.data_exchange;
 const win32_system_memory = zigwin32.system.memory;
 const HWND = win32.HWND;
-
-pub const ClipboardError = error{
-    FailedToOpen,
-    AccessDenied,
-    FailedToUpdate,
-    AllocationFailure,
-    OwnershipDenied,
-    FailedToRegisterViewer,
-};
 
 /// Copy the string contained inside the system clipboard.
 /// # Note
