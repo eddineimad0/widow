@@ -341,7 +341,7 @@ fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
 test "Win32Context singelton" {
     const testing = std.testing;
     const singleton = Win32Context.singleton();
-    testing.expect(singleton != null);
+    try testing.expect(singleton != null);
     std.debug.print("Win32 Execution context:{}\n", .{singleton.?});
     Win32Context.deinitSingleton();
 }
