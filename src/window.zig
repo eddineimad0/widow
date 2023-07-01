@@ -1,126 +1,12 @@
 const std = @import("std");
-const platform = @import("platform");
 const common = @import("common");
-const WidowContext = @import("./widow.zig").WidowContext;
-const EventType = common.event.EventType;
-
-pub const WindowBuilder = struct {
-    platform_internals: *platform.internals.Internals,
-    allocator: std.mem.Allocator,
-    window_config: common.window_data.WindowData,
-    const Self = @This();
-
-    /// Creates a window builder instance.
-    /// The window builder wraps the creation attributes of the window,
-    /// and the functions necessary to changes those attributes.
-    /// # Parameter
-    /// `title`: the title to be displayed in the window's caption bar.
-    /// `width`: intial width of the window.
-    /// `height`: intial height of the window.
-    /// `context`: a pointer to the WidowContext instance.
-    /// # Note
-    /// The context parameter should point to an initialzed WidowContext instance that lives
-    /// as long as the window, i.e destroying the WidowContext instance before the window is destroyed
-    /// causes undefined behaviour.
-    pub fn init(title: []const u8, width: i32, height: i32, context: *WidowContext) !Self {
-        std.debug.assert(context.internals != undefined);
-        std.debug.assert((width > 0 and height > 0));
-        const title_str = try context.allocator.alloc(u8, title.len);
-        std.mem.copy(u8, title_str, title);
-        return Self{
-            .platform_internals = context.internals,
-            .allocator = context.allocator,
-            .window_config = common.window_data.WindowData{ .title = title_str, .video = common.video_mode.VideoMode{
-                .width = width,
-                .height = height,
-                .color_depth = 32,
-                .frequency = 60,
-            }, .position = platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION, .restore_point = null, .min_size = null, .max_size = null, .aspect_ratio = null, .fullscreen_mode = null, .flags = common.window_data.WindowFlags{
-                .is_visible = true,
-                .is_maximized = false,
-                .is_minimized = false,
-                .is_resizable = false,
-                .is_decorated = true,
-                .is_topmost = false,
-                .is_focused = false,
-                .cursor_in_client = false,
-                .accepts_raw_input = false,
-                .allow_dpi_scaling = true,
-            }, .input = common.keyboard_and_mouse.InputState.init() },
-        };
-    }
-
-    /// Creates and returns the built window instance.
-    /// # Note
-    /// The user should deinitialize the Window instance when done.
-    pub fn build(self: *const Self) !Window {
-        return Window{
-            .impl = try platform.window_impl.WindowImpl.create(self.allocator, self.platform_internals, self.window_config),
-            .allocator = self.allocator,
-        };
-    }
-
-    /// Whether the window is visible(true) or hidden(false).
-    /// if not set the `default` is visible.
-    pub fn visibility(self: *Self, value: bool) *Self {
-        self.window_config.flags.is_visible = value;
-        return self;
-    }
-
-    /// The position of the window's top left corner.
-    /// if not set the `default` is decided by the system.
-    pub fn position(self: *Self, pos: *const common.geometry.WidowPoint2D) *Self {
-        self.window_config.position = pos.*;
-        return self;
-    }
-
-    /// Starts the window in the chosen fullscreen mode.
-    /// by default the window isn't fullscreen.
-    pub fn fullscreen(self: *Self, mode: common.window_data.FullScreenMode) *Self {
-        self.window_config.fullscreen_mode = mode;
-        return self;
-    }
-
-    /// Make the window resizable.
-    /// if not set the window is not resizable by default.
-    pub fn resizable(self: *Self) *Self {
-        self.window_config.flags.is_resizable = true;
-        return self;
-    }
-
-    /// Whether the window has a frame or not.
-    /// if not set the `default` false.
-    pub fn decorated(self: *Self, value: bool) *Self {
-        self.window_config.flags.is_decorated = value;
-        return self;
-    }
-
-    /// Whether the window should stay on top even if it lose focus.
-    /// if not set the `default` false.
-    pub fn alwaysOnTop(self: *Self, value: bool) *Self {
-        self.window_config.flags.is_topmost = value;
-        return self;
-    }
-
-    /// Specify a minimum and maximum window size for resizable windows.
-    /// no size limit is applied by `default`.
-    pub fn sizeLimit(self: *Self, min_size: *const common.geometry.WidowSize, max_size: *const common.geometry.WidowSize) *Self {
-        self.window_config.min_size = min_size.*;
-        self.window_config.max_size = max_size.*;
-        return self;
-    }
-
-    /// Specify whether the window size should be scaled by the monitor Dpi .
-    /// scaling is applied by `default`.
-    pub fn dpiScaled(self: *Self, value: bool) *Self {
-        self.window_config.allow_dpi_scaling = value;
-        return self;
-    }
-};
+const platform = @import("platform");
+const WindowImpl = platform.window_impl.WindowImpl;
+const Allocator = std.mem.Allocator;
 
 pub const Window = struct {
-    impl: *platform.window_impl.WindowImpl,
-    allocator: std.mem.Allocator,
+    impl: *WindowImpl,
+    allocator: Allocator,
     const Self = @This();
 
     /// Destroys the window and releases all allocated ressources.
@@ -132,8 +18,8 @@ pub const Window = struct {
     /// Poll for any events are currently in the queue, and copies
     /// the first one it find to the `event` parameter.
     /// Returns true if any event was copied to the event parametre.
-    pub inline fn pollEvent(self: *Self, event: *common.event.Event) bool {
-        return self.impl.pollEvent(event);
+    pub inline fn processEvents(self: *Self) void {
+        self.impl.processEvents();
     }
 
     /// This function puts the calling thread to sleep
@@ -142,8 +28,8 @@ pub const Window = struct {
     ///
     /// # Note
     /// An event is guranteed to be copied.
-    pub inline fn waitEvent(self: *Self, event: *common.event.Event) void {
-        self.impl.waitEvent(event);
+    pub inline fn waitEvent(self: *Self) void {
+        self.impl.waitEvent();
     }
 
     /// This function puts the calling thread to sleep
@@ -155,12 +41,12 @@ pub const Window = struct {
     /// # Note
     /// If the timeout is 0 the function will return immediately.
     /// The timeout parameter is specified in milliseconds.
-    pub inline fn waitEventTimeout(self: *Self, event: *common.event.Event, timeout: u32) bool {
+    pub inline fn waitEventTimeout(self: *Self, timeout: u32) bool {
         std.debug.assert(timeout > 0);
-        return self.impl.waitEventTimeout(timeout, event);
+        self.impl.waitEventTimeout(timeout);
     }
 
-    /// Posts the [`EventType.WindowClose`] event to the window's event loop.
+    /// Posts the `EventType.WindowClose` event to the window's event loop.
     /// # Note
     /// This function can be used to signal a desire to exit the event loop,
     /// from the code.
@@ -211,7 +97,7 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title bar and borders.
     /// The logical size which is the same as the size specified during window creation,
     /// can be aquired by dividing the Physical size with the content scale factor
-    /// returned by [`Window::contentScale`].
+    /// returned by `Window::contentScale`.
     pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
         return platform.window_impl.clientSize(self.impl.handle);
     }
@@ -323,8 +209,8 @@ pub const Window = struct {
     /// # Note
     /// This removes the ability to resize the window by draging it's edges,
     /// or maximize it through the caption buttons
-    /// however calls to [`Window.setClientSize`],or [`Window.set_maximize`] functions can still change
-    /// the size of the window and emit [`EventType.WindowResize`] event.
+    /// however calls to `Window.setClientSize`, or `Window.set_maximize` functions can still change
+    /// the size of the window and emit `EventType.WindowResize` event.
     pub inline fn setResizable(self: *Self, resizable: bool) void {
         self.impl.setResizable(resizable);
     }
@@ -459,7 +345,7 @@ pub const Window = struct {
     /// the window, as it makes the result looks more "crisp"
     /// e.g: an image might be 64 virtual pixels tall, but with a scale factor of 2.0,
     /// it should drawn with 128 physical pixels for it to appear good.
-    /// [`EventType.DPIChange`] can be tracked to monitor changes in the dpi,
+    /// `EventType.DPIChange` can be tracked to monitor changes in the dpi,
     /// and the scale factor.
     pub inline fn contentScale(self: *const Self) f64 {
         var scale: f64 = undefined;
