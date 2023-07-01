@@ -1,12 +1,11 @@
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
+const WidowError = @import("errors.zig").WidowWin32Error;
 
 const GetModuleHandleExW = zigwin32.system.library_loader.GetModuleHandleExW;
 const LoadLibraryA = zigwin32.system.library_loader.LoadLibraryA;
 const FreeLibrary = zigwin32.system.library_loader.FreeLibrary;
 const GetProcAddress = zigwin32.system.library_loader.GetProcAddress;
-
-pub const ModuleError = error{FailedToGetHandle};
 
 pub inline fn loadWin32Module(module_name: [:0]const u8) ?win32.HINSTANCE {
     return LoadLibraryA(module_name.ptr);
@@ -27,7 +26,7 @@ pub fn getProcessHandle() !win32.HINSTANCE {
         @intToPtr(?[*:0]const u16, @ptrToInt(&getProcessHandle)),
         &hinstance,
     ) == 0) {
-        return ModuleError.FailedToGetHandle;
+        return WidowError.ProcessHandleNotFound;
     }
     return hinstance.?;
 }

@@ -2,6 +2,7 @@ const std = @import("std");
 const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
 const win32_gdi = @import("zigwin32").graphics.gdi;
+const MonitorError = @import("errors.zig").MonitorError;
 const WindowImpl = @import("./window_impl.zig").WindowImpl;
 const VideoMode = @import("common").video_mode.VideoMode;
 const WidowPoint2D = @import("common").geometry.WidowPoint2D;
@@ -101,7 +102,7 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
 
             // Get the handle for the monitor.
             var handle = querySystemHandle(&display_adapter.DeviceName) orelse {
-                return error.FailedToQueryMonitorHandle;
+                return MonitorError.MonitorHandleNotFound;
             };
 
             // We'll need it when enumerating video modes.
@@ -321,7 +322,7 @@ pub const MonitorImpl = struct {
                     self.mode_changed = true;
                     return;
                 },
-                else => return error.FailedToSwitchMonitorVideoMode,
+                else => return MonitorError.BadVideoMode,
             }
         } else {
             self.restoreOrignalVideo();
@@ -363,7 +364,7 @@ pub const MonitorImpl = struct {
     }
 };
 
-test "monitor_impl_init_test" {
+test "monitor_impl init" {
     const testing = std.testing;
     const testing_allocator = testing.allocator;
     var all_monitors = try pollMonitors(testing_allocator);
@@ -378,7 +379,7 @@ test "monitor_impl_init_test" {
     try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
 }
 
-test "changing_primary_video_mode" {
+test "changing primary VideoMode" {
     const testing = std.testing;
     const testing_allocator = testing.allocator;
     var all_monitors = try pollMonitors(testing_allocator);
