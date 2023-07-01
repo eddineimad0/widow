@@ -52,6 +52,7 @@ pub const SC_MONITORPOWER = @as(u32, 0x0F170);
 pub const SC_KEYMENU = @as(u32, 0x0F100);
 pub const WM_COPYGLOBALDATA = @as(u32, 0x0049);
 pub const XINPUT_GAMEPAD_GUIDE = @as(u32, 0x0400);
+pub const WAIT_TIMEOUT = @as(u32, 0x102);
 
 // Mising from zigwin32.
 pub const WM_MOUSELEAVE = @as(u32, 0x02A3);
