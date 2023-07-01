@@ -9,12 +9,12 @@ pub fn build(b: *std.Build) void {
 
     var platform_module: *std.build.Module = switch (target.getOs().tag) {
         .windows => windows: {
-            var win32api = b.createModule(.{
+            var zigwin32 = b.createModule(.{
                 .source_file = .{ .path = "libs/zigwin32/win32.zig" },
             });
             var deps: [2]std.build.ModuleDependency = undefined;
             deps[0] = std.build.ModuleDependency{ .name = "common", .module = common_module };
-            deps[1] = std.build.ModuleDependency{ .name = "zigwin32", .module = win32api };
+            deps[1] = std.build.ModuleDependency{ .name = "zigwin32", .module = zigwin32 };
             break :windows b.createModule(.{ .source_file = .{ .path = "src/platform/win32/platform.zig" }, .dependencies = &deps });
         },
         else => {
