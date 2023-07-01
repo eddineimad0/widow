@@ -1,5 +1,5 @@
 const std = @import("std");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
 const win32_gdi = @import("zigwin32").graphics.gdi;
 const WindowImpl = @import("./window_impl.zig").WindowImpl;
@@ -7,7 +7,7 @@ const VideoMode = @import("common").video_mode.VideoMode;
 const WidowPoint2D = @import("common").geometry.WidowPoint2D;
 const WidowSize = @import("common").geometry.WidowSize;
 const WidowArea = @import("common").geometry.WidowArea;
-const proc_GetDpiForMonitor = @import("./internals.zig").proc_GetDpiForMonitor;
+const Win32Context = @import("globals.zig").Win32Context;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
@@ -187,12 +187,11 @@ pub fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void
 /// This function is a last resort to get the dpi value for a window.
 pub fn monitorDPI(
     monitor_handle: win32.HMONITOR,
-    GetDpiForMonitor: ?proc_GetDpiForMonitor,
 ) u32 {
     var dpi_x: u32 = undefined;
     var dpi_y: u32 = undefined;
-
-    if (GetDpiForMonitor) |proc| {
+    const globl_data = Win32Context.singleton().?;
+    if (globl_data.functions.GetDpiForMonitor) |proc| {
         // [win32api docs]
         // This API is not DPI aware and should not be used if the calling thread is per-monitor DPI aware.
         // For the DPI-aware version of this API, see GetDpiForWindow.
