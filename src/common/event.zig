@@ -2,6 +2,7 @@ const std = @import("std");
 const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
 const joystick = @import("joystick.zig");
+const Queue = @import("list.zig").Queue;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -183,3 +184,35 @@ pub inline fn createJoyButtonEvent(id: u8, button: u8, state: joystick.ButtonSta
         } };
     }
 }
+
+pub const EventQueue = struct {
+    queue: Queue(Event),
+    events_count: usize,
+    const Self = @This();
+
+    pub fn init(allocator: std.mem.Allocator) Self {
+        return Self{
+            .queue = Queue(Event).init(allocator),
+            .events_count = 0,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.queue.deinit();
+    }
+
+    pub fn sendEvent(self: *Self, event: *const Event) void {
+        self.queue.append(event) catch |err| {
+            std.log.err("[Event]: Failed to Queue Event,{}\n", .{err});
+            return;
+        };
+        self.events_count += 1;
+    }
+
+    pub fn popEvent(self: *Self, event: *Event) bool {
+        const first = self.queue.get() orelse return false;
+        event.* = first.*;
+        self.events_count -= 1;
+        return self.queue.removeFront();
+    }
+};

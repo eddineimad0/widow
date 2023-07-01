@@ -1,18 +1,19 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
+const common = @import("common");
+const utils = @import("utils.zig");
+const monitor_impl = @import("monitor_impl.zig");
+const icon = @import("icon.zig");
+const WindowError = @import("errors.zig").WindowError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
-const common = @import("common");
-const Queue = common.list.Queue;
-const utils = @import("utils.zig");
-const Internals = @import("internals.zig").Internals;
-const proc_AdjustWindowRectExForDpi = @import("internals.zig").proc_AdjustWindowRectExForDpi;
-const monitor_impl = @import("monitor_impl.zig");
-const icon = @import("icon.zig");
+const WidowContext = @import("widow").WidowContext;
+const Win32Context = @import("globals.zig").Win32Context;
+const MonitorStore = @import("internals.zig").MonitorStore;
 const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
@@ -31,10 +32,6 @@ const STYLE_NORMAL: u32 = @enumToInt(win32_window_messaging.WS_OVERLAPPED) |
     @enumToInt(win32_window_messaging.WS_MINIMIZEBOX) |
     @enumToInt(win32_window_messaging.WS_SYSMENU) |
     @enumToInt(win32_window_messaging.WS_CAPTION);
-
-const WindowError = error{
-    FailedToCreate,
-};
 
 pub fn windowStyles(data: *const WindowData) u32 {
     // Styles.
@@ -84,12 +81,12 @@ pub fn windowExStyles(data: *const WindowData) u32 {
 /// areas
 pub fn adjustWindowRect(
     rect: *win32.RECT,
-    AdjustWindowRectExForDpi: ?proc_AdjustWindowRectExForDpi,
     styles: u32,
     ex_styles: u32,
     dpi: u32,
 ) void {
-    if (AdjustWindowRectExForDpi) |proc| {
+    const win32_globl = Win32Context.singleton().?;
+    if (win32_globl.functions.AdjustWindowRectExForDpi) |proc| {
         _ = proc(
             rect,
             styles,
@@ -175,7 +172,6 @@ fn setWindowPositionIntern(window_handle: win32.HWND, top: ?win32.HWND, flags: u
 
 fn createPlatformWindow(
     allocator: std.mem.Allocator,
-    internals: *Internals,
     data: *const WindowData,
     styles: struct { u32, u32 },
 ) !win32.HWND {
@@ -188,10 +184,16 @@ fn createPlatformWindow(
 
     // Calculates the required size of the window rectangle,
     // based on the desired client-rectangle size.
-    _ = win32_window_messaging.AdjustWindowRectEx(&window_rect, @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]), 0, @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]));
+    _ = win32_window_messaging.AdjustWindowRectEx(
+        &window_rect,
+        @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]),
+        0,
+        @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]),
+    );
 
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
+
     if (data.position.x != win32_window_messaging.CW_USEDEFAULT and
         data.position.y != win32_window_messaging.CW_USEDEFAULT)
     {
@@ -209,11 +211,12 @@ fn createPlatformWindow(
         window_rect.bottom - window_rect.top,
     };
 
-    const creation_lparm = internals.win32.functions.EnableNonClientDpiScaling;
+    const creation_lparm = data;
+    const win32_globl = Win32Context.singleton().?;
 
-    var buffer: [Internals.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
+    var buffer: [Win32Context.WINDOW_CLASS_NAME.len * 4]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.WINDOW_CLASS_NAME) catch unreachable;
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WINDOW_CLASS_NAME) catch unreachable;
     const window_title = try utils.utf8ToWideZ(allocator, data.title);
     defer allocator.free(window_title);
     const window_handle = win32_window_messaging.CreateWindowExW(
@@ -228,7 +231,7 @@ fn createPlatformWindow(
         frame[3], // height
         null, // Parent Hwnd
         null, // hMenu
-        internals.win32.handles.hinstance, // hInstance
+        win32_globl.handles.hinstance, // hInstance
         @ptrCast(?*anyopaque, @constCast(creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
         return WindowError.FailedToCreate;
@@ -310,7 +313,12 @@ pub fn clientSize(handle: win32.HWND) common.geometry.WidowSize {
     };
 }
 
-pub const ExtraWin32Data = struct {
+pub const WidowData = struct {
+    monitors: *MonitorStore,
+    events_queue: *common.event.EventQueue,
+};
+
+pub const Win32WindowData = struct {
     cursor: Cursor,
     icon: Icon,
     high_surrogate: u16,
@@ -321,25 +329,22 @@ pub const ExtraWin32Data = struct {
 
 pub const WindowImpl = struct {
     data: WindowData,
-    internals: *Internals,
+    widow: WidowData,
+    win32: Win32WindowData,
     handle: win32_foundation.HWND,
-    events_queue: Queue(common.event.Event),
-    win32: ExtraWin32Data,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = win32_window_messaging.CW_USEDEFAULT,
         .y = win32_window_messaging.CW_USEDEFAULT,
     };
     const Self = @This();
 
-    pub fn create(allocator: std.mem.Allocator, internals: *Internals, data: WindowData) !*Self {
+    pub fn create(allocator: std.mem.Allocator, cntxt_data: WidowData, data: *const WindowData) !*Self {
         var self = try allocator.create(WindowImpl);
         errdefer allocator.destroy(self);
         // get the window handle
-        self.events_queue = Queue(common.event.Event).init(allocator);
-        errdefer self.events_queue.deinit();
-        self.internals = internals;
-        self.data = data;
-        self.win32 = ExtraWin32Data{
+        self.widow = cntxt_data;
+        self.data = data.*;
+        self.win32 = Win32WindowData{
             .cursor = Cursor{
                 .handle = null,
                 .mode = common.cursor.CursorMode.Normal,
@@ -355,8 +360,8 @@ pub const WindowImpl = struct {
             .dropped_files = std.ArrayList([]const u8).init(allocator),
         };
 
-        const styles = .{ windowStyles(&data), windowExStyles(&data) };
-        self.handle = try createPlatformWindow(allocator, internals, &data, styles);
+        const styles = .{ windowStyles(data), windowExStyles(data) };
+        self.handle = try createPlatformWindow(allocator, data, styles);
 
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(self)));
 
@@ -371,7 +376,6 @@ pub const WindowImpl = struct {
 
         adjustWindowRect(
             &window_rect,
-            internals.win32.functions.AdjustWindowRectExForDpi,
             styles[0],
             styles[1],
             dpi,
@@ -395,7 +399,7 @@ pub const WindowImpl = struct {
         );
 
         // Allow Drag & Drop messages.
-        if (internals.win32.flags.is_win7_or_above) {
+        if (Win32Context.singleton().?.flags.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
                 self.handle,
@@ -454,7 +458,6 @@ pub const WindowImpl = struct {
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         self.close();
         allocator.free(self.data.title);
-        self.events_queue.deinit();
         allocator.destroy(self);
     }
 
@@ -472,13 +475,14 @@ pub const WindowImpl = struct {
     }
 
     pub fn scalingDPI(self: *const Self, scaler: ?*f64) u32 {
+        const win32_globl = Win32Context.singleton().?;
         var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         if (self.data.flags.allow_dpi_scaling) err_exit: {
-            if (self.internals.win32.functions.GetDpiForWindow) |proc| {
+            if (win32_globl.functions.GetDpiForWindow) |proc| {
                 dpi = proc(self.handle);
             } else {
                 const monitor_handle = win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST) orelse break :err_exit;
-                dpi = monitor_impl.monitorDPI(monitor_handle, self.internals.win32.functions.GetDpiForMonitor);
+                dpi = monitor_impl.monitorDPI(monitor_handle);
             }
         }
         if (scaler) |ptr| {
@@ -489,41 +493,37 @@ pub const WindowImpl = struct {
 
     /// Not ThreadSafe
     /// the window should belong to the thread calling this function.
-    pub fn pollEvent(self: *Self, event: *common.event.Event) bool {
+    pub fn processEvents(self: *Self) void {
         var msg: win32_window_messaging.MSG = undefined;
         while (win32_window_messaging.PeekMessageW(&msg, self.handle, 0, 0, win32_window_messaging.PM_REMOVE) != 0) {
             _ = win32_window_messaging.TranslateMessage(&msg);
             _ = win32_window_messaging.DispatchMessageW(&msg);
         }
-
-        // WM_QUIT should terminate the program.
-
         utils.clearStickyKeys(self);
-
-        const oldest_event = self.events_queue.get() orelse return false;
-        event.* = oldest_event.*;
-
-        // always return true.
-        return self.events_queue.removeFront();
     }
 
     /// Not ThreadSafe
     /// the window should belong to the thread calling this function.
-    pub fn waitEvent(self: *Self, event: *common.event.Event) void {
+    pub fn waitEvent(self: *Self) void {
         _ = win32_window_messaging.WaitMessage();
-        _ = self.pollEvent(event);
+        self.pollEvent();
     }
 
     /// Not ThreadSafe
     /// the window should belong to the thread calling this function.
     /// Waits for an input event or the timeout interval elapses.
-    pub fn waitEventTimeout(self: *Self, timeout: u32, event: *common.event.Event) bool {
-        const WAIT_TIMEOUT = comptime @as(u32, 258);
-        if (win32_window_messaging.MsgWaitForMultipleObjects(0, null, 0, timeout, win32_window_messaging.QS_ALLINPUT) == WAIT_TIMEOUT) {
+    pub fn waitEventTimeout(self: *Self, timeout: u32) void {
+        if (win32_window_messaging.MsgWaitForMultipleObjects(
+            0,
+            null,
+            0,
+            timeout,
+            win32_window_messaging.QS_ALLINPUT,
+        ) == win32.WAIT_TIMEOUT) {
             // Timeout period elapsed.
             return false;
         }
-        return self.pollEvent(event);
+        self.pollEvent();
     }
 
     /// Updates the registered window styles to match the current window config.
@@ -553,7 +553,6 @@ pub const WindowImpl = struct {
         };
         adjustWindowRect(
             &rect,
-            self.internals.win32.functions.AdjustWindowRectExForDpi,
             @truncate(u32, reg_styles),
             @truncate(u32, reg_ex_styles),
             dpi,
@@ -610,12 +609,9 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.FlashWindowEx(&flash_info);
     }
 
-    /// Add an event to the window's Events Queue.
-    /// possible to make thread safe.
+    /// Add an event to the events queue.
     pub fn queueEvent(self: *Self, event: *const common.event.Event) void {
-        self.events_queue.append(event) catch |err| {
-            std.debug.print("[ERROR]: Failed to queue event:{}", .{err});
-        };
+        self.widow.events_queue.sendEvent(event);
     }
 
     /// Returns the position of the top left corner.
@@ -646,7 +642,6 @@ pub const WindowImpl = struct {
         };
         adjustWindowRect(
             &rect,
-            self.internals.win32.functions.AdjustWindowRectExForDpi,
             windowStyles(&self.data),
             windowExStyles(&self.data),
             self.scalingDPI(null),
@@ -678,7 +673,12 @@ pub const WindowImpl = struct {
                 .right = size.width,
                 .bottom = size.height,
             };
-            adjustWindowRect(&new_client_rect, self.internals.win32.functions.AdjustWindowRectExForDpi, windowStyles(&self.data), windowExStyles(&self.data), dpi);
+            adjustWindowRect(
+                &new_client_rect,
+                windowStyles(&self.data),
+                windowExStyles(&self.data),
+                dpi,
+            );
             if (self.data.flags.is_maximized) {
                 // un-maximize the window
                 self.restore();
@@ -916,7 +916,6 @@ pub const WindowImpl = struct {
 
         adjustWindowRect(
             &rect,
-            self.internals.win32.functions.AdjustWindowRectExForDpi,
             windowStyles(&self.data),
             windowExStyles(&self.data),
             self.scalingDPI(null),
@@ -961,11 +960,11 @@ pub const WindowImpl = struct {
 
     pub fn acquireMonitor(self: *Self) !void {
         const monitor_handle = win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST) orelse {
-            return error.NullMonitorHandle;
+            return WindowError.NullMonitorHandle;
         };
         const mode = if (self.data.fullscreen_mode.? == FullScreenMode.Exclusive) &self.data.video else null;
         var mon_area: common.geometry.WidowArea = undefined;
-        try self.internals.devices.monitor_store.?.setMonitorWindow(
+        try self.widow.monitors.setMonitorWindow(
             monitor_handle,
             self,
             mode,
@@ -990,8 +989,7 @@ pub const WindowImpl = struct {
             std.debug.print("Null Monitor handle \n", .{});
             return;
         };
-        try self.internals.devices.monitor_store.?
-            .restoreMonitor(monitor_handle);
+        try self.widow.monitors.restoreMonitor(monitor_handle);
     }
 
     pub fn setCursorShape(self: *Self, new_cursor: *const Cursor) void {
