@@ -1,10 +1,10 @@
 const std = @import("std");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
 const utils = @import("./utils.zig");
 const common = @import("common");
-const DeviceContext = @import("./internals.zig").DeviceContext;
-const proc_EnableNonClientDpiScaling = @import("./internals.zig").proc_EnableNonClientDpiScaling;
+const HelperData = @import("./internals.zig").HelperData;
+const Win32Context = @import("./globals.zig").Win32Context;
 const window_impl = @import("./window_impl.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
@@ -19,13 +19,13 @@ pub fn helperWindowProc(
 ) callconv(win32.WINAPI) isize {
     const user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
     if (user_data != 0) {
-        var devices = @intToPtr(*DeviceContext, @intCast(usize, user_data));
+        var devices = @intToPtr(*HelperData, @intCast(usize, user_data));
         switch (msg) {
             win32_window_messaging.WM_DISPLAYCHANGE => {
                 // Monitor the win32_window_messaging.WM_DISPLAYCHANGE notification
                 // to detect when settings change or when a
                 // display is added or removed.
-                if (devices.monitor_store) |store| {
+                if (devices.monitor_store_ptr) |store| {
                     if (!store.expected_video_change) {
                         store.updateMonitors() catch {
                             std.log.err("Failed to update monitors\n", .{});
@@ -57,7 +57,7 @@ pub fn helperWindowProc(
             win32_window_messaging.WM_DEVICECHANGE => exit_point: {
                 // Notifies an application of a change to the hardware configuration
                 // of a device or the computer.
-                const jss = devices.joystick_store orelse break :exit_point;
+                const jss = devices.joysubsys_ptr orelse break :exit_point;
                 const dbh_ptr = @intToPtr(?*win32_sys_service.DEV_BROADCAST_HDR, @bitCast(usize, lparam));
                 switch (wparam) {
                     win32_sys_service.DBT_DEVICEARRIVAL => {
@@ -86,8 +86,9 @@ pub fn helperWindowProc(
 }
 
 const message_handler = @import("./message_handler.zig");
+
 /// The Window Procedure function.
-pub fn windowProc(
+pub fn mainWindowProc(
     hwnd: win32.HWND,
     msg: win32.DWORD,
     wparam: win32.WPARAM,
@@ -95,20 +96,22 @@ pub fn windowProc(
 ) callconv(win32.WINAPI) isize {
 
     // Get a mutable refrence to the corresponding WindowImpl Structure.
-    const window_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
-    var window = @intToPtr(?*window_impl.WindowImpl, @bitCast(usize, window_data)) orelse {
+    const window_user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
+    var window = @intToPtr(?*window_impl.WindowImpl, @bitCast(usize, window_user_data)) orelse {
         if (msg == win32_window_messaging.WM_NCCREATE) {
             // [Win32api Docs]
             // On Windows 10 1607 or above, PMv1 applications may also call
             // EnableNonClientDpiScaling during win32_window_messaging.WM_NCCREATE to request
             // that Windows correctly scale the window's non-client area.
             const creation_struct_ptr: *win32_window_messaging.CREATESTRUCTW = @intToPtr(*win32_window_messaging.CREATESTRUCTW, @bitCast(usize, lparam));
-            var proc = @ptrCast(?proc_EnableNonClientDpiScaling, creation_struct_ptr.*.lpCreateParams);
-            if (proc) |EnableNonClientDpiScaling| {
-                _ = EnableNonClientDpiScaling(hwnd);
+            const window_data = @ptrCast(*const common.window_data.WindowData, @alignCast(8, creation_struct_ptr.*.lpCreateParams));
+            const globl_data = Win32Context.singleton();
+            if (globl_data) |singleton_ptr| {
+                if (window_data.flags.allow_dpi_scaling and singleton_ptr.flags.is_win10b1607_or_above) {
+                    _ = singleton_ptr.functions.EnableNonClientDpiScaling.?(hwnd);
+                }
             }
-            // remove the internals pointer;
-            creation_struct_ptr.*.lpCreateParams = null;
+            creation_struct_ptr.lpCreateParams = null;
         }
         // Skip until the window pointer is registered.
         return win32_window_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
@@ -272,7 +275,8 @@ pub fn windowProc(
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
-            if (window.data.fullscreen_mode == null and window.internals.win32.flags.is_win10b1703_or_above) {
+            const is_win10b1703_or_above = Win32Context.singleton().?.flags.is_win10b1703_or_above;
+            if (window.data.fullscreen_mode == null and is_win10b1703_or_above) {
                 const rect_ref: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
                 const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
                     @enumToInt(win32_window_messaging.SWP_NOZORDER) |
