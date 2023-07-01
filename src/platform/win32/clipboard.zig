@@ -1,6 +1,6 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
 const win32_system_data_exchange = zigwin32.system.data_exchange;
 const win32_system_memory = zigwin32.system.memory;
@@ -113,17 +113,17 @@ test "clipboard_tests" {
     const Internals = @import("internals.zig").Internals;
     const string1 = "Clipboard Test String👌.";
     const string2 = "Another Clipboard Test String👌.";
-    var internals = try Internals.create(std.testing.allocator);
-    defer internals.destroy(std.testing.allocator);
-    try setClipboardText(std.testing.allocator, internals.win32.handles.helper_window, string1);
-    const copied_string = try clipboardText(std.testing.allocator, internals.win32.handles.helper_window);
+    var internals = try Internals.init();
+    defer internals.deinit(std.testing.allocator);
+    try setClipboardText(std.testing.allocator, internals.helper_window, string1);
+    const copied_string = try clipboardText(std.testing.allocator, internals.helper_window);
     defer std.testing.allocator.free(copied_string);
     std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
-    const copied_string2 = try clipboardText(std.testing.allocator, internals.win32.handles.helper_window);
+    const copied_string2 = try clipboardText(std.testing.allocator, internals.helper_window);
     defer std.testing.allocator.free(copied_string2);
     std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
-    try setClipboardText(std.testing.allocator, internals.win32.handles.helper_window, string2);
-    const copied_string3 = try clipboardText(std.testing.allocator, internals.win32.handles.helper_window);
+    try setClipboardText(std.testing.allocator, internals.helper_window, string2);
+    const copied_string3 = try clipboardText(std.testing.allocator, internals.helper_window);
     defer std.testing.allocator.free(copied_string3);
     std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
 }

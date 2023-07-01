@@ -1,5 +1,5 @@
 const zigwin32 = @import("zigwin32");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
 
 const GetModuleHandleExW = zigwin32.system.library_loader.GetModuleHandleExW;
 const LoadLibraryA = zigwin32.system.library_loader.LoadLibraryA;

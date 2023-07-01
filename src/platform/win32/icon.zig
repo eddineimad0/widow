@@ -93,7 +93,7 @@ pub const Cursor = struct {
     mode: common.cursor.CursorMode,
 };
 
-pub fn dropCursor(cursor: *Cursor) void {
+pub fn destroyCursor(cursor: *Cursor) void {
     if (!cursor.shared and cursor.handle != null) {
         _ = win32_window_messaging.DestroyCursor(cursor.handle);
         cursor.handle = null;
@@ -105,7 +105,7 @@ pub const Icon = struct {
     bg_handle: ?win32_window_messaging.HICON,
 };
 
-pub fn dropIcon(icon: *Icon) void {
+pub fn destroyIcon(icon: *Icon) void {
     if (icon.sm_handle) |handle| {
         _ = win32_window_messaging.DestroyIcon(handle);
         icon.sm_handle = null;

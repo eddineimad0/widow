@@ -1,7 +1,8 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
-const win32 = @import("win32.zig");
+const win32 = @import("win32_defs.zig");
 const window_impl = @import("./window_impl.zig");
+const Win32Context = @import("globals.zig").Win32Context;
 const common = @import("common");
 const utils = @import("utils.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
@@ -123,7 +124,11 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
     window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Pressed;
 }
 
-pub inline fn mouseWheelMSGHandler(window: *window_impl.WindowImpl, wheel: common.keyboard_and_mouse.MouseWheel, wheel_delta: f64) void {
+pub inline fn mouseWheelMSGHandler(
+    window: *window_impl.WindowImpl,
+    wheel: common.keyboard_and_mouse.MouseWheel,
+    wheel_delta: f64,
+) void {
     const event = common.event.createScrollEvent(wheel, wheel_delta);
     window.queueEvent(&event);
 }
@@ -141,7 +146,6 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
 
     window_impl.adjustWindowRect(
         &rect,
-        window.internals.win32.functions.AdjustWindowRectExForDpi,
         styles,
         ex_styles,
         window.scalingDPI(null),
@@ -175,7 +179,8 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
 
 //**
 pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) bool {
-    if (window.internals.win32.flags.is_win10b1607_or_above) {
+    const is_win10b1607_or_above = Win32Context.singleton().?.flags.is_win10b1607_or_above;
+    if (is_win10b1607_or_above) {
         var pending_size = win32.RECT{
             .left = 0,
             .top = 0,
@@ -190,7 +195,6 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
 
         window_impl.adjustWindowRect(
             &pending_size,
-            window.internals.win32.functions.AdjustWindowRectExForDpi,
             styles,
             ex_styles,
             new_dpi,
@@ -205,7 +209,6 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
 
         window_impl.adjustWindowRect(
             &desired_size,
-            window.internals.win32.functions.AdjustWindowRectExForDpi,
             styles,
             ex_styles,
             new_dpi,
