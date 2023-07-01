@@ -45,6 +45,8 @@ pub fn main() void {
         // Process window events posted by the system.
         mywindow.processEvents();
 
+        // All entities in the library send their
+        // events to a central event queue in the WidowContext instance.
         while (widow_cntxt.pollEvents(&event)) {
             switch (event) {
                 EventType.WindowClose => {
