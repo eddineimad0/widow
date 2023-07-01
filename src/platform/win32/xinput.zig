@@ -209,8 +209,9 @@ pub fn pollPadsConnection(jss: *JoystickSubSystem) void {
 pub fn pollPadPresence(xapi: *const XInputInterface, xid: u8) bool {
     var xstate: xinput.XINPUT_STATE = undefined;
     const result = xapi.getState(xid, &xstate);
-    if (result == @enumToInt(win32.WIN32_ERROR.ERROR_DEVICE_NOT_CONNECTED)) {
+    if (result != @enumToInt(win32.WIN32_ERROR.NO_ERROR)) {
         // Disconnected.
+        std.debug.print("NOT_CONNECTD:{}\n,", .{result});
         return false;
     }
     return true;
@@ -250,7 +251,7 @@ fn normalizeAxis(value: i32, is_trigger: bool, negate: bool) f32 {
 /// Poll for gamepad state changes.
 /// if the gamepad is disconnected it returns null otherwise it returns the number of
 /// chages that happend to the gamepad state
-pub fn pollPadState(jss: *JoystickSubSystem, joy_id: u8, xdata: *XInputData) void {
+pub fn pollPadState(jss: *JoystickSubSystem, joy_id: u8, xdata: *XInputData) bool {
     const buttons = comptime [14]u32{
         xinput.XINPUT_GAMEPAD_A,
         xinput.XINPUT_GAMEPAD_B,
@@ -270,11 +271,10 @@ pub fn pollPadState(jss: *JoystickSubSystem, joy_id: u8, xdata: *XInputData) voi
 
     var xstate: xinput.XINPUT_STATE = undefined;
     const result = jss.xapi.getState(xdata.id, &xstate);
-    std.debug.assert(result == @enumToInt(win32.WIN32_ERROR.NO_ERROR));
-    // if (result == @enumToInt(win32.WIN32_ERROR.ERROR_DEVICE_NOT_CONNECTED)) {
-    //     // Disconnected.
-    //     false;
-    // }
+    if (result == @enumToInt(win32.WIN32_ERROR.ERROR_DEVICE_NOT_CONNECTED)) {
+        // Disconnected.
+        return false;
+    }
 
     if (xdata.packet_number != xstate.dwPacketNumber) {
         xdata.packet_number = xstate.dwPacketNumber;
@@ -368,6 +368,7 @@ pub fn pollPadState(jss: *JoystickSubSystem, joy_id: u8, xdata: *XInputData) voi
             }
         }
     }
+    return true;
 }
 
 /// Vibrate the controller

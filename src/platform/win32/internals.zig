@@ -37,9 +37,10 @@ pub const Internals = struct {
         Joystick,
     };
 
-    pub fn init() !Self {
-        var self: Self = undefined;
-
+    // if we were to use init to create the data on the stack
+    // and then copy it to the heap it will invalidate the pointer
+    // set as for the window (GWLP_USERDATA).
+    pub fn setup(self: *Self) !void {
         // first time getting the singleton, must confirm successful init.
         const win32_singelton = Win32Context.singleton() orelse return errors.WidowWin32Error.FailedToInitPlatform;
         self.helper_class = try registerHelperClass(win32_singelton.handles.hinstance);
@@ -51,7 +52,6 @@ pub const Internals = struct {
         self.helper_data.clipboard_text = null;
         registerDevicesNotif(self.helper_window, &self.dev_notif);
         _ = win32_window_messaging.SetWindowLongPtrW(self.helper_window, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(&self.helper_data)));
-        return self;
     }
 
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
@@ -97,19 +97,19 @@ pub const Internals = struct {
                 self.helper_data.monitor_store_ptr = @ptrCast(?*MonitorStore, @alignCast(8, pointer));
             },
             StatePointerMode.Joystick => {
-                self.helper_data.joysubsys_ptr = @ptrCast(?*JoystickSubSystem, pointer);
+                self.helper_data.joysubsys_ptr = @ptrCast(?*JoystickSubSystem, @alignCast(8, pointer));
             },
         }
     }
 
     pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
-        if (self.helper_data.clipboard_change or self.user_data.clipboard_text == null) {
+        if (self.helper_data.clipboard_change or self.helper_data.clipboard_text == null) {
             // refetching clipboard data
             if (self.helper_data.clipboard_text) |text| {
                 allocator.free(text);
                 errdefer self.helper_data.clipboard_text = null;
             }
-            self.helper_data.clipboard_text = try clipboard.clipboardText(allocator, self.win32.handles.helper_window);
+            self.helper_data.clipboard_text = try clipboard.clipboardText(allocator, self.helper_window);
             self.helper_data.clipboard_change = false;
         }
         return self.helper_data.clipboard_text.?;
@@ -117,7 +117,7 @@ pub const Internals = struct {
 
     pub fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
         // refetch on the next call to Internals.clipboardText.
-        return clipboard.setClipboardText(allocator, self.win32.handles.helper_window, text);
+        return clipboard.setClipboardText(allocator, self.helper_window, text);
     }
 };
 

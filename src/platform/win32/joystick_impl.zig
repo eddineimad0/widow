@@ -40,8 +40,8 @@ pub const JoystickSubSystem = struct {
         self.queueEvent(&event);
     }
 
-    pub fn create(allocator: std.mem.Allocator) !*Self {
-        var self: *Self = try allocator.create(Self);
+    pub fn init(allocator: std.mem.Allocator) !Self {
+        var self: Self = undefined;
         // TODO: Are these apis available on most current versions windows
         self.dapi = try dinput.createInterface();
         self.xapi = try xinput.XInputInterface.init();
@@ -56,7 +56,7 @@ pub const JoystickSubSystem = struct {
         return self;
     }
 
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Self) void {
         for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
             if (self.joys[joy_id].connected) {
                 self.deinitJoystick(@truncate(u8, joy_id));
@@ -65,31 +65,7 @@ pub const JoystickSubSystem = struct {
         dinput.releaseInterface(self.dapi);
         self.xapi.deinit();
         self.events_queue.deinit();
-        allocator.destroy(self);
     }
-
-    // pub fn addListener(self: *Self, window: *WindowImpl) !void {
-    //     try self.listeners.append(&window);
-    //     // New listeners should be notified of connected joysticks.
-    //     for (0..joystick.JOYSTICK_MAX_COUNT) |i| {
-    //         if (self.joys[i].connected) {
-    //             const ev = common_event.createJoyConnectEvent(@truncate(u8, i), self.joys[i].type.isGamepad());
-    //             window.queueEvent(&ev);
-    //         }
-    //     }
-    // }
-
-    // pub fn removeListener(self: *Self, window: *WindowImpl) void {
-    //     const index = self.listeners.find(&window, &cmpListeners) orelse return;
-    //     _ = self.listeners.removeAt(index);
-    // }
-    //
-    // pub fn notifyListeners(self: *Self, event: *const common_event.Event) void {
-    //     for (0..self.listeners.len) |i| {
-    //         const listener = self.listeners.getAt(i).?.*;
-    //         listener.queueEvent(event);
-    //     }
-    // }
 
     /// Returns an index to an empty slot in the joysticks array, null if the array is full
     /// # Note
@@ -131,6 +107,7 @@ pub const JoystickSubSystem = struct {
     /// Detect if any old joystick was disconnected.
     pub fn queryDisconnectedJoys(self: *Self) void {
         for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
+            // TODO why isn't this connected
             if (self.joys[joy_id].connected) {
                 switch (self.joys_exdata[joy_id]) {
                     JoystickAPI.XInput => |*xdata| {
@@ -159,7 +136,10 @@ pub const JoystickSubSystem = struct {
         // const joy = &self.joys[joy_id];
         switch (self.joys_exdata[joy_id]) {
             JoystickAPI.XInput => |*xdata| {
-                xinput.pollPadState(self, joy_id, xdata);
+                if (!xinput.pollPadState(self, joy_id, xdata)) {
+                    self.deinitJoystick(joy_id);
+                    return false;
+                }
             },
             JoystickAPI.DInput => |_| {
                 // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
@@ -171,7 +151,7 @@ pub const JoystickSubSystem = struct {
         return true;
     }
 
-    pub fn joystickName(self: *Self, joy_id: u8) ?[]const u8 {
+    pub fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
         if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
             std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
             return null;
@@ -219,28 +199,28 @@ pub const JoystickSubSystem = struct {
     }
 };
 
-test "Joystick sub system" {
-    const testing = std.testing;
-    var jss = try JoystickSubSystem.create(
-        testing.allocator,
-    );
-    jss.queryConnectedJoys();
-    std.debug.print("\nSize of jss:{}\n", .{@sizeOf(JoystickSubSystem)});
-    std.debug.print("Bit size of jss:{}\n", .{@bitSizeOf(JoystickSubSystem)});
-    while (true) {
-        for (jss.joys, 0..jss.joys.len) |joy, id| {
-            if (!joy.connected) {
-                break;
-            }
-            const start = std.time.nanoTimestamp();
-            _ = jss.updateJoystickState(@truncate(u8, id));
-            const end = std.time.nanoTimestamp();
-            std.debug.print("--------joy:{}------\n", .{id});
-            std.debug.print("axis L:{d}|{d}\n", .{ joy.axes.items[0], joy.axes.items[1] });
-            std.debug.print("axis R:{d}|{d}\n", .{ joy.axes.items[2], joy.axes.items[3] });
-            std.debug.print("axis T:{d}|{d}\n", .{ joy.axes.items[4], joy.axes.items[5] });
-            std.debug.print("Update time :{}ns\n", .{end - start});
-            std.time.sleep(std.time.ns_per_s * 1);
-        }
-    }
-}
+// test "Joystick sub system" {
+//     const testing = std.testing;
+//     var jss = try JoystickSubSystem.create(
+//         testing.allocator,
+//     );
+//     jss.queryConnectedJoys();
+//     std.debug.print("\nSize of jss:{}\n", .{@sizeOf(JoystickSubSystem)});
+//     std.debug.print("Bit size of jss:{}\n", .{@bitSizeOf(JoystickSubSystem)});
+//     while (true) {
+//         for (jss.joys, 0..jss.joys.len) |joy, id| {
+//             if (!joy.connected) {
+//                 break;
+//             }
+//             const start = std.time.nanoTimestamp();
+//             _ = jss.updateJoystickState(@truncate(u8, id));
+//             const end = std.time.nanoTimestamp();
+//             std.debug.print("--------joy:{}------\n", .{id});
+//             std.debug.print("axis L:{d}|{d}\n", .{ joy.axes.items[0], joy.axes.items[1] });
+//             std.debug.print("axis R:{d}|{d}\n", .{ joy.axes.items[2], joy.axes.items[3] });
+//             std.debug.print("axis T:{d}|{d}\n", .{ joy.axes.items[4], joy.axes.items[5] });
+//             std.debug.print("Update time :{}ns\n", .{end - start});
+//             std.time.sleep(std.time.ns_per_s * 1);
+//         }
+//     }
+// }

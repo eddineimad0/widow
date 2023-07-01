@@ -19,7 +19,8 @@ pub fn helperWindowProc(
 ) callconv(win32.WINAPI) isize {
     const user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
     if (user_data != 0) {
-        var devices = @intToPtr(*HelperData, @intCast(usize, user_data));
+        const devices = @intToPtr(*HelperData, @intCast(usize, user_data));
+
         switch (msg) {
             win32_window_messaging.WM_DISPLAYCHANGE => {
                 // Monitor the win32_window_messaging.WM_DISPLAYCHANGE notification
@@ -27,12 +28,14 @@ pub fn helperWindowProc(
                 // display is added or removed.
                 if (devices.monitor_store_ptr) |store| {
                     if (!store.expected_video_change) {
+                        std.debug.print("WM_DISPLAYCHANGE video change check\n", .{});
                         store.updateMonitors() catch {
                             std.log.err("Failed to update monitors\n", .{});
                         };
                     }
                 }
             },
+
             win32_window_messaging.WM_DRAWCLIPBOARD => {
                 // Sent When The clipboard content gets updated.
                 devices.clipboard_change = true;
