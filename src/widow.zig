@@ -4,11 +4,10 @@ const window = @import("window.zig");
 const common = @import("common");
 
 pub const WidowContext = struct {
-    internals: platform.internals.Internals,
+    platform_internals: platform.internals.Internals,
     monitors: platform.internals.MonitorStore,
     events_queue: common.event.EventQueue,
-    window_attribute: common.window_data.WindowData,
-    joysticks: ?*platform.joystick.JoystickSubSystem,
+    joysticks: ?platform.joystick.JoystickSubSystem,
     allocator: std.mem.Allocator,
 
     const Self = @This();
@@ -28,14 +27,16 @@ pub const WidowContext = struct {
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn create(allocator: std.mem.Allocator) !*Self {
         const self = try allocator.create(Self);
+        try platform.internals.Internals.setup(&self.platform_internals);
         self.monitors = try platform.internals.MonitorStore.init(allocator);
-        self.internals = try platform.internals.Internals.init();
         self.events_queue = common.event.EventQueue.init(allocator);
         self.joysticks = null;
         self.allocator = allocator;
         // The monitors store will recieve updates through the helper window
-        // TODO encapsulate in a function.
-        self.internals.devices.monitor_store = &self.monitors;
+        self.platform_internals.setStatePointer(
+            platform.internals.Internals.StatePointerMode.Monitor,
+            @ptrCast(*anyopaque, &self.monitors),
+        );
         return self;
     }
 
@@ -43,12 +44,12 @@ pub const WidowContext = struct {
     /// # Parameters
     /// `allocator`: the memory allocator used during initialization.
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        self.internals.deinit(self.allocator);
-        self.monitors.deinit();
-        if (self.joysticks) |joys| {
-            joys.destroy(self.allocator);
+        if (self.joysticks) |*joys| {
+            joys.deinit();
         }
         self.joysticks = null;
+        self.monitors.deinit();
+        self.platform_internals.deinit(self.allocator);
         allocator.destroy(self);
     }
 
@@ -66,14 +67,14 @@ pub const WidowContext = struct {
     /// On success the clipboard value is cached for future calls until the clipboard value change.
     /// The Caller shouldn't free the returned slice.
     pub inline fn clipboardText(self: *Self) ![]const u8 {
-        return self.internals.clipboardText(self.allocator);
+        return self.platform_internals.clipboardText(self.allocator);
     }
 
     /// Copys the given `text` to the system clipboard.
     /// # Parameters
     /// `text`: a slice of the data to be copied.
     pub inline fn setClipboardText(self: *Self, text: []const u8) !void {
-        return self.internals.setClipboardText(self.allocator, text);
+        return self.platform_internals.setClipboardText(self.allocator, text);
     }
 
     /// Sets  the window's icon to the RGBA pixels data.
@@ -117,9 +118,12 @@ pub const WidowContext = struct {
 
     /// Initialize the joystick sub system.
     pub inline fn initJoystickSubSyst(self: *Self) !void {
-        self.joysticks = try platform.joystick.JoystickSubSystem.create(self.allocator);
+        self.joysticks = try platform.joystick.JoystickSubSystem.init(self.allocator);
         // We assign it here so we can access it in the helper window procedure.
-        self.internals.devices.joystick_store = self.joysticks;
+        self.platform_internals.setStatePointer(
+            platform.internals.Internals.StatePointerMode.Joystick,
+            @ptrCast(*anyopaque, &self.joysticks),
+        );
         // First poll to detect joystick that are already present.
         self.joysticks.?.queryConnectedJoys();
     }
@@ -180,7 +184,7 @@ pub const WidowContext = struct {
 
 pub const WindowBuilder = struct {
     allocator: std.mem.Allocator,
-    context_data: platform.window_impl.ContextData,
+    context_data: platform.window_impl.WidowData,
     window_attributes: common.window_data.WindowData,
     title_cache: []u8, // Keep a cache of the title so that the user can build multiple
     // windows without setting the same title.
@@ -212,8 +216,7 @@ pub const WindowBuilder = struct {
         std.mem.copyForwards(u8, new_title, title);
         return Self{
             .allocator = context.allocator,
-            .context_data = platform.window_impl.ContextData{
-                .internals = &context.internals,
+            .context_data = platform.window_impl.WidowData{
                 .monitors = &context.monitors,
                 .events_queue = &context.events_queue,
             },
@@ -376,34 +379,29 @@ pub const WindowBuilder = struct {
     }
 };
 
-// test "Widow.init" {
-//     const testing = std.testing;
-//     var cntxt = try WidowContext.init(testing.allocator);
-//     defer cntxt.deinit();
-// }
-//
-// test "widow.clipboardText" {
-//     const testing = std.testing;
-//     var cntxt = try WidowContext.init(testing.allocator);
-//     defer cntxt.deinit();
-//     const string1 = "Clipboard Test String👌.";
-//     const string2 = "Maybe widow is a terrible name for the library.";
-//     try cntxt.setClipboardText(string1);
-//     const copied_string = try cntxt.clipboardText();
-//     std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
-//     const copied_string2 = try cntxt.clipboardText();
-//     std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
-//     try testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
-//     try cntxt.setClipboardText(string2);
-//     const copied_string3 = try cntxt.clipboardText();
-//     try testing.expect(copied_string3.ptr != copied_string.ptr);
-//     std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
-// }
-//
-// test "widow modules" {
-//     const testing = std.testing;
-//     testing.refAllDecls(@This());
-// }
+test "Widow.init" {
+    const testing = std.testing;
+    var cntxt = try WidowContext.create(testing.allocator);
+    defer cntxt.destroy(testing.allocator);
+}
+
+test "widow.clipboardText" {
+    const testing = std.testing;
+    var cntxt = try WidowContext.create(testing.allocator);
+    defer cntxt.destroy(testing.allocator);
+    const string1 = "Clipboard Test String👌.";
+    const string2 = "Maybe widow is a terrible name for the library.";
+    try cntxt.setClipboardText(string1);
+    const copied_string = try cntxt.clipboardText();
+    std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
+    const copied_string2 = try cntxt.clipboardText();
+    std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
+    try testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
+    try cntxt.setClipboardText(string2);
+    const copied_string3 = try cntxt.clipboardText();
+    try testing.expect(copied_string3.ptr != copied_string.ptr);
+    std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
+}
 
 // Exports
 pub const geometry = common.geometry;

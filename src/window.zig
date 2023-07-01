@@ -17,15 +17,12 @@ pub const Window = struct {
 
     /// Poll for any events are currently in the queue, and copies
     /// the first one it find to the `event` parameter.
-    /// Returns true if any event was copied to the event parametre.
     pub inline fn processEvents(self: *Self) void {
         self.impl.processEvents();
     }
 
     /// This function puts the calling thread to sleep
     /// until an event msg is posted by the system.
-    /// from there it acts exactly as [`Window.pollEvent'].
-    ///
     /// # Note
     /// An event is guranteed to be copied.
     pub inline fn waitEvent(self: *Self) void {
@@ -35,15 +32,12 @@ pub const Window = struct {
     /// This function puts the calling thread to sleep
     /// until an event msg is posted by the system,
     /// or timeout period elapses.
-    /// from there it acts exactly as [`Window.pollEvent'].
-    /// Returns true if any event was copied to the event parametre.
-    ///
     /// # Note
     /// If the timeout is 0 the function will return immediately.
     /// The timeout parameter is specified in milliseconds.
     pub inline fn waitEventTimeout(self: *Self, timeout: u32) bool {
         std.debug.assert(timeout > 0);
-        self.impl.waitEventTimeout(timeout);
+        return self.impl.waitEventTimeout(timeout);
     }
 
     /// Posts the `EventType.WindowClose` event to the window's event loop.
