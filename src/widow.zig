@@ -1,17 +1,22 @@
 const std = @import("std");
 const platform = @import("platform");
+const window = @import("window.zig");
 const common = @import("common");
 
 pub const WidowContext = struct {
-    internals: *platform.internals.Internals,
-    monitors: *platform.internals.MonitorStore,
+    internals: platform.internals.Internals,
+    monitors: platform.internals.MonitorStore,
+    events_queue: common.event.EventQueue,
+    window_attribute: common.window_data.WindowData,
     joysticks: ?*platform.joystick.JoystickSubSystem,
     allocator: std.mem.Allocator,
 
     const Self = @This();
 
     /// Creates an instance of the WidowContext.
-    /// # Note
+    /// # Parameters
+    /// `allocator`: the memory allocator to be used by the libaray.
+    /// # Notes
     /// An instance of the WidowContext is necessary to use
     /// the library, and is required to initialize a window
     /// instance.
@@ -19,31 +24,44 @@ pub const WidowContext = struct {
     /// to free the allocated ressources.
     /// There can only be one instance at a time trying
     /// to initialize more would throw an error.
-    pub fn init(allocator: std.mem.Allocator) !Self {
-        var self = Self{
-            .monitors = try platform.internals.MonitorStore.create(allocator),
-            .internals = try platform.internals.Internals.create(allocator),
-            .joysticks = null,
-            .allocator = allocator,
-        };
-        self.internals.devices.monitor_store = self.monitors;
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
+    pub fn create(allocator: std.mem.Allocator) !*Self {
+        const self = try allocator.create(Self);
+        self.monitors = try platform.internals.MonitorStore.init(allocator);
+        self.internals = try platform.internals.Internals.init();
+        self.events_queue = common.event.EventQueue.init(allocator);
+        self.joysticks = null;
+        self.allocator = allocator;
+        // The monitors store will recieve updates through the helper window
+        // TODO encapsulate in a function.
+        self.internals.devices.monitor_store = &self.monitors;
         return self;
     }
 
     /// Free allocated ressources.
-    pub fn deinit(self: *Self) void {
-        self.internals.destroy(self.allocator);
-        self.internals = undefined;
-        self.monitors.destroy(self.allocator);
-        self.monitors = undefined;
+    /// # Parameters
+    /// `allocator`: the memory allocator used during initialization.
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+        self.internals.deinit(self.allocator);
+        self.monitors.deinit();
         if (self.joysticks) |joys| {
             joys.destroy(self.allocator);
         }
         self.joysticks = null;
+        allocator.destroy(self);
+    }
+
+    /// Retrieves an event fromt the event queue,
+    /// returns false if the queue is empty.
+    /// # Parameters
+    /// `event`: pointer to an event variable to be populated.
+    pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
+        return self.events_queue.popEvent(event);
     }
 
     /// returns the string contained inside the system clipboard.
-    /// # Note
+    /// # Notes
     /// This function fails if the clipboard doesn't contain a proper unicode formatted string.
     /// On success the clipboard value is cached for future calls until the clipboard value change.
     /// The Caller shouldn't free the returned slice.
@@ -52,12 +70,14 @@ pub const WidowContext = struct {
     }
 
     /// Copys the given `text` to the system clipboard.
+    /// # Parameters
+    /// `text`: a slice of the data to be copied.
     pub inline fn setClipboardText(self: *Self, text: []const u8) !void {
         return self.internals.setClipboardText(self.allocator, text);
     }
 
     /// Sets  the window's icon to the RGBA pixels data.
-    /// # Note
+    /// # Notes
     /// This function expects non-premultiplied, 32-bits RGBA pixels
     /// i.e. each channel's value should not be scaled by the alpha value, and should be
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
@@ -69,7 +89,7 @@ pub const WidowContext = struct {
     }
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.
-    /// # Note
+    /// # Notes
     /// Unlike [`WidowContext.setWindowIcon`] this function also takes the cooridnates of the
     /// cursor hotspot which is the pixel that the system tracks to decide mouse click
     /// target, the `xhot` and `yhot` parameters represent the x and y coordinates
@@ -86,7 +106,7 @@ pub const WidowContext = struct {
     }
 
     // /// Sets the Widow's cursor to an image from the system's standard cursors.
-    // /// # Note
+    // /// # Notes
     // /// The new image used by the cursor is loaded by the system therefore,
     // /// the appearance will vary between platforms.
     // pub fn setWindowStdCursor(target: *window.Window, shape: cursor.CursorShape) !void {
@@ -127,7 +147,7 @@ pub const WidowContext = struct {
         _ = self.joysticks.?.updateJoystickState(joy_id);
     }
 
-    pub inline fn pollJoyEvent(self: *Self, ev: *event.Event) bool {
+    pub inline fn pollJoyEvent(self: *Self, ev: *common.event.Event) bool {
         return self.joysticks.?.pollEvent(ev);
     }
 
@@ -158,41 +178,239 @@ pub const WidowContext = struct {
     }
 };
 
-test "Widow.init" {
-    const testing = std.testing;
-    var cntxt = try WidowContext.init(testing.allocator);
-    defer cntxt.deinit();
-}
+pub const WindowBuilder = struct {
+    allocator: std.mem.Allocator,
+    context_data: platform.window_impl.ContextData,
+    window_attributes: common.window_data.WindowData,
+    title_cache: []u8, // Keep a cache of the title so that the user can build multiple
+    // windows without setting the same title.
+    const Self = @This();
 
-test "widow.clipboardText" {
-    const testing = std.testing;
-    var cntxt = try WidowContext.init(testing.allocator);
-    defer cntxt.deinit();
-    const string1 = "Clipboard Test String👌.";
-    const string2 = "Maybe widow is a terrible name for the library.";
-    try cntxt.setClipboardText(string1);
-    const copied_string = try cntxt.clipboardText();
-    std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
-    const copied_string2 = try cntxt.clipboardText();
-    std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
-    try testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
-    try cntxt.setClipboardText(string2);
-    const copied_string3 = try cntxt.clipboardText();
-    try testing.expect(copied_string3.ptr != copied_string.ptr);
-    std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
-}
+    /// Creates a window builder instance.
+    /// The window builder wraps the creation attributes of the window,
+    /// and the functions necessary to changes those attributes.
+    /// # Parameters
+    /// `title`: the title to be displayed in the window's caption bar.
+    /// `width`: intial width of the window.
+    /// `height`: intial height of the window.
+    /// `context`: a pointer to the WidowContext instance.
+    /// # Notes
+    /// The context parameter should point to an initialzed WidowContext instance that lives
+    /// as long as the window, i.e destroying the WidowContext instance before the window is destroyed
+    /// causes undefined behaviour.
+    /// Call `deinit()` when done using the WindowBuilder.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
+    pub fn init(
+        title: []const u8,
+        width: i32,
+        height: i32,
+        context: *WidowContext,
+    ) !Self {
+        std.debug.assert(width > 0 and height > 0);
+        const new_title = try context.allocator.alloc(u8, title.len);
+        std.mem.copyForwards(u8, new_title, title);
+        return Self{
+            .allocator = context.allocator,
+            .context_data = platform.window_impl.ContextData{
+                .internals = &context.internals,
+                .monitors = &context.monitors,
+                .events_queue = &context.events_queue,
+            },
+            .title_cache = new_title,
+            // Defalut attributes
+            .window_attributes = common.window_data.WindowData{
+                .title = undefined, // we'll set this before building.
+                .video = common.video_mode.VideoMode{
+                    .width = width,
+                    .height = height,
+                    .color_depth = 32,
+                    .frequency = 60,
+                },
+                .position = platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION,
+                .restore_point = null,
+                .min_size = null,
+                .max_size = null,
+                .aspect_ratio = null,
+                .fullscreen_mode = null,
+                .flags = common.window_data.WindowFlags{
+                    .is_visible = true,
+                    .is_maximized = false,
+                    .is_minimized = false,
+                    .is_resizable = false,
+                    .is_decorated = true,
+                    .is_topmost = false,
+                    .is_focused = false,
+                    .cursor_in_client = false,
+                    .accepts_raw_input = false,
+                    .allow_dpi_scaling = true,
+                },
+                .input = common.keyboard_and_mouse.InputState.init(),
+            },
+        };
+    }
 
-test "widow modules" {
-    const testing = std.testing;
-    testing.refAllDecls(@This());
-}
+    // Frees allocated ressources.
+    pub fn deinit(self: *Self) void {
+        self.allocator.free(self.title_cache);
+        self.title_cache = undefined;
+    }
+
+    /// Creates and returns the built window instance.
+    /// # Notes
+    /// The user should deinitialize the Window instance when done.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
+    pub fn build(self: *Self) !window.Window {
+        // Before building set the window attributes title.
+        const title_copy = try self.allocator.alloc(u8, self.title_cache.len);
+        std.mem.copyForwards(u8, title_copy, self.title_cache);
+        self.window_attributes.title = title_copy;
+        return window.Window{
+            .impl = try platform.window_impl.WindowImpl.create(self.allocator, self.context_data, &self.window_attributes),
+            .allocator = self.allocator,
+        };
+    }
+
+    /// Set the window title.
+    /// # Parameters
+    /// `title`: the new title to replace the current one.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
+    pub fn withTitle(self: *Self, title: []const u8) !*Self {
+        const new_title = try self.allocator.alloc(u8, title.len);
+        std.mem.copyForwards(u8, new_title, title);
+        if (self.title_cache) |ptr| {
+            self.allocator.free(ptr);
+        }
+        self.title_cache = new_title;
+        return self;
+    }
+
+    /// Set the window width and height.
+    /// # Parameters
+    /// `width`: the new width to replace the current one.
+    /// `height`: the new height to replace the current one.
+    /// # Notes
+    /// If the window is DPI scaled the final width and height
+    /// might be diffrent in window mode but the video mode for
+    /// exclusive fullscreen mode retain the given widht and height.
+    pub fn withSize(self: *Self, width: i32, height: i32) *Self {
+        self.builder.window_attributes.video.width = width;
+        self.builder.window_attributes.video.height = height;
+        return self;
+    }
+
+    /// Whether the window is visible(true) or hidden(false).
+    /// if not set the `default` is visible.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withVisibility(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.is_visible = value;
+        return self;
+    }
+
+    /// The position of the window's top left corner.
+    /// if not set the `default` is decided by the system.
+    /// # Parameters
+    /// `position`: the new position of the window.
+    pub fn withPosition(self: *Self, position: *const geometry.WidowPoint2D) *Self {
+        self.window_attributes.position = position.*;
+        return self;
+    }
+
+    /// Starts the window in the chosen fullscreen mode.
+    /// by default the window isn't fullscreen.
+    /// # Parameters
+    /// `mode`: the new `FullScreenMode` enum value.
+    pub fn withFullscreen(self: *Self, mode: FullScreenMode) *Self {
+        self.window_attributes.fullscreen_mode = mode;
+        return self;
+    }
+
+    /// Make the window resizable.
+    /// the window is not resizable by default.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withResize(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.is_resizable = value;
+        return self;
+    }
+
+    /// Whether the window has a frame or not.
+    /// if not set the `default` false.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withDecoration(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.is_decorated = value;
+        return self;
+    }
+
+    /// Whether the window should stay on top even if it lose focus.
+    /// if not set the `default` false.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withTopMost(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.is_topmost = value;
+        return self;
+    }
+
+    /// Specify a minimum and maximum window size for resizable windows.
+    /// no size limit is applied by `default`.
+    /// # Paramters
+    /// `min_size`: the minimum possible size for the window.
+    /// `max_size`: the maximum possible size fo the window.
+    pub fn withSizeLimit(self: *Self, min_size: *const geometry.WidowSize, max_size: *const geometry.WidowSize) *Self {
+        self.window_attributes.min_size = min_size.*;
+        self.window_attributes.max_size = max_size.*;
+        return self;
+    }
+
+    /// Specify whether the window size should be scaled by the monitor Dpi .
+    /// scaling is applied by `default`.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withDPIScaling(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.allow_dpi_scaling = value;
+        return self;
+    }
+};
+
+// test "Widow.init" {
+//     const testing = std.testing;
+//     var cntxt = try WidowContext.init(testing.allocator);
+//     defer cntxt.deinit();
+// }
+//
+// test "widow.clipboardText" {
+//     const testing = std.testing;
+//     var cntxt = try WidowContext.init(testing.allocator);
+//     defer cntxt.deinit();
+//     const string1 = "Clipboard Test String👌.";
+//     const string2 = "Maybe widow is a terrible name for the library.";
+//     try cntxt.setClipboardText(string1);
+//     const copied_string = try cntxt.clipboardText();
+//     std.debug.print("\n 1st clipboard value:{s}\n string length:{}\n", .{ copied_string, copied_string.len });
+//     const copied_string2 = try cntxt.clipboardText();
+//     std.debug.print("\n 2nd clipboard value:{s}\n string length:{}\n", .{ copied_string2, copied_string2.len });
+//     try testing.expect(copied_string.ptr == copied_string2.ptr); // no reallocation if the clipboard value didn't change.
+//     try cntxt.setClipboardText(string2);
+//     const copied_string3 = try cntxt.clipboardText();
+//     try testing.expect(copied_string3.ptr != copied_string.ptr);
+//     std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
+// }
+//
+// test "widow modules" {
+//     const testing = std.testing;
+//     testing.refAllDecls(@This());
+// }
 
 // Exports
-// TODO more restriction on the exports.
-pub const window = @import("window.zig");
-pub const event = common.event;
-pub const input = common.keyboard_and_mouse;
-pub const cursor = common.cursor;
 pub const geometry = common.geometry;
-pub const joystick = common.joystick;
+pub const cursor = common.cursor;
 pub const FullScreenMode = common.window_data.FullScreenMode;
+pub const Event = common.event.Event;
+pub const EventType = common.event.EventType;
+// TODO more restriction on the exports.
+pub const input = common.keyboard_and_mouse;
+pub const joystick = common.joystick;
