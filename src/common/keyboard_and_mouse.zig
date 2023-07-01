@@ -11,6 +11,7 @@ pub const KeyState = enum(u8) {
         return self.* == Self.Released;
     }
 };
+
 pub const MouseButtonState = KeyState;
 
 /// The Symbolic name or representation of the keyboard key.

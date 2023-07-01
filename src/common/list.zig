@@ -70,8 +70,7 @@ pub fn Queue(comptime T: type) type {
     };
 }
 
-// The std library has an unmanged linked list
-pub fn LinkedList(comptime T: type) type {
+pub fn List(comptime T: type) type {
     return struct {
         pub const Node = struct {
             next: ?*Node = null,
@@ -219,7 +218,7 @@ test "Queue test" {
 
 test "LinkedList test" {
     const testing = std.testing;
-    var float_list = LinkedList(f64).init(testing.allocator);
+    var float_list = List(f64).init(testing.allocator);
     defer float_list.deinit();
     const float_array = [5]f64{ 1.0, 2.1, 3.2, 4.3, 5.4 };
     try float_list.append(&float_array[0]);
