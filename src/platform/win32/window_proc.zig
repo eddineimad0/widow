@@ -181,7 +181,7 @@ pub fn mainWindowProc(
             // Posted to a window when the cursor leaves the client area
             // of the window specified in a prior call to TrackMouseEvent.
             window.data.flags.cursor_in_client = false;
-            const event = common.event.createMouseLeftEvent();
+            const event = common.event.createMouseLeftEvent(window.data.id);
             window.queueEvent(&event);
             // All tracking requested by TrackMouseEvent is canceled when this message is generated.
             return 0;
@@ -229,12 +229,17 @@ pub fn mainWindowProc(
                     .dwHoverTime = 0,
                 };
                 _ = win32_keyboard_mouse.TrackMouseEvent(&tme);
-                const event = common.event.createMouseEnterEvent();
+                const event = common.event.createMouseEnterEvent(window.data.id);
                 window.queueEvent(&event);
                 window.data.flags.cursor_in_client = true;
             }
             const new_pos = utils.getMousePosition(lparam);
-            const event = common.event.createMouseMoveEvent(new_pos);
+            const event = common.event.createMoveEvent(
+                window.data.id,
+                new_pos.x,
+                new_pos.y,
+                true,
+            );
             window.queueEvent(&event);
             return 0;
         },
@@ -297,7 +302,7 @@ pub fn mainWindowProc(
             }
             const new_dpi = utils.loWord(wparam);
             const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
-            const event = common.event.createDPIEvent(new_dpi, scale);
+            const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
             window.queueEvent(&event);
         },
 
@@ -324,20 +329,24 @@ pub fn mainWindowProc(
             // Sent to a window after its size has changed.
             const maximized = (wparam == win32_window_messaging.SIZE_MAXIMIZED or (window.data.flags.is_maximized and wparam != win32_window_messaging.SIZE_RESTORED));
             if (window.data.flags.is_maximized != maximized and maximized) {
-                const event = common.event.createMaximizeEvent();
+                const event = common.event.createMaximizeEvent(
+                    window.data.id,
+                );
                 window.queueEvent(&event);
             }
 
             const minimized = (wparam == win32_window_messaging.SIZE_MINIMIZED);
             if (window.data.flags.is_minimized != minimized and minimized) {
-                const event = common.event.createMinimizeEvent();
+                const event = common.event.createMinimizeEvent(
+                    window.data.id,
+                );
                 window.queueEvent(&event);
             }
 
             const new_width = utils.loWord(@bitCast(usize, lparam));
             const new_height = utils.hiWord(@bitCast(usize, lparam));
 
-            const event = common.event.createResizeEvent(@intCast(i32, new_width), @intCast(i32, new_height));
+            const event = common.event.createResizeEvent(window.data.id, @intCast(i32, new_width), @intCast(i32, new_height));
             window.queueEvent(&event);
 
             if (window.data.fullscreen_mode != null and window.data.flags.is_minimized != minimized) {
@@ -359,7 +368,12 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_WINDOWPOSCHANGED => {
             const window_pos = @intToPtr(*const win32_window_messaging.WINDOWPOS, @bitCast(usize, lparam));
-            const event = common.event.createMoveEvent(window_pos.x, window_pos.y);
+            const event = common.event.createMoveEvent(
+                window.data.id,
+                window_pos.x,
+                window_pos.y,
+                false,
+            );
             window.queueEvent(&event);
             window.data.position = common.geometry.WidowPoint2D{ .x = window_pos.x, .y = window_pos.y };
             // Let DefineWindowProc handle the rest.
@@ -378,7 +392,7 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_SETFOCUS => {
             // Sent to a window after it has gained the keyboard focus.
-            const event = common.event.createFocusEvent(true);
+            const event = common.event.createFocusEvent(window.data.id, true);
             window.queueEvent(&event);
             if (!window.win32.frame_action) {
                 // Don't disable or capture the cursor.
@@ -402,7 +416,7 @@ pub fn mainWindowProc(
                 window_impl.enableCursor(&window.win32.cursor);
             }
 
-            const event = common.event.createFocusEvent(false);
+            const event = common.event.createFocusEvent(window.data.id, false);
             window.queueEvent(&event);
             window.data.flags.is_focused = false;
             return 0;
@@ -443,7 +457,7 @@ pub fn mainWindowProc(
             }
             // The win32_window_messaging.WM_UNICHAR message is similar to WM_CHAR,
             // but it uses Unicode Transformation Format (UTF)-32
-            const event = common.event.createCharEvent(@truncate(u32, wparam), utils.getKeyModifiers());
+            const event = common.event.createCharEvent(window.data.id, @truncate(u32, wparam), utils.getKeyModifiers());
             window.queueEvent(&event);
             return 0;
         },

@@ -23,14 +23,15 @@ pub const FullScreenMode = enum(u8) {
 };
 
 pub const WindowData = struct {
-    title: []const u8, // The window title.
-    video: VideoMode, // The video mode of the window.
+    id: u32,
     position: WidowPoint2D, // The current Position of the top left corner of the
     restore_point: ?WidowPoint2D, // Keeps track of where to restore the window when exiting
+    aspect_ratio: ?AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?WidowSize, // The minimum limits of the window's size.
     max_size: ?WidowSize, // The maximum limits of the window's size.
-    aspect_ratio: ?AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
+    video: VideoMode, // The video mode of the window.
     fullscreen_mode: ?FullScreenMode,
     flags: WindowFlags,
+    title: []const u8, // The window title.
     input: InputState, // Both the keyboard and mouse buttons states.
 };

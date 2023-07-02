@@ -14,7 +14,7 @@ const win32_shell = zigwin32.ui.shell;
 pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     // we can ask user for confirmation before closing
     // here.
-    const event = common.event.createCloseEvent();
+    const event = common.event.createCloseEvent(window.data.id);
     window.queueEvent(&event);
 }
 
@@ -51,11 +51,11 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
 
     // Printscreen key only reports a release action.
     if (wparam == @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT)) {
-        const fake_event = common.event.createKeyboardEvent(keys[0], keys[1], common.keyboard_and_mouse.KeyState.Pressed, mods);
+        const fake_event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], common.keyboard_and_mouse.KeyState.Pressed, mods);
         window.queueEvent(&fake_event);
     }
 
-    const event = common.event.createKeyboardEvent(keys[0], keys[1], action, mods);
+    const event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], action, mods);
     window.queueEvent(&event);
 }
 
@@ -70,7 +70,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyState.Released, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Released, utils.getKeyModifiers());
 
     window.queueEvent(&event);
 
@@ -118,7 +118,7 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(button, common.keyboard_and_mouse.KeyState.Pressed, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Pressed, utils.getKeyModifiers());
 
     window.queueEvent(&event);
     window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Pressed;
@@ -129,7 +129,7 @@ pub inline fn mouseWheelMSGHandler(
     wheel: common.keyboard_and_mouse.MouseWheel,
     wheel_delta: f64,
 ) void {
-    const event = common.event.createScrollEvent(wheel, wheel_delta);
+    const event = common.event.createScrollEvent(window.data.id, wheel, wheel_delta);
     window.queueEvent(&event);
 }
 
@@ -240,7 +240,7 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
         }
 
         if (codepoint > 0x1F and (codepoint < 0x7F or codepoint > 0x9F)) {
-            const event = common.event.createCharEvent(codepoint, utils.getKeyModifiers());
+            const event = common.event.createCharEvent(window.data.id, codepoint, utils.getKeyModifiers());
             window.queueEvent(&event);
         }
     }
@@ -296,7 +296,9 @@ pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
                 };
             }
         }
-        const event = common.event.createDropFileEvent();
+        const event = common.event.createDropFileEvent(
+            window.data.id,
+        );
         window.queueEvent(&event);
         allocator.free(wide_slice);
     }

@@ -1014,6 +1014,7 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
             if (is_key_up) {
                 window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] = KeyState.Released;
                 const fake_event = common.event.createKeyboardEvent(
+                    window.data.id,
                     virtual_codes[index],
                     codes[index],
                     KeyState.Released,

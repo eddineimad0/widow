@@ -31,7 +31,22 @@ pub const EventType = enum(u8) {
     GamepadAxisMotion, // Gamepad axis value changed
 };
 
+pub const ResizeEvent = struct {
+    window_id: u32,
+    new_width: i32,
+    new_height: i32,
+    // new_size: geometry.WidowSize,
+};
+
+pub const MoveEvent = struct {
+    window_id: u32,
+    new_x: i32,
+    new_y: i32,
+    // new_position: geometry.WidowPoint2D,
+};
+
 pub const KeyEvent = struct {
+    window_id: u32, // the window with keyboard focus.
     virtualcode: input.VirtualCode,
     scancode: input.ScanCode,
     state: input.KeyState,
@@ -39,37 +54,46 @@ pub const KeyEvent = struct {
 };
 
 pub const MouseButtonEvent = struct {
+    window_id: u32,
     button: input.MouseButton,
     state: input.MouseButtonState,
     mods: input.KeyModifiers,
 };
 
 pub const WheelEvent = struct {
+    window_id: u32,
     wheel: input.MouseWheel,
     delta: f64,
 };
 
 pub const DPIChangeEvent = struct {
+    window_id: u32,
     dpi: u32,
     scaler: f64,
 };
 
 pub const CharacterEvent = struct {
+    window_id: u32,
     codepoint: u21,
     mods: input.KeyModifiers,
 };
 
+pub const FocusEvent = struct {
+    window_id: u32,
+    has_focus: bool,
+};
+
 pub const Event = union(EventType) {
-    WindowClose: void,
-    WindowMaximize: void,
-    WindowMinimize: void,
-    MouseEnter: void,
-    MouseLeave: void,
-    FileDrop: void,
-    Focus: bool,
-    WindowResize: geometry.WidowSize,
-    WindowMove: geometry.WidowPoint2D,
-    MouseMove: geometry.WidowPoint2D,
+    WindowClose: u32,
+    WindowMaximize: u32,
+    WindowMinimize: u32,
+    MouseEnter: u32,
+    MouseLeave: u32,
+    FileDrop: u32,
+    Focus: FocusEvent,
+    WindowResize: ResizeEvent,
+    WindowMove: MoveEvent,
+    MouseMove: MoveEvent,
     MouseButton: MouseButtonEvent,
     KeyBoard: KeyEvent,
     MouseScroll: WheelEvent,
@@ -85,64 +109,101 @@ pub const Event = union(EventType) {
     GamepadAxisMotion: joystick.GamepadAxisEvent, // Gamepad axis value changed
 };
 
-pub inline fn createCloseEvent() Event {
-    return Event.WindowClose;
+pub inline fn createCloseEvent(window_id: u32) Event {
+    return Event{ .WindowClose = window_id };
 }
 
-pub inline fn createMaximizeEvent() Event {
-    return Event.WindowMaximize;
+pub inline fn createMaximizeEvent(window_id: u32) Event {
+    return Event{ .WindowMaximize = window_id };
 }
 
-pub inline fn createMinimizeEvent() Event {
-    return Event.WindowMinimize;
+pub inline fn createMinimizeEvent(window_id: u32) Event {
+    return Event{ .WindowMinimize = window_id };
 }
 
-pub inline fn createMouseEnterEvent() Event {
-    return Event.MouseEnter;
+pub inline fn createMouseEnterEvent(window_id: u32) Event {
+    return Event{ .MouseEnter = window_id };
 }
 
-pub inline fn createMouseLeftEvent() Event {
-    return Event.MouseLeave;
+pub inline fn createMouseLeftEvent(window_id: u32) Event {
+    return Event{ .MouseLeave = window_id };
 }
 
-pub inline fn createDropFileEvent() Event {
-    return Event.FileDrop;
+pub inline fn createDropFileEvent(window_id: u32) Event {
+    return Event{ .FileDrop = window_id };
 }
 
-pub inline fn createFocusEvent(focus: bool) Event {
-    return Event{ .Focus = focus };
+pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
+    return Event{ .Focus = FocusEvent{
+        .window_id = window_id,
+        .has_focus = focus,
+    } };
 }
 
-pub inline fn createResizeEvent(width: i32, height: i32) Event {
-    return Event{ .WindowResize = geometry.WidowSize{ .width = width, .height = height } };
+pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
+    return Event{ .WindowResize = ResizeEvent{
+        .window_id = window_id,
+        .new_width = width,
+        .new_height = height,
+    } };
 }
 
-pub inline fn createMoveEvent(x: i32, y: i32) Event {
-    return Event{ .WindowMove = geometry.WidowPoint2D{ .x = x, .y = y } };
+pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Event {
+    return if (!is_mouse)
+        Event{ .WindowMove = MoveEvent{
+            .window_id = window_id,
+            .new_x = x,
+            .new_y = y,
+        } }
+    else
+        Event{ .MouseMove = MoveEvent{
+            .window_id = window_id,
+            .new_x = x,
+            .new_y = y,
+        } };
 }
 
-pub inline fn createMouseMoveEvent(position: geometry.WidowPoint2D) Event {
-    return Event{ .MouseMove = position };
+pub inline fn createMouseButtonEvent(window_id: u32, button: input.MouseButton, state: input.MouseButtonState, mods: input.KeyModifiers) Event {
+    return Event{ .MouseButton = MouseButtonEvent{
+        .window_id = window_id,
+        .button = button,
+        .state = state,
+        .mods = mods,
+    } };
 }
 
-pub inline fn createMouseButtonEvent(button: input.MouseButton, state: input.MouseButtonState, mods: input.KeyModifiers) Event {
-    return Event{ .MouseButton = MouseButtonEvent{ .button = button, .state = state, .mods = mods } };
+pub inline fn createKeyboardEvent(window_id: u32, virtualcode: input.VirtualCode, scancode: input.ScanCode, state: input.KeyState, mods: input.KeyModifiers) Event {
+    return Event{ .KeyBoard = KeyEvent{
+        .window_id = window_id,
+        .virtualcode = virtualcode,
+        .scancode = scancode,
+        .state = state,
+        .mods = mods,
+    } };
 }
 
-pub inline fn createKeyboardEvent(virtualcode: input.VirtualCode, scancode: input.ScanCode, state: input.KeyState, mods: input.KeyModifiers) Event {
-    return Event{ .KeyBoard = KeyEvent{ .virtualcode = virtualcode, .scancode = scancode, .state = state, .mods = mods } };
+pub inline fn createScrollEvent(window_id: u32, wheel: input.MouseWheel, delta: f64) Event {
+    return Event{ .MouseScroll = WheelEvent{
+        .window_id = window_id,
+        .wheel = wheel,
+        .delta = delta,
+    } };
 }
 
-pub inline fn createScrollEvent(wheel: input.MouseWheel, delta: f64) Event {
-    return Event{ .MouseScroll = WheelEvent{ .wheel = wheel, .delta = delta } };
+pub inline fn createDPIEvent(window_id: u32, new_dpi: u32, new_scale: f64) Event {
+    return Event{ .DPIChange = DPIChangeEvent{
+        .window_id = window_id,
+        .dpi = new_dpi,
+        .scaler = new_scale,
+    } };
 }
 
-pub inline fn createDPIEvent(new_dpi: u32, new_scale: f64) Event {
-    return Event{ .DPIChange = DPIChangeEvent{ .dpi = new_dpi, .scaler = new_scale } };
-}
-
-pub inline fn createCharEvent(codepoint: u32, mods: input.KeyModifiers) Event {
-    return Event{ .Character = CharacterEvent{ .codepoint = @truncate(u21, codepoint), .mods = mods } };
+pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyModifiers) Event {
+    return Event{ .Character = CharacterEvent{
+        .window_id = window_id,
+        .codepoint = @truncate(u21, codepoint),
+        .mods = mods,
+    } };
 }
 
 pub inline fn createJoyConnectEvent(id: u8, gamepad: bool) Event {
