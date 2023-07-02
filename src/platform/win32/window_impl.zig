@@ -99,7 +99,6 @@ pub fn adjustWindowRect(
     }
 }
 
-/// Thread safe
 ///# Note
 /// If the doesn't have the WS_EX_TOOLWINDOW style then the coordinates
 /// of the WINDOWPLACEMENT fields will be in workspace coordinates and not screen coordinates
@@ -108,7 +107,6 @@ fn windowPlacement(handle: win32.HWND, wp: *win32_window_messaging.WINDOWPLACEME
     _ = win32_window_messaging.GetWindowPlacement(handle, wp);
 }
 
-/// Thread safe
 /// Returns the client area's rectangle that specify it's coordinates.
 /// # Note
 /// the coordinate for the upperleft corner returned by this function
@@ -119,7 +117,6 @@ inline fn clientRect(window_handle: win32.HWND, rect: *win32.RECT) void {
     _ = win32_window_messaging.GetClientRect(window_handle, rect);
 }
 
-/// Thread safe
 /// Converts client coordinate of a RECT structure to screen coordinate.
 fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
     var upper_left = win32_foundation.POINT{
@@ -313,12 +310,12 @@ pub fn clientSize(handle: win32.HWND) common.geometry.WidowSize {
     };
 }
 
-pub const WidowData = struct {
+pub const WidowProps = struct {
     monitors: *MonitorStore,
     events_queue: *common.event.EventQueue,
 };
 
-pub const Win32WindowData = struct {
+pub const WindowWin32Data = struct {
     cursor: Cursor,
     icon: Icon,
     high_surrogate: u16,
@@ -329,8 +326,8 @@ pub const Win32WindowData = struct {
 
 pub const WindowImpl = struct {
     data: WindowData,
-    widow: WidowData,
-    win32: Win32WindowData,
+    widow: WidowProps,
+    win32: WindowWin32Data,
     handle: win32_foundation.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = win32_window_messaging.CW_USEDEFAULT,
@@ -338,13 +335,13 @@ pub const WindowImpl = struct {
     };
     const Self = @This();
 
-    pub fn create(allocator: std.mem.Allocator, cntxt_data: WidowData, data: *const WindowData) !*Self {
+    pub fn create(allocator: std.mem.Allocator, props: WidowProps, data: *const WindowData) !*Self {
         var self = try allocator.create(WindowImpl);
         errdefer allocator.destroy(self);
         // get the window handle
-        self.widow = cntxt_data;
+        self.widow = props;
         self.data = data.*;
-        self.win32 = Win32WindowData{
+        self.win32 = WindowWin32Data{
             .cursor = Cursor{
                 .handle = null,
                 .mode = common.cursor.CursorMode.Normal,
@@ -363,7 +360,11 @@ pub const WindowImpl = struct {
         const styles = .{ windowStyles(data), windowExStyles(data) };
         self.handle = try createPlatformWindow(allocator, data, styles);
 
-        _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, @intCast(isize, @ptrToInt(self)));
+        _ = win32_window_messaging.SetWindowLongPtrW(
+            self.handle,
+            win32_window_messaging.GWLP_USERDATA,
+            @intCast(isize, @ptrToInt(self)),
+        );
 
         var window_rect: win32.RECT = undefined;
         clientRect(self.handle, &window_rect);
@@ -506,13 +507,13 @@ pub const WindowImpl = struct {
     /// the window should belong to the thread calling this function.
     pub fn waitEvent(self: *Self) void {
         _ = win32_window_messaging.WaitMessage();
-        self.pollEvent();
+        self.processEvents();
     }
 
     /// Not ThreadSafe
     /// the window should belong to the thread calling this function.
     /// Waits for an input event or the timeout interval elapses.
-    pub fn waitEventTimeout(self: *Self, timeout: u32) void {
+    pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
         if (win32_window_messaging.MsgWaitForMultipleObjects(
             0,
             null,
@@ -523,7 +524,8 @@ pub const WindowImpl = struct {
             // Timeout period elapsed.
             return false;
         }
-        self.pollEvent();
+        self.processEvents();
+        return true;
     }
 
     /// Updates the registered window styles to match the current window config.
@@ -993,7 +995,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setCursorShape(self: *Self, new_cursor: *const Cursor) void {
-        icon.dropCursor(&self.win32.cursor);
+        icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor.*;
         if (self.data.flags.cursor_in_client) {
             updateCursor(&self.win32.cursor);
@@ -1008,7 +1010,7 @@ pub const WindowImpl = struct {
         };
         _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_BIG, @bitCast(isize, handles[0]));
         _ = win32_window_messaging.SendMessageW(self.handle, win32_window_messaging.WM_SETICON, win32_window_messaging.ICON_SMALL, @bitCast(isize, handles[1]));
-        icon.dropIcon(&self.win32.icon);
+        icon.destroyIcon(&self.win32.icon);
         self.win32.icon = new_icon.*;
     }
 
