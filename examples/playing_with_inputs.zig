@@ -196,8 +196,8 @@ pub fn main() void {
                         }
                     }
                 },
-                EventType.Focus => |has_focus| {
-                    if (!has_focus and window.isVisible()) {
+                EventType.Focus => |focus_event| {
+                    if (!focus_event.has_focus and window.isVisible()) {
                         window.requestUserAttention();
                     }
                 },

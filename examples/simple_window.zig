@@ -49,18 +49,24 @@ pub fn main() void {
         // events to a central event queue in the WidowContext instance.
         while (widow_cntxt.pollEvents(&event)) {
             switch (event) {
-                EventType.WindowClose => {
+                EventType.WindowClose => |window_id| {
                     // The user has requested to close the window,
                     // and the application should proceed to calling deinit on the window instance.
                     // This is merely a notification nothing is done to window in the background,
                     // ignore it if you want to continue execution as normal.
+                    std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
                 EventType.KeyBoard => |*key| {
                     // This event holds the keyboard key,
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    std.debug.print("Virtual Key:{}\nState:{}\nmods:{}\n", .{ key.scancode, key.state, key.mods });
+                    std.debug.print("Window #{}\nVirtual Key:{}\nState:{}\nmods:{}\n", .{
+                        key.window_id,
+                        key.scancode,
+                        key.state,
+                        key.mods,
+                    });
                     if (key.scancode == ScanCode.N and key.state.isPressed()) {
                         if (key.mods.shift) {
                             mywindow.setCursorMode(CursorMode.Normal);
@@ -75,62 +81,84 @@ pub fn main() void {
                     // This event holds the mouse button (left,middle,right,...),
                     // the action that was done to the button (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    std.debug.print("Mouse Button:{}\nState:{}\nmods:{}\n", .{ mouse_event.button, mouse_event.state, mouse_event.mods });
+                    std.debug.print("Window #{}\nMouse Button:{}\nState:{}\nmods:{}\n", .{
+                        mouse_event.window_id,
+                        mouse_event.button,
+                        mouse_event.state,
+                        mouse_event.mods,
+                    });
                 },
                 EventType.MouseScroll => |*scroll| {
                     // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
-                    std.debug.print("wheel:{} Scrolled by :{d}\n", .{ scroll.wheel, scroll.delta });
+                    std.debug.print("Window #{}\nwheel:{} Scrolled by :{d}\n", .{
+                        scroll.window_id,
+                        scroll.wheel,
+                        scroll.delta,
+                    });
                 },
-                EventType.MouseEnter => {
-                    std.debug.print("Mouse Entered the client area\n", .{});
+                EventType.MouseEnter => |window_id| {
+                    std.debug.print("Mouse Entered the client area of window #{}\n", .{window_id});
                 },
-                EventType.MouseLeave => {
-                    std.debug.print("Mouse Left the client area\n", .{});
+                EventType.MouseLeave => |window_id| {
+                    std.debug.print("Mouse Left the client area window #{}\n", .{window_id});
                 },
-                EventType.MouseMove => |position| {
+                EventType.MouseMove => |*motion| {
                     // This event holds the new client area coordinates (x,y).
                     // the origin point is the destop's top left corner.
-                    if (position.x == 0 and position.y == 0) {
-                        std.debug.print("Mouse in client top left \n", .{});
+                    if (motion.new_x == 0 and motion.new_y == 0) {
+                        std.debug.print("Mouse in client top left of window #{} \n", .{motion.window_id});
                     }
                 },
-                EventType.Focus => |has_focus| {
+                EventType.Focus => |*focus_event| {
                     // This event holds a boolean flag on whether the window got or lost focus.
                     std.debug.print("Focus ", .{});
-                    if (has_focus) {
-                        std.debug.print("Gained\n", .{});
+                    if (focus_event.has_focus) {
+                        std.debug.print("Gained", .{});
                     } else {
-                        std.debug.print("Lost\n", .{});
+                        std.debug.print("Lost", .{});
                     }
+                    std.debug.print("By window #{}\n", .{focus_event.window_id});
                 },
-                EventType.DPIChange => |*new_settigns| {
+                EventType.DPIChange => |*dpi_event| {
                     // This event holds the new window dpi and the scaler to be used when drawing
                     // to the screen.
-                    std.debug.print("New DPI {}, new Scaler {}\n", .{ new_settigns.dpi, new_settigns.scaler });
+                    std.debug.print("Window #{} New DPI {}, new Scaler {}\n", .{
+                        dpi_event.window_id,
+                        dpi_event.dpi,
+                        dpi_event.scaler,
+                    });
                 },
-                EventType.WindowMaximize => {
-                    std.debug.print("Window was maximized\n", .{});
+                EventType.WindowMaximize => |window_id| {
+                    std.debug.print("Window #{} was maximized\n", .{window_id});
                 },
-                EventType.WindowMinimize => {
-                    std.debug.print("Window was minimized\n", .{});
+                EventType.WindowMinimize => |window_id| {
+                    std.debug.print("Window #{} was minimized\n", .{window_id});
                 },
                 EventType.Character => |*char| {
                     // This event holds a unicode character codepoint and keymodifers that were pressed
                     // during the event.
                     if (char.codepoint == 0x47) {
-                        std.debug.print("character:{u}\nmods:{}\n", .{ char.codepoint, char.mods });
+                        std.debug.print("target window #{},character:{u}\nmods:{}\n", .{
+                            char.window_id,
+                            char.codepoint,
+                            char.mods,
+                        });
                     }
                 },
-                EventType.WindowResize => |*new_size| {
+                EventType.WindowResize => |*resize_event| {
                     // This event holds the new client width and height.
-                    std.debug.print("new width:{} | new height:{}\n", .{ new_size.width, new_size.height });
+                    std.debug.print("new width:{} | new height:{} of window #{}\n", .{
+                        resize_event.new_width,
+                        resize_event.new_height,
+                        resize_event.window_id,
+                    });
                 },
-                EventType.FileDrop => {
+                EventType.FileDrop => |window_id| {
 
                     // Get a Slice containing the path(s) to the latest file(s).
                     const files = mywindow.droppedFiles();
                     for (files) |*file| {
-                        std.debug.print("File: {s} Dropped\n", .{file.*});
+                        std.debug.print("File: {s} Dropped on window #{}\n", .{ file.*, window_id });
                     }
 
                     // if the files cache exceed a certain threshold,
