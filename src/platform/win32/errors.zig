@@ -31,3 +31,11 @@ pub const WindowError = error{
     FailedToCreate,
     NullMonitorHandle,
 };
+
+pub const XInputError = error{
+    FailedToLoadDLL,
+    FailedToLoadLibraryFunc,
+    FailedToSetState,
+    UnsupportedFunctionality,
+    NonCapableDevice,
+};

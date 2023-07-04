@@ -29,7 +29,7 @@ pub const PROCESS_DPI_AWARENESS = zigwin32.ui.hi_dpi.PROCESS_DPI_AWARENESS;
 pub const DPI_AWARENESS_CONTEXT = zigwin32.ui.hi_dpi.DPI_AWARENESS_CONTEXT;
 pub const MONITOR_DPI_TYPE = zigwin32.ui.hi_dpi.MONITOR_DPI_TYPE;
 pub const OSVERSIONINFOEXW = zigwin32.system.system_information.OSVERSIONINFOEXW;
-const GUID = zigwin32.zig.Guid;
+pub const GUID = zigwin32.zig.Guid;
 
 // Constants.
 pub const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = zigwin32.ui.hi_dpi.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
@@ -57,6 +57,7 @@ pub const WAIT_TIMEOUT = @as(u32, 0x102);
 // Mising from zigwin32.
 pub const WM_MOUSELEAVE = @as(u32, 0x02A3);
 pub const WM_UNICHAR = @as(u32, 0x0109);
+pub const DIDFT_OPTIONAL = @as(u32, 0x80000000);
 pub const GUID_DEVINTERFACE_HID = GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
 // The zigwin32 function uses enum as the type of `iModeNume` and therfore doen't
 // allow enumerating all device's graphics mode.
