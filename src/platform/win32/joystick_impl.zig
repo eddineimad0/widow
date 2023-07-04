@@ -2,15 +2,13 @@ const std = @import("std");
 const joystick = @import("common").joystick;
 const common_event = @import("common").event;
 const EventQueue = @import("common").event.EventQueue;
-const dinput = @import("dinput.zig");
 const xinput = @import("xinput.zig");
 
-pub const JoystickAPI = enum { XInput, DInput };
+// Future API to come
+pub const JoystickAPI = enum { XInput };
 
 /// Holds Platform-API-dependent data for the coresponding joystick.
 pub const Win32JoyData = union(JoystickAPI) {
-    // DirectInputAPI data.
-    DInput: dinput.DInputData,
     // XInputAPI data.
     XInput: xinput.XInputData,
 };
@@ -18,7 +16,6 @@ pub const Win32JoyData = union(JoystickAPI) {
 /// Provides an interface for managing connected joysticks.
 pub const JoystickSubSystemImpl = struct {
     allocator: std.mem.Allocator, // For initializing joysticks
-    dapi: dinput.DInputInterface,
     xapi: xinput.XInputInterface,
     joys: [joystick.JOYSTICK_MAX_COUNT]joystick.Joystick,
     joys_exdata: [joystick.JOYSTICK_MAX_COUNT]Win32JoyData,
@@ -26,24 +23,15 @@ pub const JoystickSubSystemImpl = struct {
     const Self = @This();
 
     fn deinitJoystick(self: *Self, joy_id: u8) void {
-        switch (self.joys_exdata[joy_id]) {
-            JoystickAPI.DInput => |*ddata| {
-                _ = ddata.device.IDirectInputDevice8A_Unacquire();
-                _ = ddata.device.IUnknown_Release();
-                ddata.objects.deinit();
-            },
-            else => {},
-        }
         self.joys[joy_id].deinit();
         // create the event.
         const event = common_event.createJoyRemoveEvent(joy_id, self.joys[joy_id].is_gamepad);
-        self.queueEvent(&event);
+        self.sendEvent(&event);
     }
 
     pub fn init(allocator: std.mem.Allocator, event_dst: *EventQueue) !Self {
         var self: Self = undefined;
-        // TODO: Are these apis available on most current versions windows
-        self.dapi = try dinput.createInterface();
+
         self.xapi = try xinput.XInputInterface.init();
 
         for (0..joystick.JOYSTICK_MAX_COUNT) |i| {
@@ -62,14 +50,13 @@ pub const JoystickSubSystemImpl = struct {
                 self.deinitJoystick(@truncate(u8, joy_id));
             }
         }
-        dinput.releaseInterface(self.dapi);
         self.xapi.deinit();
     }
 
     /// Returns an index to an empty slot in the joysticks array, null if the array is full
     /// # Note
     /// The maximum number of supported joysticks that can be connected at a given time,
-    /// is defined in [`common.joystick.JOYSTICK_MAX_COUNT`].
+    /// is defined in `common.joystick.JOYSTICK_MAX_COUNT`.
     pub inline fn emptyJoySlot(self: *const Self) ?u8 {
         var indx: u8 = 0;
         while (indx < joystick.JOYSTICK_MAX_COUNT) {
@@ -81,24 +68,14 @@ pub const JoystickSubSystemImpl = struct {
         return null;
     }
 
-    pub inline fn queueEvent(self: *Self, event: *const common_event.Event) void {
+    pub inline fn sendEvent(self: *Self, event: *const common_event.Event) void {
         self.events_queue_ref.sendEvent(event);
-    }
-
-    pub fn pollEvent(self: *Self, event: *common_event.Event) bool {
-        const oldest_event = self.events_queue.get() orelse return false;
-        event.* = oldest_event.*;
-
-        // always return true.
-        return self.events_queue.removeFront();
     }
 
     /// Detect any new connected joystick.
     pub fn queryConnectedJoys(self: *Self) void {
         // XInput polling.
         xinput.pollPadsConnection(self);
-        // DInput polling.
-        // dinput.pollDevicesConnection(self.dapi, @ptrCast(*anyopaque, self));
     }
 
     /// Detect if any old joystick was disconnected.
@@ -112,22 +89,15 @@ pub const JoystickSubSystemImpl = struct {
                             self.deinitJoystick(@truncate(u8, joy_id));
                         }
                     },
-                    JoystickAPI.DInput => |_| {
-                        // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
-                        //     // Failed to get state device is disconnected.
-                        //     self.deinitJoystick(joy_id);
-                        // }
-                    },
                 }
             }
         }
     }
 
     /// Update the state for the given joystick id.
-    pub fn updateJoystickState(self: *Self, joy_id: u8) bool {
+    pub fn updateJoystickState(self: *Self, joy_id: u8) void {
         if (joy_id < 0 or joy_id > joystick.JOYSTICK_MAX_COUNT or !self.joys[joy_id].connected) {
             std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
-            return false;
         }
 
         // const joy = &self.joys[joy_id];
@@ -135,17 +105,9 @@ pub const JoystickSubSystemImpl = struct {
             JoystickAPI.XInput => |*xdata| {
                 if (!xinput.pollPadState(self, joy_id, xdata)) {
                     self.deinitJoystick(joy_id);
-                    return false;
                 }
             },
-            JoystickAPI.DInput => |_| {
-                // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
-                //     // Failed to get state device is disconnected.
-                //     self.deinitJoystick(joy_id);
-                // }
-            },
         }
-        return true;
     }
 
     pub fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
@@ -166,14 +128,7 @@ pub const JoystickSubSystemImpl = struct {
             JoystickAPI.XInput => |*xdata| {
                 return xinput.batteryInfo(&self.xapi, xdata);
             },
-            JoystickAPI.DInput => |_| {
-                // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
-                //     // Failed to get state device is disconnected.
-                //     self.deinitJoystick(joy_id);
-                // }
-            },
         }
-        return joystick.BatteryInfo.PowerUnkown;
     }
 
     pub fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
@@ -185,14 +140,18 @@ pub const JoystickSubSystemImpl = struct {
             JoystickAPI.XInput => |*xdata| {
                 xinput.rumble(&self.xapi, xdata, magnitude) catch return false;
             },
-            JoystickAPI.DInput => |_| {
-                // if (!dinput.pollDeviceState(ddata.device, ddata.objects.items, joy)) {
-                //     // Failed to get state device is disconnected.
-                //     self.deinitJoystick(joy_id);
-                // }
-            },
+        }
+        return true;
+    }
+
+    pub fn countConnected(self: *const Self) u8 {
+        var count: u8 = 0;
+        for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
+            if (self.joys[joy_id].connected) {
+                count += 1;
+            }
         }
 
-        return true;
+        return count;
     }
 };
