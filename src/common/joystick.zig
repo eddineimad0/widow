@@ -74,13 +74,12 @@ pub const BatteryInfo = enum(u8) {
     PowerLow,
     PowerMedium,
     PowerFull,
-    WirePowered,
+    Wired,
 };
 
 pub const Joystick = struct {
     axes: std.ArrayList(f32),
     buttons: std.ArrayList(ButtonState),
-    // type: JoystickType,
     hid_data: HIDData,
     connected: bool,
     is_gamepad: bool,
