@@ -1,14 +1,15 @@
 const std = @import("std");
 const platform = @import("platform");
-const window = @import("window.zig");
+const Window = @import("window.zig").Window;
 const common = @import("common");
 
 pub const WidowContext = struct {
     platform_internals: platform.internals.Internals,
     monitors: platform.internals.MonitorStore,
     events_queue: common.event.EventQueue,
-    joysticks: ?platform.joystick.JoystickSubSystem,
+    joystick_sys: ?platform.joystick.JoystickSubSystemImpl,
     allocator: std.mem.Allocator,
+    next_window_id: u32, // keeps track of assigned ids.
 
     const Self = @This();
 
@@ -30,8 +31,9 @@ pub const WidowContext = struct {
         try platform.internals.Internals.setup(&self.platform_internals);
         self.monitors = try platform.internals.MonitorStore.init(allocator);
         self.events_queue = common.event.EventQueue.init(allocator);
-        self.joysticks = null;
+        self.joystick_sys = null;
         self.allocator = allocator;
+        self.next_window_id = 0;
         // The monitors store will recieve updates through the helper window
         self.platform_internals.setStatePointer(
             platform.internals.Internals.StatePointerMode.Monitor,
@@ -44,10 +46,10 @@ pub const WidowContext = struct {
     /// # Parameters
     /// `allocator`: the memory allocator used during initialization.
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        if (self.joysticks) |*joys| {
-            joys.deinit();
+        if (self.joystick_sys) |*jss| {
+            jss.deinit();
         }
-        self.joysticks = null;
+        self.joystick_sys = null;
         self.monitors.deinit();
         self.platform_internals.deinit(self.allocator);
         allocator.destroy(self);
@@ -61,11 +63,17 @@ pub const WidowContext = struct {
         return self.events_queue.popEvent(event);
     }
 
-    /// returns the string contained inside the system clipboard.
+    /// Returns the next available window ID.
+    fn nextWindowId(self: *Self) u32 {
+        self.next_window_id += 1;
+        return self.next_window_id;
+    }
+
+    /// Returns the current text content of the system clipboard.
     /// # Notes
     /// This function fails if the clipboard doesn't contain a proper unicode formatted string.
     /// On success the clipboard value is cached for future calls until the clipboard value change.
-    /// The Caller shouldn't free the returned slice.
+    /// The Caller doesn't own the returned slice and shouldn't free it.
     pub inline fn clipboardText(self: *Self) ![]const u8 {
         return self.platform_internals.clipboardText(self.allocator);
     }
@@ -77,114 +85,28 @@ pub const WidowContext = struct {
         return self.platform_internals.setClipboardText(self.allocator, text);
     }
 
-    /// Sets  the window's icon to the RGBA pixels data.
-    /// # Notes
-    /// This function expects non-premultiplied, 32-bits RGBA pixels
-    /// i.e. each channel's value should not be scaled by the alpha value, and should be
-    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
-    /// and the alpha.
-    pub inline fn setWindowIcon(target: *window.Window, pixels: []const u8, width: i32, height: i32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createIcon(target.impl, pixels, width, height);
-    }
+    /// Initializes and returns a shallow copy of the library's JoystickSubSystem.
+    /// once initialized the JoystickSubSystem lives as long as the WidowContext instance,
+    /// so subsequent calls to this function will won't do any init logic.
+    pub inline fn joystickSubSyst(self: *Self) !JoystickSubSystem {
+        if (self.joystick_sys == null) {
+            self.joystick_sys = try platform.joystick.JoystickSubSystemImpl.init(self.allocator, &self.events_queue);
+            // We assign it here so we can access it in the helper window procedure.
+            self.platform_internals.setStatePointer(
+                platform.internals.Internals.StatePointerMode.Joystick,
+                @ptrCast(*anyopaque, &self.joystick_sys),
+            );
+            // First poll to detect joystick that are already present.
+            self.joystick_sys.?.queryConnectedJoys();
+        }
 
-    /// Sets the Widow's cursor to an image from the RGBA pixels data.
-    /// # Notes
-    /// Unlike [`WidowContext.setWindowIcon`] this function also takes the cooridnates of the
-    /// cursor hotspot which is the pixel that the system tracks to decide mouse click
-    /// target, the `xhot` and `yhot` parameters represent the x and y coordinates
-    /// of that pixel relative to the top left corner of the image, with the x axis directed
-    /// to the right and the y axis directed to the bottom.
-    /// This function expects non-premultiplied,32-bits RGBA pixels
-    /// i.e. each channel's value should not be scaled by the alpha value, and should be
-    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
-    /// and the alpha.
-    pub inline fn setWindowCursor(target: *window.Window, pixels: []const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createCursor(target.impl, pixels, width, height, xhot, yhot);
-    }
-
-    // /// Sets the Widow's cursor to an image from the system's standard cursors.
-    // /// # Notes
-    // /// The new image used by the cursor is loaded by the system therefore,
-    // /// the appearance will vary between platforms.
-    // pub fn setWindowStdCursor(target: *window.Window, shape: cursor.CursorShape) !void {
-    //     try platform.internals.createStandardCursor(target.impl, shape);
-    // }
-
-    // Joystick interface.
-
-    /// Initialize the joystick sub system.
-    pub inline fn initJoystickSubSyst(self: *Self) !void {
-        self.joysticks = try platform.joystick.JoystickSubSystem.init(self.allocator);
-        // We assign it here so we can access it in the helper window procedure.
-        self.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Joystick,
-            @ptrCast(*anyopaque, &self.joysticks),
-        );
-        // First poll to detect joystick that are already present.
-        self.joysticks.?.queryConnectedJoys();
-    }
-
-    // /// Adds a window refrence to the listener list of the joystick sub system.
-    // /// # Note
-    // /// Only windows registered as listener receives joystick/gamepad events
-    // /// (connection,disconnection...).
-    // /// Any window added should be removed with `removeJoystickListener` before
-    // /// the window gets deinitialized.
-    // pub inline fn addJoystickListener(self: *Self, window_ptr: *window.Window) !void {
-    //     try self.joysticks.?.addListener(window_ptr.impl);
-    // }
-    //
-    // /// Removes a window refrence from the listener list of the joystick sub system.
-    // /// # Note
-    // /// It's necessary for a window to be unregistered from the list before it gets
-    // /// deinitialized, otherwise the joystick sub system would be working with invalid
-    // /// pointers and causing Undefined behaviour.
-    // pub inline fn removeJoystickListener(self: *Self, window_ptr: *window.Window) void {
-    //     self.joysticks.?.removeListener(window_ptr.impl);
-    // }
-    //
-    pub inline fn updateJoystick(self: *Self, joy_id: u8) void {
-        _ = self.joysticks.?.updateJoystickState(joy_id);
-    }
-
-    pub inline fn pollJoyEvent(self: *Self, ev: *common.event.Event) bool {
-        return self.joysticks.?.pollEvent(ev);
-    }
-
-    /// Returns a slice containing the name for the joystick that corresponds
-    /// to the given joy_id.
-    /// # Note
-    /// If no joystick corresponds to the given id, or if the joystick
-    /// is disconnected null is returned.
-    /// The returned slice is managed by the library and the user shouldn't free it.
-    /// The returned slice is only valid until the joystick is disconnected.
-    pub inline fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
-        return self.joysticks.?.joystickName(joy_id);
-    }
-
-    /// Applys force rumble to the given joystick if it supports it.
-    /// not all joysticks support this feature so the function returns
-    /// true on success and false on fail.
-    pub inline fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
-        return self.joysticks.?.rumbleJoystick(joy_id, magnitude);
-    }
-
-    /// Returns the state of the joystick battery.
-    /// # Note
-    /// If the device is wired it returns `BatteryInfo.WirePowered`.
-    /// If it fails to retrieve the battery state it returns `BatteryInfo.PowerUnknown`.
-    pub inline fn joystickBattery(self: *Self, joy_id: u8) common.joystick.BatteryInfo {
-        return self.joysticks.?.joystickBatteryInfo(joy_id);
+        return JoystickSubSystem{ .impl = &self.joystick_sys.? };
     }
 };
 
 pub const WindowBuilder = struct {
     allocator: std.mem.Allocator,
-    context_data: platform.window_impl.WidowData,
+    context: *WidowContext,
     window_attributes: common.window_data.WindowData,
     title_cache: []u8, // Keep a cache of the title so that the user can build multiple
     // windows without setting the same title.
@@ -216,13 +138,11 @@ pub const WindowBuilder = struct {
         std.mem.copyForwards(u8, new_title, title);
         return Self{
             .allocator = context.allocator,
-            .context_data = platform.window_impl.WidowData{
-                .monitors = &context.monitors,
-                .events_queue = &context.events_queue,
-            },
+            .context = context,
             .title_cache = new_title,
             // Defalut attributes
             .window_attributes = common.window_data.WindowData{
+                .id = 0,
                 .title = undefined, // we'll set this before building.
                 .video = common.video_mode.VideoMode{
                     .width = width,
@@ -264,15 +184,25 @@ pub const WindowBuilder = struct {
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self) !window.Window {
+    pub fn build(self: *Self) !Window {
         // Before building set the window attributes title.
         const title_copy = try self.allocator.alloc(u8, self.title_cache.len);
         std.mem.copyForwards(u8, title_copy, self.title_cache);
         self.window_attributes.title = title_copy;
-        return window.Window{
-            .impl = try platform.window_impl.WindowImpl.create(self.allocator, self.context_data, &self.window_attributes),
+        // First window has id of 1,
+        self.window_attributes.id = self.context.nextWindowId();
+        const window = Window{
+            .impl = try platform.window_impl.WindowImpl.create(
+                self.allocator,
+                platform.window_impl.WidowProps{
+                    .monitors = &self.context.monitors,
+                    .events_queue = &self.context.events_queue,
+                },
+                &self.window_attributes,
+            ),
             .allocator = self.allocator,
         };
+        return window;
     }
 
     /// Set the window title.
@@ -379,6 +309,65 @@ pub const WindowBuilder = struct {
     }
 };
 
+pub const JoystickSubSystem = struct {
+    impl: *platform.joystick.JoystickSubSystemImpl,
+    const Self = @This();
+
+    /// Returns the maximum number of supported joysticks by the library.
+    pub inline fn joysticksMaxCount() comptime_int {
+        return joystick.JOYSTICK_MAX_COUNT;
+    }
+
+    /// Returns the maximum number of currently connected joysticks.
+    pub inline fn joysticksCount(self: *const Self) u8 {
+        return self.impl.countConnected();
+    }
+
+    /// Check for any new inputs by the device the corresponds to the joy_id,
+    /// and sends the appropriate events to the Main event queue.
+    /// # Parameters
+    /// `joy_id`: the id of the targeted joystick.
+    /// # Notes
+    /// If no joystick corresponds to the given id, or if the joystick
+    /// it returns immediately.
+    pub inline fn updateJoyState(self: *Self, joy_id: u8) void {
+        self.impl.updateJoystickState(joy_id);
+    }
+
+    /// Returns a slice containing the name for the joystick that corresponds
+    /// to the given joy_id.
+    /// # Parameters
+    /// `joy_id`: the id of the targeted joystick.
+    /// # Notes
+    /// If no joystick corresponds to the given id, or if the joystick
+    /// is disconnected null is returned.
+    /// The returned slice is managed by the library and the user shouldn't free it.
+    /// The returned slice is only valid until the joystick is disconnected.
+    pub inline fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
+        return self.impl.joystickName(joy_id);
+    }
+
+    /// Applys force rumble to the given joystick if it supports it.
+    /// not all joysticks support this feature so the function returns
+    /// true on success and false on fail.
+    /// # Parameters
+    /// `joy_id`: the id of the targeted joystick.
+    /// `magnitude`: the rumble magnitude, a value of 0 means no rumble.
+    pub inline fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
+        return self.impl.rumbleJoystick(joy_id, magnitude);
+    }
+
+    /// Returns the state of the joystick battery.
+    /// # Parameters
+    /// `joy_id`: the id of the targeted joystick.
+    /// # Notes
+    /// If the device is wired it returns `BatteryInfo.Wired`.
+    /// If it fails to retrieve the battery state it returns `BatteryInfo.PowerUnknown`.
+    pub inline fn joystickBattery(self: *Self, joy_id: u8) common.joystick.BatteryInfo {
+        return self.impl.joystickBatteryInfo(joy_id);
+    }
+};
+
 test "Widow.init" {
     const testing = std.testing;
     var cntxt = try WidowContext.create(testing.allocator);
@@ -409,6 +398,5 @@ pub const cursor = common.cursor;
 pub const FullScreenMode = common.window_data.FullScreenMode;
 pub const Event = common.event.Event;
 pub const EventType = common.event.EventType;
-// TODO more restriction on the exports.
-pub const input = common.keyboard_and_mouse;
+pub const keyboard_and_mouse = common.keyboard_and_mouse;
 pub const joystick = common.joystick;
