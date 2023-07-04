@@ -1,7 +1,7 @@
 const std = @import("std");
 const joystick = @import("common").joystick;
 const common_event = @import("common").event;
-const Queue = @import("common").list.Queue;
+const EventQueue = @import("common").event.EventQueue;
 const dinput = @import("dinput.zig");
 const xinput = @import("xinput.zig");
 
@@ -16,13 +16,13 @@ pub const Win32JoyData = union(JoystickAPI) {
 };
 
 /// Provides an interface for managing connected joysticks.
-pub const JoystickSubSystem = struct {
+pub const JoystickSubSystemImpl = struct {
     allocator: std.mem.Allocator, // For initializing joysticks
     dapi: dinput.DInputInterface,
     xapi: xinput.XInputInterface,
     joys: [joystick.JOYSTICK_MAX_COUNT]joystick.Joystick,
     joys_exdata: [joystick.JOYSTICK_MAX_COUNT]Win32JoyData,
-    events_queue: Queue(common_event.Event),
+    events_queue_ref: *EventQueue,
     const Self = @This();
 
     fn deinitJoystick(self: *Self, joy_id: u8) void {
@@ -40,7 +40,7 @@ pub const JoystickSubSystem = struct {
         self.queueEvent(&event);
     }
 
-    pub fn init(allocator: std.mem.Allocator) !Self {
+    pub fn init(allocator: std.mem.Allocator, event_dst: *EventQueue) !Self {
         var self: Self = undefined;
         // TODO: Are these apis available on most current versions windows
         self.dapi = try dinput.createInterface();
@@ -51,7 +51,7 @@ pub const JoystickSubSystem = struct {
             // the connected flag is checked before use to avoid using undefined data.
             joy.connected = false;
         }
-        self.events_queue = Queue(common_event.Event).init(allocator);
+        self.events_queue_ref = event_dst;
         self.allocator = allocator;
         return self;
     }
@@ -64,7 +64,6 @@ pub const JoystickSubSystem = struct {
         }
         dinput.releaseInterface(self.dapi);
         self.xapi.deinit();
-        self.events_queue.deinit();
     }
 
     /// Returns an index to an empty slot in the joysticks array, null if the array is full
@@ -83,9 +82,7 @@ pub const JoystickSubSystem = struct {
     }
 
     pub inline fn queueEvent(self: *Self, event: *const common_event.Event) void {
-        self.events_queue.append(event) catch |err| {
-            std.log.err("[Joystick]: Failed to queue event,{}", .{err});
-        };
+        self.events_queue_ref.sendEvent(event);
     }
 
     pub fn pollEvent(self: *Self, event: *common_event.Event) bool {
@@ -176,6 +173,7 @@ pub const JoystickSubSystem = struct {
                 // }
             },
         }
+        return joystick.BatteryInfo.PowerUnkown;
     }
 
     pub fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
@@ -198,29 +196,3 @@ pub const JoystickSubSystem = struct {
         return true;
     }
 };
-
-// test "Joystick sub system" {
-//     const testing = std.testing;
-//     var jss = try JoystickSubSystem.create(
-//         testing.allocator,
-//     );
-//     jss.queryConnectedJoys();
-//     std.debug.print("\nSize of jss:{}\n", .{@sizeOf(JoystickSubSystem)});
-//     std.debug.print("Bit size of jss:{}\n", .{@bitSizeOf(JoystickSubSystem)});
-//     while (true) {
-//         for (jss.joys, 0..jss.joys.len) |joy, id| {
-//             if (!joy.connected) {
-//                 break;
-//             }
-//             const start = std.time.nanoTimestamp();
-//             _ = jss.updateJoystickState(@truncate(u8, id));
-//             const end = std.time.nanoTimestamp();
-//             std.debug.print("--------joy:{}------\n", .{id});
-//             std.debug.print("axis L:{d}|{d}\n", .{ joy.axes.items[0], joy.axes.items[1] });
-//             std.debug.print("axis R:{d}|{d}\n", .{ joy.axes.items[2], joy.axes.items[3] });
-//             std.debug.print("axis T:{d}|{d}\n", .{ joy.axes.items[4], joy.axes.items[5] });
-//             std.debug.print("Update time :{}ns\n", .{end - start});
-//             std.time.sleep(std.time.ns_per_s * 1);
-//         }
-//     }
-// }

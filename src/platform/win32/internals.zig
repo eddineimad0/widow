@@ -13,11 +13,11 @@ const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_system_power = zigwin32.system.power;
 const win32_sys_service = zigwin32.system.system_services;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
-const JoystickSubSystem = @import("joystick_impl.zig").JoystickSubSystem;
+const JoystickSubSystemImpl = @import("joystick_impl.zig").JoystickSubSystemImpl;
 
 pub const HelperData = struct {
     monitor_store_ptr: ?*MonitorStore,
-    joysubsys_ptr: ?*JoystickSubSystem,
+    joysubsys_ptr: ?*JoystickSubSystemImpl,
     clipboard_change: bool, // So we can cache the clipboard value until it changes.
     next_clipboard_viewer: ?win32.HWND, // we're using the old api to watch the clipboard.
     clipboard_text: ?[]u8,
@@ -97,7 +97,7 @@ pub const Internals = struct {
                 self.helper_data.monitor_store_ptr = @ptrCast(?*MonitorStore, @alignCast(8, pointer));
             },
             StatePointerMode.Joystick => {
-                self.helper_data.joysubsys_ptr = @ptrCast(?*JoystickSubSystem, @alignCast(8, pointer));
+                self.helper_data.joysubsys_ptr = @ptrCast(?*JoystickSubSystemImpl, @alignCast(8, pointer));
             },
         }
     }
