@@ -441,6 +441,39 @@ pub const Window = struct {
         return self.impl.freeDroppedFiles();
     }
 
+    /// Sets the window's icon to the RGBA pixels data.
+    /// # Parameters
+    /// `pixels`: a slice to the icon's pixel(RGBA) data.
+    /// `width` : the width of the icon in pixels.
+    /// `height`: the height of the icon in pixels.
+    /// # Notes
+    /// This function expects non-premultiplied, 32-bits RGBA pixels
+    /// i.e. each channel's value should not be scaled by the alpha value, and should be
+    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
+    /// and the alpha last.
+    pub inline fn setIcon(self: *Self, pixels: []const u8, width: i32, height: i32) !void {
+        std.debug.assert(width > 0 and height > 0);
+        std.debug.assert(pixels.len == (width * height * 4));
+        try platform.internals.createIcon(self.impl, pixels, width, height);
+    }
+
+    /// Sets the Widow's cursor to an image from the RGBA pixels data.
+    /// # Notes
+    /// Unlike `WidowContext.setWindowIcon` this function also takes the cooridnates of the
+    /// cursor hotspot which is the pixel that the system tracks to decide mouse click
+    /// target, the `xhot` and `yhot` parameters represent the x and y coordinates
+    /// of that pixel relative to the top left corner of the image, with the x axis directed
+    /// to the right and the y axis directed to the bottom.
+    /// This function expects non-premultiplied,32-bits RGBA pixels
+    /// i.e. each channel's value should not be scaled by the alpha value, and should be
+    /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
+    /// and the alpha.
+    pub inline fn setCursor(self: *Self, pixels: []const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+        std.debug.assert(width > 0 and height > 0);
+        std.debug.assert(pixels.len == (width * height * 4));
+        try platform.internals.createCursor(self.impl, pixels, width, height, xhot, yhot);
+    }
+
     // # Use only for debug.
     pub fn debugInfos(self: *const Self) void {
         self.impl.debugInfos();
