@@ -38,7 +38,7 @@ pub fn main() void {
     defer window.deinit();
 
     const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
-    widow.WidowContext.setWindowIcon(&window, &icon_pixels, 32, 32) catch {
+    window.setIcon(&icon_pixels, 32, 32) catch {
         std.debug.print("Failed to set Window icon.\n", .{});
     };
     var event: widow.Event = undefined;
@@ -64,7 +64,7 @@ pub fn main() void {
                             },
                             ScanCode.Q => {
                                 const black_box = [_]u8{0} ** (32 * 32 * 4);
-                                widow.WidowContext.setWindowCursor(&window, &black_box, 32, 32, 0, 0) catch {
+                                window.setCursor(&black_box, 32, 32, 0, 0) catch {
                                     std.debug.print("Failed to set window's cursor.\n", .{});
                                 };
                             },

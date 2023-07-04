@@ -41,7 +41,7 @@ pub fn main() void {
 
     // By default the joystick sub system isn't initialized .
     // and can only be deinitialized during context.deinit().
-    widow_lib.initJoystickSubSyst() catch |err| {
+    var joy_sys = widow_lib.initJoystickSubSyst() catch |err| {
         std.debug.print("Failed to initialize the JoystickSubSystem,{}\n", .{err});
         return;
     };
@@ -50,49 +50,7 @@ pub fn main() void {
     event_loop: while (true) {
         window.processEvents();
         for (joy_array.items) |joy_id| {
-            widow_lib.updateJoystick(joy_id);
-        }
-        while (widow_lib.pollJoyEvent(&event)) {
-            // Possible joystick events.
-            // `JoystickConnected` // Device inserted into the system.
-            // `JoystickRemoved` // Device removed from the system.
-            // `JoystickButtonAction` // Device button was pressed or released.
-            // `JoystickAxisMotion` // Device Axis value changed.
-            // `GamepadConnected` // Gamepad inserted.
-            // `GamepadRemoved` // Gamepad removed.
-            // `GamepadButtonAction` // Gamepad button was pressed or released.
-            // `GamepadAxisMotion` // Gamepad axis value changed
-            switch (event) {
-                EventType.GamepadButtonAction => |*button_event| {
-                    std.debug.print("\nJoy Id :{}\n", .{button_event.joy_id});
-                    std.debug.print("Button {} | number :{}\n", .{ @intToEnum(widow.joystick.XboxButton, button_event.button), button_event.button });
-                    std.debug.print("Button state :{}\n", .{button_event.state});
-                },
-                EventType.GamepadAxisMotion => |*axis_event| {
-                    const analog_dead_zone = 0.2;
-                    if (axis_event.value < analog_dead_zone and axis_event.value > -0.2) {
-                        continue;
-                    }
-                    std.debug.print("\nJoy Id :{}\n", .{axis_event.joy_id});
-                    std.debug.print("Axis {} | number {}\n", .{ @intToEnum(widow.joystick.XboxAxis, axis_event.axis), axis_event.axis });
-                    std.debug.print("Axis value :{d}\n", .{axis_event.value});
-                },
-                EventType.GamepadConnected => |id| {
-                    const name = widow_lib.joystickName(id) orelse unreachable;
-                    std.debug.print("\n{s} #{}  Connected\n", .{ name, id });
-                    joy_array.append(id) catch |err| {
-                        std.debug.print("Couldn't save joystick id {}\n", .{err});
-                    };
-                },
-                EventType.GamepadRemoved => |id| {
-                    std.debug.print("\n Gamepad #{} Removed\n", .{id});
-                    // the id is the same as the index.
-                    _ = joy_array.swapRemove(id);
-                },
-                else => {
-                    continue;
-                },
-            }
+            joy_sys.updateJoyState(joy_id);
         }
 
         while (widow_lib.pollEvents(&event)) {
@@ -103,6 +61,55 @@ pub fn main() void {
                     // This is merely a notification nothing is done to window in the background,
                     // ignore it if you want to continue execution as normal.
                     break :event_loop;
+                },
+                // Possible joystick events.
+                // `JoystickConnected` // Device inserted into the system.
+                // `JoystickRemoved` // Device removed from the system.
+                // `JoystickButtonAction` // Device button was pressed or released.
+                // `JoystickAxisMotion` // Device Axis value changed.
+                // `GamepadConnected` // Gamepad inserted.
+                // `GamepadRemoved` // Gamepad removed.
+                // `GamepadButtonAction` // Gamepad button was pressed or released.
+                // `GamepadAxisMotion` // Gamepad axis value changed
+                EventType.GamepadButtonAction => |*button_event| {
+                    std.debug.print("\nJoy Id :{}\n", .{button_event.joy_id});
+                    std.debug.print("Button {} | number :{}\n", .{ @intToEnum(widow.joystick.XboxButton, button_event.button), button_event.button });
+                    std.debug.print("Button state :{}\n", .{button_event.state});
+                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.A) and button_event.state.isPressed()) {
+                        _ = joy_sys.rumbleJoystick(button_event.joy_id, 100);
+                    }
+                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.B) and button_event.state.isPressed()) {
+                        std.debug.print("Joy:#{} battery state:{}\n", .{ button_event.joy_id, joy_sys.joystickBattery(button_event.joy_id) });
+                    }
+                },
+                EventType.GamepadAxisMotion => |*axis_event| {
+                    const analog_dead_zone = 0.2;
+
+                    if (axis_event.axis != @enumToInt(widow.joystick.XboxAxis.LTrigger) and axis_event.axis != @enumToInt(widow.joystick.XboxAxis.RTrigger)) {
+                        // analog axis will always report a value different than 0
+                        // even if they're not being moved(idle)
+                        // consider using a dead zone to filter analog inputs.
+                        if (axis_event.value < analog_dead_zone and axis_event.value > -analog_dead_zone) {
+                            continue;
+                        }
+                    }
+
+                    std.debug.print("\nJoy Id :{}\n", .{axis_event.joy_id});
+                    std.debug.print("Axis {} | number {}\n", .{ @intToEnum(widow.joystick.XboxAxis, axis_event.axis), axis_event.axis });
+                    std.debug.print("Axis value :{d}\n", .{axis_event.value});
+                },
+                EventType.GamepadConnected => |id| {
+                    const name = joy_sys.joystickName(id) orelse unreachable;
+                    std.debug.print("\n{s} #{}  Connected\n", .{ name, id });
+                    // we need to save the id so we can update the joystick later.
+                    joy_array.append(id) catch |err| {
+                        std.debug.print("Couldn't save joystick id {}\n", .{err});
+                    };
+                },
+                EventType.GamepadRemoved => |id| {
+                    std.debug.print("\n Gamepad #{} Removed\n", .{id});
+                    // joystick ids start from 0 and goes up so it is the same as the index.
+                    _ = joy_array.swapRemove(id);
                 },
                 else => {
                     continue :event_loop;
