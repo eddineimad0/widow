@@ -41,7 +41,7 @@ pub fn main() void {
 
     // By default the joystick sub system isn't initialized .
     // and can only be deinitialized during context.deinit().
-    var joy_sys = widow_lib.initJoystickSubSyst() catch |err| {
+    var joy_sys = widow_lib.joystickSubSyst() catch |err| {
         std.debug.print("Failed to initialize the JoystickSubSystem,{}\n", .{err});
         return;
     };
@@ -63,10 +63,6 @@ pub fn main() void {
                     break :event_loop;
                 },
                 // Possible joystick events.
-                // `JoystickConnected` // Device inserted into the system.
-                // `JoystickRemoved` // Device removed from the system.
-                // `JoystickButtonAction` // Device button was pressed or released.
-                // `JoystickAxisMotion` // Device Axis value changed.
                 // `GamepadConnected` // Gamepad inserted.
                 // `GamepadRemoved` // Gamepad removed.
                 // `GamepadButtonAction` // Gamepad button was pressed or released.
@@ -76,10 +72,13 @@ pub fn main() void {
                     std.debug.print("Button {} | number :{}\n", .{ @intToEnum(widow.joystick.XboxButton, button_event.button), button_event.button });
                     std.debug.print("Button state :{}\n", .{button_event.state});
                     if (button_event.button == @enumToInt(widow.joystick.XboxButton.A) and button_event.state.isPressed()) {
-                        _ = joy_sys.rumbleJoystick(button_event.joy_id, 100);
+                        _ = joy_sys.rumbleJoystick(button_event.joy_id, 3000);
                     }
                     if (button_event.button == @enumToInt(widow.joystick.XboxButton.B) and button_event.state.isPressed()) {
                         std.debug.print("Joy:#{} battery state:{}\n", .{ button_event.joy_id, joy_sys.joystickBattery(button_event.joy_id) });
+                    }
+                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.Y) and button_event.state.isPressed()) {
+                        _ = joy_sys.rumbleJoystick(button_event.joy_id, 0);
                     }
                 },
                 EventType.GamepadAxisMotion => |*axis_event| {
