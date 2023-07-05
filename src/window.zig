@@ -64,16 +64,6 @@ pub const Window = struct {
         return platform.window_impl.windowClientPosition(self.impl.handle);
     }
 
-    /// Change the position of the window's top-left corner,
-    /// to the newly specified x and y.
-    /// # Notes
-    /// The `x` and `y` parameters should be in virutal desktop coordinates.
-    /// if the window is maximized it is automatically restored.
-    /// I fail to think of any situation where this should be used.
-    pub inline fn setPosition(self: *const Self, x: i32, y: i32) void {
-        self.impl.setPosition(x, y);
-    }
-
     /// Returns the position of the top-left corner of the window,
     /// relative to the virtual desktop's top-left corner.
     /// # Notes
@@ -85,6 +75,16 @@ pub const Window = struct {
         return self.impl.position();
     }
 
+    /// Change the position of the window's top-left corner,
+    /// to the newly specified x and y.
+    /// # Notes
+    /// The `x` and `y` parameters should be in virutal desktop coordinates.
+    /// if the window is maximized it is automatically restored.
+    /// I fail to think of any situation where this should be used.
+    pub inline fn setPosition(self: *const Self, x: i32, y: i32) void {
+        self.impl.setPosition(x, y);
+    }
+
     /// Returns the size in physical pixels of the window's client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title bar and borders.
@@ -93,11 +93,6 @@ pub const Window = struct {
     /// returned by `Window.contentScale()`.
     pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
         return platform.window_impl.clientSize(self.impl.handle);
-    }
-
-    /// Returns the size in physical pixels of the entire window.
-    pub inline fn size(self: *const Self) common.geometry.WidowSize {
-        return platform.window_impl.windowSize(self.impl.handle);
     }
 
     /// Changes the client size of the window.
@@ -114,6 +109,11 @@ pub const Window = struct {
         std.debug.assert(width > 0 and height > 0);
         var new_size = common.geometry.WidowSize{ .width = width, .height = height };
         self.impl.setClientSize(&new_size);
+    }
+
+    /// Returns the size in physical pixels of the entire window.
+    pub inline fn size(self: *const Self) common.geometry.WidowSize {
+        return platform.window_impl.windowSize(self.impl.handle);
     }
 
     /// Sets a minimum limit for the window's client size and applys it immediately.
@@ -164,15 +164,21 @@ pub const Window = struct {
 
     /// Returns a slice conatining the current window title.
     /// # Parameters
-    /// `allocator`: the allocator to be used for allocating the returned slice.
+    /// `allocator`: the allocator used for allocating the returned slice.
     /// # Notes
     /// The caller has ownership of the returned slice,
     /// and is responsible for freeing the memory.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
     pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
         return self.impl.title(allocator);
     }
 
     /// Changes the title of the window.
+    /// # Parameters
+    /// `new_title`: utf-8 string of the new title to be set.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
     pub inline fn setTitle(self: *Self, new_title: []const u8) !void {
         return self.impl.setTitle(self.allocator, new_title);
     }
@@ -316,8 +322,6 @@ pub const Window = struct {
 
     /// Requests user attention to the window,
     /// this has no effect if the application is already focused.
-    /// # Notes
-    /// How requesting for user attention manifests is platform dependent,
     pub inline fn requestUserAttention(self: *const Self) void {
         if (!self.impl.data.flags.is_focused) {
             self.impl.flash();
@@ -329,10 +333,10 @@ pub const Window = struct {
     /// `fullscreen_mode` : mode to switch to or null to restore the window.
     /// # Notes
     /// Possible fullscreen modes are:
-    /// [`FullScreenMode.Exclusive`]
+    /// `FullScreenMode.Exclusive`
     /// A full screen mode with change in the display's video mode.
     /// This mode should be used when a video mode change is desired,
-    /// [`FullScreenMode.Borderless`]
+    /// `FullScreenMode.Borderless`
     /// A full screen mode that simply resize the window to fit the entire monitor.
     pub inline fn setFullscreen(self: *Self, fullscreen_mode: ?common.window_data.FullScreenMode) !void {
         return self.impl.setFullscreen(fullscreen_mode);
