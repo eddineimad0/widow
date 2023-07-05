@@ -983,6 +983,7 @@ fn keyTextToVirtual(keycode: u16) VirtualCode {
 }
 
 /// Clean the Key_state array of the window and emit the corresponding events.
+/// insight taken from glfw library.
 pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
     // Windows doesn't emit a keyup event for the modifiers and this causes
     // confusion and misinput for the user.

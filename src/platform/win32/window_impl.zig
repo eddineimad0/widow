@@ -290,7 +290,6 @@ pub inline fn centerCursor(window_handle: win32.HWND) void {
 pub inline fn windowClientPosition(handle: win32.HWND) common.geometry.WidowPoint2D {
     // the client's top left acts as the origin in client
     // coordinates (0,0).
-    // if minimized return last_known_pos.
     var top_left = win32_foundation.POINT{ .x = 0, .y = 0 };
     _ = win32_gdi.ClientToScreen(handle, &top_left);
     return common.geometry.WidowPoint2D{
@@ -500,6 +499,7 @@ pub const WindowImpl = struct {
             _ = win32_window_messaging.TranslateMessage(&msg);
             _ = win32_window_messaging.DispatchMessageW(&msg);
         }
+        // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
     }
 
@@ -622,7 +622,6 @@ pub const WindowImpl = struct {
     /// the returned value is the last known position of the window.
     /// Could add thread safety with RWlock.
     pub fn position(self: *const Self) common.geometry.WidowPoint2D {
-        // if minimized return last known position.
         return self.data.position;
     }
 
@@ -652,7 +651,6 @@ pub const WindowImpl = struct {
         const size = windowSize(self.handle);
 
         setWindowPositionIntern(self.handle, top, POSITION_FLAGS, x, y, &size);
-        // self.setPosition(rect.left, rect.top);
     }
 
     /// Sets the new (width,height) of the window's client area
@@ -668,7 +666,7 @@ pub const WindowImpl = struct {
         } else {
             var scaler: f64 = undefined;
             const dpi = self.scalingDPI(&scaler);
-            size.scale(scaler);
+            size.scaleBy(scaler);
             var new_client_rect = win32_foundation.RECT{
                 .left = 0,
                 .top = 0,
@@ -701,22 +699,21 @@ pub const WindowImpl = struct {
 
     pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
         if (min_size != null) {
-            // since capturing doesn't allow us to modify.
             var size = min_size.?;
-            // min size shouldn't be negative or null.
+            // min size shouldn't be negative.
             if (size.width > 0 and size.height > 0) {
                 if (self.data.max_size) |*max_size| {
                     // the min size shouldn't be superior to the max size.
                     if (max_size.width >= size.width and max_size.height >= size.height) {
                         var scaler: f64 = undefined;
                         _ = self.scalingDPI(&scaler);
-                        size.scale(scaler);
+                        size.scaleBy(scaler);
                         self.data.min_size = size;
                     }
                 } else {
                     var scaler: f64 = undefined;
                     _ = self.scalingDPI(&scaler);
-                    size.scale(scaler);
+                    size.scaleBy(scaler);
                     self.data.min_size = size;
                 }
             }
@@ -730,33 +727,36 @@ pub const WindowImpl = struct {
         }
         const pos = self.position();
         const size = windowSize(self.handle);
+        // We need the system to post a WM_MINMAXINFO.
+        // in order for the new size limits to be applied,
+        // we will cause that by calling MoveWindow().
         _ = win32_window_messaging.MoveWindow(
             self.handle,
             pos.x,
             pos.y,
             size.width,
             size.height,
-            1, //TRUE
+            win32.TRUE,
         );
     }
 
     pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
         if (max_size != null) {
             var size = max_size.?;
-            // max size shouldn't be negative or null.
+            // max size shouldn't be negative.
             if (size.width > 0 and size.height > 0) {
                 if (self.data.min_size) |*min_size| {
-                    // the max size shouldn't be superior to the min size.
+                    // the max size should be superior or equal to the min size.
                     if (size.width >= min_size.width or size.height >= min_size.height) {
                         var scaler: f64 = undefined;
                         _ = self.scalingDPI(&scaler);
-                        size.scale(scaler);
+                        size.scaleBy(scaler);
                         self.data.max_size = size;
                     }
                 } else {
                     var scaler: f64 = undefined;
                     _ = self.scalingDPI(&scaler);
-                    size.scale(scaler);
+                    size.scaleBy(scaler);
                     self.data.max_size = size;
                 }
             }
@@ -770,13 +770,16 @@ pub const WindowImpl = struct {
         }
         const pos = self.position();
         const size = windowSize(self.handle);
+        // We need the system to post a WM_MINMAXINFO.
+        // in order for the new size limits to be applied,
+        // we will cause that by calling MoveWindow().
         _ = win32_window_messaging.MoveWindow(
             self.handle,
             pos.x,
             pos.y,
             size.width,
             size.height,
-            1, //TRUE
+            win32.TRUE,
         );
     }
 
@@ -830,14 +833,13 @@ pub const WindowImpl = struct {
 
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, allocator: std.mem.Allocator, new_title: []const u8) !void {
-        const temp_title = try allocator.alloc(u8, new_title.len);
-        errdefer allocator.free(temp_title);
-        std.mem.copy(u8, temp_title, new_title);
         const wide_title = try utils.utf8ToWideZ(allocator, new_title);
         defer allocator.free(wide_title);
-        _ = win32_window_messaging.SetWindowTextW(self.handle, wide_title);
+        const temp_title = try allocator.alloc(u8, new_title.len);
+        std.mem.copy(u8, temp_title, new_title);
         allocator.free(self.data.title);
         self.data.title = temp_title;
+        _ = win32_window_messaging.SetWindowTextW(self.handle, wide_title);
     }
 
     /// returns the title of the window.
@@ -845,9 +847,9 @@ pub const WindowImpl = struct {
     /// The caller isn't supposed to free the returned pointer,
     /// and doing so will cause undefined behaviour.
     pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        var buffer = try allocator.alloc(u8, self.data.title.len);
-        std.mem.copy(u8, buffer, self.data.title);
-        return buffer;
+        var slice = try allocator.alloc(u8, self.data.title.len);
+        std.mem.copy(u8, slice, self.data.title);
+        return slice;
     }
 
     /// Returns the window's current opacity
@@ -889,6 +891,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setAspectRatio(self: *Self, ratio: ?common.window_data.AspectRatio) void {
+        // shamlessly copied from GLFW library.
         self.data.aspect_ratio = ratio;
         if (ratio != null) {
             var rect: win32.RECT = undefined;
@@ -900,7 +903,7 @@ pub const WindowImpl = struct {
                 rect.top,
                 rect.right - rect.left,
                 rect.bottom - rect.top,
-                1,
+                win32.TRUE,
             );
         }
     }
