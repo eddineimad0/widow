@@ -1,7 +1,7 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
-const ScanCode = widow.input.ScanCode;
+const ScanCode = widow.keyboard_and_mouse.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
 const allocator = std.heap.c_allocator;
 
