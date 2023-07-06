@@ -4,7 +4,7 @@ const WidowSize = @import("./geometry.zig").WidowSize;
 const InputState = @import("./keyboard_and_mouse.zig").InputState;
 pub const AspectRatio = @import("./geometry.zig").AspectRatio;
 
-pub const WindowFlags = struct {
+pub const WindowFlags = packed struct {
     is_visible: bool, // Does the window appear on screen or is it hidden from the user.
     is_maximized: bool, // Is the window maximized.
     is_minimized: bool, // Is the window minimized.

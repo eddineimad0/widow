@@ -16,9 +16,9 @@ pub const MouseButtonState = KeyState;
 
 /// The Symbolic name or representation of the keyboard key.
 pub const VirtualCode = enum(i32) {
-    Unknown, // Unknown key
-    A, // The A key
-    B, // The B key
+    Unknown = -1, // Unknown key
+    A = 0, // The A key
+    B = 1, // The B key
     C, // The C key
     D, // The D key
     E, // The E key
@@ -241,7 +241,7 @@ pub const ScanCode = enum(i32) {
     VALUES_COUNT,
 };
 
-pub const KeyModifiers = struct {
+pub const KeyModifiers = packed struct {
     shift: bool,
     ctrl: bool,
     alt: bool,
