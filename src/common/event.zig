@@ -33,16 +33,14 @@ pub const EventType = enum(u8) {
 
 pub const ResizeEvent = struct {
     window_id: u32,
-    new_width: i32,
-    new_height: i32,
-    // new_size: geometry.WidowSize,
+    width: i32,
+    height: i32,
 };
 
 pub const MoveEvent = struct {
     window_id: u32,
-    new_x: i32,
-    new_y: i32,
-    // new_position: geometry.WidowPoint2D,
+    x: i32,
+    y: i32,
 };
 
 pub const KeyEvent = struct {
@@ -143,8 +141,8 @@ pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
 pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
     return Event{ .WindowResize = ResizeEvent{
         .window_id = window_id,
-        .new_width = width,
-        .new_height = height,
+        .width = width,
+        .height = height,
     } };
 }
 
@@ -152,14 +150,14 @@ pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Ev
     return if (!is_mouse)
         Event{ .WindowMove = MoveEvent{
             .window_id = window_id,
-            .new_x = x,
-            .new_y = y,
+            .x = x,
+            .y = y,
         } }
     else
         Event{ .MouseMove = MoveEvent{
             .window_id = window_id,
-            .new_x = x,
-            .new_y = y,
+            .x = x,
+            .y = y,
         } };
 }
 

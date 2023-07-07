@@ -32,6 +32,5 @@ pub const WindowData = struct {
     video: VideoMode, // The video mode of the window.
     fullscreen_mode: ?FullScreenMode,
     flags: WindowFlags,
-    title: []const u8, // The window title.
     input: InputState, // Both the keyboard and mouse buttons states.
 };
