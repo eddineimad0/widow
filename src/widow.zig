@@ -108,8 +108,7 @@ pub const WindowBuilder = struct {
     allocator: std.mem.Allocator,
     context: *WidowContext,
     window_attributes: common.window_data.WindowData,
-    title_cache: []u8, // Keep a cache of the title so that the user can build multiple
-    // windows without setting the same title.
+    title: []u8,
     const Self = @This();
 
     /// Creates a window builder instance.
@@ -133,17 +132,17 @@ pub const WindowBuilder = struct {
         height: i32,
         context: *WidowContext,
     ) !Self {
+        // can't be sure of the title's lifetime so copy it first.
         std.debug.assert(width > 0 and height > 0);
         const new_title = try context.allocator.alloc(u8, title.len);
         std.mem.copyForwards(u8, new_title, title);
         return Self{
             .allocator = context.allocator,
             .context = context,
-            .title_cache = new_title,
+            .title = new_title,
             // Defalut attributes
             .window_attributes = common.window_data.WindowData{
                 .id = 0,
-                .title = undefined, // we'll set this before building.
                 .video = common.video_mode.VideoMode{
                     .width = width,
                     .height = height,
@@ -175,8 +174,8 @@ pub const WindowBuilder = struct {
 
     // Frees allocated ressources.
     pub fn deinit(self: *Self) void {
-        self.allocator.free(self.title_cache);
-        self.title_cache = undefined;
+        self.allocator.free(self.title);
+        self.title = undefined;
     }
 
     /// Creates and returns the built window instance.
@@ -185,15 +184,12 @@ pub const WindowBuilder = struct {
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn build(self: *Self) !Window {
-        // Before building set the window attributes title.
-        const title_copy = try self.allocator.alloc(u8, self.title_cache.len);
-        std.mem.copyForwards(u8, title_copy, self.title_cache);
-        self.window_attributes.title = title_copy;
         // First window has id of 1,
         self.window_attributes.id = self.context.nextWindowId();
         const window = Window{
             .impl = try platform.window_impl.WindowImpl.create(
                 self.allocator,
+                self.title,
                 platform.window_impl.WidowProps{
                     .monitors = &self.context.monitors,
                     .events_queue = &self.context.events_queue,
@@ -213,10 +209,8 @@ pub const WindowBuilder = struct {
     pub fn withTitle(self: *Self, title: []const u8) !*Self {
         const new_title = try self.allocator.alloc(u8, title.len);
         std.mem.copyForwards(u8, new_title, title);
-        if (self.title_cache) |ptr| {
-            self.allocator.free(ptr);
-        }
-        self.title_cache = new_title;
+        self.allocator.free(self.title);
+        self.title = new_title;
         return self;
     }
 

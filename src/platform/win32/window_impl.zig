@@ -169,6 +169,7 @@ fn setWindowPositionIntern(window_handle: win32.HWND, top: ?win32.HWND, flags: u
 
 fn createPlatformWindow(
     allocator: std.mem.Allocator,
+    title: []const u8,
     data: *const WindowData,
     styles: struct { u32, u32 },
 ) !win32.HWND {
@@ -214,7 +215,7 @@ fn createPlatformWindow(
     var buffer: [Win32Context.WINDOW_CLASS_NAME.len * 4]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WINDOW_CLASS_NAME) catch unreachable;
-    const window_title = try utils.utf8ToWideZ(allocator, data.title);
+    const window_title = try utils.utf8ToWideZ(allocator, title);
     defer allocator.free(window_title);
     const window_handle = win32_window_messaging.CreateWindowExW(
         @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]), // dwExStyles
@@ -238,7 +239,7 @@ fn createPlatformWindow(
 }
 
 /// Updates the cursor image.
-pub fn updateCursor(cursor: *const Cursor) void {
+pub fn updateCursorImage(cursor: *const Cursor) void {
     if (cursor.mode.is_disabled()) {
         _ = win32_window_messaging.SetCursor(null);
     } else {
@@ -265,11 +266,11 @@ pub inline fn releaseCursor() void {
 pub fn disableCursor(window_handle: win32.HWND, cursor: *const Cursor) void {
     captureCursor(window_handle);
     centerCursor(window_handle);
-    updateCursor(cursor);
+    updateCursorImage(cursor);
 }
 
 pub fn enableCursor(cursor: *const Cursor) void {
-    updateCursor(cursor);
+    updateCursorImage(cursor);
     releaseCursor();
 }
 
@@ -315,12 +316,19 @@ pub const WidowProps = struct {
 };
 
 pub const WindowWin32Data = struct {
-    cursor: Cursor,
     icon: Icon,
-    high_surrogate: u16,
+    cursor: Cursor,
     keymenu: bool,
     frame_action: bool,
+    width_cache: i32, // To store the width during resize events of the window.
+    height_cache: i32, // To store the height during resize events of the window.
+    high_surrogate: u16,
     dropped_files: std.ArrayList([]const u8),
+    size_pos_update: u8, // we will use this to filter repeating size and postion events.
+    pub const NO_SIZE_POSITION_UPDATE = @as(u8, 0x00);
+    pub const SIZE_UPDATE = @as(u8, 0x01);
+    pub const POSITON_UPDATE = @as(u8, 0x02);
+    pub const SIZE_POSITION_UPDATE = @as(u8, 0x03);
 };
 
 pub const WindowImpl = struct {
@@ -334,7 +342,7 @@ pub const WindowImpl = struct {
     };
     const Self = @This();
 
-    pub fn create(allocator: std.mem.Allocator, props: WidowProps, data: *const WindowData) !*Self {
+    pub fn create(allocator: std.mem.Allocator, window_title: []const u8, props: WidowProps, data: *const WindowData) !*Self {
         var self = try allocator.create(WindowImpl);
         errdefer allocator.destroy(self);
         // get the window handle
@@ -354,10 +362,13 @@ pub const WindowImpl = struct {
             .keymenu = false,
             .frame_action = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
+            .width_cache = 0,
+            .height_cache = 0,
+            .size_pos_update = WindowWin32Data.NO_SIZE_POSITION_UPDATE,
         };
 
         const styles = .{ windowStyles(data), windowExStyles(data) };
-        self.handle = try createPlatformWindow(allocator, data, styles);
+        self.handle = try createPlatformWindow(allocator, window_title, data, styles);
 
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.handle,
@@ -369,10 +380,8 @@ pub const WindowImpl = struct {
         clientRect(self.handle, &window_rect);
         var dpi_scale: f64 = undefined;
         const dpi = self.scalingDPI(&dpi_scale);
-        if (dpi_scale > 0.0) {
-            window_rect.right = @floatToInt(i32, @intToFloat(f64, window_rect.right) * dpi_scale);
-            window_rect.bottom = @floatToInt(i32, @intToFloat(f64, window_rect.bottom) * dpi_scale);
-        }
+        window_rect.right = @floatToInt(i32, @intToFloat(f64, window_rect.right) * dpi_scale);
+        window_rect.bottom = @floatToInt(i32, @intToFloat(f64, window_rect.bottom) * dpi_scale);
 
         adjustWindowRect(
             &window_rect,
@@ -457,7 +466,6 @@ pub const WindowImpl = struct {
 
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         self.close();
-        allocator.free(self.data.title);
         allocator.destroy(self);
     }
 
@@ -835,21 +843,23 @@ pub const WindowImpl = struct {
     pub fn setTitle(self: *Self, allocator: std.mem.Allocator, new_title: []const u8) !void {
         const wide_title = try utils.utf8ToWideZ(allocator, new_title);
         defer allocator.free(wide_title);
-        const temp_title = try allocator.alloc(u8, new_title.len);
-        std.mem.copy(u8, temp_title, new_title);
-        allocator.free(self.data.title);
-        self.data.title = temp_title;
         _ = win32_window_messaging.SetWindowTextW(self.handle, wide_title);
     }
 
     /// returns the title of the window.
-    /// # Note
-    /// The caller isn't supposed to free the returned pointer,
-    /// and doing so will cause undefined behaviour.
     pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        var slice = try allocator.alloc(u8, self.data.title.len);
-        std.mem.copy(u8, slice, self.data.title);
-        return slice;
+        // This length doesn't take into account the null character so add it when allocating.
+        const wide_title_len = win32_window_messaging.GetWindowTextLengthW(self.handle);
+        if (wide_title_len > 0) {
+            var wide_slice = try allocator.allocSentinel(u16, @intCast(usize, wide_title_len) + 1, 0);
+            defer allocator.free(wide_slice);
+            // to get the full title we must specify the full buffer length or we will be on character short.
+            _ = win32_window_messaging.GetWindowTextW(self.handle, wide_slice.ptr, wide_title_len + 1);
+            const slice = try utils.wideZToUtf8(allocator, wide_slice);
+            return slice;
+        }
+        // TODO: why can't i use WindowError set instead of the global error set?
+        return error.FailedToCopyTitle;
     }
 
     /// Returns the window's current opacity
@@ -909,7 +919,6 @@ pub const WindowImpl = struct {
     }
 
     pub fn applyAspectRatio(self: *const Self, client: *win32_foundation.RECT, edge: u32) void {
-        //(numer/denom)
         const ratio = @intToFloat(f64, self.data.aspect_ratio.?.x) / @intToFloat(f64, self.data.aspect_ratio.?.y);
 
         var rect = win32_foundation.RECT{
@@ -1001,7 +1010,7 @@ pub const WindowImpl = struct {
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor.*;
         if (self.data.flags.cursor_in_client) {
-            updateCursor(&self.win32.cursor);
+            updateCursorImage(&self.win32.cursor);
         }
     }
 
@@ -1034,7 +1043,6 @@ pub const WindowImpl = struct {
     // DEBUG ONLY
     pub fn debugInfos(self: *const Self) void {
         std.debug.print("0==========================0\n", .{});
-        std.debug.print("title: {s}\n", .{self.data.title});
         std.debug.print("Video Mode: {}\n", .{self.data.video});
         std.debug.print("Flags Mode: {}\n", .{self.data.flags});
         std.debug.print("Top Left Position: {}\n", .{self.data.position});
@@ -1052,3 +1060,57 @@ pub const WindowImpl = struct {
         }
     }
 };
+
+test "Window title" {
+    const testing = std.testing;
+    var eq = common.event.EventQueue.init(testing.allocator);
+    defer eq.deinit();
+    var ms = try MonitorStore.init(testing.allocator);
+    defer ms.deinit();
+    var data =
+        common.window_data.WindowData{
+        .id = 0,
+        .video = common.video_mode.VideoMode{
+            .width = 800,
+            .height = 600,
+            .color_depth = 32,
+            .frequency = 60,
+        },
+        .position = WindowImpl.WINDOW_DEFAULT_POSITION,
+        .restore_point = null,
+        .min_size = null,
+        .max_size = null,
+        .aspect_ratio = null,
+        .fullscreen_mode = null,
+        .flags = common.window_data.WindowFlags{
+            .is_visible = true,
+            .is_maximized = false,
+            .is_minimized = false,
+            .is_resizable = false,
+            .is_decorated = true,
+            .is_topmost = false,
+            .is_focused = false,
+            .cursor_in_client = false,
+            .accepts_raw_input = false,
+            .allow_dpi_scaling = true,
+        },
+        .input = common.keyboard_and_mouse.InputState.init(),
+    };
+    const window = try WindowImpl.create(
+        testing.allocator,
+        "Title test",
+        WidowProps{
+            .events_queue = &eq,
+            .monitors = &ms,
+        },
+        &data,
+    );
+    defer window.destroy(testing.allocator);
+    const title = try window.title(testing.allocator);
+    defer testing.allocator.free(title);
+    try testing.expectEqualStrings("Title test", title);
+    try window.setTitle(testing.allocator, "Hello World");
+    const new_title = try window.title(testing.allocator);
+    defer testing.allocator.free(new_title);
+    try testing.expectEqualStrings("Hello World", new_title);
+}
