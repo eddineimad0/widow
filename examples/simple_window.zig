@@ -49,6 +49,24 @@ pub fn main() void {
         // events to a central event queue in the WidowContext instance.
         while (widow_cntxt.pollEvents(&event)) {
             switch (event) {
+                // Possible Events
+                // WindowClose => The X icon on the window frame was pressed.
+                // WindowResize => The window client area size was changed.
+                // Focus => True/False if the window got keyboard focus.
+                // WindowMaximize => The window was minimized.
+                // WindowMinimize => The window was maximized.
+                // WindowMove => The window has been moved, the Point2D struct specify the
+                // // new coordinates for the top left corner of the window.
+                // FileDrop => Some file was released in the window area.
+                // KeyBoard => A certain Keyboard key action(press or release) was performed.
+                // MouseButton, => A certain Mouse button action(press or release) was performed while
+                // the mouse is over the client area.
+                // MouseScroll => One of the mouse wheels(vertical,horizontal) was scrolled.
+                // MouseMove => The mouse position (relative to the client area's top left corner) changed.
+                // MouseEnter => The mouse entered the client area of the window.
+                // MouseLeave => The mouse exited the client area of the window.
+                // DPIChange => DPI change due to the window being dragged to another monitor.
+                // Character => The key pressed by the user generated a character.
                 EventType.WindowClose => |window_id| {
                     // The user has requested to close the window,
                     // and the application should proceed to calling deinit on the window instance.
@@ -105,7 +123,7 @@ pub fn main() void {
                 EventType.MouseMove => |*motion| {
                     // This event holds the new client area coordinates (x,y).
                     // the origin point is the destop's top left corner.
-                    if (motion.new_x == 0 and motion.new_y == 0) {
+                    if (motion.x == 0 and motion.y == 0) {
                         std.debug.print("Mouse in client top left of window #{} \n", .{motion.window_id});
                     }
                 },
@@ -148,8 +166,8 @@ pub fn main() void {
                 EventType.WindowResize => |*resize_event| {
                     // This event holds the new client width and height.
                     std.debug.print("new width:{} | new height:{} of window #{}\n", .{
-                        resize_event.new_width,
-                        resize_event.new_height,
+                        resize_event.width,
+                        resize_event.height,
                         resize_event.window_id,
                     });
                 },
@@ -167,6 +185,9 @@ pub fn main() void {
                         std.log.info("Free drop cache\n", .{});
                         mywindow.freeDroppedFiles();
                     }
+                },
+                EventType.WindowMove => |*new_pos| {
+                    std.debug.print("Window #{} new position:({},{})\n", .{ new_pos.window_id, new_pos.x, new_pos.y });
                 },
                 else => {
                     continue;
