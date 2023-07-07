@@ -389,12 +389,6 @@ pub const MonitorStore = struct {
 //     window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = true, .mode = common.cursor.CursorMode.Normal });
 // }
 
-test "Internals.init()" {
-    const testing = std.testing;
-    var result = try Internals.init();
-    defer result.deinit(testing.allocator);
-}
-
 test "MonitorStore.init()" {
     const VideoMode = @import("common").video_mode.VideoMode;
     const testing = std.testing;

@@ -136,7 +136,10 @@ pub inline fn mouseWheelMSGHandler(
 pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.LPARAM) void {
     const styles = window_impl.windowStyles(&window.data);
     const ex_styles = window_impl.windowExStyles(&window.data);
-    const info: *win32_window_messaging.MINMAXINFO = @intToPtr(*win32_window_messaging.MINMAXINFO, @bitCast(usize, lparam));
+    const info: *win32_window_messaging.MINMAXINFO = @intToPtr(
+        *win32_window_messaging.MINMAXINFO,
+        @bitCast(usize, lparam),
+    );
     var rect = win32.RECT{
         .left = 0,
         .top = 0,
@@ -167,18 +170,19 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
     }
 
     if (!window.data.flags.is_decorated) {
+        // If the window isn't decorated we need to adjust
+        // the size and postion for when it's maximized.
         var mi: win32_gdi.MONITORINFO = undefined;
         const monitor_handle = win32_gdi.MonitorFromWindow(window.handle, win32_gdi.MONITOR_DEFAULTTONEAREST);
         _ = win32_gdi.GetMonitorInfoW(monitor_handle, &mi);
-        info.ptMaxPosition.x = mi.rcWork.left - mi.rcWork.left;
-        info.ptMaxPosition.y = mi.rcWork.top - mi.rcWork.top;
+        info.ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+        info.ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
         info.ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
         info.ptMaxSize.y = mi.rcWork.bottom - mi.rcWork.top;
     }
 }
 
-//**
-pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) bool {
+pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) win32.BOOL {
     const is_win10b1607_or_above = Win32Context.singleton().?.flags.is_win10b1607_or_above;
     if (is_win10b1607_or_above) {
         var pending_size = win32.RECT{
@@ -217,9 +221,9 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
         const size: *win32_foundation.SIZE = @intToPtr(*win32_foundation.SIZE, @bitCast(usize, lparam));
         size.cx += (desired_size.right - desired_size.left) - (pending_size.right - pending_size.left);
         size.cy += (desired_size.bottom - desired_size.top) - (pending_size.bottom - pending_size.top);
-        return true;
+        return win32.TRUE;
     }
-    return false;
+    return win32.FALSE;
 }
 
 pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
