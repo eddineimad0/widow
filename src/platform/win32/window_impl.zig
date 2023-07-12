@@ -176,6 +176,10 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
 
 /// Updates the cursor image.
 pub fn updateCursorImage(cursor: *const icon.Cursor) void {
+    if (cursor.mode.is_disabled()) {
+        return;
+    }
+
     if (cursor.handle) |value| {
         _ = win32_window_messaging.SetCursor(value);
     } else {

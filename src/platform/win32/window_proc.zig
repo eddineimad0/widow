@@ -142,6 +142,17 @@ pub fn mainWindowProc(
             // Must forward the message to DefWindowProc in order to show or hide the window.
         },
 
+        win32_window_messaging.WM_MOUSEACTIVATE => {
+            // Sent when the cursor is in an inactive window and the user presses a mouse button.
+
+            // We only use this message to delay hiding the window cursor(when the in disabled mode)
+            // while the user is interacting with the non client area (resizing with borders,grabbing the title bar...),
+            // this gives the user a better visual experience.
+            if (utils.loWord(@bitCast(usize, lparam)) != win32_window_messaging.HTCLIENT) {
+                window.win32.frame_action = true;
+            }
+        },
+
         win32_window_messaging.WM_PAINT => {
             var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
             const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
@@ -166,22 +177,6 @@ pub fn mainWindowProc(
             // If your window procedure must process a system keystroke message,
             // make sure that after processing the message the procedure passes
             // it to the DefWindowProc function.
-        },
-
-        win32_window_messaging.WM_CAPTURECHANGED => {
-            // Sent to the window that is losing the mouse capture.
-            // this is also sent after WM_*BUTTONUP messages with an lparam value of 0,
-            // we will use it to unset our frame action switch cursor mode.
-            if (window.win32.frame_action and lparam == 0) {
-                // the frame action is done treat the cursor
-                // acording to the mode.
-                if (window.win32.cursor.mode.is_captured()) {
-                    window_impl.captureCursor(window.handle);
-                } else if (window.win32.cursor.mode.is_disabled()) {
-                    window_impl.disableCursor(window.handle);
-                }
-                window.win32.frame_action = false;
-            }
         },
 
         win32_window_messaging.WM_NCPAINT => {
@@ -541,6 +536,15 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_EXITSIZEMOVE => {
             // now we should report the resize and postion change events.
+
+            // the frame action is done treat the cursor
+            // acording to the mode.
+            if (window.win32.cursor.mode.is_captured()) {
+                window_impl.captureCursor(window.handle);
+            } else if (window.win32.cursor.mode.is_disabled()) {
+                window_impl.disableCursor(window.handle);
+            }
+
             if (window.win32.size_pos_update & window_impl.WindowWin32Data.SIZE_UPDATE != 0) {
                 // At the end of a resize loop set the new client size and width.
                 const event = common.event.createResizeEvent(
@@ -559,6 +563,7 @@ pub fn mainWindowProc(
                 );
                 window.sendEvent(&event);
             }
+            window.win32.frame_action = false;
         },
 
         win32_window_messaging.WM_DROPFILES => {
