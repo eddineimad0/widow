@@ -29,19 +29,16 @@ pub const JoystickSubSystemImpl = struct {
         self.sendEvent(&event);
     }
 
-    pub fn init(allocator: std.mem.Allocator, event_dst: *EventQueue) !Self {
-        var self: Self = undefined;
-
-        self.xapi = try xinput.XInputInterface.init();
+    pub fn setup(instance: *Self, allocator: std.mem.Allocator, event_dst: *EventQueue) !void {
+        instance.xapi = try xinput.XInputInterface.init();
 
         for (0..joystick.JOYSTICK_MAX_COUNT) |i| {
-            const joy = &self.joys[i];
+            const joy = &instance.joys[i];
             // the connected flag is checked before use to avoid using undefined data.
             joy.connected = false;
         }
-        self.events_queue_ref = event_dst;
-        self.allocator = allocator;
-        return self;
+        instance.events_queue_ref = event_dst;
+        instance.allocator = allocator;
     }
 
     pub fn deinit(self: *Self) void {

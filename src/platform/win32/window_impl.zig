@@ -333,19 +333,19 @@ pub const WindowImpl = struct {
     const Self = @This();
 
     pub fn setup(
-        self: *Self,
+        instance: *Self,
         allocator: std.mem.Allocator,
         window_title: []const u8,
     ) !void {
-        const styles = .{ windowStyles(&self.data.flags), windowExStyles(&self.data.flags) };
-        self.handle = try createPlatformWindow(allocator, window_title, &self.data, styles);
+        const styles = .{ windowStyles(&instance.data.flags), windowExStyles(&instance.data.flags) };
+        instance.handle = try createPlatformWindow(allocator, window_title, &instance.data, styles);
 
         // Process inital events.
         // these events aren't reported.
-        self.processEvents();
+        instance.processEvents();
 
         // Finish setting up the window.
-        self.win32 = WindowWin32Data{
+        instance.win32 = WindowWin32Data{
             .cursor = icon.Cursor{
                 .handle = null,
                 .mode = common.cursor.CursorMode.Normal,
@@ -364,17 +364,17 @@ pub const WindowImpl = struct {
         };
 
         _ = win32_window_messaging.SetWindowLongPtrW(
-            self.handle,
+            instance.handle,
             win32_window_messaging.GWLP_USERDATA,
-            @intCast(isize, @ptrToInt(self)),
+            @intCast(isize, @ptrToInt(instance)),
         );
 
         // Now we can handle DPI adjustments.
-        if (self.data.flags.allow_dpi_scaling) {
+        if (instance.data.flags.allow_dpi_scaling) {
             var client_rect: win32.RECT = undefined;
-            clientRect(self.handle, &client_rect);
+            clientRect(instance.handle, &client_rect);
             var dpi_scale: f64 = undefined;
-            const dpi = self.scalingDPI(&dpi_scale);
+            const dpi = instance.scalingDPI(&dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
             client_rect.right = @floatToInt(i32, @intToFloat(f64, client_rect.right) * dpi_scale);
             client_rect.bottom = @floatToInt(i32, @intToFloat(f64, client_rect.bottom) * dpi_scale);
@@ -389,7 +389,7 @@ pub const WindowImpl = struct {
             var window_rect: win32.RECT = undefined;
             // [MSDN]:If the window has not been shown before,
             // GetWindowRect will not include the area of the drop shadow.
-            _ = win32_window_messaging.GetWindowRect(self.handle, &window_rect);
+            _ = win32_window_messaging.GetWindowRect(instance.handle, &window_rect);
             // Offset and readjust the created window's frame.
             _ = win32_gdi.OffsetRect(
                 &client_rect,
@@ -397,7 +397,7 @@ pub const WindowImpl = struct {
                 window_rect.top - client_rect.top,
             );
 
-            const top = if (self.data.flags.is_topmost)
+            const top = if (instance.data.flags.is_topmost)
                 win32_window_messaging.HWND_TOPMOST
             else
                 win32_window_messaging.HWND_NOTOPMOST;
@@ -405,7 +405,7 @@ pub const WindowImpl = struct {
                 @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
                 @enumToInt(win32_window_messaging.SWP_NOOWNERZORDER);
             setWindowPositionIntern(
-                self.handle,
+                instance.handle,
                 top,
                 POSITION_FLAGS,
                 client_rect.left,
@@ -419,37 +419,37 @@ pub const WindowImpl = struct {
         if (Win32Context.singleton().?.flags.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                self.handle,
+                instance.handle,
                 win32_window_messaging.WM_DROPFILES,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                self.handle,
+                instance.handle,
                 win32_window_messaging.WM_COPYDATA,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                self.handle,
+                instance.handle,
                 win32.WM_COPYGLOBALDATA,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
         }
 
-        DragAcceptFiles(self.handle, win32.TRUE);
+        DragAcceptFiles(instance.handle, win32.TRUE);
 
-        if (self.data.flags.is_visible) {
-            self.show();
-            if (self.data.flags.is_focused) {
-                self.focus();
+        if (instance.data.flags.is_visible) {
+            instance.show();
+            if (instance.data.flags.is_focused) {
+                instance.focus();
             }
         }
 
         // Fullscreen
-        if (self.data.flags.is_fullscreen) {
-            try self.acquireMonitor();
+        if (instance.data.flags.is_fullscreen) {
+            try instance.acquireMonitor();
         }
     }
 
