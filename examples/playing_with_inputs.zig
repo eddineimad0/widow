@@ -43,7 +43,7 @@ pub fn main() void {
         std.debug.print("Second event fired\n", .{});
     }
     event_loop: while (true) {
-        window.processEvents();
+        window.waitEvent();
         while (context.pollEvents(&event)) {
             switch (event) {
                 EventType.WindowClose => {
