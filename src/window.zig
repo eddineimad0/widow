@@ -2,6 +2,8 @@ const std = @import("std");
 const common = @import("common");
 const platform = @import("platform");
 const WindowImpl = platform.window_impl.WindowImpl;
+const WidowProps = platform.window_impl.WidowProps;
+const WindowData = common.window_data.WindowData;
 const Allocator = std.mem.Allocator;
 
 pub const Window = struct {
@@ -9,9 +11,33 @@ pub const Window = struct {
     allocator: Allocator,
     const Self = @This();
 
+    /// Initializes and returns a Window instance.
+    /// Prefer using a WindowBuilder instead of calling this directly.
+    /// # Parameters
+    /// `Allocator` : the allocator to be used with window related allocations(title,...).
+    /// `title` : the window's title.
+    /// `data` : a refrence to a WindowData structure.
+    /// `widow_props` : the widow properties to be passed along to the window.
+    /// # Errors
+    /// 'OutOfMemory': failure due to memory allocation.
+    /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
+    pub fn init(allocator: Allocator, window_title: []const u8, data: *WindowData, widow_props: WidowProps) !Self {
+        var self: Self = undefined;
+        self.allocator = allocator;
+        self.impl = try allocator.create(WindowImpl);
+        errdefer allocator.destroy(self.impl);
+        self.impl.data = data.*;
+        self.impl.widow = widow_props;
+        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title);
+        return self;
+    }
+
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
-        self.impl.destroy(self.allocator);
+        // Platform dependent cleaning code.
+        self.impl.deinit();
+        // Destroy the allocated data.
+        self.allocator.destroy(self.impl);
         self.impl = undefined;
     }
 
@@ -49,11 +75,13 @@ pub const Window = struct {
     /// first.
     pub inline fn queueCloseEvent(self: *Self) void {
         const event = common.event.createCloseEvent(self.impl.data.id);
-        self.impl.queueEvent(&event);
+        self.impl.sendEvent(&event);
     }
 
     /// Returns the position of the top-left corner of the window's client area,
     /// relative to the virtual desktop's top-left corner.
+    /// If the window is minimized the returned value is the last known position
+    /// of the client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title bar and borders.
     /// The virutal desktop is the desktop created by combining all connected monitors
@@ -61,18 +89,7 @@ pub const Window = struct {
     /// The virtual desktop's top-left in a single monitor setup is the same as that monitor's
     /// top left-corner, in a multi-monitor setup it depends on the setup's configuration.
     pub inline fn clientPosition(self: *const Self) common.geometry.WidowPoint2D {
-        return platform.window_impl.windowClientPosition(self.impl.handle);
-    }
-
-    /// Returns the position of the top-left corner of the window,
-    /// relative to the virtual desktop's top-left corner.
-    /// # Notes
-    /// The virutal desktop is the desktop created by combining all connected monitors
-    /// where each monitor displays a portion of it.
-    /// The virtual desktop's top-left in a single monitor setup is the same as that monitor's
-    /// top left-corner, in a multi-monitor setup it depends on the setup's configuration.
-    pub inline fn position(self: *const Self) common.geometry.WidowPoint2D {
-        return self.impl.position();
+        return self.impl.clientPosition();
     }
 
     /// Change the position of the window's top-left corner,
@@ -81,18 +98,20 @@ pub const Window = struct {
     /// The `x` and `y` parameters should be in virutal desktop coordinates.
     /// if the window is maximized it is automatically restored.
     /// I fail to think of any situation where this should be used.
-    pub inline fn setPosition(self: *const Self, x: i32, y: i32) void {
-        self.impl.setPosition(x, y);
+    pub inline fn setClientPosition(self: *const Self, x: i32, y: i32) void {
+        self.impl.setClientPosition(x, y);
     }
 
     /// Returns the size in physical pixels of the window's client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title bar and borders.
+    /// If the window allows dpi scaling the returned size might be diffrent from the
+    /// size specified during creation.
     /// The logical size which is the same as the size specified during window creation,
     /// can be aquired by dividing the Physical size with the content scale factor
     /// returned by `Window.contentScale()`.
     pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
-        return platform.window_impl.clientSize(self.impl.handle);
+        return self.impl.clientSize();
     }
 
     /// Changes the client size of the window.
@@ -111,35 +130,30 @@ pub const Window = struct {
         self.impl.setClientSize(&new_size);
     }
 
-    /// Returns the size in physical pixels of the entire window.
-    pub inline fn size(self: *const Self) common.geometry.WidowSize {
-        return platform.window_impl.windowSize(self.impl.handle);
-    }
-
     /// Sets a minimum limit for the window's client size and applys it immediately.
     /// # Parameters
-    /// `min_size`: the new minimum size to be applied.
+    /// `min_size`: the new minimum size to be applied or null to remove size limitation.
     /// # Notes
-    /// If the window isn't resizable any call to this function is useless as
-    /// as it has no effect.
+    /// If the window isn't resizable this function returns immediately
     /// By default no size limit is specified.
     /// The new size limit must have a width and height greater than zero or it's ignored.
     /// if the requested minimum size is bigger than an already set maximum size it's ignored
     /// The new size limit only affects window while it isn't full screen mode.
+    /// If the window allows dpi scaling the specified size is auto scaled by the window's dpi.
     pub inline fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
         self.impl.setMinSize(min_size);
     }
 
     /// Sets a maximum limit for the window's client size, and applys it immediately.
     /// # Parameters
-    /// `max_size`: the new maximum size to be applied.
+    /// `max_size`: the new maximum size to be applied or null to remove size limitation.
     /// # Notes
-    /// If the window isn't resizable any call to this function is useless as
-    /// as it has no effect.
+    /// If the window isn't resizable this function returns immediately.
     /// By default no size limit is specified.
     /// The new size limit must have a width and height greater than zero or it's ignored.
     /// If the requested maximum size is smaller than an already set minimum size it's ignored
     /// The new size limit only affects window while it isn't full screen mode.
+    /// If the window allows dpi scaling the specified size is auto scaled by the window's dpi.
     pub inline fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
         self.impl.setMaxSize(max_size);
     }
@@ -197,7 +211,7 @@ pub const Window = struct {
     /// # Notes
     /// This function has no effect on a full screen window.
     pub inline fn setVisible(self: *Self, visible: bool) void {
-        if (self.impl.data.fullscreen_mode != null) {
+        if (self.impl.data.flags.is_fullscreen) {
             return;
         }
         if (visible) {
@@ -224,12 +238,12 @@ pub const Window = struct {
         self.impl.setResizable(resizable);
     }
 
-    /// Returns true if the window is currently decorated.
+    /// Returns true if the window is currently decorated(has a title bar).
     pub inline fn isDecorated(self: *const Self) bool {
         return self.impl.data.flags.is_decorated;
     }
 
-    /// Removes the window's decorations.
+    /// Sets the window's decorations.
     /// # Parameters
     /// `decorated`: the new decorated state to be set.
     pub inline fn setDecorated(self: *Self, decorated: bool) void {
@@ -265,9 +279,9 @@ pub const Window = struct {
     /// # Parameters
     /// `maximize`: flag whether to maximize or restore(unmaximize).
     /// # Notes
-    /// This function does nothing to a full screen window.
+    /// This function does nothing to a full screen window or a non resizable window.
     pub inline fn setMaximized(self: *Self, maximize: bool) void {
-        if (self.impl.data.fullscreen_mode != null) {
+        if (self.impl.data.flags.is_fullscreen) {
             return;
         }
         if (maximize) {
@@ -329,24 +343,21 @@ pub const Window = struct {
     }
 
     /// Switches the window to fullscreen or back(null) to windowed mode.
+    /// if the function succeeds it returns true else it returns false.
     /// # Parameters
-    /// `fullscreen_mode` : mode to switch to or null to restore the window.
-    /// # Notes
-    /// Possible fullscreen modes are:
-    /// `FullScreenMode.Exclusive`
-    /// A full screen mode with change in the display's video mode.
-    /// This mode should be used when a video mode change is desired,
-    /// `FullScreenMode.Borderless`
-    /// A full screen mode that simply resize the window to fit the entire monitor.
-    pub inline fn setFullscreen(self: *Self, fullscreen_mode: ?common.window_data.FullScreenMode) !void {
-        return self.impl.setFullscreen(fullscreen_mode);
+    /// `value`: whether to set or exit fullscreen mode.
+    /// `video_mode`:  a VideoMode to switch to or null to keep the user's video mode
+    pub inline fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
+        self.impl.setFullscreen(value, video_mode) catch |err| {
+            std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
+            return false;
+        };
+        return true;
     }
 
-    /// Gets the fullscreen's mode.
-    /// # Notes
-    /// If the window isn't fullscreen it returns null.
-    pub inline fn fullscreen(self: *const Self) ?common.window_data.FullScreenMode {
-        return self.impl.data.fullscreen_mode;
+    /// Returns whether the window is fullscreen or not.
+    pub inline fn isFullscreen(self: *const Self) bool {
+        return self.impl.data.flags.is_fullscreen;
     }
 
     /// Returns the scale factor that maps logical pixels to real(physical) pixels.
@@ -462,6 +473,12 @@ pub const Window = struct {
     }
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.
+    /// # Parameters
+    /// `pixels`: a slice to the cursor image's pixel(RGBA) data.
+    /// `width` : the width of the icon in pixels.
+    /// `height`: the height of the icon in pixels.
+    /// `xhot`: the x coordinates of the cursor's hotspot.
+    /// `yhot`: the y coordinates of the cursor's hotspot.
     /// # Notes
     /// Unlike `WidowContext.setWindowIcon` this function also takes the cooridnates of the
     /// cursor hotspot which is the pixel that the system tracks to decide mouse click
@@ -479,7 +496,7 @@ pub const Window = struct {
     }
 
     // # Use only for debug.
-    pub fn debugInfos(self: *const Self) void {
-        self.impl.debugInfos();
+    pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
+        self.impl.debugInfos(size, flags);
     }
 };

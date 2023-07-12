@@ -25,7 +25,7 @@ pub const WidowContext = struct {
     /// There can only be one instance at a time trying
     /// to initialize more would throw an error.
     /// # Errors
-    /// 'OutOfMemory': function could fail due to memory allocation.
+    /// 'OutOfMemory': function could fail due to memory allocation failure.
     pub fn create(allocator: std.mem.Allocator) !*Self {
         const self = try allocator.create(Self);
         try platform.internals.Internals.setup(&self.platform_internals);
@@ -125,15 +125,15 @@ pub const WindowBuilder = struct {
     /// causes undefined behaviour.
     /// Call `deinit()` when done using the WindowBuilder.
     /// # Errors
-    /// 'OutOfMemory': function could fail due to memory allocation.
+    /// 'OutOfMemory': function could fail due to memory allocation Failure.
     pub fn init(
         title: []const u8,
         width: i32,
         height: i32,
         context: *WidowContext,
     ) !Self {
-        // can't be sure of the title's lifetime so copy it first.
         std.debug.assert(width > 0 and height > 0);
+        // can't be sure of the title's lifetime so copy it first.
         const new_title = try context.allocator.alloc(u8, title.len);
         std.mem.copyForwards(u8, new_title, title);
         return Self{
@@ -143,18 +143,15 @@ pub const WindowBuilder = struct {
             // Defalut attributes
             .window_attributes = common.window_data.WindowData{
                 .id = 0,
-                .video = common.video_mode.VideoMode{
-                    .width = width,
-                    .height = height,
-                    .color_depth = 32,
-                    .frequency = 60,
-                },
-                .position = platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION,
-                .restore_point = null,
+                .client_area = common.geometry.WidowArea.init(
+                    platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION.x,
+                    platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION.y,
+                    width,
+                    height,
+                ),
                 .min_size = null,
                 .max_size = null,
                 .aspect_ratio = null,
-                .fullscreen_mode = null,
                 .flags = common.window_data.WindowFlags{
                     .is_visible = true,
                     .is_maximized = false,
@@ -163,9 +160,9 @@ pub const WindowBuilder = struct {
                     .is_decorated = true,
                     .is_topmost = false,
                     .is_focused = false,
+                    .is_fullscreen = false,
                     .cursor_in_client = false,
-                    .accepts_raw_input = false,
-                    .allow_dpi_scaling = true,
+                    .allow_dpi_scaling = false,
                 },
                 .input = common.keyboard_and_mouse.InputState.init(),
             },
@@ -186,18 +183,15 @@ pub const WindowBuilder = struct {
     pub fn build(self: *Self) !Window {
         // First window has id of 1,
         self.window_attributes.id = self.context.nextWindowId();
-        const window = Window{
-            .impl = try platform.window_impl.WindowImpl.create(
-                self.allocator,
-                self.title,
-                platform.window_impl.WidowProps{
-                    .monitors = &self.context.monitors,
-                    .events_queue = &self.context.events_queue,
-                },
-                &self.window_attributes,
-            ),
-            .allocator = self.allocator,
-        };
+        const window = Window.init(
+            self.allocator,
+            self.title,
+            &self.window_attributes,
+            platform.window_impl.WidowProps{
+                .monitors = &self.context.monitors,
+                .events_queue = &self.context.events_queue,
+            },
+        );
         return window;
     }
 
@@ -223,13 +217,14 @@ pub const WindowBuilder = struct {
     /// might be diffrent in window mode but the video mode for
     /// exclusive fullscreen mode retain the given widht and height.
     pub fn withSize(self: *Self, width: i32, height: i32) *Self {
-        self.builder.window_attributes.video.width = width;
-        self.builder.window_attributes.video.height = height;
+        std.debug.assert(width > 0 and height > 0);
+        self.window_attributes.client_area.size.width = width;
+        self.window_attributes.client_area.size.height = height;
         return self;
     }
 
     /// Whether the window is visible(true) or hidden(false).
-    /// if not set the `default` is visible.
+    /// if not set the default is visible.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withVisibility(self: *Self, value: bool) *Self {
@@ -237,21 +232,23 @@ pub const WindowBuilder = struct {
         return self;
     }
 
-    /// The position of the window's top left corner.
-    /// if not set the `default` is decided by the system.
+    /// Choose the position of the client(content area)'s top left corner.
+    /// if not set the default is decided by the system.
     /// # Parameters
-    /// `position`: the new position of the window.
-    pub fn withPosition(self: *Self, position: *const geometry.WidowPoint2D) *Self {
-        self.window_attributes.position = position.*;
+    /// `x`: the y coordinates of the client's top left corner.
+    /// `y`: the y coordinates of the client's top left corner.
+    pub fn withPosition(self: *Self, x: i32, y: i32) *Self {
+        self.window_attributes.client_area.top_left.x = x;
+        self.window_attributes.client_area.top_left.y = y;
         return self;
     }
 
     /// Starts the window in the chosen fullscreen mode.
     /// by default the window isn't fullscreen.
     /// # Parameters
-    /// `mode`: the new `FullScreenMode` enum value.
-    pub fn withFullscreen(self: *Self, mode: FullScreenMode) *Self {
-        self.window_attributes.fullscreen_mode = mode;
+    /// `value`: the boolean value of the flag.
+    pub fn withFullscreen(self: *Self, value: bool) *Self {
+        self.window_attributes.flags.is_fullscreen = value;
         return self;
     }
 
@@ -265,7 +262,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Whether the window has a frame or not.
-    /// if not set the `default` false.
+    /// if not set the default is false.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDecoration(self: *Self, value: bool) *Self {
@@ -274,7 +271,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Whether the window should stay on top even if it lose focus.
-    /// if not set the `default` false.
+    /// if not set the default is false.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withTopMost(self: *Self, value: bool) *Self {
@@ -283,7 +280,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Specify a minimum and maximum window size for resizable windows.
-    /// no size limit is applied by `default`.
+    /// no size limit is applied by default.
     /// # Paramters
     /// `min_size`: the minimum possible size for the window.
     /// `max_size`: the maximum possible size fo the window.
@@ -294,7 +291,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Specify whether the window size should be scaled by the monitor Dpi .
-    /// scaling is applied by `default`.
+    /// scaling is not applied by default.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDPIScaling(self: *Self, value: bool) *Self {
@@ -389,7 +386,7 @@ test "widow.clipboardText" {
 // Exports
 pub const geometry = common.geometry;
 pub const cursor = common.cursor;
-pub const FullScreenMode = common.window_data.FullScreenMode;
+pub const VideoMode = common.video_mode.VideoMode;
 pub const Event = common.event.Event;
 pub const EventType = common.event.EventType;
 pub const keyboard_and_mouse = common.keyboard_and_mouse;
