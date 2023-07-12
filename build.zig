@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
         "simple_window",
         "playing_with_inputs",
         "cursor_and_icon",
-        "window_joystick",
+        "joystick",
     };
     for (examples) |example_name| {
         const example = b.addExecutable(.{

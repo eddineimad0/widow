@@ -39,16 +39,18 @@ pub fn main() void {
     var joy_array = std.ArrayList(u8).init(allocator);
     defer joy_array.deinit();
 
-    // By default the joystick sub system isn't initialized .
-    // and can only be deinitialized during context.deinit().
-    var joy_sys = widow_lib.joystickSubSyst() catch |err| {
+    // create an instance of the JoystickSubSystem.
+    var joy_sys = widow.JoystickSubSystem.create(allocator, widow_lib) catch |err| {
         std.debug.print("Failed to initialize the JoystickSubSystem,{}\n", .{err});
         return;
     };
+    // destroy when done.
+    defer joy_sys.destroy(allocator);
 
     var event: widow.Event = undefined;
     event_loop: while (true) {
         window.processEvents();
+
         for (joy_array.items) |joy_id| {
             joy_sys.updateJoyState(joy_id);
         }
