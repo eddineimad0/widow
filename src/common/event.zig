@@ -7,9 +7,12 @@ const Queue = @import("list.zig").Queue;
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
     WindowResize, // The window client area size was changed.
-    Focus, // True/False if the window got keyboard focus.
+    WindowFocus, // True/False if the window got keyboard focus.
+    WindowShown, // The window was shown to the user.
+    WindowHidden, // The window was hidden from the user.
     WindowMaximize, // The window was minimized.
     WindowMinimize, // The window was maximized.
+    WindowRestore, // The window was restored(from minimized or maximized state).
     WindowMove, // The window has been moved, the Point2D struct specify the
     // new coordinates for the top left corner of the window.
     FileDrop, // Some file was released in the window area.
@@ -83,12 +86,15 @@ pub const FocusEvent = struct {
 
 pub const Event = union(EventType) {
     WindowClose: u32,
+    WindowShown: u32,
+    WindowHidden: u32,
     WindowMaximize: u32,
     WindowMinimize: u32,
+    WindowRestore: u32,
     MouseEnter: u32,
     MouseLeave: u32,
     FileDrop: u32,
-    Focus: FocusEvent,
+    WindowFocus: FocusEvent,
     WindowResize: ResizeEvent,
     WindowMove: MoveEvent,
     MouseMove: MoveEvent,
@@ -111,12 +117,24 @@ pub inline fn createCloseEvent(window_id: u32) Event {
     return Event{ .WindowClose = window_id };
 }
 
+pub inline fn createVisibilityEvent(window_id: u32, shown: bool) Event {
+    if (shown) {
+        return Event{ .WindowShown = window_id };
+    } else {
+        return Event{ .WindowHidden = window_id };
+    }
+}
+
 pub inline fn createMaximizeEvent(window_id: u32) Event {
     return Event{ .WindowMaximize = window_id };
 }
 
 pub inline fn createMinimizeEvent(window_id: u32) Event {
     return Event{ .WindowMinimize = window_id };
+}
+
+pub inline fn createRestoreEvent(window_id: u32) Event {
+    return Event{ .WindowRestore = window_id };
 }
 
 pub inline fn createMouseEnterEvent(window_id: u32) Event {
@@ -132,7 +150,7 @@ pub inline fn createDropFileEvent(window_id: u32) Event {
 }
 
 pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
-    return Event{ .Focus = FocusEvent{
+    return Event{ .WindowFocus = FocusEvent{
         .window_id = window_id,
         .has_focus = focus,
     } };
@@ -260,7 +278,7 @@ pub const EventQueue = struct {
         self.queue.deinit();
     }
 
-    pub fn sendEvent(self: *Self, event: *const Event) void {
+    pub fn queueEvent(self: *Self, event: *const Event) void {
         self.queue.append(event) catch |err| {
             std.log.err("[Event]: Failed to Queue Event,{}\n", .{err});
             return;
