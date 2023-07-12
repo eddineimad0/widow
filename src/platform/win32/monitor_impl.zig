@@ -174,7 +174,7 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
 }
 
 /// Populate the given MonitorInfo struct with the corresponding monitor informations.
-pub fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void {
+pub inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void {
     mi.cbSize = @sizeOf(win32_gdi.MONITORINFO);
     // Always succeed.
     _ = win32_gdi.GetMonitorInfoW(
@@ -255,8 +255,8 @@ pub const MonitorImpl = struct {
         return (self.handle == other.handle and utils.strCmp(self.name, other.name));
     }
 
-    /// Returns the current VideoMode of the monitor.
-    pub fn queryCurrentMode(self: *const Self) VideoMode {
+    /// Populate the output with the current VideoMode of the monitor.
+    pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
         var dev_mode: win32_gdi.DEVMODEW = undefined;
         dev_mode.dmDriverExtra = 0;
         dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
@@ -267,19 +267,22 @@ pub const MonitorImpl = struct {
             0,
         );
 
-        return VideoMode.init(
-            @intCast(i32, dev_mode.dmPelsWidth),
-            @intCast(i32, dev_mode.dmPelsHeight),
-            @intCast(u16, dev_mode.dmDisplayFrequency),
-            @intCast(u8, dev_mode.dmBitsPerPel),
-        );
+        output.width = @intCast(i32, dev_mode.dmPelsWidth);
+        output.height = @intCast(i32, dev_mode.dmPelsHeight);
+        output.frequency = @intCast(u16, dev_mode.dmDisplayFrequency);
+        output.color_depth = @intCast(u8, dev_mode.dmBitsPerPel);
     }
 
-    /// Populate the `area` with the total resolution of the monitor.
-    pub inline fn fullscreenArea(self: *const Self, area: *WidowArea) void {
+    /// Populate the `area` with the monitor's full area.
+    pub inline fn monitorFullArea(self: *const Self, area: *WidowArea) void {
         var mi: win32_gdi.MONITORINFO = undefined;
         queryMonitorInfo(self.handle, &mi);
-        area.* = WidowArea.init(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top);
+        area.* = WidowArea.init(
+            mi.rcMonitor.left,
+            mi.rcMonitor.top,
+            mi.rcMonitor.right - mi.rcMonitor.left,
+            mi.rcMonitor.bottom - mi.rcMonitor.top,
+        );
     }
 
     /// Determines if the desired VideoMode `mode` is possible with
@@ -301,8 +304,9 @@ pub const MonitorImpl = struct {
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
         if (video_mode) |mode| {
             const possible_mode = if (self.isModePossible(mode) == true) mode else mode.selectBestMatch(self.modes.items);
-
-            if (possible_mode.*.equals(&(self.queryCurrentMode()))) {
+            var current_mode: VideoMode = undefined;
+            self.queryCurrentMode(&current_mode);
+            if (possible_mode.*.equals(&current_mode)) {
                 // the desired mode is already current.
                 return;
             }

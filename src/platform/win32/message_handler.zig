@@ -15,7 +15,7 @@ pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
     // we can ask user for confirmation before closing
     // here.
     const event = common.event.createCloseEvent(window.data.id);
-    window.queueEvent(&event);
+    window.sendEvent(&event);
 }
 
 pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
@@ -52,11 +52,11 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
     // Printscreen key only reports a release action.
     if (wparam == @enumToInt(win32_keyboard_mouse.VK_SNAPSHOT)) {
         const fake_event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], common.keyboard_and_mouse.KeyState.Pressed, mods);
-        window.queueEvent(&fake_event);
+        window.sendEvent(&fake_event);
     }
 
     const event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], action, mods);
-    window.queueEvent(&event);
+    window.sendEvent(&event);
 }
 
 pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
@@ -72,7 +72,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
 
     const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Released, utils.getKeyModifiers());
 
-    window.queueEvent(&event);
+    window.sendEvent(&event);
 
     window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Released;
 
@@ -120,7 +120,7 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
 
     const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Pressed, utils.getKeyModifiers());
 
-    window.queueEvent(&event);
+    window.sendEvent(&event);
     window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Pressed;
 }
 
@@ -130,43 +130,53 @@ pub inline fn mouseWheelMSGHandler(
     wheel_delta: f64,
 ) void {
     const event = common.event.createScrollEvent(window.data.id, wheel, wheel_delta);
-    window.queueEvent(&event);
+    window.sendEvent(&event);
 }
 
 pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.LPARAM) void {
-    const styles = window_impl.windowStyles(&window.data);
-    const ex_styles = window_impl.windowExStyles(&window.data);
+    const styles = window_impl.windowStyles(&window.data.flags);
+    const ex_styles = window_impl.windowExStyles(&window.data.flags);
     const info: *win32_window_messaging.MINMAXINFO = @intToPtr(
         *win32_window_messaging.MINMAXINFO,
         @bitCast(usize, lparam),
     );
-    var rect = win32.RECT{
-        .left = 0,
-        .top = 0,
-        .right = 0,
-        .bottom = 0,
-    };
 
-    window_impl.adjustWindowRect(
-        &rect,
-        styles,
-        ex_styles,
-        window.scalingDPI(null),
-    );
+    // Depending on the styles we might need the window's border width and height
+    // let's grab them here.
+    if (window.data.min_size != null or window.data.max_size != null) {
+        var rect = win32.RECT{
+            .left = 0,
+            .top = 0,
+            .right = 0,
+            .bottom = 0,
+        };
 
-    // [Win32api docs]
-    // The maximum tracking size is the largest window size that can be produced
-    // by using the borders to size the window.
-    // The minimum tracking size is the smallest window size that can be produced
-    // by using the borders to size the window.
-    if (window.data.min_size) |size| {
-        info.ptMinTrackSize.x = size.width + (rect.right - rect.left);
-        info.ptMinTrackSize.y = size.height + (rect.bottom - rect.top);
-    }
+        var dpi: ?u32 = null;
+        if (window.data.flags.allow_dpi_scaling) {
+            dpi = window.scalingDPI(null);
+        }
 
-    if (window.data.max_size) |size| {
-        info.ptMaxTrackSize.x = size.width + (rect.right - rect.left);
-        info.ptMaxTrackSize.y = size.height + (rect.bottom - rect.top);
+        window_impl.adjustWindowRect(
+            &rect,
+            styles,
+            ex_styles,
+            dpi,
+        );
+
+        // [Win32api docs]
+        // The maximum tracking size is the largest window size that can be produced
+        // by using the borders to size the window.
+        // The minimum tracking size is the smallest window size that can be produced
+        // by using the borders to size the window.
+        if (window.data.min_size) |size| {
+            info.ptMinTrackSize.x = size.width + (rect.right - rect.left);
+            info.ptMinTrackSize.y = size.height + (rect.bottom - rect.top);
+        }
+
+        if (window.data.max_size) |size| {
+            info.ptMaxTrackSize.x = size.width + (rect.right - rect.left);
+            info.ptMaxTrackSize.y = size.height + (rect.bottom - rect.top);
+        }
     }
 
     if (!window.data.flags.is_decorated) {
@@ -192,8 +202,8 @@ pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win3
             .bottom = 0,
         };
 
-        const styles = window_impl.windowStyles(&window.data);
-        const ex_styles = window_impl.windowExStyles(&window.data);
+        const styles = window_impl.windowStyles(&window.data.flags);
+        const ex_styles = window_impl.windowExStyles(&window.data.flags);
         const new_dpi = utils.loWord(wparam);
         std.debug.print("scaled_size new DPI:{}\n", .{new_dpi});
 
@@ -245,7 +255,7 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
 
         if (codepoint > 0x1F and (codepoint < 0x7F or codepoint > 0x9F)) {
             const event = common.event.createCharEvent(window.data.id, codepoint, utils.getKeyModifiers());
-            window.queueEvent(&event);
+            window.sendEvent(&event);
         }
     }
 }
@@ -303,7 +313,7 @@ pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
         const event = common.event.createDropFileEvent(
             window.data.id,
         );
-        window.queueEvent(&event);
+        window.sendEvent(&event);
         allocator.free(wide_slice);
     }
     win32_shell.DragFinish(drop_handle);

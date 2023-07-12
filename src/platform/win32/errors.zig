@@ -30,6 +30,7 @@ pub const MonitorError = error{
 pub const WindowError = error{
     FailedToCreate,
     NullMonitorHandle,
+    FailedToCopyTitle,
 };
 
 pub const XInputError = error{

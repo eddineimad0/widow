@@ -7,7 +7,7 @@ const monitor_impl = @import("./monitor_impl.zig");
 const icon = @import("./icon.zig");
 const clipboard = @import("./clipboard.zig");
 const common = @import("common");
-const errors = @import("errors.zig");
+const error_defs = @import("errors.zig");
 const Win32Context = @import("globals.zig").Win32Context;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_system_power = zigwin32.system.power;
@@ -42,7 +42,7 @@ pub const Internals = struct {
     // set as for the window (GWLP_USERDATA).
     pub fn setup(self: *Self) !void {
         // first time getting the singleton, must confirm successful init.
-        const win32_singelton = Win32Context.singleton() orelse return errors.WidowWin32Error.FailedToInitPlatform;
+        const win32_singelton = Win32Context.singleton() orelse return error_defs.WidowWin32Error.FailedToInitPlatform;
         self.helper_class = try registerHelperClass(win32_singelton.handles.hinstance);
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
         self.helper_data.joysubsys_ptr = null;
@@ -135,7 +135,7 @@ fn registerHelperClass(hinstance: win32.HINSTANCE) !u16 {
     helper_class.lpszClassName = wide_class_name;
     const class = win32_window_messaging.RegisterClassExW(&helper_class);
     if (class == 0) {
-        return errors.WindowError.FailedToCreate;
+        return error_defs.WindowError.FailedToCreate;
     }
     return class;
 }
@@ -165,7 +165,7 @@ fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
         hinstance,
         null,
     ) orelse {
-        return errors.WindowError.FailedToCreate;
+        return error_defs.WindowError.FailedToCreate;
     };
 
     _ = win32_window_messaging.ShowWindow(helper_window, win32_window_messaging.SW_HIDE);
@@ -259,7 +259,7 @@ pub const MonitorStore = struct {
     /// and adding new connected ones.
     /// # Note
     /// the update is very slow but it's only triggered if a monitor was connected, or disconnected.
-    pub fn updateMonitors(self: *Self) !void {
+    pub fn refreshMonitorsMap(self: *Self) !void {
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
@@ -284,10 +284,11 @@ pub const MonitorStore = struct {
                 }
             }
             if (disconnected) {
-                // Free the name pointer.
+                // Restore any occupying window.
                 if (monitor.window) |*window| {
                     window.*.requestRestore();
                 }
+                // Free the monitor name pointer.
                 monitor.deinit();
                 _ = self.monitors_map.swapRemove(monitor.handle);
             }
@@ -317,24 +318,20 @@ pub const MonitorStore = struct {
         self: *Self,
         monitor_handle: win32.HMONITOR,
         window: *WindowImpl,
-        mode: ?*const common.video_mode.VideoMode,
         monitor_area: *common.geometry.WidowArea,
     ) !void {
         const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
-            return;
+            return error_defs.MonitorError.MonitorNotFound;
         };
 
-        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
-        // We Set this here to avoid wastefully updating the monitors map.
-        self.expected_video_change = true;
-        defer self.expected_video_change = false;
-        try monitor.setVideoMode(mode);
-
         if (self.used_monitors == 0) {
-            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) | @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
-            // first time acquiring a  monitor
+            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) |
+                @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
+            // first time acquiring a monitor
             // prevent the system from entering sleep or turning off.
-            self.prev_exec_state = win32_system_power.SetThreadExecutionState(@intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state));
+            self.prev_exec_state = win32_system_power.SetThreadExecutionState(
+                @intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state),
+            );
         } else {
             if (monitor.window) |old_window| {
                 if (window.handle != old_window.handle) {
@@ -346,24 +343,48 @@ pub const MonitorStore = struct {
 
         monitor.setWindow(window);
         self.used_monitors += 1;
-        monitor.fullscreenArea(monitor_area);
+        monitor.monitorFullArea(monitor_area);
     }
 
     /// Called by the window instance to release any occupied monitor
     pub fn restoreMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
-            return errors.MonitorError.MonitorNotFound;
+            return error_defs.MonitorError.MonitorNotFound;
         };
         monitor.setWindow(null);
-
-        self.expected_video_change = true;
-        defer self.expected_video_change = false;
-        monitor.restoreOrignalVideo();
 
         self.used_monitors -= 1;
         if (self.used_monitors == 0) {
             _ = win32_system_power.SetThreadExecutionState(self.prev_exec_state);
         }
+    }
+
+    pub fn setMonitorVideoMode(
+        self: *Self,
+        monitor_handle: win32.HMONITOR,
+        mode: ?*common.video_mode.VideoMode,
+    ) !void {
+        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+            return error_defs.MonitorError.MonitorNotFound;
+        };
+
+        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
+        // We Set this here to avoid wastefully updating the monitors map.
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+
+        try monitor.setVideoMode(mode);
+    }
+
+    pub fn monitorVideoMode(
+        self: *const Self,
+        monitor_handle: win32.HMONITOR,
+        output: *common.video_mode.VideoMode,
+    ) !void {
+        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+            return error_defs.MonitorError.MonitorNotFound;
+        };
+        monitor.queryCurrentMode(output);
     }
 };
 

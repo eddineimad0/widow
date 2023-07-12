@@ -1021,7 +1021,7 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
                     KeyState.Released,
                     getKeyModifiers(),
                 );
-                window.queueEvent(&fake_event);
+                window.sendEvent(&fake_event);
             }
         }
     }

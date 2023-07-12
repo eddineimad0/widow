@@ -28,9 +28,9 @@ pub fn helperWindowProc(
                 // display is added or removed.
                 if (devices.monitor_store_ptr) |store| {
                     if (!store.expected_video_change) {
-                        std.debug.print("WM_DISPLAYCHANGE video change check\n", .{});
-                        store.updateMonitors() catch {
-                            std.log.err("Failed to update monitors\n", .{});
+                        std.debug.print("[🔔] WM_DISPLAYCHANGE\n", .{});
+                        store.refreshMonitorsMap() catch |err| {
+                            std.log.err("[Monitor]: Failed to refresh monitors,{}\n", .{err});
                         };
                     }
                 }
@@ -39,7 +39,7 @@ pub fn helperWindowProc(
             win32_window_messaging.WM_DRAWCLIPBOARD => {
                 // Sent When The clipboard content gets updated.
                 devices.clipboard_change = true;
-                std.debug.print("Clipboard was updated\n", .{});
+                std.debug.print("[🔔] Clipboard Updated\n", .{});
                 if (devices.next_clipboard_viewer) |viewer| {
                     std.debug.print("Forwarding msg to next viewer\n", .{});
                     _ = win32_window_messaging.SendMessage(viewer, msg, wparam, lparam);
@@ -97,9 +97,6 @@ pub fn mainWindowProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
-    // if (msg == 0x86) {
-    // std.debug.print("[+] Window Message:{}\n", .{msg});
-    // }
     // Get a mutable refrence to the corresponding WindowImpl Structure.
     const window_user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
     var window = @intToPtr(?*window_impl.WindowImpl, @bitCast(usize, window_user_data)) orelse {
@@ -108,8 +105,14 @@ pub fn mainWindowProc(
             // On Windows 10 1607 or above, PMv1 applications may also call
             // EnableNonClientDpiScaling during win32_window_messaging.WM_NCCREATE to request
             // that Windows correctly scale the window's non-client area.
-            const creation_struct_ptr: *win32_window_messaging.CREATESTRUCTW = @intToPtr(*win32_window_messaging.CREATESTRUCTW, @bitCast(usize, lparam));
-            const window_data = @ptrCast(*const common.window_data.WindowData, @alignCast(8, creation_struct_ptr.*.lpCreateParams));
+            const creation_struct_ptr: *win32_window_messaging.CREATESTRUCTW = @intToPtr(
+                *win32_window_messaging.CREATESTRUCTW,
+                @bitCast(usize, lparam),
+            );
+            const window_data = @ptrCast(
+                *const common.window_data.WindowData,
+                @alignCast(8, creation_struct_ptr.*.lpCreateParams),
+            );
             const globl_data = Win32Context.singleton();
             if (globl_data) |singleton_ptr| {
                 if (window_data.flags.allow_dpi_scaling and singleton_ptr.flags.is_win10b1607_or_above) {
@@ -127,6 +130,27 @@ pub fn mainWindowProc(
             // Received upon an attempt to close the window.
             message_handler.closeMSGHandler(window);
             return 0;
+        },
+
+        win32_window_messaging.WM_SHOWWINDOW => {
+            // Sent to a window when the window is about to be hidden or shown.
+            const event = common.event.createVisibilityEvent(
+                window.data.id,
+                wparam == win32.TRUE,
+            );
+            window.sendEvent(&event);
+            // Must forward the message to DefWindowProc in order to show or hide the window.
+        },
+
+        win32_window_messaging.WM_PAINT => {
+            var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
+            const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
+            const x = paint.rcPaint.left;
+            const y = paint.rcPaint.top;
+            const w = paint.rcPaint.right - x;
+            const h = paint.rcPaint.bottom - y;
+            _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
+            _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
         },
 
         win32_window_messaging.WM_KEYUP,
@@ -154,7 +178,7 @@ pub fn mainWindowProc(
                 if (window.win32.cursor.mode.is_captured()) {
                     window_impl.captureCursor(window.handle);
                 } else if (window.win32.cursor.mode.is_disabled()) {
-                    window_impl.disableCursor(window.handle, &window.win32.cursor);
+                    window_impl.disableCursor(window.handle);
                 }
                 window.win32.frame_action = false;
             }
@@ -163,8 +187,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_NCPAINT => {
             // An application can intercept the win32_window_messaging.WM_NCPAINT message
             // and paint its own custom window frame
-            if (!window.data.flags.is_decorated) {
-                // no need to paint the frame for non decorated(Borderless) windows;
+            if (!window.data.flags.is_decorated or window.data.flags.is_fullscreen) {
+                // no need to paint the frame for non decorated(Borderless)
+                // or fullscrenn windows;
                 return 0;
             }
         },
@@ -174,7 +199,7 @@ pub fn mainWindowProc(
             // of the window specified in a prior call to TrackMouseEvent.
             window.data.flags.cursor_in_client = false;
             const event = common.event.createMouseLeftEvent(window.data.id);
-            window.queueEvent(&event);
+            window.sendEvent(&event);
             // All tracking requested by TrackMouseEvent is canceled when this message is generated.
             return 0;
         },
@@ -213,16 +238,16 @@ pub fn mainWindowProc(
             // the message is posted to the window that contains the cursor.
             // Otherwise, the message is posted to the window that has captured the mouse.
             if (!window.data.flags.cursor_in_client) {
-                // Calling TrackMouseEvent in order to receive mouse leave events.
                 var tme = win32_keyboard_mouse.TRACKMOUSEEVENT{
                     .cbSize = @sizeOf(win32_keyboard_mouse.TRACKMOUSEEVENT),
                     .dwFlags = win32_keyboard_mouse.TME_LEAVE,
                     .hwndTrack = window.handle,
                     .dwHoverTime = 0,
                 };
+                // Calling TrackMouseEvent in order to receive mouse leave events.
                 _ = win32_keyboard_mouse.TrackMouseEvent(&tme);
                 const event = common.event.createMouseEnterEvent(window.data.id);
-                window.queueEvent(&event);
+                window.sendEvent(&event);
                 window.data.flags.cursor_in_client = true;
             }
             const new_pos = utils.getMousePosition(lparam);
@@ -232,13 +257,12 @@ pub fn mainWindowProc(
                 new_pos.y,
                 true,
             );
-            window.queueEvent(&event);
+            window.sendEvent(&event);
             return 0;
         },
 
         win32_window_messaging.WM_MOUSEWHEEL => {
             // Sent to the active window when the mouse's vertical scroll wheel is tilted or rotated.
-
             // A positive value indicates that the wheel was rotated forward,
             // away from the user.
             // a negative value indicates that the wheel was rotated backward, toward the user.
@@ -276,12 +300,16 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
-            if (window.data.fullscreen_mode == null and window.data.flags.allow_dpi_scaling) {
+            if (!window.data.flags.is_fullscreen and window.data.flags.allow_dpi_scaling) {
                 const rect_ref: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
                 const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
                     @enumToInt(win32_window_messaging.SWP_NOZORDER) |
                     @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
-                const top = if (window.data.flags.is_topmost) win32_window_messaging.HWND_TOPMOST else win32_window_messaging.HWND_NOTOPMOST;
+                const top = if (window.data.flags.is_topmost)
+                    win32_window_messaging.HWND_TOPMOST
+                else
+                    win32_window_messaging.HWND_NOTOPMOST;
+
                 _ = win32_window_messaging.SetWindowPos(
                     window.handle,
                     top,
@@ -295,7 +323,7 @@ pub fn mainWindowProc(
             const new_dpi = utils.loWord(wparam);
             const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
             const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
-            window.queueEvent(&event);
+            window.sendEvent(&event);
             return 0;
         },
 
@@ -303,7 +331,7 @@ pub fn mainWindowProc(
             // Sent to a window when the size or position of the window is about to change.
             // An application can use this message to override the window's default
             // maximized size and position, or its default minimum or maximum tracking size.
-            if (window.data.fullscreen_mode == null) {
+            if (!window.data.flags.is_fullscreen) {
                 message_handler.minMaxInfoHandler(window, lparam);
             }
             return 0;
@@ -320,13 +348,14 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_SIZE => {
             // Sent to a window after its size has changed.
-            // To avoid creating multiple resize event while the window is being resized
-            const maximized = (wparam == win32_window_messaging.SIZE_MAXIMIZED or (window.data.flags.is_maximized and wparam != win32_window_messaging.SIZE_RESTORED));
+            // usually due to maximizing, minimizing, resizing...etc.
+
+            const maximized = (wparam == win32_window_messaging.SIZE_MAXIMIZED);
             if (window.data.flags.is_maximized != maximized and maximized) {
                 const event = common.event.createMaximizeEvent(
                     window.data.id,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
 
             const minimized = (wparam == win32_window_messaging.SIZE_MINIMIZED);
@@ -334,75 +363,84 @@ pub fn mainWindowProc(
                 const event = common.event.createMinimizeEvent(
                     window.data.id,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
 
-            const new_width = utils.loWord(@bitCast(usize, lparam));
-            const new_height = utils.hiWord(@bitCast(usize, lparam));
+            const restored = (wparam == win32_window_messaging.SIZE_RESTORED and (window.data.flags.is_minimized or window.data.flags.is_maximized));
+            if (restored) {
+                const event = common.event.createRestoreEvent(
+                    window.data.id,
+                );
+                window.sendEvent(&event);
+            }
 
-            // This message is sent multiple times during Window Resize if we were to queue a resize event for each
-            // the user will be bombarded by multiple useless messages so we will only queue the final one.
-            // for now cache the new_width and height
-            window.win32.width_cache = @intCast(i32, new_width);
-            window.win32.height_cache = @intCast(i32, new_height);
+            window.data.flags.is_maximized = maximized;
+            window.data.flags.is_minimized = minimized;
+
+            const new_width = @intCast(i32, utils.loWord(@bitCast(usize, lparam)));
+            const new_height = @intCast(i32, utils.hiWord(@bitCast(usize, lparam)));
+
+            if (minimized or (window.data.client_area.size.width == new_width and
+                window.data.client_area.size.height == new_height))
+            {
+                // No need to report duplicate events.
+                // On minimize window the system resizes the window to a width = 0 and height = 0;
+                // we only report meaningfull changes to the size.
+                return 0;
+            }
+
+            window.data.client_area.size.width = new_width;
+            window.data.client_area.size.height = new_height;
             window.win32.size_pos_update |= window_impl.WindowWin32Data.SIZE_UPDATE;
 
             if (!window.win32.frame_action) {
-                // if it isn't a user dragging the frame
-                // it was probably triggred by code (resize function).
+                // This message is sent multiple times when the user resizes the window
+                // by dragging it's borders if we were to queue a resize event for each
+                // the user will be bombarded by multiple useless messages so we will only queue the final one.
                 const event = common.event.createResizeEvent(
                     window.data.id,
-                    @intCast(i32, new_width),
-                    @intCast(i32, new_height),
+                    new_width,
+                    new_height,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
 
-            if (window.data.fullscreen_mode != null and window.data.flags.is_minimized != minimized) {
-                if (minimized) {
-                    window.releaseMonitor() catch {
-                        std.debug.print("Failed To release monitor.", .{});
-                        window.requestRestore();
-                    };
-                }
-                window.acquireMonitor() catch {
-                    std.debug.print("Failed To Switch video mode", .{});
-                    window.requestRestore();
-                };
-            }
-            window.data.flags.is_maximized = maximized;
-            window.data.flags.is_minimized = minimized;
             return 0;
         },
 
-        win32_window_messaging.WM_WINDOWPOSCHANGED => {
-            const window_pos = @intToPtr(
-                *const win32_window_messaging.WINDOWPOS,
-                @bitCast(usize, lparam),
-            );
-            if (window_pos.x != window.data.position.x or window_pos.y != window.data.position.y) {
-                window.data.position.x = window_pos.x;
-                window.data.position.y = window_pos.y;
-                window.win32.size_pos_update |= window_impl.WindowWin32Data.POSITON_UPDATE;
-            }
-            // same as WM_SIZE a lot of event will be sent during the move action
-            // we will only report the final postion though.
+        win32_window_messaging.WM_MOVE => blk: {
+            // Sent after a window has been moved.
+            // the lparam holds the new client top left coords.
 
+            // Our minimized flag is still not set so check using the winapi.
+            if (win32_window_messaging.IsIconic(window.handle) != 0) {
+                // When minimized don't change the top left position.
+                break :blk;
+            }
+
+            const xpos = utils.getXLparam(@bitCast(usize, lparam));
+            const ypos = utils.getYLparam(@bitCast(usize, lparam));
+
+            if (window.data.client_area.top_left.x == xpos and
+                window.data.client_area.top_left.y == ypos)
+            {
+                // No need to report duplicate events.
+                break :blk;
+            }
+
+            window.data.client_area.top_left.x = xpos;
+            window.data.client_area.top_left.y = ypos;
+
+            window.win32.size_pos_update |= window_impl.WindowWin32Data.POSITON_UPDATE;
             if (!window.win32.frame_action) {
-                // if it isn't a user using the frame
-                // it was probably triggred by code (setPosition function).
                 const event = common.event.createMoveEvent(
                     window.data.id,
-                    window_pos.x,
-                    window_pos.y,
+                    window.data.client_area.top_left.x,
+                    window.data.client_area.top_left.y,
                     false,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
-
-            // if we want to receive WM_SIZE and WM_MOVE messages we need to pass
-            // this message to DefineWindowProc.
-            // Let DefineWindowProc handle the rest.
         },
 
         win32_window_messaging.WM_SETCURSOR => {
@@ -419,17 +457,17 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SETFOCUS => {
             // Sent to a window after it has gained the keyboard focus.
             const event = common.event.createFocusEvent(window.data.id, true);
-            window.queueEvent(&event);
+            window.sendEvent(&event);
+            window.data.flags.is_focused = true;
             if (!window.win32.frame_action) {
                 // Don't disable or capture the cursor.
                 // until the frame action is done.
                 if (window.win32.cursor.mode.is_captured()) {
                     window_impl.captureCursor(window.handle);
                 } else if (window.win32.cursor.mode.is_disabled()) {
-                    window_impl.disableCursor(window.handle, &window.win32.cursor);
+                    window_impl.disableCursor(window.handle);
                 }
             }
-            window.data.flags.is_focused = true;
             return 0;
         },
 
@@ -437,13 +475,12 @@ pub fn mainWindowProc(
             // Sent to a window immediately before it loses the keyboard focus.
             if (window.win32.cursor.mode.is_captured()) {
                 window_impl.releaseCursor();
-                window.win32.cursor.mode = common.cursor.CursorMode.Normal;
             } else if (window.win32.cursor.mode.is_disabled()) {
                 window_impl.enableCursor(&window.win32.cursor);
             }
 
             const event = common.event.createFocusEvent(window.data.id, false);
-            window.queueEvent(&event);
+            window.sendEvent(&event);
             window.data.flags.is_focused = false;
             return 0;
         },
@@ -453,7 +490,7 @@ pub fn mainWindowProc(
             // parameter are used internally by the system.
             switch (wparam & 0xFFF0) {
                 win32.SC_SCREENSAVE, win32.SC_MONITORPOWER => {
-                    if (window.data.fullscreen_mode != null) {
+                    if (window.data.flags.is_fullscreen) {
                         // No screen saver for fullscreen mode
                         return 0;
                     }
@@ -478,7 +515,7 @@ pub fn mainWindowProc(
             // The win32_window_messaging.WM_UNICHAR message is similar to WM_CHAR,
             // but it uses Unicode Transformation Format (UTF)-32
             const event = common.event.createCharEvent(window.data.id, @truncate(u32, wparam), utils.getKeyModifiers());
-            window.queueEvent(&event);
+            window.sendEvent(&event);
             return 0;
         },
 
@@ -504,24 +541,23 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_EXITSIZEMOVE => {
             // now we should report the resize and postion change events.
-            // const size = window_impl.windowSize(window.handle);
-            // std.debug.print("New Size = {},size cache ({},{})\n", .{ size, window.win32.width_cache, window.win32.height_cache });
             if (window.win32.size_pos_update & window_impl.WindowWin32Data.SIZE_UPDATE != 0) {
+                // At the end of a resize loop set the new client size and width.
                 const event = common.event.createResizeEvent(
                     window.data.id,
-                    window.win32.width_cache,
-                    window.win32.height_cache,
+                    window.data.client_area.size.width,
+                    window.data.client_area.size.height,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
             if (window.win32.size_pos_update & window_impl.WindowWin32Data.POSITON_UPDATE != 0) {
                 const event = common.event.createMoveEvent(
                     window.data.id,
-                    window.data.position.x,
-                    window.data.position.y,
+                    window.data.client_area.top_left.x,
+                    window.data.client_area.top_left.y,
                     false,
                 );
-                window.queueEvent(&event);
+                window.sendEvent(&event);
             }
         },
 

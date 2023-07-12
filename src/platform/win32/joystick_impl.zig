@@ -69,7 +69,7 @@ pub const JoystickSubSystemImpl = struct {
     }
 
     pub inline fn sendEvent(self: *Self, event: *const common_event.Event) void {
-        self.events_queue_ref.sendEvent(event);
+        self.events_queue_ref.queueEvent(event);
     }
 
     /// Detect any new connected joystick.
