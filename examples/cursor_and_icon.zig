@@ -18,8 +18,8 @@ pub fn main() void {
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
         "Simple window",
-        800,
-        600,
+        1024,
+        640,
         widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
@@ -53,6 +53,10 @@ pub fn main() void {
                 EventType.KeyBoard => |*key| {
                     if (key.state.isPressed()) {
                         switch (key.scancode) {
+                            ScanCode.Q => {
+                                // let's request closing the window on pressing Q key
+                                window.queueCloseEvent();
+                            },
                             ScanCode.C => {
                                 window.setCursorMode(CursorMode.Captured);
                             },
@@ -62,8 +66,8 @@ pub fn main() void {
                             ScanCode.S => {
                                 window.setCursorMode(CursorMode.Normal);
                             },
-                            ScanCode.Q => {
-                                const black_box = [_]u8{0} ** (32 * 32 * 4);
+                            ScanCode.I => {
+                                const black_box = [_]u8{255} ** (32 * 32 * 4);
                                 window.setCursor(&black_box, 32, 32, 0, 0) catch {
                                     std.debug.print("Failed to set window's cursor.\n", .{});
                                 };

@@ -1,7 +1,7 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
-const ScanCode = widow.keyboard_and_mouse.ScanCode;
+const VirtualCode = widow.keyboard_and_mouse.VirtualCode;
 const CursorMode = widow.cursor.CursorMode;
 const allocator = std.heap.c_allocator;
 
@@ -29,8 +29,19 @@ pub fn main() void {
         return;
     };
 
+    _ = builder.withResize(true)
+        .withDPIScaling(false)
+        .withPosition(200, 200)
+        .withSize(800, 600)
+        .withDecoration(true);
+
+    _ = builder.withTitle("Re:Simple Window") catch |err| {
+        std.debug.print("Failed to change window title,{}\n", .{err});
+        return;
+    };
+
     // create our window,
-    var mywindow = builder.withResize(true).withDPIScaling(false).build() catch |err| {
+    var mywindow = builder.build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -43,7 +54,7 @@ pub fn main() void {
     var event: widow.Event = undefined;
     event_loop: while (true) {
         // Process window events posted by the system.
-        mywindow.processEvents();
+        mywindow.waitEvent();
 
         // All entities in the library send their
         // events to a central event queue in the WidowContext instance.
@@ -52,7 +63,9 @@ pub fn main() void {
                 // Possible Events
                 // WindowClose => The X icon on the window frame was pressed.
                 // WindowResize => The window client area size was changed.
-                // Focus => True/False if the window got keyboard focus.
+                // WindowShown, => The window was shown to the user.
+                // WindowHidden, => The window was hidden from the user.
+                // WindowFocus => True/False if the window got keyboard focus.
                 // WindowMaximize => The window was minimized.
                 // WindowMinimize => The window was maximized.
                 // WindowMove => The window has been moved, the Point2D struct specify the
@@ -67,6 +80,7 @@ pub fn main() void {
                 // MouseLeave => The mouse exited the client area of the window.
                 // DPIChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
+
                 EventType.WindowClose => |window_id| {
                     // The user has requested to close the window,
                     // and the application should proceed to calling deinit on the window instance.
@@ -76,22 +90,61 @@ pub fn main() void {
                     break :event_loop;
                 },
                 EventType.KeyBoard => |*key| {
-                    // This event holds the keyboard key,
+                    // This event holds the keyboard key virtualcode (symbolic representation that
+                    // depends on the language settigns) and scancode (Hardware representation of the key),
+                    // in short scancode is the symbol of the key on the keyboard,the virtual key is the
+                    // symbol the key represents with the current input language settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    std.debug.print("Window #{}\nVirtual Key:{}\nState:{}\nmods:{}\n", .{
-                        key.window_id,
-                        key.scancode,
-                        key.state,
-                        key.mods,
-                    });
-                    if (key.scancode == ScanCode.N and key.state.isPressed()) {
-                        if (key.mods.shift) {
-                            mywindow.setCursorMode(CursorMode.Normal);
-                        } else if (key.mods.ctrl) {
-                            mywindow.setCursorMode(CursorMode.Disabled);
-                        } else {
-                            mywindow.setCursorMode(CursorMode.Captured);
+                    // std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                    //     key.window_id,
+                    //     key.virtualcode,
+                    //     key.scancode,
+                    //     key.state,
+                    //     key.mods,
+                    // });
+                    if (key.state.isPressed()) {
+                        if (key.virtualcode == VirtualCode.Q) {
+                            // let's request closing the window on pressing Q key
+                            mywindow.queueCloseEvent();
+                        }
+                        if (key.virtualcode == VirtualCode.D) {
+                            mywindow.debugInfos(true, true);
+                        }
+                        if (key.virtualcode == VirtualCode.P) {
+                            std.debug.print("ClientPosition:{}\n", .{mywindow.clientPosition()});
+                        }
+                        if (key.virtualcode == VirtualCode.S) {
+                            mywindow.setClientPosition(0, 0);
+                        }
+                        if (key.virtualcode == VirtualCode.C) {
+                            mywindow.setClientSize(1024, 640);
+                        }
+                        if (key.virtualcode == VirtualCode.R) {
+                            const resizable = mywindow.isResizable();
+                            mywindow.setResizable(!resizable);
+                        }
+                        if (key.virtualcode == VirtualCode.B) {
+                            const decorated = mywindow.isDecorated();
+                            mywindow.setDecorated(!decorated);
+                        }
+                        if (key.virtualcode == VirtualCode.E) {
+                            var video = widow.VideoMode.init(800, 600, 60, 32);
+                            if (key.mods.shift) {
+                                _ = mywindow.setFullscreen(true, &video);
+                            } else {
+                                _ = mywindow.setFullscreen(true, null);
+                            }
+                        }
+                        if (key.virtualcode == VirtualCode.Escape) {
+                            _ = mywindow.setFullscreen(false, null);
+                        }
+                        if (key.virtualcode == VirtualCode.N) {
+                            if (key.mods.shift) {
+                                mywindow.setMinSize(null);
+                            } else {
+                                mywindow.setMinSize(widow.geometry.WidowSize{ .width = 300, .height = 300 });
+                            }
                         }
                     }
                 },
@@ -127,7 +180,7 @@ pub fn main() void {
                         std.debug.print("Mouse in client top left of window #{} \n", .{motion.window_id});
                     }
                 },
-                EventType.Focus => |*focus_event| {
+                EventType.WindowFocus => |*focus_event| {
                     // This event holds a boolean flag on whether the window got or lost focus.
                     std.debug.print("Focus ", .{});
                     if (focus_event.has_focus) {
@@ -152,6 +205,15 @@ pub fn main() void {
                 EventType.WindowMinimize => |window_id| {
                     std.debug.print("Window #{} was minimized\n", .{window_id});
                 },
+                EventType.WindowShown => |window_id| {
+                    std.debug.print("Window #{} was Shown\n", .{window_id});
+                },
+                EventType.WindowHidden => |window_id| {
+                    std.debug.print("Window #{} was Hidden\n", .{window_id});
+                },
+                EventType.WindowRestore => |window_id| {
+                    std.debug.print("Window #{} was restored\n", .{window_id});
+                },
                 EventType.Character => |*char| {
                     // This event holds a unicode character codepoint and keymodifers that were pressed
                     // during the event.
@@ -164,8 +226,8 @@ pub fn main() void {
                     }
                 },
                 EventType.WindowResize => |*resize_event| {
-                    // This event holds the new client width and height.
-                    std.debug.print("new width:{} | new height:{} of window #{}\n", .{
+                    // This event holds the new physical(dpi scaled) client width and height.
+                    std.debug.print("new client width:{} | new client height:{} of window #{}\n", .{
                         resize_event.width,
                         resize_event.height,
                         resize_event.window_id,
@@ -187,7 +249,10 @@ pub fn main() void {
                     }
                 },
                 EventType.WindowMove => |*new_pos| {
-                    std.debug.print("Window #{} new position:({},{})\n", .{ new_pos.window_id, new_pos.x, new_pos.y });
+                    std.debug.print(
+                        "Window #{} new client position:({},{})\n",
+                        .{ new_pos.window_id, new_pos.x, new_pos.y },
+                    );
                 },
                 else => {
                     continue;

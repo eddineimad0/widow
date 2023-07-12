@@ -5,7 +5,6 @@ const ScanCode = widow.keyboard_and_mouse.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
 const WidowSize = widow.geometry.WidowSize;
 const AspectRatio = widow.geometry.AspectRatio;
-const FullScreenMode = widow.FullScreenMode;
 const allocator = std.heap.c_allocator;
 
 pub fn main() void {
@@ -79,17 +78,9 @@ pub fn main() void {
                                     window.setMaxSize(WidowSize{ .width = 1000, .height = 1000 });
                                 }
                             },
-                            ScanCode.P => {
-                                if (key.mods.shift) {
-                                    window.setPosition(0, 0);
-                                }
-                                std.debug.print("Widnow Position {}\n", .{window.position()});
-                            },
                             ScanCode.S => {
                                 if (key.mods.shift) {
                                     window.setClientSize(800, 600);
-                                } else if (key.mods.ctrl) {
-                                    std.debug.print("Window Size {}\n", .{window.size()});
                                 } else if (key.mods.alt) {
                                     window.setClientSize(640, 480);
                                 } else {
@@ -119,9 +110,6 @@ pub fn main() void {
                                     continue;
                                 };
                             },
-                            ScanCode.D => {
-                                window.debugInfos();
-                            },
                             ScanCode.M => {
                                 if (key.mods.shift) {
                                     const maximized = window.isMaximized();
@@ -145,29 +133,7 @@ pub fn main() void {
                                 window.setOpacity(opacity);
                             },
                             ScanCode.Y => {
-                                if (key.mods.shift) {
-                                    const client_size = window.clientSize();
-                                    window.setCursorPosition(@divExact(client_size.width, 2), @divExact(client_size.height, 2));
-                                } else {
-                                    const cursor_pos = window.cursorPosition();
-                                    std.debug.print("Cursor Position: ({},{})\n", .{ cursor_pos.x, cursor_pos.y });
-                                }
-                            },
-                            ScanCode.E => {
-                                if (key.mods.shift) {
-                                    window.setFullscreen(FullScreenMode.Exclusive) catch {
-                                        std.debug.print("Failed to switch video mode\n", .{});
-                                    };
-                                } else {
-                                    window.setFullscreen(FullScreenMode.Borderless) catch {
-                                        unreachable;
-                                    };
-                                }
-                            },
-                            ScanCode.Escape => {
-                                window.setFullscreen(null) catch {
-                                    unreachable;
-                                };
+                                window.setDecorated(false);
                             },
                             ScanCode.F => {
                                 std.debug.print("--------Window Flags--------\n", .{});
@@ -194,11 +160,6 @@ pub fn main() void {
                             },
                             else => {},
                         }
-                    }
-                },
-                EventType.Focus => |focus_event| {
-                    if (!focus_event.has_focus and window.isVisible()) {
-                        window.requestUserAttention();
                     }
                 },
                 else => {
