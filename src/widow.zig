@@ -7,7 +7,6 @@ pub const WidowContext = struct {
     platform_internals: platform.internals.Internals,
     monitors: platform.internals.MonitorStore,
     events_queue: common.event.EventQueue,
-    joystick_sys: ?platform.joystick.JoystickSubSystemImpl,
     allocator: std.mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
 
@@ -31,7 +30,6 @@ pub const WidowContext = struct {
         try platform.internals.Internals.setup(&self.platform_internals);
         self.monitors = try platform.internals.MonitorStore.init(allocator);
         self.events_queue = common.event.EventQueue.init(allocator);
-        self.joystick_sys = null;
         self.allocator = allocator;
         self.next_window_id = 0;
         // The monitors store will recieve updates through the helper window
@@ -42,31 +40,26 @@ pub const WidowContext = struct {
         return self;
     }
 
-    /// Free allocated ressources.
+    /// Destroys the instance and free allocated ressources.
     /// # Parameters
     /// `allocator`: the memory allocator used during initialization.
+    /// # Note
+    /// the WidowContext instance should be the last thing you destroy,
+    /// as all other created library entities(Window,JoystickSubSystem) hold
+    /// a refrence to it, destroying this one before the others will cause
+    /// undefined behaviour and crash you application.
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        if (self.joystick_sys) |*jss| {
-            jss.deinit();
-        }
-        self.joystick_sys = null;
         self.monitors.deinit();
         self.platform_internals.deinit(self.allocator);
         allocator.destroy(self);
     }
 
-    /// Retrieves an event fromt the event queue,
+    /// Retrieves an event from the event queue,
     /// returns false if the queue is empty.
     /// # Parameters
     /// `event`: pointer to an event variable to be populated.
     pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
         return self.events_queue.popEvent(event);
-    }
-
-    /// Returns the next available window ID.
-    fn nextWindowId(self: *Self) u32 {
-        self.next_window_id += 1;
-        return self.next_window_id;
     }
 
     /// Returns the current text content of the system clipboard.
@@ -85,22 +78,10 @@ pub const WidowContext = struct {
         return self.platform_internals.setClipboardText(self.allocator, text);
     }
 
-    /// Initializes and returns a shallow copy of the library's JoystickSubSystem.
-    /// once initialized the JoystickSubSystem lives as long as the WidowContext instance,
-    /// so subsequent calls to this function will won't do any init logic.
-    pub inline fn joystickSubSyst(self: *Self) !JoystickSubSystem {
-        if (self.joystick_sys == null) {
-            self.joystick_sys = try platform.joystick.JoystickSubSystemImpl.init(self.allocator, &self.events_queue);
-            // We assign it here so we can access it in the helper window procedure.
-            self.platform_internals.setStatePointer(
-                platform.internals.Internals.StatePointerMode.Joystick,
-                @ptrCast(*anyopaque, &self.joystick_sys),
-            );
-            // First poll to detect joystick that are already present.
-            self.joystick_sys.?.queryConnectedJoys();
-        }
-
-        return JoystickSubSystem{ .impl = &self.joystick_sys.? };
+    /// Returns the next available window ID.
+    fn nextWindowId(self: *Self) u32 {
+        self.next_window_id += 1;
+        return self.next_window_id;
     }
 };
 
@@ -301,8 +282,47 @@ pub const WindowBuilder = struct {
 };
 
 pub const JoystickSubSystem = struct {
-    impl: *platform.joystick.JoystickSubSystemImpl,
+    impl: platform.joystick.JoystickSubSystemImpl,
+    context: *WidowContext,
     const Self = @This();
+
+    /// Creates an instance of the JoystickSubSystem struct.
+    /// # Parameters
+    /// `allocator`: the memory allocator to be used when allocating joysticks data.
+    /// `widow_context`: a pointer to a WidowContext instance.
+    /// # Notes
+    /// User should deinitialize the instance once done,
+    /// to free the allocated ressources.
+    /// You might create multiple instances of the JoystickSubSystem but only the
+    /// last one will receive hardware connection and disconnection notifications
+    /// i.e only the last one will have acurate joysick input data.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation failure.
+    pub fn create(allocator: std.mem.Allocator, widow_cntxt: *WidowContext) !*Self {
+        var self = try allocator.create(Self);
+        try platform.joystick.JoystickSubSystemImpl.setup(&self.impl, allocator, &widow_cntxt.events_queue);
+        self.context = widow_cntxt;
+        // TODO: this setState pointer doesn't feel cross platform friendly.
+        widow_cntxt.platform_internals.setStatePointer(
+            platform.internals.Internals.StatePointerMode.Joystick,
+            @ptrCast(*anyopaque, &self.impl),
+        );
+        // First poll to detect joystick that are already present.
+        self.impl.queryConnectedJoys();
+        return self;
+    }
+
+    /// Destroys the instance of the JoystickSubSystem struct.
+    /// # Parameters
+    /// `allocator`: the memory allocator to be used to allocate the instance.
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+        self.context.platform_internals.setStatePointer(
+            platform.internals.Internals.StatePointerMode.Joystick,
+            null,
+        );
+        self.impl.deinit();
+        allocator.destroy(self);
+    }
 
     /// Returns the maximum number of supported joysticks by the library.
     pub inline fn joysticksMaxCount() comptime_int {
