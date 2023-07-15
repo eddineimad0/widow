@@ -43,7 +43,7 @@ pub fn main() void {
     };
 
     // create our window,
-    var mywindow = 
+    var mywindow =
     builder.withResize(true).withDPIScaling(false).build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -55,6 +55,12 @@ pub fn main() void {
     defer mywindow.deinit();
 }
 ```
+
+## Minimum Zig Version
+
+0.11.0-dev.3395+1e7dcaa3a
+
+the main branch will stick to official release once 0.11.0 is out.
 
 ## Contributing
 
