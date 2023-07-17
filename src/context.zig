@@ -2,6 +2,8 @@ const std = @import("std");
 const platform = @import("platform");
 const Window = @import("window.zig").Window;
 const common = @import("common");
+const joystick = common.joystick;
+const geometry = common.geometry;
 
 pub const WidowContext = struct {
     platform_internals: platform.internals.Internals,
@@ -402,12 +404,3 @@ test "widow.clipboardText" {
     try testing.expect(copied_string3.ptr != copied_string.ptr);
     std.debug.print("\n 3rd clipboard value:{s}\n string length:{}\n", .{ copied_string3, copied_string2.len });
 }
-
-// Exports
-pub const geometry = common.geometry;
-pub const cursor = common.cursor;
-pub const VideoMode = common.video_mode.VideoMode;
-pub const Event = common.event.Event;
-pub const EventType = common.event.EventType;
-pub const keyboard_and_mouse = common.keyboard_and_mouse;
-pub const joystick = common.joystick;
