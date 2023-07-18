@@ -20,10 +20,13 @@ pub const VideoMode = struct {
     }
 
     pub fn equals(self: *const Self, other: *const Self) bool {
-        return (self.width == other.width and self.height == other.height and self.color_depth == other.color_depth and self.frequency == other.frequency);
+        return (self.width == other.width and
+            self.height == other.height and
+            self.color_depth == other.color_depth and
+            self.frequency == other.frequency);
     }
 
-    /// this function returns the closest possible video mode to the `desired_mode`
+    /// This function returns the closest possible video mode to the `desired_mode`
     /// from a slice of supported video modes.
     pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) *const VideoMode {
         var ret_val = desired_mode;

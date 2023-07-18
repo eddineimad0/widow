@@ -8,7 +8,7 @@ pub const AspectRatio = WidowPoint2D;
 
 pub const WidowSize = struct {
     // The width and hight are both i32 and not u32
-    // for best compatibility with the API functions,
+    // for best compatibility with the API functions
     // that expects i32 data type for both width and height.
     width: i32,
     height: i32,
