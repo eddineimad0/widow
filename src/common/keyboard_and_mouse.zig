@@ -283,3 +283,26 @@ pub const InputState = struct {
         };
     }
 };
+
+// Events.
+//
+pub const KeyEvent = struct {
+    window_id: u32, // the window with keyboard focus.
+    virtualcode: VirtualCode,
+    scancode: ScanCode,
+    state: KeyState,
+    mods: KeyModifiers,
+};
+
+pub const MouseButtonEvent = struct {
+    window_id: u32,
+    button: MouseButton,
+    state: MouseButtonState,
+    mods: KeyModifiers,
+};
+
+pub const WheelEvent = struct {
+    window_id: u32,
+    wheel: MouseWheel,
+    delta: f64,
+};

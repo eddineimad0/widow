@@ -1,8 +1,12 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
+const KeyEvent = input.KeyEvent;
+const KeyModifiers = input.KeyModifiers;
+const MouseButtonEvent = input.MouseButtonEvent;
+const WheelEvent = input.WheelEvent;
 const joystick = @import("joystick.zig");
-const Queue = @import("list.zig").Queue;
+const Queue = @import("queue.zig").Queue;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -46,27 +50,6 @@ pub const MoveEvent = struct {
     y: i32,
 };
 
-pub const KeyEvent = struct {
-    window_id: u32, // the window with keyboard focus.
-    virtualcode: input.VirtualCode,
-    scancode: input.ScanCode,
-    state: input.KeyState,
-    mods: input.KeyModifiers,
-};
-
-pub const MouseButtonEvent = struct {
-    window_id: u32,
-    button: input.MouseButton,
-    state: input.MouseButtonState,
-    mods: input.KeyModifiers,
-};
-
-pub const WheelEvent = struct {
-    window_id: u32,
-    wheel: input.MouseWheel,
-    delta: f64,
-};
-
 pub const DPIChangeEvent = struct {
     window_id: u32,
     dpi: u32,
@@ -76,7 +59,7 @@ pub const DPIChangeEvent = struct {
 pub const CharacterEvent = struct {
     window_id: u32,
     codepoint: u21,
-    mods: input.KeyModifiers,
+    mods: KeyModifiers,
 };
 
 pub const FocusEvent = struct {
