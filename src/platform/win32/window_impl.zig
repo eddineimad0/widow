@@ -316,7 +316,6 @@ pub const WindowWin32Data = struct {
     restore_frame: ?common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
-    keymenu: bool,
     frame_action: bool,
     size_pos_update: u8, // we will use this to filter repeating size and postion events.
     pub const NO_SIZE_POSITION_UPDATE = @as(u8, 0x00);
@@ -360,7 +359,6 @@ pub const WindowImpl = struct {
                 .bg_handle = null,
             },
             .high_surrogate = 0,
-            .keymenu = false,
             .frame_action = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
             .restore_frame = null,

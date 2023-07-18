@@ -520,7 +520,7 @@ pub fn mainWindowProc(
             // WM_CHAR | WM_SYSCHAR message uses UTF-16
             // code units in its wParam if the Unicode version of the RegisterClass function was used
             message_handler.charEventHandler(window, wparam);
-            if (msg != win32_window_messaging.WM_SYSCHAR or !window.win32.keymenu) {
+            if (msg != win32_window_messaging.WM_SYSCHAR) {
                 return 0;
             }
         },

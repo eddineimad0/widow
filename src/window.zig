@@ -414,7 +414,7 @@ pub const Window = struct {
     /// The specified position should be relative to the client area's top-left corner.
     /// with everything above it having a negative y-coord,
     /// and everthing to the left of it having a negative x-coord.
-    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
+    pub inline fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
         if (self.isFocused()) {
             self.impl.setCursorPosition(x, y);
         }
