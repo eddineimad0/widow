@@ -78,7 +78,6 @@ pub const JoystickSubSystemImpl = struct {
     /// Detect if any old joystick was disconnected.
     pub fn queryDisconnectedJoys(self: *Self) void {
         for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
-            // TODO why isn't this connected
             if (self.joys[joy_id].connected) {
                 switch (self.joys_exdata[joy_id]) {
                     JoystickAPI.XInput => |*xdata| {
@@ -97,7 +96,6 @@ pub const JoystickSubSystemImpl = struct {
             std.log.warn("[Joystick]: Bad joystick id,{}", .{joy_id});
         }
 
-        // const joy = &self.joys[joy_id];
         switch (self.joys_exdata[joy_id]) {
             JoystickAPI.XInput => |*xdata| {
                 if (!xinput.pollPadState(self, joy_id, xdata)) {

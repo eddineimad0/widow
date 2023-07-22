@@ -2,7 +2,6 @@ const windows = @import("std").os.windows;
 const zigwin32 = @import("zigwin32");
 
 // Windows Data Types:
-// pub const HWND = zigwin32.everything.HWND;
 pub const HINSTANCE = windows.HINSTANCE;
 pub const HRESULT = windows.HRESULT;
 pub const NTSTATUS = windows.NTSTATUS;
@@ -59,8 +58,8 @@ pub const WM_MOUSELEAVE = @as(u32, 0x02A3);
 pub const WM_UNICHAR = @as(u32, 0x0109);
 pub const DIDFT_OPTIONAL = @as(u32, 0x80000000);
 pub const GUID_DEVINTERFACE_HID = GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
-// The zigwin32 function uses enum as the type of `iModeNume` and therfore doen't
-// allow enumerating all device's graphics mode.
+// In zigwin32 'EnumDisplaySettingsExW' uses enum(u32) as the type of `iModeNume` parameter and therfore doesn't
+// allow enumerating all device's graphics mode incrementally through a loop.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsexw
 pub const ENUM_CURRENT_SETTINGS = @as(u32, 0xFFFFFFFF);
 pub const ENUM_REGISTRY_SETTINGS = @as(u32, 0xFFFFFFFE);

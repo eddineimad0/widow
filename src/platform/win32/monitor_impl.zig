@@ -5,8 +5,6 @@ const win32_gdi = @import("zigwin32").graphics.gdi;
 const MonitorError = @import("errors.zig").MonitorError;
 const WindowImpl = @import("./window_impl.zig").WindowImpl;
 const VideoMode = @import("common").video_mode.VideoMode;
-const WidowPoint2D = @import("common").geometry.WidowPoint2D;
-const WidowSize = @import("common").geometry.WidowSize;
 const WidowArea = @import("common").geometry.WidowArea;
 const Win32Context = @import("globals.zig").Win32Context;
 const ArrayList = std.ArrayList;
@@ -26,7 +24,6 @@ fn EnumMonitorProc(
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
     // we'll need to compare the names to figure out the right handle.
     var mi: win32_gdi.MONITORINFOEXW = undefined;
-    // Only populate the size the reste will be populated by the functions `GetMonitorInfoW`.
     mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(win32_gdi.MONITORINFOEXW);
     if (win32_gdi.GetMonitorInfoW(handle, @ptrCast(*win32_gdi.MONITORINFO, &mi)) == 1) {
         if (utils.wideStrZCmp(@ptrCast([*:0]const u16, &mi.szDevice), @ptrCast([*:0]const u16, data_ptr.*[1].ptr))) {
@@ -39,12 +36,16 @@ fn EnumMonitorProc(
 /// Returns the handle used by the system to identify the monitor.
 fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
     var dm: win32_gdi.DEVMODEW = undefined;
-    // The reste of the fields will be populated by `EnumDisplaySettingsExW`.
     dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
     dm.dmDriverExtra = 0;
     // we need to figure out the rectangle that the monitor occupies on the virtual
     // desktop.
-    if (win32.EnumDisplaySettingsExW(@ptrCast([*:0]const u16, display_adapter.ptr), win32.ENUM_CURRENT_SETTINGS, &dm, 0) == 0) {
+    if (win32.EnumDisplaySettingsExW(
+        @ptrCast([*:0]const u16, display_adapter.ptr),
+        win32.ENUM_CURRENT_SETTINGS,
+        &dm,
+        0,
+    ) == 0) {
         return null;
     }
 
@@ -57,7 +58,7 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
 
     const data: LparamTuple = .{ null, display_adapter };
 
-    // Enumerate the displays to figure out the monitor's handle
+    // Enumerate the displays that intersect the rectangle to figure out the monitor's handle.
     _ = win32_gdi.EnumDisplayMonitors(null, &clip_rect, EnumMonitorProc, @intCast(win32.LPARAM, @ptrToInt(&data)));
     return data[0];
 }
@@ -68,10 +69,8 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
     var monitors = try ArrayList(MonitorImpl).initCapacity(allocator, 2);
     errdefer monitors.deinit();
     var display_device: win32_gdi.DISPLAY_DEVICEW = undefined;
-    // The reste of the fields will be populated by `EnumDisplayDevicesW`.
     display_device.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
     var display_adapter: win32_gdi.DISPLAY_DEVICEW = undefined;
-    // The reste of the fields will be populated by `EnumDisplayDevicesW`.
     display_adapter.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
     var j: u32 = undefined;
     var i: u32 = 0;
@@ -334,7 +333,7 @@ pub const MonitorImpl = struct {
     }
 
     /// Restores the original video mode stored in the registry.
-    pub inline fn restoreOrignalVideo(self: *Self) void {
+    fn restoreOrignalVideo(self: *Self) void {
         // Passing NULL for the lpDevMode parameter and 0 for the dwFlags parameter
         // is the easiest way to return to the default mode after a dynamic mode change.
         if (self.mode_changed) {
@@ -396,8 +395,10 @@ test "changing primary VideoMode" {
         all_monitors.deinit();
     }
     var primary_monitor = &all_monitors.items[0];
+    var output: VideoMode = undefined;
     primary_monitor.debugInfos();
-    std.debug.print("Current Video Mode: {}\n", .{primary_monitor.queryCurrentMode()});
+    primary_monitor.queryCurrentMode(&output);
+    std.debug.print("Current Video Mode: {}\n", .{output});
     std.debug.print("Changing Video Mode....\n", .{});
     const mode = VideoMode.init(700, 400, 55, 24);
     try primary_monitor.setVideoMode(&mode);

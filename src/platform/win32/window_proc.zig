@@ -28,7 +28,7 @@ pub fn helperWindowProc(
                 // display is added or removed.
                 if (devices.monitor_store_ptr) |store| {
                     if (!store.expected_video_change) {
-                        std.debug.print("[🔔] WM_DISPLAYCHANGE\n", .{});
+                        std.debug.print("[+] WM_DISPLAYCHANGE\n", .{});
                         store.refreshMonitorsMap() catch |err| {
                             std.log.err("[Monitor]: Failed to refresh monitors,{}\n", .{err});
                         };
@@ -39,7 +39,7 @@ pub fn helperWindowProc(
             win32_window_messaging.WM_DRAWCLIPBOARD => {
                 // Sent When The clipboard content gets updated.
                 devices.clipboard_change = true;
-                std.debug.print("[🔔] Clipboard Updated\n", .{});
+                std.debug.print("[+] Clipboard Updated\n", .{});
                 if (devices.next_clipboard_viewer) |viewer| {
                     std.debug.print("Forwarding msg to next viewer\n", .{});
                     _ = win32_window_messaging.SendMessage(viewer, msg, wparam, lparam);

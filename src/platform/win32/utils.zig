@@ -123,7 +123,8 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
         mods.alt = true;
     }
     if (isBitSet(
-        (win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_LWIN)) | win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_RWIN))),
+        (win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_LWIN)) |
+            win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_RWIN))),
         15,
     )) {
         mods.meta = true;

@@ -12,13 +12,12 @@ const win32_gdi = zigwin32.graphics.gdi;
 const win32_shell = zigwin32.ui.shell;
 
 pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
-    // we can ask user for confirmation before closing
-    // here.
     const event = common.event.createCloseEvent(window.data.id);
     window.sendEvent(&event);
 }
 
 pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
+    // TODO: test more keyboards.
     // Note: the right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
@@ -70,7 +69,12 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Released, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(
+        window.data.id,
+        button,
+        common.keyboard_and_mouse.KeyState.Released,
+        utils.getKeyModifiers(),
+    );
 
     window.sendEvent(&event);
 
@@ -105,6 +109,7 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
         // messages for as long as the user holds at least
         // one mouse button down, even if the mouse quits
         // the window area.
+        // we stop the capture once all buttons are released.
         _ = win32_keyboard_mouse.SetCapture(window.handle);
     }
 
@@ -118,7 +123,12 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
             common.keyboard_and_mouse.MouseButton.ExtraButton1,
     };
 
-    const event = common.event.createMouseButtonEvent(window.data.id, button, common.keyboard_and_mouse.KeyState.Pressed, utils.getKeyModifiers());
+    const event = common.event.createMouseButtonEvent(
+        window.data.id,
+        button,
+        common.keyboard_and_mouse.KeyState.Pressed,
+        utils.getKeyModifiers(),
+    );
 
     window.sendEvent(&event);
     window.data.input.mouse_buttons[@enumToInt(button)] = common.keyboard_and_mouse.KeyState.Pressed;
@@ -141,9 +151,10 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
         @bitCast(usize, lparam),
     );
 
-    // Depending on the styles we might need the window's border width and height
-    // let's grab them here.
     if (window.data.min_size != null or window.data.max_size != null) {
+
+        // Depending on the styles we might need the window's border width and height
+        // let's grab them here.
         var rect = win32.RECT{
             .left = 0,
             .top = 0,
@@ -192,9 +203,14 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
     }
 }
 
-pub inline fn dpiScaledSizeHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) win32.BOOL {
-    const is_win10b1607_or_above = Win32Context.singleton().?.flags.is_win10b1607_or_above;
-    if (is_win10b1607_or_above) {
+pub inline fn dpiScaledSizeHandler(
+    window: *window_impl.WindowImpl,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) win32.BOOL {
+    const globl_cntxt = Win32Context.singleton() orelse return win32.FALSE;
+    // TODO: more docs.
+    if (globl_cntxt.flags.is_win10b1607_or_above) {
         var pending_size = win32.RECT{
             .left = 0,
             .top = 0,
@@ -261,7 +277,7 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
 }
 
 pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
-    // can we use a different allocator for better performance?
+    // TODO: can we use a different allocator for better performance?
     // free old files
     const allocator = window.win32.dropped_files.allocator;
     for (window.win32.dropped_files.items) |file| {

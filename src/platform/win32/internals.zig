@@ -88,6 +88,9 @@ pub const Internals = struct {
 
         // we're done.
         // destory the singelton.
+        // Note: this assumes that only one internals instance is created,
+        // in the event that the user create more than one the next time a singelton
+        // is called it will get reinitialized.
         Win32Context.deinitSingleton();
     }
 
@@ -411,25 +414,7 @@ pub const MonitorStore = struct {
 // }
 
 test "MonitorStore.init()" {
-    const VideoMode = @import("common").video_mode.VideoMode;
     const testing = std.testing;
-    var ph_dev = try MonitorStore.init(testing.allocator);
-    defer ph_dev.deinit();
-    var all_monitors = try monitor_impl.pollMonitors(testing.allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    var main_monitor = all_monitors.items[0];
-    try ph_dev.updateMonitors();
-    var primary_monitor = ph_dev.monitors_map.getPtr(main_monitor.handle).?;
-    const mode = VideoMode.init(1600, 900, 32, 60);
-    try primary_monitor.*.setVideoMode(&mode);
-    std.time.sleep(std.time.ns_per_s * 3);
-    std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.*.restoreOrignalVideo();
+    var ms = try MonitorStore.init(testing.allocator);
+    defer ms.deinit();
 }

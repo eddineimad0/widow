@@ -1,10 +1,12 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const common = @import("common");
-const IconError = @import("errors.zig").IconError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
-const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
+const IconError = @import("errors.zig").IconError;
+const TRUE = @import("win32_defs.zig").TRUE;
+const FALSE = @import("win32_defs.zig").FALSE;
+const BOOL = @import("win32_defs.zig").BOOL;
 
 pub fn createIcon(
     pixels: []const u8,
@@ -13,7 +15,6 @@ pub fn createIcon(
     xhot: ?u32,
     yhot: ?u32,
 ) !win32_window_messaging.HICON {
-    // extract the color palette for the bitmap
     var bmp_header: win32_gdi.BITMAPV5HEADER = std.mem.zeroes(win32_gdi.BITMAPV5HEADER);
     bmp_header.bV5Size = @sizeOf(win32_gdi.BITMAPV5HEADER);
     bmp_header.bV5Width = width;
@@ -22,9 +23,7 @@ pub fn createIcon(
     bmp_header.bV5Height = -height;
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
-    // No compression
-    bmp_header.bV5Compression = win32_gdi.BI_BITFIELDS;
-    // ARGB32.
+    bmp_header.bV5Compression = win32_gdi.BI_BITFIELDS; // No compression
     bmp_header.bV5RedMask = 0x00FF0000;
     bmp_header.bV5GreenMask = 0x0000FF00;
     bmp_header.bV5BlueMask = 0x000000FF;
@@ -46,7 +45,6 @@ pub fn createIcon(
     }
     defer _ = win32_gdi.DeleteObject(color_mask);
 
-    // create a monochrome bitmap with undefined content
     const monochrome_mask = win32_gdi.CreateBitmap(width, height, 1, 1, null);
     if (monochrome_mask == null) {
         return IconError.NullMonochromeMask;
@@ -65,11 +63,11 @@ pub fn createIcon(
 
     var xspot: u32 = undefined;
     var yspot: u32 = undefined;
-    var icon_flag: i32 = 1;
+    var icon_flag: BOOL = TRUE;
     if (xhot != null and yhot != null) {
         xspot = xhot.?;
         yspot = yhot.?;
-        icon_flag = 0;
+        icon_flag = FALSE;
     }
 
     var icon_info = win32_window_messaging.ICONINFO{
@@ -82,15 +80,12 @@ pub fn createIcon(
 
     const icon_handle = win32_window_messaging.CreateIconIndirect(&icon_info);
 
-    if (icon_handle) |handle| {
-        return handle;
-    }
-    return IconError.FailedToCreateIcon;
+    return icon_handle orelse return IconError.FailedToCreate;
 }
 
 pub const Cursor = struct {
     handle: ?win32_window_messaging.HCURSOR,
-    shared: bool, // As to not deleted system owned cursors.
+    shared: bool, // As to not try deleting system owned cursors.
     mode: common.cursor.CursorMode,
 };
 

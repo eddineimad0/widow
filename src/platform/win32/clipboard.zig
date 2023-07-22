@@ -7,18 +7,21 @@ const win32_system_data_exchange = zigwin32.system.data_exchange;
 const win32_system_memory = zigwin32.system.memory;
 const HWND = win32.HWND;
 
-/// Copy the string contained inside the system clipboard.
-/// # Note
+/// Returns the string contained inside the system clipboard.
+/// # Notes
 /// This function fails if the clipboard doesn't contain a proper unicode formatted string.
 /// The caller is responsible for freeing the returned string.
+/// # Parameters
+/// `allocator`: used when to allocate memory for the clipboard data.
+/// `window_handle`: used to gain access to the clipboard.
 pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
     if (win32_system_data_exchange.OpenClipboard(window_handle) != 0) {
         defer _ = win32_system_data_exchange.CloseClipboard();
-        // Might Fail if the data format is different than CF_UNICODETEXT.
+        // Might Fail if the data in the clipboard has different format.
         const handle = win32_system_data_exchange.GetClipboardData(win32.CF_UNICODETEXT);
         if (handle != null) {
             // Pointer returned by windows do not respect data types alignment.
-            // we'll copy the data to an aligned ptr for this one, so we can use it with std functions.
+            // we'll copy the data to an aligned ptr for this one, so we can use it with std library.
             const buffer = @ptrCast(?[*]const u8, win32_system_memory.GlobalLock(@bitCast(isize, @ptrToInt(handle))));
             if (buffer) |wide_buffer| {
                 defer _ = win32_system_memory.GlobalUnlock(@bitCast(isize, @ptrToInt(handle)));
@@ -44,6 +47,10 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
 }
 
 /// Paste the given `text` to the system clipboard.
+/// # Parameters
+/// `allocator`: used when to allocate memory when utf16-encoding the clipboard data.
+/// `window_handle`: used to gain access to the clipboard.
+/// `text`: the string slice to copy.
 pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text: []const u8) !void {
     if (win32_system_data_exchange.OpenClipboard(window_handle) == 0) {
         return ClipboardError.FailedToOpen;
@@ -58,12 +65,12 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
     const bytes_len = (wide_text.len + 1) << 1; // + 1 for the null terminator.
     const alloc_mem = win32_system_memory.GlobalAlloc(win32_system_memory.GMEM_MOVEABLE, bytes_len);
     if (alloc_mem == 0) {
-        return ClipboardError.AllocationFailure;
+        return ClipboardError.FailedToUpdate;
     }
 
     var buffer = win32_system_memory.GlobalLock(alloc_mem);
     if (buffer == null) {
-        return ClipboardError.AllocationFailure;
+        return ClipboardError.FailedToUpdate;
     }
 
     // Hack to deal with alignement BS.
@@ -74,7 +81,10 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
     }
     _ = win32_system_memory.GlobalUnlock(alloc_mem);
 
-    if (win32_system_data_exchange.SetClipboardData(win32.CF_UNICODETEXT, @intToPtr(*anyopaque, @bitCast(usize, alloc_mem))) == null) {
+    if (win32_system_data_exchange.SetClipboardData(
+        win32.CF_UNICODETEXT,
+        @intToPtr(*anyopaque, @bitCast(usize, alloc_mem)),
+    ) == null) {
         return ClipboardError.FailedToUpdate;
     }
     _ = win32_system_data_exchange.CloseClipboard();
@@ -82,9 +92,12 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
 
 /// Register a window as clipboard viewer, so it can be notified on
 /// clipboard value changes.
+/// On success it returns a handle to the window that's next in the viewer(subscriber) chain.
 /// # Note
-/// This api is supported by all versions of window, it's messages are nonqueued
-/// and deliverd immediately by the system.
+/// This API is supported by older versions of windows, it's messages are nonqueued
+/// and deliverd immediately by the system, which makes it perfect for our hidden window.
+/// # Parameters
+/// `viewer`: the window to be notified.
 pub fn registerClipboardViewer(viewer: HWND) ClipboardError!?HWND {
     utils.clearThreadError();
     const next_viewer = win32_system_data_exchange.SetClipboardViewer(viewer);
@@ -96,7 +109,10 @@ pub fn registerClipboardViewer(viewer: HWND) ClipboardError!?HWND {
     return next_viewer;
 }
 
-/// Unsubscribe from clipboard viewer list.
+/// Unsubscribe from the clipboard's viewer list.
+/// # Parameters
+/// `viewer`: a handle to a window that was already registered in the viewer chain.
+/// `next_viewer`: a handle to the winodw that's next in the viewer chain.
 pub inline fn unregisterClipboardViewer(viewer: HWND, next_viewer: ?HWND) void {
     _ = win32_system_data_exchange.ChangeClipboardChain(viewer, next_viewer);
 }

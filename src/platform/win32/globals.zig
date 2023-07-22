@@ -44,7 +44,7 @@ const Win32Flags = struct {
 };
 
 const Win32Handles = struct {
-    main_class: u16,
+    wnd_class: u16,
     ntdll: ?win32.HINSTANCE,
     user32: ?win32.HINSTANCE,
     shcore: ?win32.HINSTANCE,
@@ -52,7 +52,7 @@ const Win32Handles = struct {
 };
 
 const LoadedFunctions = struct {
-    RtlVerifyVersionInfo: ?proc_RtlVerifyVersionInfo,
+    RtlVerifyVersionInfo: proc_RtlVerifyVersionInfo,
     SetProcessDPIAware: ?proc_SetProcessDPIAware,
     SetProcessDpiAwareness: ?proc_SetProcessDpiAwareness,
     SetProcessDpiAwarenessContext: ?proc_SetProcessDpiAwarenessContext,
@@ -71,7 +71,7 @@ pub const Win32Context = struct {
     pub const WINDOW_CLASS_NAME = "WIDOW";
 
     // A global readonly singelton
-    // used to access loaded function and os flag.
+    // used to access loaded function and os flag and handles.
     var global_instance: Win32Context = Win32Context{
         .initialzied = false,
         .flags = Win32Flags{
@@ -82,7 +82,6 @@ pub const Win32Context = struct {
             .is_win10b1703_or_above = false,
         },
         .functions = LoadedFunctions{
-            .RtlVerifyVersionInfo = null,
             .SetProcessDPIAware = null,
             .SetProcessDpiAwareness = null,
             .SetProcessDpiAwarenessContext = null,
@@ -90,9 +89,10 @@ pub const Win32Context = struct {
             .GetDpiForWindow = null,
             .AdjustWindowRectExForDpi = null,
             .EnableNonClientDpiScaling = null,
+            .RtlVerifyVersionInfo = undefined,
         },
         .handles = Win32Handles{
-            .main_class = 0,
+            .wnd_class = 0,
             .ntdll = null,
             .user32 = null,
             .shcore = null,
@@ -102,8 +102,7 @@ pub const Win32Context = struct {
 
     const Self = @This();
 
-    fn init() !Self {
-        var self: Self = undefined;
+    fn setup(self: *Self) !void {
         // Determine the current HInstance.
         self.handles.hinstance = try module.getProcessHandle();
 
@@ -112,19 +111,19 @@ pub const Win32Context = struct {
         errdefer self.freeLibraries();
 
         // Setup windows version flags.
-        if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo.?, 6, 0)) {
+        if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 0)) {
             self.flags.is_win_vista_or_above = true;
 
-            if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo.?, 6, 1)) {
+            if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 1)) {
                 self.flags.is_win7_or_above = true;
 
-                if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo.?, 6, 3)) {
+                if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 3)) {
                     self.flags.is_win8point1_or_above = true;
 
-                    if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo.?, 1607)) {
+                    if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo, 1607)) {
                         self.flags.is_win10b1607_or_above = true;
 
-                        if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo.?, 1703)) {
+                        if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo, 1703)) {
                             self.flags.is_win10b1703_or_above = true;
                         }
                     }
@@ -132,7 +131,7 @@ pub const Win32Context = struct {
             }
         }
         // Register the window class
-        self.handles.main_class = try registerMainClass(self.handles.hinstance);
+        self.handles.wnd_class = try registerMainClass(self.handles.hinstance);
 
         // Declare Process DPI Awareness.
         if (self.flags.is_win10b1703_or_above) {
@@ -144,13 +143,15 @@ pub const Win32Context = struct {
         }
 
         self.initialzied = true;
-        return self;
     }
 
     fn loadLibraries(self: *Self) !void {
         self.handles.ntdll = module.loadWin32Module("ntdll.dll");
         if (self.handles.ntdll) |*ntdll| {
-            self.functions.RtlVerifyVersionInfo = @ptrCast(proc_RtlVerifyVersionInfo, module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"));
+            self.functions.RtlVerifyVersionInfo = @ptrCast(
+                proc_RtlVerifyVersionInfo,
+                module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"),
+            );
         } else {
             // It's important for this module to be loaded since
             // it has the necessary function for figuring out
@@ -164,20 +165,27 @@ pub const Win32Context = struct {
             self.functions.SetProcessDPIAware =
                 @ptrCast(proc_SetProcessDPIAware, module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
             self.functions.SetProcessDpiAwarenessContext =
-                @ptrCast(proc_SetProcessDpiAwarenessContext, module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"));
+                @ptrCast(
+                proc_SetProcessDpiAwarenessContext,
+                module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"),
+            );
             self.functions.GetDpiForWindow =
                 @ptrCast(proc_GetDpiForWindow, module.getModuleSymbol(user32.*, "GetDpiForWindow"));
             self.functions.EnableNonClientDpiScaling =
                 @ptrCast(proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
             self.functions.AdjustWindowRectExForDpi =
                 @ptrCast(proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
-        } else {
-            return WidowError.User32DLLNotFound;
         }
         self.handles.shcore = module.loadWin32Module("Shcore.dll");
         if (self.handles.shcore) |*shcore| {
-            self.functions.GetDpiForMonitor = @ptrCast(proc_GetDpiForMonitor, module.getModuleSymbol(shcore.*, "GetDpiForMonitor"));
-            self.functions.SetProcessDpiAwareness = @ptrCast(proc_SetProcessDpiAwareness, module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"));
+            self.functions.GetDpiForMonitor = @ptrCast(
+                proc_GetDpiForMonitor,
+                module.getModuleSymbol(shcore.*, "GetDpiForMonitor"),
+            );
+            self.functions.SetProcessDpiAwareness = @ptrCast(
+                proc_SetProcessDpiAwareness,
+                module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"),
+            );
         }
     }
 
@@ -185,7 +193,7 @@ pub const Win32Context = struct {
         if (self.handles.ntdll) |*handle| {
             module.freeWin32Module(handle.*);
             self.handles.ntdll = null;
-            self.functions.RtlVerifyVersionInfo = null;
+            // self.functions.RtlVerifyVersionInfo = undefined;
         }
         if (self.handles.user32) |*handle| {
             module.freeWin32Module(handle.*);
@@ -207,8 +215,8 @@ pub const Win32Context = struct {
     // Enfoce readonly.
     pub inline fn singleton() ?*const Self {
         if (!Self.global_instance.initialzied) {
-            Self.global_instance = init() catch |err| {
-                std.log.err("[Win32]: Failed to init singelton,{}\n", .{err});
+            setup(&Self.global_instance) catch |err| {
+                std.log.err("[Win32]: Failed to init Win32Context,{}\n", .{err});
                 return null;
             };
         }
@@ -218,15 +226,15 @@ pub const Win32Context = struct {
     pub fn deinitSingleton() void {
         if (Self.global_instance.initialzied) {
             freeLibraries(&Self.global_instance);
-            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 4]u8 = undefined;
+            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
             var fba = std.heap.FixedBufferAllocator.init(&buffer);
             const fballocator = fba.allocator();
-            // Shoudln't fail since the buffer is big enough.
+            // Shouldn't fail since the buffer is big enough.
             const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
 
             // Unregister the window class.
             _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.handles.main_class),
+                // utils.makeIntAtom(u8, self.handles.wnd_class),
                 wide_class_name,
                 Self.global_instance.handles.hinstance,
             );
@@ -258,7 +266,8 @@ fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
             IMAGE_ICON,
             0,
             0,
-            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) | @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
+            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) |
+                @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
         ));
     }
     const class = win32_window_messaging.RegisterClassExW(&window_class);
@@ -269,10 +278,11 @@ fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
 }
 
 fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
-    //If you must require a particular operating system,
-    //be sure to use it as a minimum supported version,
-    //rather than design the test for the one operating system.
-    //This way, your detection code will continue to work on future versions of Windows.
+    // [MSDN]
+    // If you must require a particular operating system,
+    // be sure to use it as a minimum supported version,
+    // rather than design the test for the one operating system.
+    // This way, your detection code will continue to work on future versions of Windows.
     var vi: win32_sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwOSVersionInfoSize = @sizeOf(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = major;
@@ -305,10 +315,7 @@ fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32
         win32_sysinfo.VER_SERVICEPACKMINOR,
         win32.VER_GREATER_EQUAL,
     );
-    // `VerifyVersionInfoW(&mut vi, mask, cond_mask) == TRUE`
-    // Subject to windows manifestation on 8.1 or above
-    // thus reporting false information for compatibility with older software.
-    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS; // STATUS_SUCCESS
+    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
 fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
@@ -335,7 +342,7 @@ fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
         win32_sysinfo.VER_BUILDNUMBER,
         win32.VER_GREATER_EQUAL,
     );
-    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS; // STATUS_SUCCESS
+    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
 test "Win32Context singelton" {
@@ -344,4 +351,8 @@ test "Win32Context singelton" {
     try testing.expect(singleton != null);
     std.debug.print("Win32 Execution context:{}\n", .{singleton.?});
     Win32Context.deinitSingleton();
+    // simulate double init
+    const singleton2 = Win32Context.singleton();
+    try testing.expect(singleton2 != null);
+    std.debug.print("Win32 Execution context:{}\n", .{singleton2.?});
 }
