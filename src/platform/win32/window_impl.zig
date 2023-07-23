@@ -86,7 +86,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
 /// this function modifies the rect so that it
 /// describes a window rectangle which is the smallest rectangle
 /// that encloses completely both client and non client(titlebar...)
-/// areas
+/// areas.
 pub fn adjustWindowRect(
     rect: *win32.RECT,
     styles: u32,
@@ -116,8 +116,8 @@ pub fn adjustWindowRect(
 /// # Note
 /// the coordinate for the upperleft corner returned by this function
 /// are always (0,0), and do not reflect it's actual position on the screen
-/// pass the returned rect to client_to_screen function to get the true upperleft
-/// coordinates.
+/// pass the returned rect to clientToScreen function to get the true upperleft
+/// screen coordinates.
 /// TODO: Get rid of this.
 inline fn clientRect(window_handle: win32.HWND, rect: *win32.RECT) void {
     _ = win32_window_messaging.GetClientRect(window_handle, rect);
@@ -189,6 +189,7 @@ pub fn updateCursorImage(cursor: *const icon.Cursor) void {
     }
 }
 
+/// Limit the cursor motion to the client rectangle.
 pub inline fn captureCursor(window_handle: win32.HWND) void {
     var clip_rect: win32.RECT = undefined;
     clientRect(window_handle, &clip_rect);
@@ -197,20 +198,24 @@ pub inline fn captureCursor(window_handle: win32.HWND) void {
     _ = win32_window_messaging.ClipCursor(&clip_rect);
 }
 
+/// Remove cursor motion limitation.
 pub inline fn releaseCursor() void {
     _ = win32_window_messaging.ClipCursor(null);
 }
 
+/// Capture and hide the cursor from the user.
 pub fn disableCursor(window_handle: win32.HWND) void {
     captureCursor(window_handle);
     _ = win32_window_messaging.SetCursor(null);
 }
 
+/// Show and release the cursor.
 pub fn enableCursor(cursor: *const icon.Cursor) void {
     updateCursorImage(cursor);
     releaseCursor();
 }
 
+/// helper function for changing the window position,size and styles.
 fn setWindowPositionIntern(
     window_handle: win32.HWND,
     top: ?win32.HWND,
@@ -305,11 +310,13 @@ fn createPlatformWindow(
     return window_handle;
 }
 
+/// Holds all the refrences we use to communitcate with the WidowContext.
 pub const WidowProps = struct {
     monitors: *MonitorStore,
     events_queue: *common.event.EventQueue,
 };
 
+/// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: Icon,
     cursor: icon.Cursor,
@@ -440,8 +447,6 @@ pub const WindowImpl = struct {
             );
         }
 
-        DragAcceptFiles(instance.handle, win32.TRUE);
-
         if (instance.data.flags.is_visible) {
             instance.show();
             if (instance.data.flags.is_focused) {
@@ -467,7 +472,6 @@ pub const WindowImpl = struct {
         if (self.win32.cursor.mode.is_disabled()) {
             enableCursor(&self.win32.cursor);
         }
-        // Get rid of the pointer to the window.
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, 0);
         _ = win32_window_messaging.DestroyWindow(self.handle);
         self.freeDroppedFiles();
@@ -799,7 +803,6 @@ pub const WindowImpl = struct {
             new_client_rect.right - new_client_rect.left,
             new_client_rect.bottom - new_client_rect.top,
         );
-        // }
     }
 
     pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
@@ -921,13 +924,13 @@ pub const WindowImpl = struct {
         self.data.flags.is_visible = false;
     }
 
-    /// toggles window resizablitity on(true) or off(false).
+    /// Toggles window resizablitity on(true) or off(false).
     pub fn setResizable(self: *Self, value: bool) void {
         self.data.flags.is_resizable = value;
         self.updateStyles();
     }
 
-    /// toggles window resizablitity on(true) or off(false).
+    /// Toggles window resizablitity on(true) or off(false).
     pub fn setDecorated(self: *Self, value: bool) void {
         self.data.flags.is_decorated = value;
         self.updateStyles();
@@ -958,7 +961,7 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.SetWindowTextW(self.handle, wide_title);
     }
 
-    /// returns the title of the window.
+    /// Returns the title of the window.
     pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
         // This length doesn't take into account the null character so add it when allocating.
         const wide_title_len = win32_window_messaging.GetWindowTextLengthW(self.handle);
@@ -970,7 +973,7 @@ pub const WindowImpl = struct {
             const slice = try utils.wideZToUtf8(allocator, wide_slice);
             return slice;
         }
-        // TODO: why can't i use WindowError set instead of the global error set?
+        // TODO: why does using the WindowError doesn't compile?
         return error.FailedToCopyTitle;
     }
 
@@ -991,7 +994,7 @@ pub const WindowImpl = struct {
         return 1.0;
     }
 
-    /// set the window's opacity
+    /// Sets the window's opacity
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
@@ -1181,8 +1184,22 @@ pub const WindowImpl = struct {
         return self.win32.dropped_files.items;
     }
 
+    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
+        const accept = if (accepted)
+            win32.TRUE
+        else blk: {
+            self.freeDroppedFiles();
+            break :blk win32.FALSE;
+        };
+        DragAcceptFiles(self.handle, accept);
+    }
+
     /// Frees the allocated memory used to hold the file(s) path(s).
     pub fn freeDroppedFiles(self: *Self) void {
+        // Avoid double free.
+        if (self.win32.dropped_files.capacity == 0) {
+            return;
+        }
         const allocator = self.win32.dropped_files.allocator;
         for (self.win32.dropped_files.items) |item| {
             allocator.free(item);

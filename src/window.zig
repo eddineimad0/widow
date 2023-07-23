@@ -436,6 +436,14 @@ pub const Window = struct {
         self.impl.setCursorMode(mode);
     }
 
+    /// Sets whether the window accepts dropping files or not.
+    /// by default any window created doesn't accept dropped files.
+    /// # Parameters
+    /// `accepted`: true to allow file dropping, false to block it.
+    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
+        self.impl.setDragAndDrop(accepted);
+    }
+
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
     /// # Note
     /// User should only call this function when receiving a FileDrop event.
