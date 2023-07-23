@@ -66,14 +66,14 @@ pub const Win32Context = struct {
     flags: Win32Flags,
     handles: Win32Handles,
     functions: LoadedFunctions,
-    initialzied: bool,
     // TODO: can we change this to a user comptime string.
     pub const WINDOW_CLASS_NAME = "WIDOW";
+    var mutex: std.Thread.Mutex = std.Thread.Mutex{};
+    var g_init: bool = false;
 
     // A global readonly singelton
     // used to access loaded function and os flag and handles.
-    var global_instance: Win32Context = Win32Context{
-        .initialzied = false,
+    var globl_instance: Win32Context = Win32Context{
         .flags = Win32Flags{
             .is_win_vista_or_above = false,
             .is_win7_or_above = false,
@@ -102,47 +102,55 @@ pub const Win32Context = struct {
 
     const Self = @This();
 
-    fn setup(self: *Self) !void {
+    fn initSingleton() !void {
+        @setCold(true);
         // Determine the current HInstance.
-        self.handles.hinstance = try module.getProcessHandle();
+        const g_instance = &Self.globl_instance;
 
-        // Load the required libraries.
-        try self.loadLibraries();
-        errdefer self.freeLibraries();
+        Self.mutex.lock();
+        defer mutex.unlock();
 
-        // Setup windows version flags.
-        if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 0)) {
-            self.flags.is_win_vista_or_above = true;
+        if (!Self.g_init) {
+            g_instance.handles.hinstance = try module.getProcessHandle();
 
-            if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 1)) {
-                self.flags.is_win7_or_above = true;
+            // Load the required libraries.
+            try g_instance.loadLibraries();
+            errdefer g_instance.freeLibraries();
 
-                if (isWin32VersionMinimum(self.functions.RtlVerifyVersionInfo, 6, 3)) {
-                    self.flags.is_win8point1_or_above = true;
+            // Setup windows version flags.
+            if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 0)) {
+                g_instance.flags.is_win_vista_or_above = true;
 
-                    if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo, 1607)) {
-                        self.flags.is_win10b1607_or_above = true;
+                if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 1)) {
+                    g_instance.flags.is_win7_or_above = true;
 
-                        if (isWin10BuildMinimum(self.functions.RtlVerifyVersionInfo, 1703)) {
-                            self.flags.is_win10b1703_or_above = true;
+                    if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 3)) {
+                        g_instance.flags.is_win8point1_or_above = true;
+
+                        if (isWin10BuildMinimum(g_instance.functions.RtlVerifyVersionInfo, 1607)) {
+                            g_instance.flags.is_win10b1607_or_above = true;
+
+                            if (isWin10BuildMinimum(g_instance.functions.RtlVerifyVersionInfo, 1703)) {
+                                g_instance.flags.is_win10b1703_or_above = true;
+                            }
                         }
                     }
                 }
             }
-        }
-        // Register the window class
-        self.handles.wnd_class = try registerMainClass(self.handles.hinstance);
+            // Register the window class
+            g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
 
-        // Declare Process DPI Awareness.
-        if (self.flags.is_win10b1703_or_above) {
-            _ = self.functions.SetProcessDpiAwarenessContext.?(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        } else if (self.flags.is_win8point1_or_above) {
-            _ = self.functions.SetProcessDpiAwareness.?(win32.PROCESS_PER_MONITOR_DPI_AWARE);
-        } else if (self.flags.is_win_vista_or_above) {
-            _ = self.functions.SetProcessDPIAware.?();
-        }
+            // Declare Process DPI Awareness.
+            if (g_instance.flags.is_win10b1703_or_above) {
+                _ = g_instance.functions.SetProcessDpiAwarenessContext.?(win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            } else if (g_instance.flags.is_win8point1_or_above) {
+                _ = g_instance.functions.SetProcessDpiAwareness.?(win32.PROCESS_PER_MONITOR_DPI_AWARE);
+            } else if (g_instance.flags.is_win_vista_or_above) {
+                _ = g_instance.functions.SetProcessDPIAware.?();
+            }
 
-        self.initialzied = true;
+            @atomicStore(bool, &Self.g_init, true, .Release);
+        }
     }
 
     fn loadLibraries(self: *Self) !void {
@@ -213,34 +221,37 @@ pub const Win32Context = struct {
     }
 
     // Enfoce readonly.
-    pub inline fn singleton() ?*const Self {
-        if (!Self.global_instance.initialzied) {
-            setup(&Self.global_instance) catch |err| {
+    pub fn singleton() ?*const Self {
+        if (!@atomicLoad(bool, &Self.g_init, .Acquire)) {
+            initSingleton() catch |err| {
                 std.log.err("[Win32]: Failed to init Win32Context,{}\n", .{err});
                 return null;
             };
         }
-        return &Self.global_instance;
+        return &Self.globl_instance;
     }
 
-    pub fn deinitSingleton() void {
-        if (Self.global_instance.initialzied) {
-            freeLibraries(&Self.global_instance);
-            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
-            var fba = std.heap.FixedBufferAllocator.init(&buffer);
-            const fballocator = fba.allocator();
-            // Shouldn't fail since the buffer is big enough.
-            const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
-
-            // Unregister the window class.
-            _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.handles.wnd_class),
-                wide_class_name,
-                Self.global_instance.handles.hinstance,
-            );
-            Self.global_instance.initialzied = false;
-        }
-    }
+    // !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
+    // that hasn't been destroyed yet !!!.
+    // for now let windows handle cleaning once the program exit.
+    // pub fn deinitSingleton() void {
+    //     if (Self.global_instance.initialzied) {
+    //         freeLibraries(&Self.global_instance);
+    //         var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
+    //         var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    //         const fballocator = fba.allocator();
+    //         // Shouldn't fail since the buffer is big enough.
+    //         const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
+    //
+    //         // Unregister the window class.
+    //         _ = win32_window_messaging.UnregisterClassW(
+    //             // utils.makeIntAtom(u8, self.handles.wnd_class),
+    //             wide_class_name,
+    //             Self.global_instance.handles.hinstance,
+    //         );
+    //         Self.global_instance.initialzied = false;
+    //     }
+    // }
 };
 
 fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
@@ -345,14 +356,31 @@ fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
     return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
-test "Win32Context singelton" {
+test "Win32Context Thread safety" {
+    const testing = std.testing;
+    const builtin = @import("builtin");
+    if (builtin.single_threaded) {
+        const singleton = Win32Context.singleton();
+        const singleton2 = Win32Context.singleton();
+        try testing.expect(singleton != null);
+        try testing.expect(singleton2 != null);
+    } else {
+        var threads: [10]std.Thread = undefined;
+        defer for (threads) |handle| handle.join();
+
+        for (&threads) |*handle| {
+            handle.* = try std.Thread.spawn(.{}, struct {
+                fn thread_fn() void {
+                    _ = Win32Context.singleton();
+                }
+            }.thread_fn, .{});
+        }
+    }
+}
+
+test "Win32Context init" {
     const testing = std.testing;
     const singleton = Win32Context.singleton();
     try testing.expect(singleton != null);
-    std.debug.print("Win32 Execution context:{}\n", .{singleton.?});
-    Win32Context.deinitSingleton();
-    // simulate double init
-    const singleton2 = Win32Context.singleton();
-    try testing.expect(singleton2 != null);
-    std.debug.print("Win32 Execution context:{}\n", .{singleton2.?});
+    std.debug.print("Win32 execution context: {any}\n", .{singleton.?});
 }
