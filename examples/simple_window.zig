@@ -146,6 +146,13 @@ pub fn main() void {
                                 mywindow.setMinSize(widow.geometry.WidowSize{ .width = 300, .height = 300 });
                             }
                         }
+                        if (key.virtualcode == VirtualCode.U) {
+                            if (key.mods.shift) {
+                                mywindow.setDragAndDrop(true);
+                            } else {
+                                mywindow.setDragAndDrop(false);
+                            }
+                        }
                     }
                 },
                 EventType.MouseButton => |*mouse_event| {
@@ -242,7 +249,7 @@ pub fn main() void {
                     }
 
                     // if the files cache exceed a certain threshold,
-                    // you may want to free it.
+                    // you may want to manually free it.
                     if (files.len > 5) {
                         std.log.info("Free drop cache\n", .{});
                         mywindow.freeDroppedFiles();
