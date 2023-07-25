@@ -3,17 +3,17 @@ const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
+const icon = @import("icon.zig");
 const monitor_impl = @import("monitor_impl.zig");
 const WindowError = @import("errors.zig").WindowError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
 const win32_dwm = zigwin32.graphics.dwm;
-const Win32Context = @import("globals.zig").Win32Context;
+const Win32Context = @import("global.zig").Win32Context;
 const MonitorStore = @import("internals.zig").MonitorStore;
-const Cursor = @import("icon.zig").Cursor;
-const Icon = @import("icon.zig").Icon;
-const icon = @import("icon.zig");
+const Cursor = icon.Cursor;
+const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
 const WindowFlags = common.window_data.WindowFlags;
 const FullScreenMode = common.window_data.FullScreenMode;
@@ -464,7 +464,7 @@ pub const WindowImpl = struct {
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
-            self.releaseMonitor() catch {};
+            self.setFullscreen(false, null) catch unreachable;
         }
         if (self.win32.cursor.mode.is_captured()) {
             releaseCursor();
