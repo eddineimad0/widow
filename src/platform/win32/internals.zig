@@ -1,17 +1,18 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
-const helperWindowProc = @import("./window_proc.zig").helperWindowProc;
-const utils = @import("./utils.zig");
-const monitor_impl = @import("./monitor_impl.zig");
-const icon = @import("./icon.zig");
-const clipboard = @import("./clipboard.zig");
+const helperWindowProc = @import("window_proc.zig").helperWindowProc;
+const utils = @import("utils.zig");
+const monitor_impl = @import("monitor_impl.zig");
+const icon = @import("icon.zig");
+const clipboard = @import("clipboard.zig");
 const common = @import("common");
 const error_defs = @import("errors.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_system_power = zigwin32.system.power;
 const win32_sys_service = zigwin32.system.system_services;
-const Win32Context = @import("globals.zig").Win32Context;
+const Win32Context = @import("global.zig").Win32Context;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const JoystickSubSystemImpl = @import("joystick_impl.zig").JoystickSubSystemImpl;
 
@@ -31,6 +32,8 @@ pub const Internals = struct {
     dev_notif_handle: *anyopaque,
     const HELPER_CLASS_NAME = "WIDOW_HELPER";
     const HELPER_TITLE = "";
+    var instances_count: u8 = 0;
+    var mutex = std.Thread.Mutex{};
     const Self = @This();
 
     pub const StatePointerMode = enum {
@@ -42,7 +45,12 @@ pub const Internals = struct {
     // and then copy it to the heap it will invalidate the pointer
     // set as for the window (GWLP_USERDATA).
     pub fn setup(self: *Self) !void {
-        // first time getting the singleton, must confirm successful init.
+
+        // To safely release our global singelton we will keep count of
+        // the how many instances we created
+        Self.mutex.lock();
+        defer Self.mutex.unlock();
+        Self.instances_count += 1;
         const win32_singelton = Win32Context.singleton() orelse return error_defs.WidowWin32Error.FailedToInitPlatform;
         self.helper_class = try registerHelperClass(win32_singelton.handles.hinstance);
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
@@ -89,6 +97,15 @@ pub const Internals = struct {
             helper_class_name,
             Win32Context.singleton().?.handles.hinstance,
         );
+
+        Self.mutex.lock();
+        defer Self.mutex.unlock();
+
+        if (instances_count == 1) {
+            // last one closes the door
+            Win32Context.deinitSingleton();
+            instances_count -= 1;
+        }
     }
 
     pub inline fn setStatePointer(self: *Self, mode: StatePointerMode, pointer: ?*anyopaque) void {
@@ -233,7 +250,7 @@ pub fn createCursor(
 // }
 
 pub const MonitorStore = struct {
-    monitors_map: std.AutoArrayHashMap(win32.HMONITOR, monitor_impl.MonitorImpl),
+    monitors: std.ArrayList(monitor_impl.MonitorImpl),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
     prev_exec_state: win32_system_power.EXECUTION_STATE,
@@ -242,98 +259,77 @@ pub const MonitorStore = struct {
     /// Initialize the `MonitorStore` struct.
     pub fn init(allocator: std.mem.Allocator) !Self {
         var self = Self{
-            .monitors_map = std.AutoArrayHashMap(win32.HMONITOR, monitor_impl.MonitorImpl).init(allocator),
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
+            .monitors = undefined,
         };
 
-        // Populate the monitor map
-        var monitors = try monitor_impl.pollMonitors(allocator);
-        defer monitors.deinit();
-        errdefer {
-            for (monitors.items) |*monitor| {
-                monitor.deinit();
-            }
-            monitors.deinit();
-            self.monitors_map.deinit();
-        }
-        for (monitors.items) |*monitor| {
-            try self.monitors_map.put(monitor.handle, monitor.*);
-        }
+        self.monitors = try monitor_impl.pollMonitors(allocator);
+
         return self;
     }
 
-    /// Deinitialize the `MonitorStore` struct.
-    /// this frees the monitors map and invalidate all monitors refrence.
+    /// Deinitialize the MonitorStore struct.
+    /// this frees the monitors array invalidating all monitors refrence.
     pub fn deinit(self: *Self) void {
         self.expected_video_change = true;
-        for (self.monitors_map.values()) |*monitor| {
+        for (self.monitors.items) |*monitor| {
             if (monitor.window) |*window| {
                 window.*.requestRestore();
             }
             // free allocated data.
             monitor.deinit();
         }
-        self.monitors_map.deinit();
+        self.monitors.deinit();
     }
 
-    /// Updates the monitor map by removing all disconnected monitors
+    /// Updates the monitors array by removing all disconnected monitors
     /// and adding new connected ones.
-    /// # Note
-    /// the update is very slow but it's only triggered if a monitor was connected, or disconnected.
     pub fn refreshMonitorsMap(self: *Self) !void {
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
-        const all_monitors = try monitor_impl.pollMonitors(self.monitors_map.allocator);
-        // keep track of the index in case of an error to free the remaining monitors.
-        var i: usize = 0;
-        defer all_monitors.deinit();
-        errdefer {
-            // clean the remaning monitors.
-            for (i..all_monitors.items.len) |index| {
-                all_monitors.items[index].deinit();
-            }
-        }
+        const new_monitors = try monitor_impl.pollMonitors(self.monitors.allocator);
 
-        // Remove the disconnected monitors.
-        for (self.monitors_map.values()) |*monitor| {
+        for (self.monitors.items) |*monitor| {
             var disconnected = true;
-            for (all_monitors.items) |*new_monitor| {
+            for (new_monitors.items) |*new_monitor| {
                 if (monitor.equals(new_monitor)) {
+                    // pass along the address of the occupying window.
+                    new_monitor.setWindow(monitor.window);
+                    if (monitor.current_mode) |*mode| {
+                        // copy the current video mode
+                        new_monitor.setVideoMode(mode) catch {};
+                    }
                     disconnected = false;
                     break;
                 }
             }
             if (disconnected) {
-                // Restore any occupying window.
-                if (monitor.window) |*window| {
-                    window.*.requestRestore();
-                }
-                // Free the monitor name pointer.
-                monitor.deinit();
-                _ = self.monitors_map.swapRemove(monitor.handle);
-            }
-        }
-
-        // Insert the new ones
-        for (all_monitors.items) |*monitor| {
-            var connected = true;
-            for (self.monitors_map.values()) |*value| {
-                if (monitor.equals(value)) {
-                    connected = false;
-                    break;
+                if (monitor.window) |window| {
+                    // when a monitor is disconnected
+                    // windows will move the window as is
+                    // to an availble monitor
+                    // not good in fullscreen mode.
+                    window.requestRestore();
+                    // when the window is restored from fullscreen
+                    // its coordinates might fall in the region that
+                    // the disconnected monitor occupied and end up being
+                    // hidden from the user so manually set it's position.
+                    window.setClientPosition(50, 50);
                 }
             }
 
-            if (connected) {
-                try self.monitors_map.put(monitor.handle, monitor.*);
-            } else {
-                monitor.deinit();
-            }
-            i += 1;
+            // avoids changing the video mode when deinit is called.
+            // as it's a useless call to the OS.
+            monitor.current_mode = null;
+            monitor.deinit();
         }
+
+        self.monitors.deinit();
+
+        self.monitors = new_monitors;
     }
 
     /// Acquire a monitor for a window
@@ -343,7 +339,17 @@ pub const MonitorStore = struct {
         window: *WindowImpl,
         monitor_area: *common.geometry.WidowArea,
     ) !void {
-        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+
+        // Find the monitor.
+        var target: ?*monitor_impl.MonitorImpl = null;
+        for (self.monitors.items) |*item| {
+            if (item.handle == monitor_handle) {
+                target = item;
+                break;
+            }
+        }
+        const monitor = target orelse {
+            std.debug.print("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
 
@@ -371,9 +377,19 @@ pub const MonitorStore = struct {
 
     /// Called by the window instance to release any occupied monitor
     pub fn restoreMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
-        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+        // Find the monitor.
+        var target: ?*monitor_impl.MonitorImpl = null;
+        for (self.monitors.items) |*item| {
+            if (item.handle == monitor_handle) {
+                target = item;
+                break;
+            }
+        }
+        const monitor = target orelse {
+            std.debug.print("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
+
         monitor.setWindow(null);
 
         self.used_monitors -= 1;
@@ -387,7 +403,16 @@ pub const MonitorStore = struct {
         monitor_handle: win32.HMONITOR,
         mode: ?*common.video_mode.VideoMode,
     ) !void {
-        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+        // Find the monitor.
+        var target: ?*monitor_impl.MonitorImpl = null;
+        for (self.monitors.items) |*item| {
+            if (item.handle == monitor_handle) {
+                target = item;
+                break;
+            }
+        }
+        const monitor = target orelse {
+            std.debug.print("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
 
@@ -404,15 +429,31 @@ pub const MonitorStore = struct {
         monitor_handle: win32.HMONITOR,
         output: *common.video_mode.VideoMode,
     ) !void {
-        const monitor = self.monitors_map.getPtr(monitor_handle) orelse {
+        // Find the monitor.
+        var target: ?*monitor_impl.MonitorImpl = null;
+        for (self.monitors.items) |*item| {
+            if (item.handle == monitor_handle) {
+                target = item;
+                break;
+            }
+        }
+        const monitor = target orelse {
+            std.debug.print("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
         monitor.queryCurrentMode(output);
+    }
+
+    pub fn debugInfos(self: *const Self) void {
+        for (self.monitors.items) |*monitor| {
+            monitor.debugInfos(false);
+        }
     }
 };
 
 test "MonitorStore.init()" {
     const testing = std.testing;
     var ms = try MonitorStore.init(testing.allocator);
+    try ms.refreshMonitorsMap();
     defer ms.deinit();
 }

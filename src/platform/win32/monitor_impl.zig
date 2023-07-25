@@ -3,10 +3,10 @@ const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
 const win32_gdi = @import("zigwin32").graphics.gdi;
 const MonitorError = @import("errors.zig").MonitorError;
-const WindowImpl = @import("./window_impl.zig").WindowImpl;
+const WindowImpl = @import("window_impl.zig").WindowImpl;
 const VideoMode = @import("common").video_mode.VideoMode;
 const WidowArea = @import("common").geometry.WidowArea;
-const Win32Context = @import("globals.zig").Win32Context;
+const Win32Context = @import("global.zig").Win32Context;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
@@ -215,8 +215,8 @@ pub const MonitorImpl = struct {
     handle: win32_gdi.HMONITOR, // System handle to the monitor.
     name: []u8, // Name assigned to the monitor
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the monitor.
-    mode_changed: bool, // Set true if the original video mode of the monitor was changed.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
+    current_mode: ?VideoMode, // Keeps track of any mode changes we made.
     window: ?*WindowImpl, // A pointer to the window occupying(fullscreen) the monitor.
 
     const Self = @This();
@@ -232,8 +232,8 @@ pub const MonitorImpl = struct {
             .adapter = adapter,
             .name = name,
             .modes = modes,
-            .mode_changed = false,
             .window = null,
+            .current_mode = null,
         };
     }
 
@@ -249,13 +249,18 @@ pub const MonitorImpl = struct {
     /// # Note
     /// We will need this when checking which monitor was disconnected.
     pub inline fn equals(self: *const Self, other: *const Self) bool {
-        // Windows might reassing the same handle to a new monitor so make sure
-        // to compare the name too
-        return (self.handle == other.handle and utils.strCmp(self.name, other.name));
+        // Windows might change the monitor handle when a new one is plugged or unplugged
+        // so make sure to compare the name.
+        return (utils.strCmp(self.name, other.name));
     }
 
     /// Populate the output with the current VideoMode of the monitor.
     pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
+        if (self.current_mode) |*mode| {
+            output.* = mode.*;
+            return;
+        }
+
         var dev_mode: win32_gdi.DEVMODEW = undefined;
         dev_mode.dmDriverExtra = 0;
         dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
@@ -302,7 +307,10 @@ pub const MonitorImpl = struct {
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
         if (video_mode) |mode| {
-            const possible_mode = if (self.isModePossible(mode) == true) mode else mode.selectBestMatch(self.modes.items);
+            const possible_mode = if (self.isModePossible(mode) == true)
+                mode
+            else
+                mode.selectBestMatch(self.modes.items);
             var current_mode: VideoMode = undefined;
             self.queryCurrentMode(&current_mode);
             if (possible_mode.*.equals(&current_mode)) {
@@ -313,16 +321,25 @@ pub const MonitorImpl = struct {
             var dm: win32_gdi.DEVMODEW = undefined;
             dm.dmDriverExtra = 0;
             dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
-            dm.dmFields = win32_gdi.DM_PELSWIDTH | win32_gdi.DM_PELSHEIGHT | win32_gdi.DM_BITSPERPEL | win32_gdi.DM_DISPLAYFREQUENCY;
+            dm.dmFields = win32_gdi.DM_PELSWIDTH |
+                win32_gdi.DM_PELSHEIGHT |
+                win32_gdi.DM_BITSPERPEL |
+                win32_gdi.DM_DISPLAYFREQUENCY;
             dm.dmPelsWidth = @intCast(u32, possible_mode.width);
             dm.dmPelsHeight = @intCast(u32, possible_mode.height);
             dm.dmBitsPerPel = @intCast(u32, possible_mode.color_depth);
             dm.dmDisplayFrequency = @intCast(u32, possible_mode.frequency);
-            const result = win32_gdi.ChangeDisplaySettingsExW(@ptrCast([*:0]const u16, &self.adapter), &dm, null, win32_gdi.CDS_FULLSCREEN, null);
+            const result = win32_gdi.ChangeDisplaySettingsExW(
+                @ptrCast([*:0]const u16, &self.adapter),
+                &dm,
+                null,
+                win32_gdi.CDS_FULLSCREEN,
+                null,
+            );
 
             switch (result) {
                 win32_gdi.DISP_CHANGE_SUCCESSFUL => {
-                    self.mode_changed = true;
+                    self.current_mode = possible_mode.*;
                     return;
                 },
                 else => return MonitorError.BadVideoMode,
@@ -336,7 +353,7 @@ pub const MonitorImpl = struct {
     fn restoreOrignalVideo(self: *Self) void {
         // Passing NULL for the lpDevMode parameter and 0 for the dwFlags parameter
         // is the easiest way to return to the default mode after a dynamic mode change.
-        if (self.mode_changed) {
+        if (self.current_mode != null) {
             _ = win32_gdi.ChangeDisplaySettingsExW(
                 @ptrCast([*:0]const u16, &self.adapter),
                 null,
@@ -344,7 +361,7 @@ pub const MonitorImpl = struct {
                 win32_gdi.CDS_FULLSCREEN,
                 null,
             );
-            self.mode_changed = false;
+            self.current_mode = null;
         }
     }
 
@@ -354,16 +371,19 @@ pub const MonitorImpl = struct {
     }
 
     // Debug Only.
-    pub fn debugInfos(self: *Self) void {
+    pub fn debugInfos(self: *Self, print_video_modes: bool) void {
         std.debug.print("Handle:{}\n", .{@ptrToInt(self.handle)});
         var adapter_name = std.mem.zeroes([32 * 3]u8);
         _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
         std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
-        std.debug.print("video modes:", .{});
-        for (self.modes.items) |*monitor| {
-            std.debug.print("{}", .{monitor.*});
+        if (print_video_modes) {
+            std.debug.print("video modes:", .{});
+            for (self.modes.items) |*monitor| {
+                std.debug.print("{}", .{monitor.*});
+            }
         }
-        std.debug.print("\n mode change : {}\n", .{self.mode_changed});
+        std.debug.print("\n mode change : {}\n", .{self.current_mode != null});
+        std.debug.print("\n occupying window: {?*}\n", .{self.window});
     }
 };
 
@@ -398,6 +418,7 @@ test "changing primary VideoMode" {
     var output: VideoMode = undefined;
     primary_monitor.debugInfos();
     primary_monitor.queryCurrentMode(&output);
+    std.debug.print("Primary monitor name len:{}\n", .{primary_monitor.name.len});
     std.debug.print("Current Video Mode: {}\n", .{output});
     std.debug.print("Changing Video Mode....\n", .{});
     const mode = VideoMode.init(700, 400, 55, 24);
