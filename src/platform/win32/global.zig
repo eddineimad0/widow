@@ -2,9 +2,9 @@ const std = @import("std");
 const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
 const WidowError = @import("errors.zig").WidowWin32Error;
-const mainWindowProc = @import("./window_proc.zig").mainWindowProc;
-const module = @import("./module.zig");
-const utils = @import("./utils.zig");
+const mainWindowProc = @import("window_proc.zig").mainWindowProc;
+const module = @import("module.zig");
+const utils = @import("utils.zig");
 const win32_sysinfo = zigwin32.system.system_information;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 
@@ -231,27 +231,26 @@ pub const Win32Context = struct {
         return &Self.globl_instance;
     }
 
-    // !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
-    // that hasn't been destroyed yet !!!.
-    // for now let windows handle cleaning once the program exit.
-    // pub fn deinitSingleton() void {
-    //     if (Self.global_instance.initialzied) {
-    //         freeLibraries(&Self.global_instance);
-    //         var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
-    //         var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    //         const fballocator = fba.allocator();
-    //         // Shouldn't fail since the buffer is big enough.
-    //         const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
-    //
-    //         // Unregister the window class.
-    //         _ = win32_window_messaging.UnregisterClassW(
-    //             // utils.makeIntAtom(u8, self.handles.wnd_class),
-    //             wide_class_name,
-    //             Self.global_instance.handles.hinstance,
-    //         );
-    //         Self.global_instance.initialzied = false;
-    //     }
-    // }
+    /// !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
+    /// that hasn't been destroyed yet !!!.
+    pub fn deinitSingleton() void {
+        if (Self.g_init) {
+            freeLibraries(&Self.globl_instance);
+            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            const fballocator = fba.allocator();
+            // Shouldn't fail since the buffer is big enough.
+            const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
+
+            // Unregister the window class.
+            _ = win32_window_messaging.UnregisterClassW(
+                // utils.makeIntAtom(u8, self.handles.wnd_class),
+                wide_class_name,
+                Self.globl_instance.handles.hinstance,
+            );
+            Self.g_init = false;
+        }
+    }
 };
 
 fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
