@@ -284,37 +284,45 @@ pub fn mainWindowProc(
         },
 
         win32_window_messaging.WM_GETDPISCALEDSIZE => {
-            // This message is received before a win32_window_messaging.WM_DPICHANGED for PMv2 awareness, and allows
-            // the window to compute its desired size for the pending DPI change.
-            // this is only useful in scenarios where the window wants to scale non-linearly.
-            if (window.data.flags.allow_dpi_scaling) {
-                return message_handler.dpiScaledSizeHandler(window, wparam, lparam);
-            }
-            return win32.FALSE;
+            // [MSDN]
+            // This message is received before a win32_window_messaging.WM_DPICHANGED
+            // for PMv2 awareness, and allows the window to compute its desired size
+            // for the pending DPI change.
+            // [SDL]:
+            // Experimentation shows it's only sent during interactive dragging, not in response to
+            // SetWindowPos.
+            // Windows expects applications to scale their window rects linearly
+            // when dragging between monitors with different DPI's.
+            // e.g. a 100x100 window dragged to a 200% scaled monitor
+            // becomes 200x200.
+            // For SDL, we instead want the client size to scale linearly.
+            // This is not the same as the window rect scaling linearly,
+            // because Windows doesn't scale the non-client area (titlebar etc.)
+            // linearly. So, we need to handle this message to request custom
+            // scaling.
+            return message_handler.dpiScaledSizeHandler(window, wparam, lparam);
         },
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
-            if (!window.data.flags.is_fullscreen and window.data.flags.allow_dpi_scaling) {
-                const rect_ref: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
-                const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-                    @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-                    @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
-                const top = if (window.data.flags.is_topmost)
-                    win32_window_messaging.HWND_TOPMOST
-                else
-                    win32_window_messaging.HWND_NOTOPMOST;
+            const suggested_rect: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
+            const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
+                @enumToInt(win32_window_messaging.SWP_NOZORDER) |
+                @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
+            const top = if (window.data.flags.is_topmost)
+                win32_window_messaging.HWND_TOPMOST
+            else
+                win32_window_messaging.HWND_NOTOPMOST;
 
-                _ = win32_window_messaging.SetWindowPos(
-                    window.handle,
-                    top,
-                    rect_ref.left,
-                    rect_ref.top,
-                    rect_ref.right - rect_ref.left,
-                    rect_ref.bottom - rect_ref.top,
-                    @intToEnum(win32_window_messaging.SET_WINDOW_POS_FLAGS, flags),
-                );
-            }
+            _ = win32_window_messaging.SetWindowPos(
+                window.handle,
+                top,
+                suggested_rect.left,
+                suggested_rect.top,
+                suggested_rect.right - suggested_rect.left,
+                suggested_rect.bottom - suggested_rect.top,
+                @intToEnum(win32_window_messaging.SET_WINDOW_POS_FLAGS, flags),
+            );
             const new_dpi = utils.loWord(wparam);
             const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
             const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);

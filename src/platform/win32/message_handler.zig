@@ -209,28 +209,14 @@ pub inline fn dpiScaledSizeHandler(
     lparam: win32.LPARAM,
 ) win32.BOOL {
     const globl_cntxt = Win32Context.singleton() orelse return win32.FALSE;
-    // TODO: more docs.
     if (globl_cntxt.flags.is_win10b1607_or_above) {
-        var pending_size = win32.RECT{
-            .left = 0,
-            .top = 0,
-            .right = 0,
-            .bottom = 0,
-        };
-
         const styles = window_impl.windowStyles(&window.data.flags);
         const ex_styles = window_impl.windowExStyles(&window.data.flags);
         const new_dpi = utils.loWord(wparam);
-        std.debug.print("scaled_size new DPI:{}\n", .{new_dpi});
+        const size: *win32_foundation.SIZE = @intToPtr(*win32_foundation.SIZE, @bitCast(usize, lparam));
+        const old_dpi = window.scalingDPI(null);
 
-        window_impl.adjustWindowRect(
-            &pending_size,
-            styles,
-            ex_styles,
-            new_dpi,
-        );
-
-        var desired_size = win32.RECT{
+        var old_nc_size = win32.RECT{
             .left = 0,
             .top = 0,
             .right = 0,
@@ -238,15 +224,28 @@ pub inline fn dpiScaledSizeHandler(
         };
 
         window_impl.adjustWindowRect(
-            &desired_size,
+            &old_nc_size,
+            styles,
+            ex_styles,
+            old_dpi,
+        );
+
+        var new_nc_size = win32.RECT{
+            .left = 0,
+            .top = 0,
+            .right = 0,
+            .bottom = 0,
+        };
+
+        window_impl.adjustWindowRect(
+            &new_nc_size,
             styles,
             ex_styles,
             new_dpi,
         );
 
-        const size: *win32_foundation.SIZE = @intToPtr(*win32_foundation.SIZE, @bitCast(usize, lparam));
-        size.cx += (desired_size.right - desired_size.left) - (pending_size.right - pending_size.left);
-        size.cy += (desired_size.bottom - desired_size.top) - (pending_size.bottom - pending_size.top);
+        size.cx += (new_nc_size.right - new_nc_size.left) - (old_nc_size.right - old_nc_size.left);
+        size.cy += (new_nc_size.bottom - new_nc_size.top) - (old_nc_size.bottom - old_nc_size.top);
         return win32.TRUE;
     }
     return win32.FALSE;
