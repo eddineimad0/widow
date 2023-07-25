@@ -456,7 +456,8 @@ pub const WindowImpl = struct {
 
         // Fullscreen
         if (instance.data.flags.is_fullscreen) {
-            try instance.acquireMonitor();
+            instance.data.flags.is_fullscreen = false;
+            try instance.setFullscreen(true, null);
         }
     }
 
@@ -742,23 +743,6 @@ pub const WindowImpl = struct {
 
     /// Sets the new (width,height) of the window's client area
     pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
-        if (self.data.flags.is_fullscreen) {
-            // setting the client size in fullscreen mode should
-            // translate to setting the video mode.
-            const monitor_handle = self.occupiedMonitor();
-            var video: common.video_mode.VideoMode = undefined;
-            // Can't fail
-            self.widow.monitors.monitorVideoMode(monitor_handle, &video) catch unreachable;
-            video.width = size.width;
-            video.height = size.height;
-            _ = self.setFullscreen(true, &video) catch {
-                std.debug.print("Failed To switch video Mode\n", .{});
-                self.requestRestore();
-            };
-            self.acquireMonitor() catch {
-                self.requestRestore();
-            };
-        }
         var dpi: ?u32 = null;
         if (self.data.flags.allow_dpi_scaling) {
             var scaler: f64 = undefined;
@@ -803,6 +787,26 @@ pub const WindowImpl = struct {
             new_client_rect.right - new_client_rect.left,
             new_client_rect.bottom - new_client_rect.top,
         );
+
+        if (self.data.flags.is_fullscreen) {
+            // setting the client size in fullscreen mode should
+            // translate to setting the video mode.
+            const monitor_handle = self.occupiedMonitor();
+            var video: common.video_mode.VideoMode = undefined;
+            self.widow.monitors.monitorVideoMode(monitor_handle, &video) catch unreachable;
+            video.width = size.width;
+            video.height = size.height;
+            _ = self.setFullscreen(true, &video) catch {
+                std.debug.print("Failed To switch video Mode\n", .{});
+                self.requestRestore();
+            };
+            // as to not change the restore position.
+            // manually set the restore frame size.
+            self.win32.restore_frame.?.size = self.data.client_area.size;
+            self.acquireMonitor(monitor_handle) catch {
+                self.requestRestore();
+            };
+        }
     }
 
     pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
@@ -1093,9 +1097,9 @@ pub const WindowImpl = struct {
 
                 self.data.flags.is_fullscreen = true;
                 self.updateStyles();
-                try self.acquireMonitor();
+                try self.acquireMonitor(monitor_handle);
             } else {
-                try self.releaseMonitor();
+                try self.releaseMonitor(monitor_handle);
                 self.requestRestore();
             }
         }
@@ -1107,9 +1111,7 @@ pub const WindowImpl = struct {
         self.win32.restore_frame = null;
     }
 
-    pub fn acquireMonitor(self: *Self) !void {
-        const monitor_handle = self.occupiedMonitor();
-
+    pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         var mon_area: common.geometry.WidowArea = undefined;
 
         try self.widow.monitors.setMonitorWindow(
@@ -1138,8 +1140,7 @@ pub const WindowImpl = struct {
         );
     }
 
-    pub fn releaseMonitor(self: *const Self) !void {
-        const monitor_handle = self.occupiedMonitor();
+    pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
         try self.widow.monitors.restoreMonitor(monitor_handle);
     }
 
