@@ -27,7 +27,7 @@ pub fn main() void {
     };
 
     // create our window,
-    var window = builder.withDPIScaling(false).withResize(true).build() catch |err| {
+    var window = builder.withDPIScaling(true).withResize(true).build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
