@@ -117,6 +117,9 @@ pub const Win32Context = struct {
             try g_instance.loadLibraries();
             errdefer g_instance.freeLibraries();
 
+            // Register the window class
+            g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
+
             // Setup windows version flags.
             if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 0)) {
                 g_instance.flags.is_win_vista_or_above = true;
@@ -137,8 +140,6 @@ pub const Win32Context = struct {
                     }
                 }
             }
-            // Register the window class
-            g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
 
             // Declare Process DPI Awareness.
             if (g_instance.flags.is_win10b1703_or_above) {
