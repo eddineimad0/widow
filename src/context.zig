@@ -145,7 +145,7 @@ pub const WindowBuilder = struct {
                     .is_focused = false,
                     .is_fullscreen = false,
                     .cursor_in_client = false,
-                    .allow_dpi_scaling = false,
+                    .is_dpi_aware = false,
                 },
                 .input = common.keyboard_and_mouse.InputState.init(),
             },
@@ -278,7 +278,7 @@ pub const WindowBuilder = struct {
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDPIScaling(self: *Self, value: bool) *Self {
-        self.window_attributes.flags.allow_dpi_scaling = value;
+        self.window_attributes.flags.is_dpi_aware = value;
         return self;
     }
 };

@@ -13,13 +13,13 @@ pub const WindowFlags = packed struct {
     is_topmost: bool, // Should the window be always on top of all active windows.
     is_focused: bool, // Does the window have keyboard and input focus.
     is_fullscreen: bool, // Is the window in fullscreen mode.
+    is_dpi_aware: bool, // Should the window dimensions be scaled by the dpi scale factor
     cursor_in_client: bool, // Is the cursor currently in client area.
-    allow_dpi_scaling: bool, // Should the window dimensions be scaled by the dpi scale factor.
 };
 
 pub const WindowData = struct {
     id: u32,
-    client_area: WidowArea, // The Size(non dpi scaled) and position(top left corner) of the client(content) area.
+    client_area: WidowArea, // The Size and position of the client(content) area.
     aspect_ratio: ?AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?WidowSize, // The minimum limits of the window's size.
     max_size: ?WidowSize, // The maximum limits of the window's size.
