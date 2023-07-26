@@ -115,7 +115,7 @@ pub fn mainWindowProc(
             );
             const globl_data = Win32Context.singleton();
             if (globl_data) |singleton_ptr| {
-                if (window_data.flags.allow_dpi_scaling and singleton_ptr.flags.is_win10b1607_or_above) {
+                if (window_data.flags.is_dpi_aware and singleton_ptr.flags.is_win10b1607_or_above) {
                     _ = singleton_ptr.functions.EnableNonClientDpiScaling.?(hwnd);
                 }
             }
@@ -288,24 +288,25 @@ pub fn mainWindowProc(
             // This message is received before a win32_window_messaging.WM_DPICHANGED
             // for PMv2 awareness, and allows the window to compute its desired size
             // for the pending DPI change.
-            // [SDL]:
+            // [SDL]
             // Experimentation shows it's only sent during interactive dragging, not in response to
             // SetWindowPos.
-            // Windows expects applications to scale their window rects linearly
-            // when dragging between monitors with different DPI's.
-            // e.g. a 100x100 window dragged to a 200% scaled monitor
-            // becomes 200x200.
-            // For SDL, we instead want the client size to scale linearly.
-            // This is not the same as the window rect scaling linearly,
-            // because Windows doesn't scale the non-client area (titlebar etc.)
-            // linearly. So, we need to handle this message to request custom
-            // scaling.
-            return message_handler.dpiScaledSizeHandler(window, wparam, lparam);
+            const globl_cntxt = Win32Context.singleton().?;
+            // there is no need to process this message for a dpi aware window
+            // for a non dpi aware window processing this message allows it
+            // to keep a constant width and height.
+            if (!window.data.flags.is_dpi_aware and globl_cntxt.flags.is_win10b1607_or_above) {
+                message_handler.dpiScaledSizeHandler(window, wparam, lparam);
+                return win32.TRUE;
+            }
+            return win32.FALSE;
         },
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
             const suggested_rect: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
+            const new_dpi = utils.loWord(wparam);
+            const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
             const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
                 @enumToInt(win32_window_messaging.SWP_NOZORDER) |
                 @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
@@ -323,8 +324,6 @@ pub fn mainWindowProc(
                 suggested_rect.bottom - suggested_rect.top,
                 @intToEnum(win32_window_messaging.SET_WINDOW_POS_FLAGS, flags),
             );
-            const new_dpi = utils.loWord(wparam);
-            const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
             const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
             window.sendEvent(&event);
             return 0;

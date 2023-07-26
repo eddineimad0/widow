@@ -163,7 +163,7 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
         };
 
         var dpi: ?u32 = null;
-        if (window.data.flags.allow_dpi_scaling) {
+        if (window.data.flags.is_dpi_aware) {
             dpi = window.scalingDPI(null);
         }
 
@@ -207,48 +207,43 @@ pub inline fn dpiScaledSizeHandler(
     window: *window_impl.WindowImpl,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) win32.BOOL {
-    const globl_cntxt = Win32Context.singleton() orelse return win32.FALSE;
-    if (globl_cntxt.flags.is_win10b1607_or_above) {
-        const styles = window_impl.windowStyles(&window.data.flags);
-        const ex_styles = window_impl.windowExStyles(&window.data.flags);
-        const new_dpi = utils.loWord(wparam);
-        const size: *win32_foundation.SIZE = @intToPtr(*win32_foundation.SIZE, @bitCast(usize, lparam));
-        const old_dpi = window.scalingDPI(null);
+) void {
+    const styles = window_impl.windowStyles(&window.data.flags);
+    const ex_styles = window_impl.windowExStyles(&window.data.flags);
+    const new_dpi = utils.loWord(wparam);
+    const size: *win32_foundation.SIZE = @intToPtr(*win32_foundation.SIZE, @bitCast(usize, lparam));
+    const old_dpi = window.scalingDPI(null);
 
-        var old_nc_size = win32.RECT{
-            .left = 0,
-            .top = 0,
-            .right = 0,
-            .bottom = 0,
-        };
+    var old_nc_size = win32.RECT{
+        .left = 0,
+        .top = 0,
+        .right = 0,
+        .bottom = 0,
+    };
 
-        window_impl.adjustWindowRect(
-            &old_nc_size,
-            styles,
-            ex_styles,
-            old_dpi,
-        );
+    var new_nc_size = win32.RECT{
+        .left = 0,
+        .top = 0,
+        .right = 0,
+        .bottom = 0,
+    };
 
-        var new_nc_size = win32.RECT{
-            .left = 0,
-            .top = 0,
-            .right = 0,
-            .bottom = 0,
-        };
+    window_impl.adjustWindowRect(
+        &old_nc_size,
+        styles,
+        ex_styles,
+        old_dpi,
+    );
 
-        window_impl.adjustWindowRect(
-            &new_nc_size,
-            styles,
-            ex_styles,
-            new_dpi,
-        );
+    window_impl.adjustWindowRect(
+        &new_nc_size,
+        styles,
+        ex_styles,
+        new_dpi,
+    );
 
-        size.cx += (new_nc_size.right - new_nc_size.left) - (old_nc_size.right - old_nc_size.left);
-        size.cy += (new_nc_size.bottom - new_nc_size.top) - (old_nc_size.bottom - old_nc_size.top);
-        return win32.TRUE;
-    }
-    return win32.FALSE;
+    size.cx += (new_nc_size.right - new_nc_size.left) - (old_nc_size.right - old_nc_size.left);
+    size.cy += (new_nc_size.bottom - new_nc_size.top) - (old_nc_size.bottom - old_nc_size.top);
 }
 
 pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {

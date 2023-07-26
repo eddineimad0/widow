@@ -102,16 +102,22 @@ pub const Window = struct {
         self.impl.setClientPosition(x, y);
     }
 
+    /// Returns the size in logical pixels of the window's client area.
+    /// # Notes
+    /// The client area is the content of the window, excluding the title bar and borders.
+    /// If the window allows dpi scaling the returned size might be diffrent from the
+    /// physical size.
+    pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
+        return self.impl.clientSize();
+    }
+
     /// Returns the size in physical pixels of the window's client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title bar and borders.
     /// If the window allows dpi scaling the returned size might be diffrent from the
-    /// size specified during creation.
-    /// The logical size which is the same as the size specified during window creation,
-    /// can be aquired by dividing the Physical size with the content scale factor
-    /// returned by `Window.contentScale()`.
-    pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
-        return self.impl.clientSize();
+    /// logical size.
+    pub inline fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
+        return self.impl.clientPixelSize();
     }
 
     /// Changes the client size of the window.
@@ -121,9 +127,8 @@ pub const Window = struct {
     /// `width`: the new width of the client size.
     /// `height`: the new height of the client size.
     /// # Notes
-    /// For a full screen window this function updates the resolution
-    /// and switches to the video mode closest to the desired one.
     /// This automatically un-maximizes the window if it's maximized.
+    /// For a full screen window this function does nothing.
     pub inline fn setClientSize(self: *Self, width: i32, height: i32) void {
         std.debug.assert(width > 0 and height > 0);
         var new_size = common.geometry.WidowSize{ .width = width, .height = height };

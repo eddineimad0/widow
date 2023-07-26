@@ -16,7 +16,6 @@ const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
 const WindowFlags = common.window_data.WindowFlags;
-const FullScreenMode = common.window_data.FullScreenMode;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 
@@ -350,10 +349,6 @@ pub const WindowImpl = struct {
         const styles = .{ windowStyles(&instance.data.flags), windowExStyles(&instance.data.flags) };
         instance.handle = try createPlatformWindow(allocator, window_title, &instance.data, styles);
 
-        // Process inital events.
-        // these events aren't reported.
-        instance.processEvents();
-
         // Finish setting up the window.
         instance.win32 = WindowWin32Data{
             .cursor = icon.Cursor{
@@ -372,6 +367,10 @@ pub const WindowImpl = struct {
             .size_pos_update = WindowWin32Data.NO_SIZE_POSITION_UPDATE,
         };
 
+        // Process inital events.
+        // these events aren't reported.
+        instance.processEvents();
+
         _ = win32_window_messaging.SetWindowLongPtrW(
             instance.handle,
             win32_window_messaging.GWLP_USERDATA,
@@ -379,9 +378,13 @@ pub const WindowImpl = struct {
         );
 
         // Now we can handle DPI adjustments.
-        if (instance.data.flags.allow_dpi_scaling) {
-            var client_rect: win32.RECT = undefined;
-            clientRect(instance.handle, &client_rect);
+        if (instance.data.flags.is_dpi_aware) {
+            var client_rect = win32.RECT{
+                .left = 0,
+                .top = 0,
+                .right = instance.data.client_area.size.width,
+                .bottom = instance.data.client_area.size.height,
+            };
             var dpi_scale: f64 = undefined;
             const dpi = instance.scalingDPI(&dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
@@ -584,30 +587,25 @@ pub const WindowImpl = struct {
             @bitCast(isize, reg_ex_styles),
         );
 
-        var rect = win32_foundation.RECT{
-            .left = 0,
-            .top = 0,
-            .right = 0,
-            .bottom = 0,
-        };
+        var rect: win32.RECT = undefined;
 
         if (self.win32.restore_frame) |*frame| {
             // we're exiting fullscreen mode use the saved size.
             rect.left = frame.top_left.x;
             rect.top = frame.top_left.y;
-            rect.right = frame.size.width + rect.left;
-            rect.bottom = frame.size.height + rect.top;
+            rect.right = frame.size.width;
+            rect.bottom = frame.size.height;
         } else {
             // we're simply changing some styles.
             rect.left = self.data.client_area.top_left.x;
             rect.top = self.data.client_area.top_left.y;
-            rect.right = self.data.client_area.size.width + rect.left;
-            rect.bottom = self.data.client_area.size.height + rect.top;
+            rect.right = self.data.client_area.size.width;
+            rect.bottom = self.data.client_area.size.height;
         }
 
         var dpi: ?u32 = null;
 
-        if (self.data.flags.allow_dpi_scaling) {
+        if (self.data.flags.is_dpi_aware) {
             dpi = self.scalingDPI(null);
         }
 
@@ -703,7 +701,7 @@ pub const WindowImpl = struct {
 
         var dpi: ?u32 = null;
 
-        if (self.data.flags.allow_dpi_scaling) {
+        if (self.data.flags.is_dpi_aware) {
             dpi = self.scalingDPI(null);
         }
 
@@ -733,79 +731,75 @@ pub const WindowImpl = struct {
         );
     }
 
-    /// Returns the Size of the window's client area
-    pub fn clientSize(self: *const Self) common.geometry.WidowSize {
+    /// Returns the Physical size of the window's client area
+    pub fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
         return common.geometry.WidowSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
     }
 
+    /// Returns the logical size of the window's client area
+    pub fn clientSize(self: *const Self) common.geometry.WidowSize {
+        var client_size = common.geometry.WidowSize{
+            .width = self.data.client_area.size.width,
+            .height = self.data.client_area.size.height,
+        };
+        if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
+            const dpi = self.scalingDPI(null);
+            const r_scaler = @intToFloat(f64, win32.USER_DEFAULT_SCREEN_DPI) / @intToFloat(f64, dpi);
+            client_size.scaleBy(r_scaler);
+        }
+        return client_size;
+    }
+
     /// Sets the new (width,height) of the window's client area
     pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
-        var dpi: ?u32 = null;
-        if (self.data.flags.allow_dpi_scaling) {
-            var scaler: f64 = undefined;
-            dpi = self.scalingDPI(&scaler);
-            size.scaleBy(scaler);
-        }
+        if (!self.data.flags.is_fullscreen) {
+            var dpi: ?u32 = null;
+            if (self.data.flags.is_dpi_aware) {
+                var scaler: f64 = undefined;
+                dpi = self.scalingDPI(&scaler);
+                size.scaleBy(scaler);
+            }
 
-        var new_client_rect = win32_foundation.RECT{
-            .left = 0,
-            .top = 0,
-            .right = size.width,
-            .bottom = size.height,
-        };
-
-        adjustWindowRect(
-            &new_client_rect,
-            windowStyles(&self.data.flags),
-            windowExStyles(&self.data.flags),
-            dpi,
-        );
-        if (self.data.flags.is_maximized) {
-            // un-maximize the window
-            self.restore();
-        }
-
-        const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOREPOSITION) |
-            @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-            @enumToInt(win32_window_messaging.SWP_NOMOVE);
-
-        const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
-        else
-            win32_window_messaging.HWND_NOTOPMOST;
-
-        setWindowPositionIntern(
-            self.handle,
-            top,
-            POSITION_FLAGS,
-            0,
-            0,
-            new_client_rect.right - new_client_rect.left,
-            new_client_rect.bottom - new_client_rect.top,
-        );
-
-        if (self.data.flags.is_fullscreen) {
-            // setting the client size in fullscreen mode should
-            // translate to setting the video mode.
-            const monitor_handle = self.occupiedMonitor();
-            var video: common.video_mode.VideoMode = undefined;
-            self.widow.monitors.monitorVideoMode(monitor_handle, &video) catch unreachable;
-            video.width = size.width;
-            video.height = size.height;
-            _ = self.setFullscreen(true, &video) catch {
-                std.debug.print("Failed To switch video Mode\n", .{});
-                self.requestRestore();
+            var new_client_rect = win32_foundation.RECT{
+                .left = 0,
+                .top = 0,
+                .right = size.width,
+                .bottom = size.height,
             };
-            // as to not change the restore position.
-            // manually set the restore frame size.
-            self.win32.restore_frame.?.size = self.data.client_area.size;
-            self.acquireMonitor(monitor_handle) catch {
-                self.requestRestore();
-            };
+
+            adjustWindowRect(
+                &new_client_rect,
+                windowStyles(&self.data.flags),
+                windowExStyles(&self.data.flags),
+                dpi,
+            );
+            if (self.data.flags.is_maximized) {
+                // un-maximize the window
+                self.restore();
+            }
+
+            const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
+                @enumToInt(win32_window_messaging.SWP_NOREPOSITION) |
+                @enumToInt(win32_window_messaging.SWP_NOZORDER) |
+                @enumToInt(win32_window_messaging.SWP_NOMOVE);
+
+            const top = if (self.data.flags.is_topmost)
+                win32_window_messaging.HWND_TOPMOST
+            else
+                win32_window_messaging.HWND_NOTOPMOST;
+
+            setWindowPositionIntern(
+                self.handle,
+                top,
+                POSITION_FLAGS,
+                0,
+                0,
+                new_client_rect.right - new_client_rect.left,
+                new_client_rect.bottom - new_client_rect.top,
+            );
         }
     }
 
@@ -832,7 +826,7 @@ pub const WindowImpl = struct {
                 }
             }
 
-            if (self.data.flags.allow_dpi_scaling) {
+            if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
                 _ = self.scalingDPI(&scaler);
                 size.scaleBy(scaler);
@@ -888,7 +882,7 @@ pub const WindowImpl = struct {
                     return;
                 }
             }
-            if (self.data.flags.allow_dpi_scaling) {
+            if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
                 _ = self.scalingDPI(&scaler);
                 size.scaleBy(scaler);
@@ -1213,9 +1207,16 @@ pub const WindowImpl = struct {
         std.debug.print("0==========================0\n", .{});
         if (size) {
             std.debug.print("\nWindow #{}\n", .{self.data.id});
-            var cs: win32.RECT = undefined;
-            clientRect(self.handle, &cs);
-            std.debug.print("Client Size (w:{},h:{}) | with API (w:{},h:{})\n", .{ self.data.client_area.size.width, self.data.client_area.size.height, cs.right - cs.left, cs.bottom - cs.top });
+            const cs = self.clientSize();
+            std.debug.print(
+                "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
+                .{
+                    self.data.client_area.size.width,
+                    self.data.client_area.size.height,
+                    cs.width,
+                    cs.height,
+                },
+            );
             const ws = windowSize(self.handle);
             std.debug.print("Window Size (w:{},h:{})\n", .{ ws.width, ws.height });
             if (self.data.min_size) |*value| {
