@@ -1,4 +1,4 @@
 zig-*
-*.ps1
 *.txt
+scripts/
 
