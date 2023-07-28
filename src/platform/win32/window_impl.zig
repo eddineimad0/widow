@@ -111,17 +111,6 @@ pub fn adjustWindowRect(
     }
 }
 
-/// Returns the client area's rectangle that specify it's coordinates.
-/// # Note
-/// the coordinate for the upperleft corner returned by this function
-/// are always (0,0), and do not reflect it's actual position on the screen
-/// pass the returned rect to clientToScreen function to get the true upperleft
-/// screen coordinates.
-/// TODO: Get rid of this.
-inline fn clientRect(window_handle: win32.HWND, rect: *win32.RECT) void {
-    _ = win32_window_messaging.GetClientRect(window_handle, rect);
-}
-
 /// Converts client coordinate of a RECT structure to screen coordinate.
 fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
     var upper_left = win32_foundation.POINT{
@@ -188,27 +177,27 @@ pub fn updateCursorImage(cursor: *const icon.Cursor) void {
     }
 }
 
-/// Limit the cursor motion to the client rectangle.
+/// Limits the cursor motion to the client rectangle.
 pub inline fn captureCursor(window_handle: win32.HWND) void {
     var clip_rect: win32.RECT = undefined;
-    clientRect(window_handle, &clip_rect);
+    _ = win32_window_messaging.GetClientRect(window_handle, &clip_rect);
     // ClipCursor expects screen coordinates.
     clientToScreen(window_handle, &clip_rect);
     _ = win32_window_messaging.ClipCursor(&clip_rect);
 }
 
-/// Remove cursor motion limitation.
+/// Removes cursor motion limitation.
 pub inline fn releaseCursor() void {
     _ = win32_window_messaging.ClipCursor(null);
 }
 
-/// Capture and hide the cursor from the user.
+/// Captures and hide the cursor from the user.
 pub fn disableCursor(window_handle: win32.HWND) void {
     captureCursor(window_handle);
     _ = win32_window_messaging.SetCursor(null);
 }
 
-/// Show and release the cursor.
+/// Shows and release the cursor.
 pub fn enableCursor(cursor: *const icon.Cursor) void {
     updateCursorImage(cursor);
     releaseCursor();
@@ -971,8 +960,7 @@ pub const WindowImpl = struct {
             const slice = try utils.wideZToUtf8(allocator, wide_slice);
             return slice;
         }
-        // TODO: why does using the WindowError doesn't compile?
-        return error.FailedToCopyTitle;
+        return WindowError.FailedToCopyTitle;
     }
 
     /// Returns the window's current opacity
