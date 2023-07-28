@@ -2,7 +2,6 @@ const std = @import("std");
 const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
 const WidowError = @import("errors.zig").WidowWin32Error;
-const mainWindowProc = @import("window_proc.zig").mainWindowProc;
 const module = @import("module.zig");
 const utils = @import("utils.zig");
 const win32_sysinfo = zigwin32.system.system_information;
@@ -44,7 +43,6 @@ const Win32Flags = struct {
 };
 
 const Win32Handles = struct {
-    wnd_class: u16,
     ntdll: ?win32.HINSTANCE,
     user32: ?win32.HINSTANCE,
     shcore: ?win32.HINSTANCE,
@@ -68,6 +66,7 @@ pub const Win32Context = struct {
     functions: LoadedFunctions,
     // TODO: can we change this to a user comptime string.
     pub const WINDOW_CLASS_NAME = "WIDOW";
+    pub const HELPER_CLASS_NAME = "WIDOW_HELPER";
     var mutex: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
 
@@ -92,7 +91,6 @@ pub const Win32Context = struct {
             .RtlVerifyVersionInfo = undefined,
         },
         .handles = Win32Handles{
-            .wnd_class = 0,
             .ntdll = null,
             .user32 = null,
             .shcore = null,
@@ -118,7 +116,7 @@ pub const Win32Context = struct {
             errdefer g_instance.freeLibraries();
 
             // Register the window class
-            g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
+            // g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
 
             // Setup windows version flags.
             if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 0)) {
@@ -202,7 +200,6 @@ pub const Win32Context = struct {
         if (self.handles.ntdll) |*handle| {
             module.freeWin32Module(handle.*);
             self.handles.ntdll = null;
-            // self.functions.RtlVerifyVersionInfo = undefined;
         }
         if (self.handles.user32) |*handle| {
             module.freeWin32Module(handle.*);
@@ -237,56 +234,10 @@ pub const Win32Context = struct {
     pub fn deinitSingleton() void {
         if (Self.g_init) {
             freeLibraries(&Self.globl_instance);
-            var buffer: [(Self.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
-            var fba = std.heap.FixedBufferAllocator.init(&buffer);
-            const fballocator = fba.allocator();
-            // Shouldn't fail since the buffer is big enough.
-            const wide_class_name = utils.utf8ToWideZ(fballocator, Self.WINDOW_CLASS_NAME) catch unreachable;
-
-            // Unregister the window class.
-            _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.handles.wnd_class),
-                wide_class_name,
-                Self.globl_instance.handles.hinstance,
-            );
             Self.g_init = false;
         }
     }
 };
-
-fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
-    const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
-    var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
-    window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
-    window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) | @enumToInt(win32_window_messaging.CS_VREDRAW) | @enumToInt(win32_window_messaging.CS_OWNDC));
-    window_class.lpfnWndProc = mainWindowProc;
-    window_class.hInstance = hinstance;
-    window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
-    var buffer: [Win32Context.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WINDOW_CLASS_NAME) catch unreachable;
-    window_class.lpszClassName = wide_class_name;
-    // TODO :load ressource icon
-    window_class.hIcon = null;
-    if (window_class.hIcon == null) {
-        // No Icon was provided or we failed.
-        window_class.hIcon = @ptrCast(?win32_window_messaging.HICON, win32_window_messaging.LoadImageW(
-            null,
-            win32_window_messaging.IDI_APPLICATION,
-            IMAGE_ICON,
-            0,
-            0,
-            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) |
-                @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
-        ));
-    }
-    const class = win32_window_messaging.RegisterClassExW(&window_class);
-    if (class == 0) {
-        return WidowError.FailedToRegisterWNDCLASS;
-    }
-    return class;
-}
 
 fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
     // [MSDN]

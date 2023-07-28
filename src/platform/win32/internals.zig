@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
-const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const utils = @import("utils.zig");
 const monitor_impl = @import("monitor_impl.zig");
 const icon = @import("icon.zig");
@@ -12,6 +11,8 @@ const error_defs = @import("errors.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_system_power = zigwin32.system.power;
 const win32_sys_service = zigwin32.system.system_services;
+const helperWindowProc = @import("window_proc.zig").helperWindowProc;
+const mainWindowProc = @import("window_proc.zig").mainWindowProc;
 const Win32Context = @import("global.zig").Win32Context;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const JoystickSubSystemImpl = @import("joystick_impl.zig").JoystickSubSystemImpl;
@@ -29,11 +30,9 @@ pub const Internals = struct {
     helper_data: HelperData,
     helper_window: win32.HWND,
     helper_class: u16,
+    wnd_class: u16,
     dev_notif_handle: *anyopaque,
-    const HELPER_CLASS_NAME = "WIDOW_HELPER";
     const HELPER_TITLE = "";
-    var instances_count: u8 = 0;
-    var mutex = std.Thread.Mutex{};
     const Self = @This();
 
     pub const StatePointerMode = enum {
@@ -45,13 +44,8 @@ pub const Internals = struct {
     // and then copy it to the heap it will invalidate the pointer
     // set as for the window (GWLP_USERDATA).
     pub fn setup(self: *Self) !void {
-
-        // To safely release our global singelton we will keep count of
-        // the how many instances we created
-        Self.mutex.lock();
-        defer Self.mutex.unlock();
-        Self.instances_count += 1;
         const win32_singelton = Win32Context.singleton() orelse return error_defs.WidowWin32Error.FailedToInitPlatform;
+        self.wnd_class = try registerMainClass(win32_singelton.handles.hinstance);
         self.helper_class = try registerHelperClass(win32_singelton.handles.hinstance);
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
         self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
@@ -69,7 +63,6 @@ pub const Internals = struct {
 
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         clipboard.unregisterClipboardViewer(self.helper_window, self.helper_data.next_clipboard_viewer);
-
         _ = win32_sys_service.UnregisterDeviceNotification(self.dev_notif_handle);
 
         _ = win32_window_messaging.SetWindowLongPtrW(
@@ -84,12 +77,20 @@ pub const Internals = struct {
             self.helper_data.clipboard_text = null;
         }
 
-        var buffer: [(Self.HELPER_CLASS_NAME.len) * 4]u8 = undefined;
+        var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Win32Context.WINDOW_CLASS_NAME.len) * 5]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
         const fballocator = fba.allocator();
 
         // Shoudln't fail since the buffer is big enough.
-        const helper_class_name = utils.utf8ToWideZ(fballocator, Self.HELPER_CLASS_NAME) catch unreachable;
+        const wide_class_name = utils.utf8ToWideZ(fballocator, Win32Context.WINDOW_CLASS_NAME) catch unreachable;
+        const helper_class_name = utils.utf8ToWideZ(fballocator, Win32Context.HELPER_CLASS_NAME) catch unreachable;
+
+        // Unregister the window class.
+        _ = win32_window_messaging.UnregisterClassW(
+            // utils.makeIntAtom(u8, self.handles.wnd_class),
+            wide_class_name,
+            Win32Context.singleton().?.handles.hinstance,
+        );
 
         // Unregister the helper class.
         _ = win32_window_messaging.UnregisterClassW(
@@ -97,15 +98,6 @@ pub const Internals = struct {
             helper_class_name,
             Win32Context.singleton().?.handles.hinstance,
         );
-
-        Self.mutex.lock();
-        defer Self.mutex.unlock();
-
-        if (instances_count == 1) {
-            // last one closes the door
-            Win32Context.deinitSingleton();
-            instances_count -= 1;
-        }
     }
 
     pub inline fn setStatePointer(self: *Self, mode: StatePointerMode, pointer: ?*anyopaque) void {
@@ -144,15 +136,48 @@ fn registerHelperClass(hinstance: win32.HINSTANCE) !u16 {
     helper_class.style = win32_window_messaging.CS_OWNDC;
     helper_class.lpfnWndProc = helperWindowProc;
     helper_class.hInstance = hinstance;
-    // Estimate five times the curent utf8 string len.
-    var buffer: [Internals.HELPER_CLASS_NAME.len * 4]u8 = undefined;
+    var buffer: [Win32Context.HELPER_CLASS_NAME.len * 4]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_CLASS_NAME) catch unreachable;
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.HELPER_CLASS_NAME) catch unreachable;
     helper_class.lpszClassName = wide_class_name;
     const class = win32_window_messaging.RegisterClassExW(&helper_class);
     if (class == 0) {
-        return error_defs.WindowError.FailedToCreate;
+        return error_defs.WidowWin32Error.FailedToRegisterHELPCLASS;
+    }
+    return class;
+}
+
+fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
+    const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
+    var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
+    window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
+    window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) | @enumToInt(win32_window_messaging.CS_VREDRAW) | @enumToInt(win32_window_messaging.CS_OWNDC));
+    window_class.lpfnWndProc = mainWindowProc;
+    window_class.hInstance = hinstance;
+    window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
+    var buffer: [Win32Context.WINDOW_CLASS_NAME.len * 5]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    // Shoudln't fail since the buffer is big enough.
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WINDOW_CLASS_NAME) catch unreachable;
+    window_class.lpszClassName = wide_class_name;
+    // TODO :load ressource icon
+    window_class.hIcon = null;
+    if (window_class.hIcon == null) {
+        // No Icon was provided or we failed.
+        window_class.hIcon = @ptrCast(?win32_window_messaging.HICON, win32_window_messaging.LoadImageW(
+            null,
+            win32_window_messaging.IDI_APPLICATION,
+            IMAGE_ICON,
+            0,
+            0,
+            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) |
+                @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
+        ));
+    }
+    const class = win32_window_messaging.RegisterClassExW(&window_class);
+    if (class == 0) {
+        return error_defs.WidowWin32Error.FailedToRegisterWNDCLASS;
     }
     return class;
 }
@@ -160,11 +185,10 @@ fn registerHelperClass(hinstance: win32.HINSTANCE) !u16 {
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
 fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
-    // Estimate five times the curent utf8 string len.
-    var buffer: [(Internals.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 4]u8 = undefined;
+    var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 4]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_CLASS_NAME) catch unreachable;
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.HELPER_CLASS_NAME) catch unreachable;
     const helper_title = utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_TITLE) catch unreachable;
 
     const helper_window = win32_window_messaging.CreateWindowExW(
