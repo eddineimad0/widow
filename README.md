@@ -23,7 +23,7 @@ pub fn main() void {
 
     // Start by creating a WidowContext instance.
     // the context is at the heart of the library and keeps track of monitors,clipboard,events...
-    // only one instance is needed and allocating any more would be a waste of memory.
+    // for now you can only have one instance of the WidowContext.
     var widow_cntxt = widow.WidowContext.create(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
