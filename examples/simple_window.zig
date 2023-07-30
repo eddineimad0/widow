@@ -5,11 +5,15 @@ const VirtualCode = widow.keyboard_and_mouse.VirtualCode;
 const CursorMode = widow.cursor.CursorMode;
 const allocator = std.heap.c_allocator;
 
-pub fn main() void {
+pub fn main() !void {
+    // first we need to preform some platform specific initialization.
+    try widow.initWidowPlatform();
+    // clean up code to be called, when done using the library.
+    defer widow.deinitWidowPlatform();
 
     // Start by creating a WidowContext instance.
     // the context is at the heart of the library and keeps track of monitors,clipboard,events...
-    // only one instance is needed and allocating any more would be a waste of memory.
+    // only one instance is needed but you can create as many as you need.
     var widow_cntxt = widow.WidowContext.create(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
@@ -17,7 +21,7 @@ pub fn main() void {
     // destroy it when done.
     defer widow_cntxt.destroy(allocator);
 
-    // Grab the library's WindowBuilder instance.
+    // create a WindowBuilder.
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
         "Simple window",
@@ -29,6 +33,7 @@ pub fn main() void {
         return;
     };
 
+    // customize the window to your liking.
     _ = builder.withResize(true)
         .withDPIScaling(false)
         .withPosition(200, 200)
@@ -40,7 +45,7 @@ pub fn main() void {
         return;
     };
 
-    // create our window,
+    // create the window,
     var mywindow = builder.build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -48,7 +53,7 @@ pub fn main() void {
 
     // No longer nedded.
     builder.deinit();
-    // deinitialize when done.
+    // closes the window when done.
     defer mywindow.deinit();
 
     var event: widow.Event = undefined;
@@ -56,8 +61,9 @@ pub fn main() void {
         // Process window events posted by the system.
         mywindow.waitEvent();
 
-        // All entities in the library send their
+        // All entities in the library(Window,joystick) send their
         // events to a central event queue in the WidowContext instance.
+        // specified at their creation.
         while (widow_cntxt.pollEvents(&event)) {
             switch (event) {
                 // Possible Events
