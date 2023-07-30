@@ -4,6 +4,8 @@ const zigwin32 = @import("zigwin32");
 const WidowError = @import("errors.zig").WidowWin32Error;
 const module = @import("module.zig");
 const utils = @import("utils.zig");
+const helperWindowProc = @import("window_proc.zig").helperWindowProc;
+const mainWindowProc = @import("window_proc.zig").mainWindowProc;
 const win32_sysinfo = zigwin32.system.system_information;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 
@@ -46,7 +48,9 @@ const Win32Handles = struct {
     ntdll: ?win32.HINSTANCE,
     user32: ?win32.HINSTANCE,
     shcore: ?win32.HINSTANCE,
-    hinstance: win32.HINSTANCE, // the hinstance of the process
+    hinstance: win32.HINSTANCE,
+    helper_class: u16,
+    wnd_class: u16,
 };
 
 const LoadedFunctions = struct {
@@ -91,6 +95,8 @@ pub const Win32Context = struct {
             .RtlVerifyVersionInfo = undefined,
         },
         .handles = Win32Handles{
+            .wnd_class = 0,
+            .helper_class = 0,
             .ntdll = null,
             .user32 = null,
             .shcore = null,
@@ -100,9 +106,8 @@ pub const Win32Context = struct {
 
     const Self = @This();
 
-    fn initSingleton() !void {
+    pub fn initSingleton() !void {
         @setCold(true);
-        // Determine the current HInstance.
         const g_instance = &Self.globl_instance;
 
         Self.mutex.lock();
@@ -111,12 +116,12 @@ pub const Win32Context = struct {
         if (!Self.g_init) {
             g_instance.handles.hinstance = try module.getProcessHandle();
 
+            g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
+            g_instance.handles.helper_class = try registerHelperClass(g_instance.handles.hinstance);
+
             // Load the required libraries.
             try g_instance.loadLibraries();
             errdefer g_instance.freeLibraries();
-
-            // Register the window class
-            // g_instance.handles.wnd_class = try registerMainClass(g_instance.handles.hinstance);
 
             // Setup windows version flags.
             if (isWin32VersionMinimum(g_instance.functions.RtlVerifyVersionInfo, 6, 0)) {
@@ -218,23 +223,52 @@ pub const Win32Context = struct {
         }
     }
 
+    inline fn WNDClassName() []const u8 {
+        // comptime if (Self.wndcls_name) |name| {
+        //     return name;
+        // } else {
+        //     return Self.WINDOW_CLASS_NAME;
+        // };
+        //
+        // return Self.wndcls_name.?
+        return Self.WINDOW_CLASS_NAME;
+    }
+
     // Enfoce readonly.
-    pub fn singleton() ?*const Self {
-        if (!@atomicLoad(bool, &Self.g_init, .Acquire)) {
-            initSingleton() catch |err| {
-                std.log.err("[Win32]: Failed to init Win32Context,{}\n", .{err});
-                return null;
-            };
-        }
+    pub fn singleton() *const Self {
+        std.debug.assert(g_init == true);
         return &Self.globl_instance;
     }
 
     /// !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
     /// that hasn't been destroyed yet !!!.
     pub fn deinitSingleton() void {
+        @setCold(true);
         if (Self.g_init) {
-            freeLibraries(&Self.globl_instance);
             Self.g_init = false;
+            var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Win32Context.WNDClassName().len) * 5]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            const fballocator = fba.allocator();
+
+            // Shoudln't fail since the buffer is big enough.
+            const wide_class_name = utils.utf8ToWideZ(fballocator, Win32Context.WINDOW_CLASS_NAME) catch unreachable;
+            const helper_class_name = utils.utf8ToWideZ(fballocator, Win32Context.HELPER_CLASS_NAME) catch unreachable;
+
+            // Unregister the window class.
+            _ = win32_window_messaging.UnregisterClassW(
+                // utils.makeIntAtom(u8, self.handles.wnd_class),
+                wide_class_name,
+                Self.globl_instance.handles.hinstance,
+            );
+
+            // Unregister the helper class.
+            _ = win32_window_messaging.UnregisterClassW(
+                // utils.makeIntAtom(u8, self.win32.handles.helper_class),
+                helper_class_name,
+                Self.globl_instance.handles.hinstance,
+            );
+
+            freeLibraries(&Self.globl_instance);
         }
     }
 };
@@ -307,6 +341,60 @@ fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
     return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
+fn registerHelperClass(hinstance: win32.HINSTANCE) !u16 {
+    var helper_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
+    helper_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
+    helper_class.style = win32_window_messaging.CS_OWNDC;
+    helper_class.lpfnWndProc = helperWindowProc;
+    helper_class.hInstance = hinstance;
+    var buffer: [Win32Context.HELPER_CLASS_NAME.len * 4]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    // Shoudln't fail since the buffer is big enough.
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.HELPER_CLASS_NAME) catch unreachable;
+    helper_class.lpszClassName = wide_class_name;
+    const class = win32_window_messaging.RegisterClassExW(&helper_class);
+    if (class == 0) {
+        return WidowError.FailedToRegisterHELPCLASS;
+    }
+    return class;
+}
+
+fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
+    var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
+    window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
+    window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) |
+        @enumToInt(win32_window_messaging.CS_VREDRAW) |
+        @enumToInt(win32_window_messaging.CS_OWNDC));
+    window_class.lpfnWndProc = mainWindowProc;
+    window_class.hInstance = hinstance;
+    window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
+    var buffer: [Win32Context.WNDClassName().len * 5]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    // Shoudln't fail since the buffer is big enough.
+    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WNDClassName()) catch unreachable;
+    window_class.lpszClassName = wide_class_name;
+    // TODO :load ressource icon
+    window_class.hIcon = null;
+    if (window_class.hIcon == null) {
+        // No Icon was provided or we failed.
+        const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
+        window_class.hIcon = @ptrCast(?win32_window_messaging.HICON, win32_window_messaging.LoadImageW(
+            null,
+            win32_window_messaging.IDI_APPLICATION,
+            IMAGE_ICON,
+            0,
+            0,
+            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) |
+                @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
+        ));
+    }
+    const class = win32_window_messaging.RegisterClassExW(&window_class);
+    if (class == 0) {
+        return WidowError.FailedToRegisterWNDCLASS;
+    }
+    return class;
+}
+
 test "Win32Context Thread safety" {
     const testing = std.testing;
     const builtin = @import("builtin");
@@ -331,6 +419,7 @@ test "Win32Context Thread safety" {
 
 test "Win32Context init" {
     const testing = std.testing;
+    try Win32Context.initSingleton();
     const singleton = Win32Context.singleton();
     try testing.expect(singleton != null);
     std.debug.print("Win32 execution context: {any}\n", .{singleton.?});

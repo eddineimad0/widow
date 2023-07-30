@@ -2,7 +2,6 @@ const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const window_impl = @import("window_impl.zig");
-const Win32Context = @import("global.zig").Win32Context;
 const common = @import("common");
 const utils = @import("utils.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;

@@ -9,7 +9,6 @@ const WindowError = @import("errors.zig").WindowError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
-const win32_dwm = zigwin32.graphics.dwm;
 const Win32Context = @import("global.zig").Win32Context;
 const MonitorStore = @import("internals.zig").MonitorStore;
 const Cursor = icon.Cursor;
@@ -92,7 +91,7 @@ pub fn adjustWindowRect(
     ex_styles: u32,
     dpi: ?u32,
 ) void {
-    const win32_globl = Win32Context.singleton().?;
+    const win32_globl = Win32Context.singleton();
     if (dpi != null and win32_globl.functions.AdjustWindowRectExForDpi != null) {
         _ = win32_globl.functions.AdjustWindowRectExForDpi.?(
             rect,
@@ -275,7 +274,7 @@ fn createPlatformWindow(
     defer allocator.free(window_title);
 
     const creation_lparm = data;
-    const win32_globl = Win32Context.singleton().?;
+    const win32_globl = Win32Context.singleton();
 
     // Create the window.
     const window_handle = win32_window_messaging.CreateWindowExW(
@@ -307,7 +306,7 @@ pub const WidowProps = struct {
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: Icon,
-    cursor: icon.Cursor,
+    cursor: Cursor,
     restore_frame: ?common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
@@ -340,7 +339,7 @@ pub const WindowImpl = struct {
 
         // Finish setting up the window.
         instance.win32 = WindowWin32Data{
-            .cursor = icon.Cursor{
+            .cursor = Cursor{
                 .handle = null,
                 .mode = common.cursor.CursorMode.Normal,
                 .shared = false,
@@ -417,7 +416,7 @@ pub const WindowImpl = struct {
         }
 
         // Allow Drag & Drop messages.
-        if (Win32Context.singleton().?.flags.is_win7_or_above) {
+        if (Win32Context.singleton().flags.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
                 instance.handle,
@@ -488,7 +487,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn scalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        const win32_globl = Win32Context.singleton().?;
+        const win32_globl = Win32Context.singleton();
         var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         err_exit: {
             if (win32_globl.functions.GetDpiForWindow) |proc| {
