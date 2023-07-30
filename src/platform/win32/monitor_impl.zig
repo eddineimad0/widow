@@ -190,7 +190,7 @@ pub fn monitorDPI(
 ) u32 {
     var dpi_x: u32 = undefined;
     var dpi_y: u32 = undefined;
-    const globl_data = Win32Context.singleton().?;
+    const globl_data = Win32Context.singleton();
     if (globl_data.functions.GetDpiForMonitor) |proc| {
         // [win32api docs]
         // This API is not DPI aware and should not be used if the calling thread is per-monitor DPI aware.
@@ -393,8 +393,6 @@ test "monitor_impl init" {
     var all_monitors = try pollMonitors(testing_allocator);
     defer {
         for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
             monitor.deinit();
         }
         all_monitors.deinit();
@@ -408,15 +406,13 @@ test "changing primary VideoMode" {
     var all_monitors = try pollMonitors(testing_allocator);
     defer {
         for (all_monitors.items) |*monitor| {
-            // monitors contain heap allocated data that need
-            // to be freed.
             monitor.deinit();
         }
         all_monitors.deinit();
     }
     var primary_monitor = &all_monitors.items[0];
     var output: VideoMode = undefined;
-    primary_monitor.debugInfos();
+    primary_monitor.debugInfos(false);
     primary_monitor.queryCurrentMode(&output);
     std.debug.print("Primary monitor name len:{}\n", .{primary_monitor.name.len});
     std.debug.print("Current Video Mode: {}\n", .{output});
