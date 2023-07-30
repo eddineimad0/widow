@@ -5,3 +5,12 @@ const win32 = @import("win32_defs.zig");
 // Platform handles
 pub const MonitorHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
+
+const WidowContext = @import("global.zig").Win32Context;
+pub fn initPlatform() !void {
+    try WidowContext.initSingleton();
+}
+
+pub fn deinitPlatform() void {
+    WidowContext.deinitSingleton();
+}
