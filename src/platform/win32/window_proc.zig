@@ -114,10 +114,8 @@ pub fn mainWindowProc(
                 @alignCast(8, creation_struct_ptr.*.lpCreateParams),
             );
             const globl_data = Win32Context.singleton();
-            if (globl_data) |singleton_ptr| {
-                if (window_data.flags.is_dpi_aware and singleton_ptr.flags.is_win10b1607_or_above) {
-                    _ = singleton_ptr.functions.EnableNonClientDpiScaling.?(hwnd);
-                }
+            if (window_data.flags.is_dpi_aware and globl_data.flags.is_win10b1607_or_above) {
+                _ = globl_data.functions.EnableNonClientDpiScaling.?(hwnd);
             }
             creation_struct_ptr.lpCreateParams = null;
         }
@@ -291,7 +289,7 @@ pub fn mainWindowProc(
             // [SDL]
             // Experimentation shows it's only sent during interactive dragging, not in response to
             // SetWindowPos.
-            const globl_cntxt = Win32Context.singleton().?;
+            const globl_cntxt = Win32Context.singleton();
             // there is no need to process this message for a dpi aware window
             // for a non dpi aware window processing this message allows it
             // to keep a constant width and height.
