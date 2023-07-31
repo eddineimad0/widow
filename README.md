@@ -21,37 +21,57 @@ const allocator = std.heap.c_allocator;
 
 pub fn main() void {
 
+    // First we need to preform some platform specific initialization.
+    widow.initWidowPlatform() catch {
+        std.debug.print("Failed to start Widow library\n", .{});
+    };
+    // Clean up code to be called, when done using the library.
+    defer widow.deinitWidowPlatform();
+
+
     // Start by creating a WidowContext instance.
     // the context is at the heart of the library and keeps track of monitors,clipboard,events...
-    // for now you can only have one instance of the WidowContext.
+    // only one instance is needed but you can create as many as you need.
     var widow_cntxt = widow.WidowContext.create(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
-    // destroy it when done.
+    // Destroy it when done.
     defer widow_cntxt.destroy(allocator);
 
-    // create a WindowBuilder instance.
+    // Create a WindowBuilder.
+    // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
-        "Simple window", // Title
-        800, // Width
-        600, // Height
-        widow_cntxt, // The context we created.
+        "Simple window",
+        800,
+        600,
+        widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;
     };
 
-    // create our window,
-    var mywindow =
-    builder.withResize(true).withDPIScaling(false).build() catch |err| {
+    // Customize the window to your liking.
+    _ = builder.withResize(true)
+        .withDPIScaling(false)
+        .withPosition(200, 200)
+        .withSize(800, 600)
+        .withDecoration(true);
+
+    _ = builder.withTitle("Re:Simple Window") catch |err| {
+        std.debug.print("Failed to change window title,{}\n", .{err});
+        return;
+    };
+
+    // Create the window,
+    var mywindow = builder.build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
     // No longer nedded.
     builder.deinit();
-    // deinitialize when done.
+    // Deinitialize when done.
     defer mywindow.deinit();
 }
 ```
