@@ -63,8 +63,8 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
 /// wide pointers([*:0]u16) returned by windows are not always properly aligned,
 /// therfore this function will randomly fail in debug mode.
 /// As of now this function is not used anywhere.
-pub inline fn makeIntAtom(comptime T: type, atom: u16) ?[*:0]const T {
-    return @intToPtr(?[*:0]const T, @as(usize, atom));
+pub inline fn makeIntAtom(atom: u16) ?win32.LPCWSTR {
+    return @intToPtr(?win32.LPCWSTR, @as(usize, atom));
 }
 
 // Some usefule windows.h Macros.
