@@ -27,7 +27,7 @@ pub const Internals = struct {
     helper_data: HelperData,
     helper_window: win32.HWND,
     dev_notif_handle: *anyopaque,
-    const HELPER_TITLE = "";
+    const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
     pub const StatePointerMode = enum {
@@ -104,18 +104,16 @@ pub const Internals = struct {
 /// Create an invisible helper window that lives as long as the internals struct.
 /// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
 fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
-    var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Internals.HELPER_TITLE.len) * 4]u8 = undefined;
+    var buffer: [(Internals.HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.HELPER_CLASS_NAME) catch unreachable;
     const helper_title = utils.utf8ToWideZ(fba.allocator(), Internals.HELPER_TITLE) catch unreachable;
 
-    const helper_window = win32_window_messaging.CreateWindowExW(
-        @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, 0),
-        wide_class_name,
-        // utils.makeIntAtom(u16, helper_handle.*),
+    const helper_window = win32.CreateWindowExW(
+        0,
+        utils.makeIntAtom(Win32Context.singleton().handles.helper_class),
         helper_title,
-        win32_window_messaging.WS_OVERLAPPED,
+        0,
         win32.CW_USEDEFAULT,
         win32.CW_USEDEFAULT,
         win32.CW_USEDEFAULT,

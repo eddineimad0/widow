@@ -265,10 +265,6 @@ fn createPlatformWindow(
         window_rect.bottom - window_rect.top,
     };
 
-    var buffer: [Win32Context.WINDOW_CLASS_NAME.len * 4]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), Win32Context.WINDOW_CLASS_NAME) catch unreachable;
-
     // Encode the title string in utf-16.
     const window_title = try utils.utf8ToWideZ(allocator, title);
     defer allocator.free(window_title);
@@ -277,11 +273,11 @@ fn createPlatformWindow(
     const win32_globl = Win32Context.singleton();
 
     // Create the window.
-    const window_handle = win32_window_messaging.CreateWindowExW(
-        @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, styles[1]), // dwExStyles
-        wide_class_name, // Window Class Name
+    const window_handle = win32.CreateWindowExW(
+        styles[1], // dwExStyles
+        utils.makeIntAtom(win32_globl.handles.wnd_class),
         window_title, // Window Name
-        @intToEnum(win32_window_messaging.WINDOW_STYLE, styles[0]), // dwStyles
+        styles[0], // dwStyles
         frame[0], // X
         frame[1], // Y
         frame[2], // width

@@ -246,25 +246,23 @@ pub const Win32Context = struct {
         @setCold(true);
         if (Self.g_init) {
             Self.g_init = false;
-            var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Win32Context.WNDClassName().len) * 5]u8 = undefined;
-            var fba = std.heap.FixedBufferAllocator.init(&buffer);
-            const fballocator = fba.allocator();
-
-            // Shoudln't fail since the buffer is big enough.
-            const wide_class_name = utils.utf8ToWideZ(fballocator, Win32Context.WINDOW_CLASS_NAME) catch unreachable;
-            const helper_class_name = utils.utf8ToWideZ(fballocator, Win32Context.HELPER_CLASS_NAME) catch unreachable;
+            // var buffer: [(Win32Context.HELPER_CLASS_NAME.len + Win32Context.WNDClassName().len) * 5]u8 = undefined;
+            // var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            // const fballocator = fba.allocator();
+            //
+            // // Shoudln't fail since the buffer is big enough.
+            // const wide_class_name = utils.utf8ToWideZ(fballocator, Win32Context.WINDOW_CLASS_NAME) catch unreachable;
+            // const helper_class_name = utils.utf8ToWideZ(fballocator, Win32Context.HELPER_CLASS_NAME) catch unreachable;
 
             // Unregister the window class.
-            _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.handles.wnd_class),
-                wide_class_name,
+            _ = win32.UnregisterClassW(
+                utils.makeIntAtom(globl_instance.handles.wnd_class),
                 Self.globl_instance.handles.hinstance,
             );
 
             // Unregister the helper class.
-            _ = win32_window_messaging.UnregisterClassW(
-                // utils.makeIntAtom(u8, self.win32.handles.helper_class),
-                helper_class_name,
+            _ = win32.UnregisterClassW(
+                utils.makeIntAtom(globl_instance.handles.helper_class),
                 Self.globl_instance.handles.hinstance,
             );
 
@@ -396,21 +394,19 @@ fn registerMainClass(hinstance: win32.HINSTANCE) !u16 {
 }
 
 test "Win32Context Thread safety" {
-    const testing = std.testing;
     const builtin = @import("builtin");
     if (builtin.single_threaded) {
-        const singleton = Win32Context.singleton();
-        const singleton2 = Win32Context.singleton();
-        try testing.expect(singleton != null);
-        try testing.expect(singleton2 != null);
+        try Win32Context.initSingleton();
+        try Win32Context.initSingleton();
+        defer Win32Context.deinitSingleton();
     } else {
         var threads: [10]std.Thread = undefined;
         defer for (threads) |handle| handle.join();
 
         for (&threads) |*handle| {
             handle.* = try std.Thread.spawn(.{}, struct {
-                fn thread_fn() void {
-                    _ = Win32Context.singleton();
+                fn thread_fn() !void {
+                    try Win32Context.initSingleton();
                 }
             }.thread_fn, .{});
         }
@@ -418,9 +414,8 @@ test "Win32Context Thread safety" {
 }
 
 test "Win32Context init" {
-    const testing = std.testing;
     try Win32Context.initSingleton();
+    defer Win32Context.deinitSingleton();
     const singleton = Win32Context.singleton();
-    try testing.expect(singleton != null);
-    std.debug.print("Win32 execution context: {any}\n", .{singleton.?});
+    std.debug.print("Win32 execution context: {any}\n", .{singleton});
 }
