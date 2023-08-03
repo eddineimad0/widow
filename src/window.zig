@@ -508,6 +508,11 @@ pub const Window = struct {
         try platform.internals.createCursor(self.impl, pixels, width, height, xhot, yhot);
     }
 
+    /// Returns the descriptor or handle used by the platform to identify the window.
+    pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
+        return self.impl.handle;
+    }
+
     // # Use only for debug.
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         self.impl.debugInfos(size, flags);
