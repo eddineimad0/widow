@@ -8,7 +8,7 @@ const allocator = std.heap.c_allocator;
 
 pub fn main() void {
     // first we need to preform some platform specific initialization.
-    widow.initWidowPlatform() catch {
+    widow.initWidowPlatform(.{}) catch {
         std.debug.print("Failed to start Widow library\n", .{});
     };
     // clean up code to be called, when done using the library.

@@ -2,12 +2,13 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
 const VirtualCode = widow.keyboard_and_mouse.VirtualCode;
-const CursorMode = widow.cursor.CursorMode;
 const allocator = std.heap.c_allocator;
 
 pub fn main() !void {
     // first we need to preform some platform specific initialization.
-    try widow.initWidowPlatform();
+    // an options tuple can be passed to customize the platform init
+    // e.g on windows we can set the WNDClass name to a comptime string of our choice,
+    try widow.initWidowPlatform(.{ .wnd_class = "Zig_is_awesome" });
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
