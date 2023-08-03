@@ -7,8 +7,13 @@ pub const MonitorHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
 const WidowContext = @import("global.zig").Win32Context;
-pub fn initPlatform() !void {
-    try WidowContext.initSingleton();
+
+pub fn initPlatform(options: anytype) !void {
+    if (@hasField(@TypeOf(options), "wnd_class")) {
+        try WidowContext.initSingleton(@field(options, "wnd_class"));
+    } else {
+        try WidowContext.initSingleton("WIDOW_CLASS");
+    }
 }
 
 pub fn deinitPlatform() void {
