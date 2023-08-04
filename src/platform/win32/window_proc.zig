@@ -155,16 +155,16 @@ pub fn mainWindowProc(
             }
         },
 
-        win32_window_messaging.WM_PAINT => {
-            var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
-            const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
-            const x = paint.rcPaint.left;
-            const y = paint.rcPaint.top;
-            const w = paint.rcPaint.right - x;
-            const h = paint.rcPaint.bottom - y;
-            _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
-            _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
-        },
+        // win32_window_messaging.WM_PAINT => {
+        //     var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
+        //     const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
+        //     const x = paint.rcPaint.left;
+        //     const y = paint.rcPaint.top;
+        //     const w = paint.rcPaint.right - x;
+        //     const h = paint.rcPaint.bottom - y;
+        //     _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
+        //     _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
+        // },
 
         win32_window_messaging.WM_KEYUP,
         win32_window_messaging.WM_KEYDOWN,
