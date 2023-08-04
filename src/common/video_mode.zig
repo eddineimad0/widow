@@ -29,7 +29,7 @@ pub const VideoMode = struct {
     /// This function returns the closest possible video mode to the `desired_mode`
     /// from a slice of supported video modes.
     pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) *const VideoMode {
-        var ret_val = desired_mode;
+        var result = desired_mode;
         var size_diff: i32 = undefined;
         var width_diff: i32 = undefined;
         var height_diff: i32 = undefined;
@@ -41,21 +41,28 @@ pub const VideoMode = struct {
         for (modes) |*mode| {
 
             // Euclidean distance.
-            color_diff = @intCast(i32, mode.color_depth) - @intCast(i32, desired_mode.color_depth);
+            color_diff = @intCast(mode.color_depth);
+            color_diff -= @intCast(desired_mode.color_depth);
             color_diff *|= color_diff;
-            rate_diff = @intCast(i32, mode.frequency) - @intCast(i32, desired_mode.frequency);
+
+            rate_diff = @intCast(mode.frequency);
+            rate_diff -= @intCast(desired_mode.frequency);
             rate_diff *|= rate_diff;
+
             width_diff = mode.width - desired_mode.width;
             width_diff *|= width_diff;
             height_diff = mode.height - desired_mode.height;
             height_diff *|= height_diff;
             size_diff = width_diff +| height_diff;
-            current_distance = math.sqrt(@intCast(u32, color_diff + rate_diff + size_diff));
+
+            const distance_square: u32 = @intCast(color_diff +| rate_diff +| size_diff);
+            current_distance = math.sqrt(distance_square);
+
             if (current_distance < least_distance) {
-                ret_val = mode;
-                least_distance = @intCast(u32, current_distance);
+                result = mode;
+                least_distance = @intCast(current_distance);
             }
         }
-        return ret_val;
+        return result;
     }
 };

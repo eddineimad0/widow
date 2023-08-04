@@ -36,7 +36,7 @@ pub fn main() !void {
 
     // customize the window to your liking.
     _ = builder.withResize(true)
-        .withDPIScaling(false)
+        .withDPIScaling(true)
         .withPosition(200, 200)
         .withSize(800, 600)
         .withDecoration(true);
@@ -121,7 +121,7 @@ pub fn main() !void {
                         if (key.virtualcode == VirtualCode.P) {
                             std.debug.print("ClientPosition:{}\n", .{mywindow.clientPosition()});
                         }
-                        if (key.virtualcode == VirtualCode.S) {
+                        if (key.virtualcode == VirtualCode.M) {
                             mywindow.setClientPosition(0, 0);
                         }
                         if (key.virtualcode == VirtualCode.C) {

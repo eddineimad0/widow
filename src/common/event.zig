@@ -200,7 +200,7 @@ pub inline fn createDPIEvent(window_id: u32, new_dpi: u32, new_scale: f64) Event
 pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyModifiers) Event {
     return Event{ .Character = CharacterEvent{
         .window_id = window_id,
-        .codepoint = @truncate(u21, codepoint),
+        .codepoint = @truncate(codepoint),
         .mods = mods,
     } };
 }

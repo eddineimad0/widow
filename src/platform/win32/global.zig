@@ -166,7 +166,6 @@ pub const Win32Context = struct {
         self.handles.ntdll = module.loadWin32Module("ntdll.dll");
         if (self.handles.ntdll) |*ntdll| {
             self.functions.RtlVerifyVersionInfo = @ptrCast(
-                proc_RtlVerifyVersionInfo,
                 module.getModuleSymbol(ntdll.*, "RtlVerifyVersionInfo"),
             );
         } else {
@@ -180,27 +179,24 @@ pub const Win32Context = struct {
         self.handles.user32 = module.loadWin32Module("user32.dll");
         if (self.handles.user32) |*user32| {
             self.functions.SetProcessDPIAware =
-                @ptrCast(proc_SetProcessDPIAware, module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
+                @ptrCast(module.getModuleSymbol(user32.*, "SetProcessDPIAware"));
             self.functions.SetProcessDpiAwarenessContext =
                 @ptrCast(
-                proc_SetProcessDpiAwarenessContext,
                 module.getModuleSymbol(user32.*, "SetProcessDpiAwarenessContext"),
             );
             self.functions.GetDpiForWindow =
-                @ptrCast(proc_GetDpiForWindow, module.getModuleSymbol(user32.*, "GetDpiForWindow"));
+                @ptrCast(module.getModuleSymbol(user32.*, "GetDpiForWindow"));
             self.functions.EnableNonClientDpiScaling =
-                @ptrCast(proc_EnableNonClientDpiScaling, module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
+                @ptrCast(module.getModuleSymbol(user32.*, "EnableNonClientDpiScaling"));
             self.functions.AdjustWindowRectExForDpi =
-                @ptrCast(proc_AdjustWindowRectExForDpi, module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
+                @ptrCast(module.getModuleSymbol(user32.*, "AdjustWindowRectExForDpi"));
         }
         self.handles.shcore = module.loadWin32Module("Shcore.dll");
         if (self.handles.shcore) |*shcore| {
             self.functions.GetDpiForMonitor = @ptrCast(
-                proc_GetDpiForMonitor,
                 module.getModuleSymbol(shcore.*, "GetDpiForMonitor"),
             );
             self.functions.SetProcessDpiAwareness = @ptrCast(
-                proc_SetProcessDpiAwareness,
                 module.getModuleSymbol(shcore.*, "SetProcessDpiAwareness"),
             );
         }
@@ -280,10 +276,10 @@ fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32
     vi.dwMajorVersion = major;
     vi.dwMinorVersion = minor;
     const mask =
-        @enumToInt(win32_sysinfo.VER_MAJORVERSION) |
-        @enumToInt(win32_sysinfo.VER_MINORVERSION) |
-        @enumToInt(win32_sysinfo.VER_SERVICEPACKMAJOR) |
-        @enumToInt(win32_sysinfo.VER_SERVICEPACKMINOR);
+        @intFromEnum(win32_sysinfo.VER_MAJORVERSION) |
+        @intFromEnum(win32_sysinfo.VER_MINORVERSION) |
+        @intFromEnum(win32_sysinfo.VER_SERVICEPACKMAJOR) |
+        @intFromEnum(win32_sysinfo.VER_SERVICEPACKMINOR);
     var cond_mask: u64 = 0;
     cond_mask = win32_sysinfo.VerSetConditionMask(
         cond_mask,
@@ -316,8 +312,9 @@ fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
     vi.dwMajorVersion = 10;
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = build;
-    const mask = @enumToInt(win32_sysinfo.VER_MAJORVERSION) | @enumToInt(win32_sysinfo.VER_MINORVERSION) |
-        @enumToInt(win32_sysinfo.VER_BUILDNUMBER);
+    const mask = @intFromEnum(win32_sysinfo.VER_MAJORVERSION) |
+        @intFromEnum(win32_sysinfo.VER_MINORVERSION) |
+        @intFromEnum(win32_sysinfo.VER_BUILDNUMBER);
     var cond_mask: u64 = 0;
     cond_mask = win32_sysinfo.VerSetConditionMask(
         cond_mask,
@@ -358,9 +355,11 @@ fn registerHelperClass(comptime helper_class_name: []const u8, hinstance: win32.
 fn registerMainClass(comptime wnd_class_name: []const u8, hinstance: win32.HINSTANCE) !u16 {
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
-    window_class.style = @intToEnum(win32_window_messaging.WNDCLASS_STYLES, @enumToInt(win32_window_messaging.CS_HREDRAW) |
-        @enumToInt(win32_window_messaging.CS_VREDRAW) |
-        @enumToInt(win32_window_messaging.CS_OWNDC));
+    window_class.style = @enumFromInt(
+        @intFromEnum(win32_window_messaging.CS_HREDRAW) |
+            @intFromEnum(win32_window_messaging.CS_VREDRAW) |
+            @intFromEnum(win32_window_messaging.CS_OWNDC),
+    );
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
@@ -374,14 +373,15 @@ fn registerMainClass(comptime wnd_class_name: []const u8, hinstance: win32.HINST
     if (window_class.hIcon == null) {
         // No Icon was provided or we failed.
         const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
-        window_class.hIcon = @ptrCast(?win32_window_messaging.HICON, win32_window_messaging.LoadImageW(
+        window_class.hIcon = @ptrCast(win32_window_messaging.LoadImageW(
             null,
             win32_window_messaging.IDI_APPLICATION,
             IMAGE_ICON,
             0,
             0,
-            @intToEnum(win32_window_messaging.IMAGE_FLAGS, @enumToInt(win32_window_messaging.LR_SHARED) |
-                @enumToInt(win32_window_messaging.LR_DEFAULTSIZE)),
+            @enumFromInt(
+                @intFromEnum(win32_window_messaging.LR_SHARED) | @intFromEnum(win32_window_messaging.LR_DEFAULTSIZE),
+            ),
         ));
     }
     const class = win32_window_messaging.RegisterClassExW(&window_class);

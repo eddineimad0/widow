@@ -50,7 +50,7 @@ pub const Internals = struct {
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.helper_window,
             win32_window_messaging.GWLP_USERDATA,
-            @intCast(isize, @ptrToInt(&self.helper_data)),
+            @intCast(@intFromPtr(&self.helper_data)),
         );
     }
 
@@ -74,10 +74,10 @@ pub const Internals = struct {
     pub inline fn setStatePointer(self: *Self, mode: StatePointerMode, pointer: ?*anyopaque) void {
         switch (mode) {
             StatePointerMode.Monitor => {
-                self.helper_data.monitor_store_ptr = @ptrCast(?*MonitorStore, @alignCast(8, pointer));
+                self.helper_data.monitor_store_ptr = @ptrCast(@alignCast(pointer));
             },
             StatePointerMode.Joystick => {
-                self.helper_data.joysubsys_ptr = @ptrCast(?*JoystickSubSystemImpl, @alignCast(8, pointer));
+                self.helper_data.joysubsys_ptr = @ptrCast(@alignCast(pointer));
             },
         }
     }
@@ -134,11 +134,11 @@ fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
 fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void {
     var dbi: win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A = undefined;
     dbi.dbcc_size = @sizeOf(win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A);
-    dbi.dbcc_devicetype = @enumToInt(win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE);
+    dbi.dbcc_devicetype = @intFromEnum(win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE);
     dbi.dbcc_classguid = win32.GUID_DEVINTERFACE_HID;
     dbi_handle.* = win32_window_messaging.RegisterDeviceNotificationW(
         helper_window,
-        @ptrCast(*anyopaque, &dbi),
+        @ptrCast(&dbi),
         win32.DEVICE_NOTIFY_WINDOW_HANDLE,
     ) orelse unreachable; // Should always succeed.
 }
@@ -295,12 +295,12 @@ pub const MonitorStore = struct {
         };
 
         if (self.used_monitors == 0) {
-            const thread_exec_state = comptime @enumToInt(win32_system_power.ES_CONTINUOUS) |
-                @enumToInt(win32_system_power.ES_DISPLAY_REQUIRED);
+            const thread_exec_state = comptime @intFromEnum(win32_system_power.ES_CONTINUOUS) |
+                @intFromEnum(win32_system_power.ES_DISPLAY_REQUIRED);
             // first time acquiring a monitor
             // prevent the system from entering sleep or turning off.
             self.prev_exec_state = win32_system_power.SetThreadExecutionState(
-                @intToEnum(win32_system_power.EXECUTION_STATE, thread_exec_state),
+                @enumFromInt(thread_exec_state),
             );
         } else {
             if (monitor.window) |old_window| {

@@ -22,7 +22,7 @@ pub fn main() void {
     defer context.destroy(allocator);
 
     var builder = widow.WindowBuilder.init(
-        "Simple window",
+        "playing with inputs",
         800,
         600,
         context,
@@ -59,9 +59,7 @@ pub fn main() void {
                     if (key.state.isPressed()) {
                         switch (key.scancode) {
                             ScanCode.Q => {
-                                if (key.mods.shift) {
-                                    window.queueCloseEvent();
-                                }
+                                window.queueCloseEvent();
                             },
                             ScanCode.C => {
                                 std.debug.print("Client Position {}\n", .{window.clientPosition()});

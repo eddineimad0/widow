@@ -17,10 +17,12 @@ pub fn helperWindowProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
-    const user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
+    const user_data: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
+        hwnd,
+        win32_window_messaging.GWLP_USERDATA,
+    ));
     if (user_data != 0) {
-        const devices = @intToPtr(*HelperData, @intCast(usize, user_data));
-
+        const devices: *HelperData = @ptrFromInt(user_data);
         switch (msg) {
             win32_window_messaging.WM_DISPLAYCHANGE => {
                 // Monitor the win32_window_messaging.WM_DISPLAYCHANGE notification
@@ -48,8 +50,9 @@ pub fn helperWindowProc(
             win32_window_messaging.WM_CHANGECBCHAIN => {
                 // Sent When one of the clipboard viewers is getting removed.
                 if (devices.next_clipboard_viewer) |viewer| {
-                    if (wparam == @ptrToInt(viewer)) {
-                        devices.next_clipboard_viewer = @intToPtr(?win32.HWND, @bitCast(usize, lparam));
+                    if (wparam == @intFromPtr(viewer)) {
+                        const ulparam: usize = @bitCast(lparam);
+                        devices.next_clipboard_viewer = @ptrFromInt(ulparam);
                     } else {
                         _ = win32_window_messaging.SendMessage(devices.next_clipboard_viewer, msg, wparam, lparam);
                     }
@@ -61,7 +64,8 @@ pub fn helperWindowProc(
                 // Notifies an application of a change to the hardware configuration
                 // of a device or the computer.
                 const jss = devices.joysubsys_ptr orelse break :exit_point;
-                const dbh_ptr = @intToPtr(?*win32_sys_service.DEV_BROADCAST_HDR, @bitCast(usize, lparam));
+                const ulparam: usize = @bitCast(lparam);
+                const dbh_ptr: ?*win32_sys_service.DEV_BROADCAST_HDR = @ptrFromInt(ulparam);
                 switch (wparam) {
                     win32_sys_service.DBT_DEVICEARRIVAL => {
                         if (dbh_ptr) |ptr| {
@@ -98,20 +102,20 @@ pub fn mainWindowProc(
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
     // Get a mutable refrence to the corresponding WindowImpl Structure.
-    const window_user_data = win32_window_messaging.GetWindowLongPtrW(hwnd, win32_window_messaging.GWLP_USERDATA);
-    var window = @intToPtr(?*window_impl.WindowImpl, @bitCast(usize, window_user_data)) orelse {
+    const window_user_data: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
+        hwnd,
+        win32_window_messaging.GWLP_USERDATA,
+    ));
+    if (window_user_data == 0) {
         if (msg == win32_window_messaging.WM_NCCREATE) {
             // [Win32api Docs]
             // On Windows 10 1607 or above, PMv1 applications may also call
             // EnableNonClientDpiScaling during win32_window_messaging.WM_NCCREATE to request
             // that Windows correctly scale the window's non-client area.
-            const creation_struct_ptr: *win32_window_messaging.CREATESTRUCTW = @intToPtr(
-                *win32_window_messaging.CREATESTRUCTW,
-                @bitCast(usize, lparam),
-            );
-            const window_data = @ptrCast(
-                *const common.window_data.WindowData,
-                @alignCast(8, creation_struct_ptr.*.lpCreateParams),
+            const ulparam: usize = @bitCast(lparam);
+            const creation_struct_ptr: *win32_window_messaging.CREATESTRUCTW = @ptrFromInt(ulparam);
+            const window_data: *const common.window_data.WindowData = @ptrCast(
+                @alignCast(creation_struct_ptr.*.lpCreateParams),
             );
             const globl_data = Win32Context.singleton();
             if (window_data.flags.is_dpi_aware and globl_data.flags.is_win10b1607_or_above) {
@@ -121,8 +125,8 @@ pub fn mainWindowProc(
         }
         // Skip until the window pointer is registered.
         return win32_window_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
-    };
-
+    }
+    var window: *window_impl.WindowImpl = @ptrFromInt(window_user_data);
     switch (msg) {
         win32_window_messaging.WM_CLOSE => {
             // Received upon an attempt to close the window.
@@ -146,21 +150,21 @@ pub fn mainWindowProc(
             // We only use this message to delay hiding the window cursor(when the in disabled mode)
             // while the user is interacting with the non client area (resizing with borders,grabbing the title bar...),
             // this gives the user a better visual experience.
-            if (utils.loWord(@bitCast(usize, lparam)) != win32_window_messaging.HTCLIENT) {
+            if (utils.loWord(@bitCast(lparam)) != win32_window_messaging.HTCLIENT) {
                 window.win32.frame_action = true;
             }
         },
 
-        // win32_window_messaging.WM_PAINT => {
-        //     var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
-        //     const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
-        //     const x = paint.rcPaint.left;
-        //     const y = paint.rcPaint.top;
-        //     const w = paint.rcPaint.right - x;
-        //     const h = paint.rcPaint.bottom - y;
-        //     _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
-        //     _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
-        // },
+        win32_window_messaging.WM_PAINT => {
+            var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
+            const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
+            const x = paint.rcPaint.left;
+            const y = paint.rcPaint.top;
+            const w = paint.rcPaint.right - x;
+            const h = paint.rcPaint.bottom - y;
+            _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
+            _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
+        },
 
         win32_window_messaging.WM_KEYUP,
         win32_window_messaging.WM_KEYDOWN,
@@ -259,7 +263,8 @@ pub fn mainWindowProc(
             // A positive value indicates that the wheel was rotated forward,
             // away from the user.
             // a negative value indicates that the wheel was rotated backward, toward the user.
-            const wheel_delta = @intToFloat(f64, utils.getYLparam(wparam)) / @intToFloat(f64, win32_window_messaging.WHEEL_DELTA);
+            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const wheel_delta = scroll / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.VerticalWheel, wheel_delta);
             return 0;
         },
@@ -268,7 +273,8 @@ pub fn mainWindowProc(
             // Sent to the active window when the mouse's horizontal scroll wheel is tilted or rotated.
             // A positive value indicates that the wheel was rotated left,
             // a negative value indicates that the wheel was rotated right.
-            const wheel_delta = -(@intToFloat(f64, utils.getYLparam(wparam)) / @intToFloat(f64, win32_window_messaging.WHEEL_DELTA));
+            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const wheel_delta = -(scroll) / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.HorizontalWheel, wheel_delta);
             return 0;
         },
@@ -302,12 +308,14 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
-            const suggested_rect: *win32.RECT = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
+            const ulparam: usize = @bitCast(lparam);
+            const suggested_rect: *win32.RECT = @ptrFromInt(ulparam);
             const new_dpi = utils.loWord(wparam);
-            const scale = @intToFloat(f64, new_dpi) / @intToFloat(f64, win32_window_messaging.USER_DEFAULT_SCREEN_DPI);
-            const flags = @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-                @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-                @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
+            const fdpi: f64 = @floatFromInt(new_dpi);
+            const scale = fdpi / win32.FUSER_DEFAULT_SCREEN_DPI;
+            const flags = @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+                @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+                @intFromEnum(win32_window_messaging.SWP_NOREPOSITION);
             const top = if (window.data.flags.is_topmost)
                 win32_window_messaging.HWND_TOPMOST
             else
@@ -320,7 +328,7 @@ pub fn mainWindowProc(
                 suggested_rect.top,
                 suggested_rect.right - suggested_rect.left,
                 suggested_rect.bottom - suggested_rect.top,
-                @intToEnum(win32_window_messaging.SET_WINDOW_POS_FLAGS, flags),
+                @enumFromInt(flags),
             );
             const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
             window.sendEvent(&event);
@@ -340,8 +348,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SIZING => {
             // Sent to a window that the user is currently resizing.
             if (window.data.aspect_ratio != null) {
-                const drag_rect_ptr = @intToPtr(*win32.RECT, @bitCast(usize, lparam));
-                window.applyAspectRatio(drag_rect_ptr, @truncate(u32, wparam));
+                const ulparam: usize = @bitCast(lparam);
+                const drag_rect_ptr: *win32.RECT = @ptrFromInt(ulparam);
+                window.applyAspectRatio(drag_rect_ptr, @truncate(wparam));
             }
             return win32.TRUE;
         },
@@ -366,7 +375,8 @@ pub fn mainWindowProc(
                 window.sendEvent(&event);
             }
 
-            const restored = (wparam == win32_window_messaging.SIZE_RESTORED and (window.data.flags.is_minimized or window.data.flags.is_maximized));
+            const restored = (wparam == win32_window_messaging.SIZE_RESTORED and
+                (window.data.flags.is_minimized or window.data.flags.is_maximized));
             if (restored) {
                 const event = common.event.createRestoreEvent(
                     window.data.id,
@@ -377,8 +387,8 @@ pub fn mainWindowProc(
             window.data.flags.is_maximized = maximized;
             window.data.flags.is_minimized = minimized;
 
-            const new_width = @intCast(i32, utils.loWord(@bitCast(usize, lparam)));
-            const new_height = @intCast(i32, utils.hiWord(@bitCast(usize, lparam)));
+            const new_width: i32 = @intCast(utils.loWord(@bitCast(lparam)));
+            const new_height: i32 = @intCast(utils.hiWord(@bitCast(lparam)));
 
             if (minimized or (window.data.client_area.size.width == new_width and
                 window.data.client_area.size.height == new_height))
@@ -418,8 +428,8 @@ pub fn mainWindowProc(
                 break :blk;
             }
 
-            const xpos = utils.getXLparam(@bitCast(usize, lparam));
-            const ypos = utils.getYLparam(@bitCast(usize, lparam));
+            const xpos = utils.getXLparam(@bitCast(lparam));
+            const ypos = utils.getYLparam(@bitCast(lparam));
 
             if (window.data.client_area.top_left.x == xpos and
                 window.data.client_area.top_left.y == ypos)
@@ -446,7 +456,7 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SETCURSOR => {
             // Sent to a window if the mouse causes the cursor
             // to move within a window and mouse input is not captured.
-            if (utils.loWord(@bitCast(usize, lparam)) == win32_window_messaging.HTCLIENT) {
+            if (utils.loWord(@bitCast(lparam)) == win32_window_messaging.HTCLIENT) {
                 // the mouse just moved into the client area
                 // update the cursor image acording to the current mode;
                 window_impl.updateCursorImage(&window.win32.cursor);
@@ -514,7 +524,7 @@ pub fn mainWindowProc(
 
             // The win32_window_messaging.WM_UNICHAR message is similar to WM_CHAR,
             // but it uses Unicode Transformation Format (UTF)-32
-            const event = common.event.createCharEvent(window.data.id, @truncate(u32, wparam), utils.getKeyModifiers());
+            const event = common.event.createCharEvent(window.data.id, @truncate(wparam), utils.getKeyModifiers());
             window.sendEvent(&event);
             return 0;
         },

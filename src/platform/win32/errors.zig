@@ -33,6 +33,5 @@ pub const WindowError = error{
 
 pub const XInputError = error{
     FailedToLoadDLL,
-    FailedToLoadLibraryFunc,
     FailedToSetState,
 };

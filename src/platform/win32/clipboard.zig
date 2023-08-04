@@ -2,9 +2,9 @@ const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
-const ClipboardError = @import("errors.zig").ClipboardError;
 const win32_system_data_exchange = zigwin32.system.data_exchange;
 const win32_system_memory = zigwin32.system.memory;
+const ClipboardError = @import("errors.zig").ClipboardError;
 const HWND = win32.HWND;
 
 /// Returns the string contained inside the system clipboard.
@@ -22,19 +22,20 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
         if (handle != null) {
             // Pointer returned by windows do not respect data types alignment.
             // we'll copy the data to an aligned ptr for this one, so we can use it with std library.
-            const buffer = @ptrCast(?[*]const u8, win32_system_memory.GlobalLock(@bitCast(isize, @ptrToInt(handle))));
+            const buffer: ?[*]const u8 = @ptrCast(win32_system_memory.GlobalLock(@bitCast(@intFromPtr(handle))));
             if (buffer) |wide_buffer| {
-                defer _ = win32_system_memory.GlobalUnlock(@bitCast(isize, @ptrToInt(handle)));
+                defer _ = win32_system_memory.GlobalUnlock(@bitCast(@intFromPtr(handle)));
                 var buffer_size: usize = 0;
                 var null_flag: u16 = 1;
                 while (null_flag != 0x0000) {
-                    null_flag = @intCast(u16, wide_buffer[buffer_size]) << 8 | wide_buffer[buffer_size + 1];
+                    const upper_byte: u16 = wide_buffer[buffer_size];
+                    null_flag = upper_byte << 8 | wide_buffer[buffer_size + 1];
                     buffer_size += 2;
                 }
                 // no null terminator;
                 var utf16_buffer = try allocator.alloc(u16, (buffer_size >> 1) - 1);
                 defer allocator.free(utf16_buffer);
-                var dest_buffer = @ptrCast([*]u8, utf16_buffer.ptr);
+                var dest_buffer: [*]u8 = @ptrCast(utf16_buffer.ptr);
                 for (0..buffer_size - 2) |i| {
                     dest_buffer[i] = wide_buffer[i];
                 }
@@ -74,16 +75,17 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
     }
 
     // Hack to deal with alignement BS.
-    var wide_dest_ptr = @ptrCast([*]u8, buffer);
-    var wide_src_ptr = @ptrCast([*]u8, wide_text.ptr);
+    var wide_dest_ptr: [*]u8 = @ptrCast(buffer);
+    var wide_src_ptr: [*]u8 = @ptrCast(wide_text.ptr);
     for (0..bytes_len) |i| {
         wide_dest_ptr[i] = wide_src_ptr[i];
     }
     _ = win32_system_memory.GlobalUnlock(alloc_mem);
 
+    const ualloc_mem: usize = @bitCast(alloc_mem);
     if (win32_system_data_exchange.SetClipboardData(
         win32.CF_UNICODETEXT,
-        @intToPtr(*anyopaque, @bitCast(usize, alloc_mem)),
+        @ptrFromInt(ualloc_mem),
     ) == null) {
         return ClipboardError.FailedToUpdate;
     }
@@ -119,9 +121,12 @@ pub inline fn unregisterClipboardViewer(viewer: HWND, next_viewer: ?HWND) void {
 
 test "clipboard_tests" {
     const Internals = @import("internals.zig").Internals;
+    const Win32Context = @import("global.zig").Win32Context;
     const string1 = "Clipboard Test String👌.";
     const string2 = "Another Clipboard Test String👌.";
-    var internals = try Internals.init();
+    try Win32Context.initSingleton("Clipboard Test");
+    var internals: Internals = undefined;
+    try Internals.setup(&internals);
     defer internals.deinit(std.testing.allocator);
     try setClipboardText(std.testing.allocator, internals.helper_window, string1);
     const copied_string = try clipboardText(std.testing.allocator, internals.helper_window);

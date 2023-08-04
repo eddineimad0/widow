@@ -37,7 +37,7 @@ pub const WidowContext = struct {
         // The monitors store will recieve updates through the helper window
         self.platform_internals.setStatePointer(
             platform.internals.Internals.StatePointerMode.Monitor,
-            @ptrCast(*anyopaque, &self.monitors),
+            @ptrCast(&self.monitors),
         );
         return self;
     }
@@ -307,7 +307,7 @@ pub const JoystickSubSystem = struct {
         // TODO: this setState pointer doesn't feel cross platform friendly.
         widow_cntxt.platform_internals.setStatePointer(
             platform.internals.Internals.StatePointerMode.Joystick,
-            @ptrCast(*anyopaque, &self.impl),
+            @ptrCast(&self.impl),
         );
         // First poll to detect joystick that are already present.
         self.impl.queryConnectedJoys();

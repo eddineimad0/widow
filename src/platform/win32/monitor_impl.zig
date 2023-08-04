@@ -17,17 +17,18 @@ fn EnumMonitorProc(
     handle: ?win32_gdi.HMONITOR,
     _: ?win32_gdi.HDC,
     _: ?*win32.RECT,
-    data: win32.LPARAM,
+    lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL {
-    var data_ptr = @intToPtr(*LparamTuple, @intCast(usize, data));
+    const ulparam: usize = @intCast(lparam);
+    var data: *LparamTuple = @ptrFromInt(ulparam);
     // the EnumDisplayMonitor function will return the handles of all monitors
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
     // we'll need to compare the names to figure out the right handle.
     var mi: win32_gdi.MONITORINFOEXW = undefined;
     mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(win32_gdi.MONITORINFOEXW);
-    if (win32_gdi.GetMonitorInfoW(handle, @ptrCast(*win32_gdi.MONITORINFO, &mi)) == 1) {
-        if (utils.wideStrZCmp(@ptrCast([*:0]const u16, &mi.szDevice), @ptrCast([*:0]const u16, data_ptr.*[1].ptr))) {
-            data_ptr.*[0] = handle;
+    if (win32_gdi.GetMonitorInfoW(handle, @ptrCast(&mi)) == 1) {
+        if (utils.wideStrZCmp(@ptrCast(&mi.szDevice), @ptrCast(data.*[1].ptr))) {
+            data.*[0] = handle;
         }
     }
     return win32.TRUE;
@@ -41,7 +42,7 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
     // we need to figure out the rectangle that the monitor occupies on the virtual
     // desktop.
     if (win32.EnumDisplaySettingsExW(
-        @ptrCast([*:0]const u16, display_adapter.ptr),
+        @ptrCast(display_adapter.ptr),
         win32.ENUM_CURRENT_SETTINGS,
         &dm,
         0,
@@ -49,17 +50,19 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
         return null;
     }
 
+    const pels_width: i32 = @intCast(dm.dmPelsWidth);
+    const pels_height: i32 = @intCast(dm.dmPelsHeight);
     var clip_rect = win32.RECT{
         .left = dm.Anonymous1.Anonymous2.dmPosition.x,
         .top = dm.Anonymous1.Anonymous2.dmPosition.y,
-        .right = dm.Anonymous1.Anonymous2.dmPosition.x + @intCast(i32, dm.dmPelsWidth),
-        .bottom = dm.Anonymous1.Anonymous2.dmPosition.y + @intCast(i32, dm.dmPelsHeight),
+        .right = dm.Anonymous1.Anonymous2.dmPosition.x + pels_width,
+        .bottom = dm.Anonymous1.Anonymous2.dmPosition.y + pels_height,
     };
 
     const data: LparamTuple = .{ null, display_adapter };
 
     // Enumerate the displays that intersect the rectangle to figure out the monitor's handle.
-    _ = win32_gdi.EnumDisplayMonitors(null, &clip_rect, EnumMonitorProc, @intCast(win32.LPARAM, @ptrToInt(&data)));
+    _ = win32_gdi.EnumDisplayMonitors(null, &clip_rect, EnumMonitorProc, @intCast(@intFromPtr(&data)));
     return data[0];
 }
 
@@ -88,7 +91,7 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
 
         j = 0;
         while (true) {
-            if (win32_gdi.EnumDisplayDevicesW(@ptrCast([*:0]const u16, &display_adapter.DeviceName), j, &display_device, 0) == 0) {
+            if (win32_gdi.EnumDisplayDevicesW(@ptrCast(&display_adapter.DeviceName), j, &display_device, 0) == 0) {
                 // End of enumeration.
                 break;
             }
@@ -135,17 +138,17 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
     main_loop: while (true) {
         dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
         dev_mode.dmDriverExtra = 0;
-        if (win32.EnumDisplaySettingsExW(@ptrCast([*:0]const u16, adapter_name.ptr), i, &dev_mode, 0) == 0) {
+        if (win32.EnumDisplaySettingsExW(@ptrCast(adapter_name.ptr), i, &dev_mode, 0) == 0) {
             // No more modes to enumerate.
             break;
         }
         i += 1;
 
         var mode = VideoMode.init(
-            @intCast(i32, dev_mode.dmPelsWidth),
-            @intCast(i32, dev_mode.dmPelsHeight),
-            @intCast(u16, dev_mode.dmDisplayFrequency),
-            @intCast(u8, dev_mode.dmBitsPerPel),
+            @intCast(dev_mode.dmPelsWidth),
+            @intCast(dev_mode.dmPelsHeight),
+            @intCast(dev_mode.dmDisplayFrequency),
+            @intCast(dev_mode.dmBitsPerPel),
         );
 
         // Skip duplicate modes.
@@ -157,7 +160,7 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
 
         // If `is_pruned` we need to skip modes unsupported by the display.
         if (is_pruned and win32_gdi.ChangeDisplaySettingsExW(
-            @ptrCast([*:0]const u16, adapter_name),
+            @ptrCast(adapter_name),
             &dev_mode,
             null,
             win32_gdi.CDS_TEST,
@@ -200,7 +203,7 @@ pub fn monitorDPI(
         }
     } else {
         const device_cntxt = win32_gdi.GetDC(null);
-        dpi_x = @intCast(u32, win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSX));
+        dpi_x = @intCast(win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSX));
         _ = win32_gdi.ReleaseDC(null, device_cntxt);
     }
     // [Winapi docs]
@@ -265,16 +268,16 @@ pub const MonitorImpl = struct {
         dev_mode.dmDriverExtra = 0;
         dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
         _ = win32.EnumDisplaySettingsExW(
-            @ptrCast([*:0]const u16, &self.adapter),
+            @ptrCast(&self.adapter),
             win32.ENUM_CURRENT_SETTINGS,
             &dev_mode,
             0,
         );
 
-        output.width = @intCast(i32, dev_mode.dmPelsWidth);
-        output.height = @intCast(i32, dev_mode.dmPelsHeight);
-        output.frequency = @intCast(u16, dev_mode.dmDisplayFrequency);
-        output.color_depth = @intCast(u8, dev_mode.dmBitsPerPel);
+        output.width = @intCast(dev_mode.dmPelsWidth);
+        output.height = @intCast(dev_mode.dmPelsHeight);
+        output.frequency = @intCast(dev_mode.dmDisplayFrequency);
+        output.color_depth = @intCast(dev_mode.dmBitsPerPel);
     }
 
     /// Populate the `area` with the monitor's full area.
@@ -325,12 +328,12 @@ pub const MonitorImpl = struct {
                 win32_gdi.DM_PELSHEIGHT |
                 win32_gdi.DM_BITSPERPEL |
                 win32_gdi.DM_DISPLAYFREQUENCY;
-            dm.dmPelsWidth = @intCast(u32, possible_mode.width);
-            dm.dmPelsHeight = @intCast(u32, possible_mode.height);
-            dm.dmBitsPerPel = @intCast(u32, possible_mode.color_depth);
-            dm.dmDisplayFrequency = @intCast(u32, possible_mode.frequency);
+            dm.dmPelsWidth = @intCast(possible_mode.width);
+            dm.dmPelsHeight = @intCast(possible_mode.height);
+            dm.dmBitsPerPel = @intCast(possible_mode.color_depth);
+            dm.dmDisplayFrequency = @intCast(possible_mode.frequency);
             const result = win32_gdi.ChangeDisplaySettingsExW(
-                @ptrCast([*:0]const u16, &self.adapter),
+                @ptrCast(&self.adapter),
                 &dm,
                 null,
                 win32_gdi.CDS_FULLSCREEN,
@@ -355,7 +358,7 @@ pub const MonitorImpl = struct {
         // is the easiest way to return to the default mode after a dynamic mode change.
         if (self.current_mode != null) {
             _ = win32_gdi.ChangeDisplaySettingsExW(
-                @ptrCast([*:0]const u16, &self.adapter),
+                @ptrCast(&self.adapter),
                 null,
                 null,
                 win32_gdi.CDS_FULLSCREEN,
@@ -372,7 +375,7 @@ pub const MonitorImpl = struct {
 
     // Debug Only.
     pub fn debugInfos(self: *Self, print_video_modes: bool) void {
-        std.debug.print("Handle:{}\n", .{@ptrToInt(self.handle)});
+        std.debug.print("Handle:{x}\n", .{@intFromPtr(self.handle)});
         var adapter_name = std.mem.zeroes([32 * 3]u8);
         _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
         std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });

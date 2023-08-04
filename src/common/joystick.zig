@@ -124,7 +124,7 @@ pub const Joystick = struct {
     pub fn setAxis(self: *Self, axis: u8, value: f32) bool {
         std.debug.assert(axis < self.hid_data.axis_count and axis < AXES_COUNT);
 
-        if (std.math.fabs(self.axes.items[axis] - value) < std.math.f32_epsilon) {
+        if (std.math.fabs(self.axes.items[axis] - value) < std.math.floatEps(f32)) {
             return false;
         }
         self.axes.items[axis] = value;

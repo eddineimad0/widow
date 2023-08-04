@@ -24,7 +24,7 @@ pub fn main() void {
     // Grab the library's WindowBuilder instance.
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
-        "Simple window",
+        "cursor and icon",
         1024,
         640,
         widow_cntxt,

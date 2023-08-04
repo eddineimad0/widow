@@ -23,7 +23,7 @@ pub fn getProcessHandle() !win32.HINSTANCE {
     var hinstance: ?win32.HINSTANCE = null;
     if (GetModuleHandleExW(
         win32.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | win32.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-        @intToPtr(?[*:0]const u16, @ptrToInt(&getProcessHandle)),
+        @ptrFromInt(@intFromPtr(&getProcessHandle)),
         &hinstance,
     ) == 0) {
         return WidowError.ProcessHandleNotFound;
@@ -37,8 +37,8 @@ test "Loading and freeing win32 libraries" {
     const hinstance = try getProcessHandle();
     std.debug.print("\nProcess hinstance:{*}\n", .{hinstance});
     const module = loadWin32Module("ntdll.dll");
-    try testing.expect(@ptrToInt(module) != 0);
+    try testing.expect(@intFromPtr(module) != 0);
     const symbol = getModuleSymbol(module.?, "RtlVerifyVersionInfo");
-    try testing.expect(@ptrToInt(symbol) != 0);
+    try testing.expect(@intFromPtr(symbol) != 0);
     freeWin32Module(module.?);
 }

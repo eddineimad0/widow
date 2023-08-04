@@ -21,7 +21,7 @@ pub fn main() void {
     // Grab the library's WindowBuilder instance.
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
-        "Simple window",
+        "joystick",
         800,
         600,
         widow_lib,
@@ -31,7 +31,7 @@ pub fn main() void {
     };
 
     // create our window,
-    var window = builder.withDPIScaling(false).build() catch |err| {
+    var window = builder.build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -75,23 +75,32 @@ pub fn main() void {
                 // `GamepadButtonAction` // Gamepad button was pressed or released.
                 // `GamepadAxisMotion` // Gamepad axis value changed
                 EventType.GamepadButtonAction => |*button_event| {
+                    const button: widow.joystick.XboxButton = @enumFromInt(button_event.button);
                     std.debug.print("\nJoy Id :{}\n", .{button_event.joy_id});
-                    std.debug.print("Button {} | number :{}\n", .{ @intToEnum(widow.joystick.XboxButton, button_event.button), button_event.button });
+                    std.debug.print("Button {} | number :{}\n", .{ button, button_event.button });
                     std.debug.print("Button state :{}\n", .{button_event.state});
-                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.A) and button_event.state.isPressed()) {
+                    if (button_event.button == @intFromEnum(widow.joystick.XboxButton.A) and
+                        button_event.state.isPressed())
+                    {
                         _ = joy_sys.rumbleJoystick(button_event.joy_id, 3000);
                     }
-                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.B) and button_event.state.isPressed()) {
+                    if (button_event.button == @intFromEnum(widow.joystick.XboxButton.B) and
+                        button_event.state.isPressed())
+                    {
                         std.debug.print("Joy:#{} battery state:{}\n", .{ button_event.joy_id, joy_sys.joystickBattery(button_event.joy_id) });
                     }
-                    if (button_event.button == @enumToInt(widow.joystick.XboxButton.Y) and button_event.state.isPressed()) {
+                    if (button_event.button == @intFromEnum(widow.joystick.XboxButton.Y) and
+                        button_event.state.isPressed())
+                    {
                         _ = joy_sys.rumbleJoystick(button_event.joy_id, 0);
                     }
                 },
                 EventType.GamepadAxisMotion => |*axis_event| {
                     const analog_dead_zone = 0.2;
 
-                    if (axis_event.axis != @enumToInt(widow.joystick.XboxAxis.LTrigger) and axis_event.axis != @enumToInt(widow.joystick.XboxAxis.RTrigger)) {
+                    if (axis_event.axis != @intFromEnum(widow.joystick.XboxAxis.LTrigger) and
+                        axis_event.axis != @intFromEnum(widow.joystick.XboxAxis.RTrigger))
+                    {
                         // analog axis will always report a value different than 0
                         // even if they're not being moved(idle)
                         // consider using a dead zone to filter analog inputs.
@@ -100,8 +109,9 @@ pub fn main() void {
                         }
                     }
 
+                    const axis: widow.joystick.XboxAxis = @enumFromInt(axis_event.axis);
                     std.debug.print("\nJoy Id :{}\n", .{axis_event.joy_id});
-                    std.debug.print("Axis {} | number {}\n", .{ @intToEnum(widow.joystick.XboxAxis, axis_event.axis), axis_event.axis });
+                    std.debug.print("Axis {} | number {}\n", .{ axis, axis_event.axis });
                     std.debug.print("Axis value :{d}\n", .{axis_event.value});
                 },
                 EventType.GamepadConnected => |id| {

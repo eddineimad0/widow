@@ -44,7 +44,7 @@ pub const JoystickSubSystemImpl = struct {
     pub fn deinit(self: *Self) void {
         for (0..joystick.JOYSTICK_MAX_COUNT) |joy_id| {
             if (self.joys[joy_id].connected) {
-                self.deinitJoystick(@truncate(u8, joy_id));
+                self.deinitJoystick(@truncate(joy_id));
             }
         }
         self.xapi.deinit();
@@ -82,7 +82,7 @@ pub const JoystickSubSystemImpl = struct {
                 switch (self.joys_exdata[joy_id]) {
                     JoystickAPI.XInput => |*xdata| {
                         if (!xinput.pollPadPresence(&self.xapi, xdata.id)) {
-                            self.deinitJoystick(@truncate(u8, joy_id));
+                            self.deinitJoystick(@truncate(joy_id));
                         }
                     },
                 }

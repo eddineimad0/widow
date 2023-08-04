@@ -64,24 +64,24 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
 /// therfore this function will randomly fail in debug mode.
 /// As of now this function is not used anywhere.
 pub inline fn makeIntAtom(atom: u16) ?win32.LPCWSTR {
-    return @intToPtr(?win32.LPCWSTR, @as(usize, atom));
+    return @ptrFromInt(atom);
 }
 
 // Some usefule windows.h Macros.
 pub inline fn hiWord(bits: usize) u16 {
-    return @truncate(u16, (bits >> 16) & 0xFFFF);
+    return @truncate((bits >> 16) & 0xFFFF);
 }
 
 pub inline fn loWord(bits: usize) u16 {
-    return @truncate(u16, (bits & 0xFFFF));
+    return @truncate((bits & 0xFFFF));
 }
 
-pub inline fn getXLparam(bits: usize) i32 {
-    return @bitCast(i16, loWord(bits));
+pub inline fn getXLparam(bits: usize) i16 {
+    return @bitCast(loWord(bits));
 }
 
-pub inline fn getYLparam(bits: usize) i32 {
-    return @bitCast(i16, hiWord(bits));
+pub inline fn getYLparam(bits: usize) i16 {
+    return @bitCast(hiWord(bits));
 }
 
 pub inline fn isBitSet(bitset: isize, comptime pos: comptime_int) bool {
@@ -113,26 +113,26 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
         .caps_lock = false,
         .num_lock = false,
     };
-    if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_SHIFT)), 15)) {
+    if (isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_SHIFT)), 15)) {
         mods.shift = true;
     }
-    if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_CONTROL)), 15)) {
+    if (isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_CONTROL)), 15)) {
         mods.ctrl = true;
     }
-    if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_MENU)), 15)) {
+    if (isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_MENU)), 15)) {
         mods.alt = true;
     }
     if (isBitSet(
-        (win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_LWIN)) |
-            win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_RWIN))),
+        (win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_LWIN)) |
+            win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_RWIN))),
         15,
     )) {
         mods.meta = true;
     }
-    if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_CAPITAL)), 0)) {
+    if (isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_CAPITAL)), 0)) {
         mods.caps_lock = true;
     }
-    if (isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(win32_keyboard_mouse.VK_NUMLOCK)), 0)) {
+    if (isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(win32_keyboard_mouse.VK_NUMLOCK)), 0)) {
         mods.num_lock = true;
     }
     return mods;
@@ -142,7 +142,8 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
 pub fn getKeyCodes(keycode: u16, lparam: win32.LPARAM) struct { VirtualCode, ScanCode } {
     const MAPVK_VK_TO_VSC = 0;
     // The extended bit is necessary to find the correct scancode
-    var code: u32 = @truncate(u32, @bitCast(usize, (lparam >> 16) & 0x1FF));
+    const ulparm: usize = @bitCast((lparam >> 16) & 0x1FF);
+    var code: u32 = @truncate(ulparm);
     if (code == 0) {
         // scancode value shouldn't be zero
         code = win32_keyboard_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_VSC);
@@ -441,7 +442,7 @@ fn platformKeyToVirutal(keycode: u16) VirtualCode {
         // Note: OEM keys are used for miscellanous characters
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
-        @enumToInt(win32_keyboard_mouse.VK_OEM_1), @enumToInt(win32_keyboard_mouse.VK_OEM_2), @enumToInt(win32_keyboard_mouse.VK_OEM_3), @enumToInt(win32_keyboard_mouse.VK_OEM_4), @enumToInt(win32_keyboard_mouse.VK_OEM_5), @enumToInt(win32_keyboard_mouse.VK_OEM_6), @enumToInt(win32_keyboard_mouse.VK_OEM_7), @enumToInt(win32_keyboard_mouse.VK_OEM_102) => {
+        @intFromEnum(win32_keyboard_mouse.VK_OEM_1), @intFromEnum(win32_keyboard_mouse.VK_OEM_2), @intFromEnum(win32_keyboard_mouse.VK_OEM_3), @intFromEnum(win32_keyboard_mouse.VK_OEM_4), @intFromEnum(win32_keyboard_mouse.VK_OEM_5), @intFromEnum(win32_keyboard_mouse.VK_OEM_6), @intFromEnum(win32_keyboard_mouse.VK_OEM_7), @intFromEnum(win32_keyboard_mouse.VK_OEM_102) => {
             // Use the key text to identify it.
             return keyTextToVirtual(keycode);
         },
@@ -1011,10 +1012,10 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
     };
 
     for (0..4) |index| {
-        if (window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] == KeyState.Pressed) {
-            const is_key_up = !isBitSet(win32_keyboard_mouse.GetKeyState(@enumToInt(virtual_keys[index])), 15);
+        if (window.data.input.keys[@intCast(@intFromEnum(codes[index]))] == KeyState.Pressed) {
+            const is_key_up = !isBitSet(win32_keyboard_mouse.GetKeyState(@intFromEnum(virtual_keys[index])), 15);
             if (is_key_up) {
-                window.data.input.keys[@intCast(usize, @enumToInt(codes[index]))] = KeyState.Released;
+                window.data.input.keys[@intCast(@intFromEnum(codes[index]))] = KeyState.Released;
                 const fake_event = common.event.createKeyboardEvent(
                     window.data.id,
                     virtual_codes[index],
@@ -1029,7 +1030,7 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
 }
 
 pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.WidowPoint2D {
-    const xpos = getXLparam(@bitCast(usize, lparam));
-    const ypos = getYLparam(@bitCast(usize, lparam));
+    const xpos = getXLparam(@bitCast(lparam));
+    const ypos = getYLparam(@bitCast(lparam));
     return common.geometry.WidowPoint2D{ .x = xpos, .y = ypos };
 }

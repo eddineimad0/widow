@@ -20,28 +20,28 @@ const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @enumToInt(win32_window_messaging.WS_CLIPCHILDREN) |
-    @enumToInt(win32_window_messaging.WS_CLIPSIBLINGS);
+const STYLE_BASIC: u32 = @intFromEnum(win32_window_messaging.WS_CLIPCHILDREN) |
+    @intFromEnum(win32_window_messaging.WS_CLIPSIBLINGS);
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @enumToInt(win32_window_messaging.WS_POPUP) |
-    @enumToInt(win32_window_messaging.WS_MINIMIZEBOX);
+const STYLE_FULLSCREEN: u32 = @intFromEnum(win32_window_messaging.WS_POPUP) |
+    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX);
 // Captionless: without a caption(title bar)
-const STYLE_BORDERLESS: u32 = @enumToInt(win32_window_messaging.WS_POPUP) |
-    @enumToInt(win32_window_messaging.WS_MINIMIZEBOX);
+const STYLE_BORDERLESS: u32 = @intFromEnum(win32_window_messaging.WS_POPUP) |
+    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX);
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @enumToInt(win32_window_messaging.WS_THICKFRAME) |
-    @enumToInt(win32_window_messaging.WS_MAXIMIZEBOX);
+const STYLE_RESIZABLE: u32 = @intFromEnum(win32_window_messaging.WS_THICKFRAME) |
+    @intFromEnum(win32_window_messaging.WS_MAXIMIZEBOX);
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @enumToInt(win32_window_messaging.WS_OVERLAPPED) |
-    @enumToInt(win32_window_messaging.WS_MINIMIZEBOX) |
-    @enumToInt(win32_window_messaging.WS_SYSMENU) |
-    @enumToInt(win32_window_messaging.WS_CAPTION);
+const STYLE_NORMAL: u32 = @intFromEnum(win32_window_messaging.WS_OVERLAPPED) |
+    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX) |
+    @intFromEnum(win32_window_messaging.WS_SYSMENU) |
+    @intFromEnum(win32_window_messaging.WS_CAPTION);
 
-const STYLES_MASK: u32 = @enumToInt(win32_window_messaging.WS_OVERLAPPEDWINDOW) |
-    @enumToInt(win32_window_messaging.WS_POPUP) |
-    @enumToInt(win32_window_messaging.WS_MAXIMIZE) |
-    @enumToInt(win32_window_messaging.WS_CLIPCHILDREN) |
-    @enumToInt(win32_window_messaging.WS_CLIPSIBLINGS);
+const STYLES_MASK: u32 = @intFromEnum(win32_window_messaging.WS_OVERLAPPEDWINDOW) |
+    @intFromEnum(win32_window_messaging.WS_POPUP) |
+    @intFromEnum(win32_window_messaging.WS_MAXIMIZE) |
+    @intFromEnum(win32_window_messaging.WS_CLIPCHILDREN) |
+    @intFromEnum(win32_window_messaging.WS_CLIPSIBLINGS);
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -60,11 +60,11 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
         }
 
         if (flags.is_maximized) {
-            styles |= @enumToInt(win32_window_messaging.WS_MAXIMIZE);
+            styles |= @intFromEnum(win32_window_messaging.WS_MAXIMIZE);
         }
 
         if (flags.is_minimized) {
-            styles |= @enumToInt(win32_window_messaging.WS_MINIMIZE);
+            styles |= @intFromEnum(win32_window_messaging.WS_MINIMIZE);
         }
     }
 
@@ -75,7 +75,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
     var ex_styles: u32 = 0;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @enumToInt(win32_window_messaging.WS_EX_TOPMOST);
+        ex_styles |= @intFromEnum(win32_window_messaging.WS_EX_TOPMOST);
     }
     return ex_styles;
 }
@@ -103,9 +103,9 @@ pub fn adjustWindowRect(
     } else {
         _ = win32_window_messaging.AdjustWindowRectEx(
             rect,
-            @intToEnum(win32_window_messaging.WINDOW_STYLE, styles),
+            @enumFromInt(styles),
             0,
-            @intToEnum(win32_window_messaging.WINDOW_EX_STYLE, ex_styles),
+            @enumFromInt(ex_styles),
         );
     }
 }
@@ -219,7 +219,7 @@ fn setWindowPositionIntern(
         y,
         width,
         height,
-        @intToEnum(win32_window_messaging.SET_WINDOW_POS_FLAGS, flags),
+        @enumFromInt(flags),
     );
 }
 
@@ -285,7 +285,7 @@ fn createPlatformWindow(
         null, // Parent Hwnd
         null, // hMenu
         win32_globl.handles.hinstance, // hInstance
-        @ptrCast(?*anyopaque, @constCast(creation_lparm)), // CREATESTRUCT lparam
+        @ptrCast(@constCast(creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
         return WindowError.FailedToCreate;
     };
@@ -358,7 +358,7 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.SetWindowLongPtrW(
             instance.handle,
             win32_window_messaging.GWLP_USERDATA,
-            @intCast(isize, @ptrToInt(instance)),
+            @intCast(@intFromPtr(instance)),
         );
 
         // Now we can handle DPI adjustments.
@@ -372,8 +372,10 @@ pub const WindowImpl = struct {
             var dpi_scale: f64 = undefined;
             const dpi = instance.scalingDPI(&dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
-            client_rect.right = @floatToInt(i32, @intToFloat(f64, client_rect.right) * dpi_scale);
-            client_rect.bottom = @floatToInt(i32, @intToFloat(f64, client_rect.bottom) * dpi_scale);
+            const fwidth: f64 = @floatFromInt(client_rect.right);
+            const fheight: f64 = @floatFromInt(client_rect.bottom);
+            client_rect.right = @intFromFloat(fwidth * dpi_scale);
+            client_rect.bottom = @intFromFloat(fheight * dpi_scale);
 
             adjustWindowRect(
                 &client_rect,
@@ -397,9 +399,9 @@ pub const WindowImpl = struct {
                 win32_window_messaging.HWND_TOPMOST
             else
                 win32_window_messaging.HWND_NOTOPMOST;
-            const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-                @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-                @enumToInt(win32_window_messaging.SWP_NOOWNERZORDER);
+            const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+                @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+                @intFromEnum(win32_window_messaging.SWP_NOOWNERZORDER);
             setWindowPositionIntern(
                 instance.handle,
                 top,
@@ -495,7 +497,8 @@ pub const WindowImpl = struct {
             }
         }
         if (scaler) |ptr| {
-            ptr.* = (@intToFloat(f64, dpi) / @intToFloat(f64, win32.USER_DEFAULT_SCREEN_DPI));
+            const fdpi: f64 = @floatFromInt(dpi);
+            ptr.* = (fdpi / win32.FUSER_DEFAULT_SCREEN_DPI);
         }
         return dpi;
     }
@@ -541,16 +544,16 @@ pub const WindowImpl = struct {
 
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(self: *Self) void {
-        const EX_STYLES_MASK: u32 = @enumToInt(win32_window_messaging.WS_EX_TOPMOST);
-        const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_FRAMECHANGED) |
-            @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOZORDER);
+        const EX_STYLES_MASK: u32 = @intFromEnum(win32_window_messaging.WS_EX_TOPMOST);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_FRAMECHANGED) |
+            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+            @intFromEnum(win32_window_messaging.SWP_NOZORDER);
 
-        var reg_styles = @bitCast(usize, win32_window_messaging.GetWindowLongPtrW(
+        var reg_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_STYLE,
         ));
-        var reg_ex_styles = @bitCast(usize, win32_window_messaging.GetWindowLongPtrW(
+        var reg_ex_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_EXSTYLE,
         ));
@@ -562,13 +565,13 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_STYLE,
-            @bitCast(isize, reg_styles),
+            @bitCast(reg_styles),
         );
 
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_EXSTYLE,
-            @bitCast(isize, reg_ex_styles),
+            @bitCast(reg_ex_styles),
         );
 
         var rect: win32.RECT = undefined;
@@ -577,14 +580,14 @@ pub const WindowImpl = struct {
             // we're exiting fullscreen mode use the saved size.
             rect.left = frame.top_left.x;
             rect.top = frame.top_left.y;
-            rect.right = frame.size.width;
-            rect.bottom = frame.size.height;
+            rect.right = frame.size.width + frame.top_left.x;
+            rect.bottom = frame.size.height + frame.top_left.y;
         } else {
             // we're simply changing some styles.
             rect.left = self.data.client_area.top_left.x;
             rect.top = self.data.client_area.top_left.y;
-            rect.right = self.data.client_area.size.width;
-            rect.bottom = self.data.client_area.size.height;
+            rect.right = self.data.client_area.size.width + rect.left;
+            rect.bottom = self.data.client_area.size.height + rect.top;
         }
 
         var dpi: ?u32 = null;
@@ -595,8 +598,8 @@ pub const WindowImpl = struct {
 
         adjustWindowRect(
             &rect,
-            @truncate(u32, reg_styles),
-            @truncate(u32, reg_ex_styles),
+            @truncate(reg_styles),
+            @truncate(reg_ex_styles),
             dpi,
         );
 
@@ -667,9 +670,9 @@ pub const WindowImpl = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         // Don't use SWP_NOSIZE to allow dpi change.
-        const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-            @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOREPOSITION);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION);
 
         if (self.data.flags.is_maximized) {
             // Moving a maximized window should restore it to it's orignal size
@@ -730,8 +733,8 @@ pub const WindowImpl = struct {
             .height = self.data.client_area.size.height,
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
-            const dpi = self.scalingDPI(null);
-            const r_scaler = @intToFloat(f64, win32.USER_DEFAULT_SCREEN_DPI) / @intToFloat(f64, dpi);
+            const dpi: f64 = @floatFromInt(self.scalingDPI(null));
+            const r_scaler = (win32.FUSER_DEFAULT_SCREEN_DPI / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
@@ -765,10 +768,10 @@ pub const WindowImpl = struct {
                 self.restore();
             }
 
-            const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-                @enumToInt(win32_window_messaging.SWP_NOREPOSITION) |
-                @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-                @enumToInt(win32_window_messaging.SWP_NOMOVE);
+            const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+                @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
+                @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+                @intFromEnum(win32_window_messaging.SWP_NOMOVE);
 
             const top = if (self.data.flags.is_topmost)
                 win32_window_messaging.HWND_TOPMOST
@@ -821,10 +824,10 @@ pub const WindowImpl = struct {
             self.data.min_size = null;
         }
 
-        const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOREPOSITION) |
-            @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-            @enumToInt(win32_window_messaging.SWP_NOMOVE);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
+            @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+            @intFromEnum(win32_window_messaging.SWP_NOMOVE);
 
         const size = windowSize(self.handle);
 
@@ -876,10 +879,10 @@ pub const WindowImpl = struct {
             self.data.max_size = null;
         }
 
-        const POSITION_FLAGS: u32 = comptime @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOREPOSITION) |
-            @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-            @enumToInt(win32_window_messaging.SWP_NOMOVE);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
+            @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+            @intFromEnum(win32_window_messaging.SWP_NOMOVE);
 
         const size = windowSize(self.handle);
 
@@ -948,7 +951,8 @@ pub const WindowImpl = struct {
         // This length doesn't take into account the null character so add it when allocating.
         const wide_title_len = win32_window_messaging.GetWindowTextLengthW(self.handle);
         if (wide_title_len > 0) {
-            var wide_slice = try allocator.allocSentinel(u16, @intCast(usize, wide_title_len) + 1, 0);
+            const uwide_title_len: usize = @intCast(wide_title_len);
+            var wide_slice = try allocator.allocSentinel(u16, uwide_title_len + 1, 0);
             defer allocator.free(wide_slice);
             // to get the full title we must specify the full buffer length or we will be 1 character short.
             _ = win32_window_messaging.GetWindowTextW(self.handle, wide_slice.ptr, wide_title_len + 1);
@@ -964,12 +968,13 @@ pub const WindowImpl = struct {
     /// with 1 being opaque and 0 being full transparent.
     pub fn opacity(self: *const Self) f32 {
         const ex_styles = win32_window_messaging.GetWindowLongPtrW(self.handle, win32_window_messaging.GWL_EXSTYLE);
-        if ((ex_styles & @enumToInt(win32_window_messaging.WS_EX_LAYERED)) != 0) {
+        if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) != 0) {
             var alpha: u8 = undefined;
             var flags: win32_window_messaging.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
             _ = win32_window_messaging.GetLayeredWindowAttributes(self.handle, null, &alpha, &flags);
-            if ((@enumToInt(flags) & @enumToInt(win32_window_messaging.LWA_ALPHA)) != 0) {
-                return (@intToFloat(f32, alpha) / 255.0);
+            if ((@intFromEnum(flags) & @intFromEnum(win32_window_messaging.LWA_ALPHA)) != 0) {
+                const falpha: f32 = @floatFromInt(alpha);
+                return (falpha / 255.0);
             }
         }
         return 1.0;
@@ -980,31 +985,31 @@ pub const WindowImpl = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f32) void {
-        var ex_styles = @bitCast(usize, win32_window_messaging.GetWindowLongPtrW(
+        var ex_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_EXSTYLE,
         ));
 
         if (value == @as(f32, 1.0)) {
-            ex_styles &= ~@enumToInt(win32_window_messaging.WS_EX_LAYERED);
+            ex_styles &= ~@intFromEnum(win32_window_messaging.WS_EX_LAYERED);
         } else {
-            const alpha = @truncate(u8, @floatToInt(u32, value * 255.0));
+            const alpha: u32 = @intFromFloat(value * 255.0);
 
-            if ((ex_styles & @enumToInt(win32_window_messaging.WS_EX_LAYERED)) == 0) {
-                ex_styles |= @enumToInt(win32_window_messaging.WS_EX_LAYERED);
+            if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) == 0) {
+                ex_styles |= @intFromEnum(win32_window_messaging.WS_EX_LAYERED);
             }
 
             _ = win32_window_messaging.SetLayeredWindowAttributes(
                 self.handle,
                 0,
-                alpha,
+                @truncate(alpha),
                 win32_window_messaging.LWA_ALPHA,
             );
         }
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.handle,
             win32_window_messaging.GWL_EXSTYLE,
-            @bitCast(isize, ex_styles),
+            @bitCast(ex_styles),
         );
     }
 
@@ -1027,7 +1032,9 @@ pub const WindowImpl = struct {
     }
 
     pub fn applyAspectRatio(self: *const Self, client: *win32_foundation.RECT, edge: u32) void {
-        const ratio = @intToFloat(f64, self.data.aspect_ratio.?.x) / @intToFloat(f64, self.data.aspect_ratio.?.y);
+        const faspect_x: f64 = @floatFromInt(self.data.aspect_ratio.?.x);
+        const faspect_y: f64 = @floatFromInt(self.data.aspect_ratio.?.y);
+        const ratio: f64 = faspect_x / faspect_y;
 
         var rect = win32_foundation.RECT{
             .left = 0,
@@ -1045,16 +1052,19 @@ pub const WindowImpl = struct {
 
         switch (edge) {
             win32_window_messaging.WMSZ_LEFT, win32_window_messaging.WMSZ_RIGHT, win32_window_messaging.WMSZ_BOTTOMLEFT, win32_window_messaging.WMSZ_BOTTOMRIGHT => {
-                client.bottom = client.top + (rect.bottom - rect.top) +
-                    @floatToInt(i32, @intToFloat(f64, (client.right - client.left) - (rect.right - rect.left)) / ratio);
+                client.bottom = client.top + (rect.bottom - rect.top);
+                const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
+                client.bottom += @intFromFloat(fborder_width / ratio);
             },
             win32_window_messaging.WMSZ_TOPLEFT, win32_window_messaging.WMSZ_TOPRIGHT => {
-                client.top = client.bottom - (rect.bottom - rect.top) -
-                    @floatToInt(i32, @intToFloat(f64, (client.right - client.left) - (rect.right - rect.left)) / ratio);
+                client.top = client.bottom - (rect.bottom - rect.top);
+                const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
+                client.top -= @intFromFloat(fborder_width / ratio);
             },
             win32_window_messaging.WMSZ_TOP, win32_window_messaging.WMSZ_BOTTOM => {
-                client.right = client.left + (rect.right - rect.left) +
-                    @floatToInt(i32, @intToFloat(f64, (client.bottom - client.top) - (rect.bottom - rect.top)) * ratio);
+                client.right = client.left + (rect.right - rect.left);
+                const fborder_height: f64 = @floatFromInt((client.bottom - client.top) - (rect.bottom - rect.top));
+                client.bottom += @intFromFloat(fborder_height * ratio);
             },
             else => unreachable,
         }
@@ -1097,9 +1107,9 @@ pub const WindowImpl = struct {
             &mon_area,
         );
 
-        const POSITION_FLAGS: u32 = @enumToInt(win32_window_messaging.SWP_NOZORDER) |
-            @enumToInt(win32_window_messaging.SWP_NOACTIVATE) |
-            @enumToInt(win32_window_messaging.SWP_NOCOPYBITS);
+        const POSITION_FLAGS: u32 = @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
+            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
+            @intFromEnum(win32_window_messaging.SWP_NOCOPYBITS);
 
         const top = if (self.data.flags.is_topmost)
             win32_window_messaging.HWND_TOPMOST
@@ -1135,7 +1145,7 @@ pub const WindowImpl = struct {
 
     pub fn setIcon(self: *Self, new_icon: *const icon.Icon) void {
         const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
-            .{ @ptrToInt(new_icon.bg_handle.?), @ptrToInt(new_icon.sm_handle.?) }
+            .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
         else blk: {
             const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
             const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
@@ -1145,13 +1155,13 @@ pub const WindowImpl = struct {
             self.handle,
             win32_window_messaging.WM_SETICON,
             win32_window_messaging.ICON_BIG,
-            @bitCast(isize, handles[0]),
+            @bitCast(handles[0]),
         );
         _ = win32_window_messaging.SendMessageW(
             self.handle,
             win32_window_messaging.WM_SETICON,
             win32_window_messaging.ICON_SMALL,
-            @bitCast(isize, handles[1]),
+            @bitCast(handles[1]),
         );
         icon.destroyIcon(&self.win32.icon);
         self.win32.icon = new_icon.*;

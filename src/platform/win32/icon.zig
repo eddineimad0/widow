@@ -29,13 +29,14 @@ pub fn createIcon(
     bmp_header.bV5BlueMask = 0x000000FF;
     bmp_header.bV5AlphaMask = 0xFF000000;
 
-    var dib_ptr: [*]u8 = undefined;
+    var dib: [*]u8 = undefined;
+    // var dib_ptr: ?*anyopaque = @ptrCast(dib);
     const dc = win32_gdi.GetDC(null);
     const color_mask = win32_gdi.CreateDIBSection(
         dc,
-        @ptrCast(*win32_gdi.BITMAPINFO, &bmp_header),
+        @ptrCast(&bmp_header),
         win32_gdi.DIB_RGB_COLORS,
-        @ptrCast(*?*anyopaque, &dib_ptr),
+        @ptrCast(&dib),
         null,
         0,
     );
@@ -54,13 +55,12 @@ pub fn createIcon(
     var i: usize = 0;
     // RGBA -> BGRA.
     while (i < pixels.len) {
-        dib_ptr[i] = pixels[i + 2];
-        dib_ptr[i + 1] = pixels[i + 1];
-        dib_ptr[i + 2] = pixels[i];
-        dib_ptr[i + 3] = pixels[i + 3];
+        dib[i] = pixels[i + 2];
+        dib[i + 1] = pixels[i + 1];
+        dib[i + 2] = pixels[i];
+        dib[i + 3] = pixels[i + 3];
         i += 4;
     }
-
     var xspot: u32 = undefined;
     var yspot: u32 = undefined;
     var icon_flag: BOOL = TRUE;

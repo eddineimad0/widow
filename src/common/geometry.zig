@@ -16,8 +16,10 @@ pub const WidowSize = struct {
     const Self = @This();
 
     pub fn scaleBy(self: *Self, scaler: f64) void {
-        self.width = @floatToInt(i32, (@intToFloat(f64, self.width) * scaler));
-        self.height = @floatToInt(i32, (@intToFloat(f64, self.height) * scaler));
+        const fwidth: f64 = @floatFromInt(self.width);
+        const fheight: f64 = @floatFromInt(self.width);
+        self.width = @intFromFloat(fwidth * scaler);
+        self.height = @intFromFloat(fheight * scaler);
     }
 };
 

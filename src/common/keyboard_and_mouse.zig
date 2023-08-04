@@ -273,13 +273,13 @@ pub const MouseWheel = enum(u8) {
 };
 
 pub const InputState = struct {
-    keys: [@enumToInt(ScanCode.VALUES_COUNT)]KeyState,
-    mouse_buttons: [@enumToInt(MouseButton.VALUES_COUNT)]MouseButtonState,
+    keys: [@intFromEnum(ScanCode.VALUES_COUNT)]KeyState,
+    mouse_buttons: [@intFromEnum(MouseButton.VALUES_COUNT)]MouseButtonState,
     const Self = @This();
     pub fn init() Self {
         return Self{
-            .keys = [1]KeyState{KeyState.Released} ** @enumToInt(ScanCode.VALUES_COUNT),
-            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** @enumToInt(MouseButton.VALUES_COUNT),
+            .keys = [1]KeyState{KeyState.Released} ** @intFromEnum(ScanCode.VALUES_COUNT),
+            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** @intFromEnum(MouseButton.VALUES_COUNT),
         };
     }
 };

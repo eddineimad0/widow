@@ -72,19 +72,10 @@ pub const XInputInterface = struct {
         }
 
         self.handle = dll.?;
-        self.getState = @ptrCast(?proc_XInputGetState, module.getModuleSymbol(self.handle, "XInputGetState")) orelse {
-            module.freeWin32Module(self.handle);
-            return XInputError.FailedToLoadLibraryFunc;
-        };
-        self.setState = @ptrCast(?proc_XInputSetState, module.getModuleSymbol(self.handle, "XInputSetState")) orelse {
-            module.freeWin32Module(self.handle);
-            return XInputError.FailedToLoadLibraryFunc;
-        };
-        self.getCaps = @ptrCast(?proc_XInputGetCapabilities, module.getModuleSymbol(self.handle, "XInputGetCapabilities")) orelse {
-            module.freeWin32Module(self.handle);
-            return XInputError.FailedToLoadLibraryFunc;
-        };
-        self.getBatteryInfo = @ptrCast(?proc_XInputGetBatteryInformation, module.getModuleSymbol(self.handle, "XInputGetBatteryInformation"));
+        self.getState = @ptrCast(module.getModuleSymbol(self.handle, "XInputGetState"));
+        self.setState = @ptrCast(module.getModuleSymbol(self.handle, "XInputSetState"));
+        self.getCaps = @ptrCast(module.getModuleSymbol(self.handle, "XInputGetCapabilities"));
+        self.getBatteryInfo = @ptrCast(module.getModuleSymbol(self.handle, "XInputGetBatteryInformation"));
         return self;
     }
 
@@ -131,7 +122,7 @@ pub fn pollPadsConnection(jss: *JoystickSubSystemImpl) void {
         }
 
         var xcaps: xinput.XINPUT_CAPABILITIES = undefined;
-        if (jss.xapi.getCaps(i, xinput.XINPUT_FLAG_GAMEPAD, &xcaps) == @enumToInt(win32.WIN32_ERROR.NO_ERROR)) {
+        if (jss.xapi.getCaps(i, xinput.XINPUT_FLAG_GAMEPAD, &xcaps) == @intFromEnum(win32.WIN32_ERROR.NO_ERROR)) {
             const joy = &jss.joys[slot];
             if (initPad(jss.allocator, joy, i)) {
                 // On success.
@@ -155,7 +146,7 @@ pub fn pollPadsConnection(jss: *JoystickSubSystemImpl) void {
 pub fn pollPadPresence(xapi: *const XInputInterface, xid: u8) bool {
     var xstate: xinput.XINPUT_STATE = undefined;
     const result = xapi.getState(xid, &xstate);
-    if (result != @enumToInt(win32.WIN32_ERROR.NO_ERROR)) {
+    if (result != @intFromEnum(win32.WIN32_ERROR.NO_ERROR)) {
         // Disconnected.
         std.debug.print("NOT_CONNECTD:{}\n,", .{result});
         return false;
@@ -180,18 +171,19 @@ inline fn initPad(allocator: std.mem.Allocator, joy: *Joystick, id: u8) bool {
 }
 
 fn normalizeAxis(value: i32, is_trigger: bool, negate: bool) f32 {
-    var nvalue: f32 = undefined;
+    const fvalue: f32 = @floatFromInt(value);
+    var norm_value: f32 = undefined;
     if (is_trigger) {
-        nvalue = (@intToFloat(f32, value) / FHALF_MAX_JOY_TRIGGER) - 1.0;
+        norm_value = (fvalue / FHALF_MAX_JOY_TRIGGER) - 1.0;
     } else {
-        nvalue = ((@intToFloat(f32, value) + 0.5) / FMAX_JOY_AXIS);
+        norm_value = ((fvalue + 0.5) / FMAX_JOY_AXIS);
     }
 
     if (negate) {
-        nvalue = -nvalue;
+        norm_value = -norm_value;
     }
 
-    return nvalue;
+    return norm_value;
 }
 
 /// Poll for gamepad state changes.
@@ -217,7 +209,7 @@ pub fn pollPadState(jss: *JoystickSubSystemImpl, joy_id: u8, xdata: *XInputData)
 
     var xstate: xinput.XINPUT_STATE = undefined;
     const result = jss.xapi.getState(xdata.id, &xstate);
-    if (result == @enumToInt(win32.WIN32_ERROR.ERROR_DEVICE_NOT_CONNECTED)) {
+    if (result == @intFromEnum(win32.WIN32_ERROR.ERROR_DEVICE_NOT_CONNECTED)) {
         // Disconnected.
         return false;
     }
@@ -232,68 +224,68 @@ pub fn pollPadState(jss: *JoystickSubSystemImpl, joy_id: u8, xdata: *XInputData)
         // Positive values signify up or to the right.
         // All axis values are normalized to a value between -1.0 and 1.0,
         // the direction of the y axis is flipped with the down being positve and up being negative.
-        var axis_value: f32 = normalizeAxis(@intCast(i32, xstate.Gamepad.sThumbLX), false, false);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.LeftX), axis_value);
+        var axis_value: f32 = normalizeAxis(@intCast(xstate.Gamepad.sThumbLX), false, false);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.LeftX), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.LeftX),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.LeftX)],
+                @intFromEnum(joystick.XboxAxis.LeftX),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.LeftX)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
         }
-        axis_value = normalizeAxis(@intCast(i32, xstate.Gamepad.sThumbLY), false, true);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.LeftY), axis_value);
+        axis_value = normalizeAxis(@intCast(xstate.Gamepad.sThumbLY), false, true);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.LeftY), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.LeftY),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.LeftY)],
+                @intFromEnum(joystick.XboxAxis.LeftY),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.LeftY)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
         }
-        axis_value = normalizeAxis(@intCast(i32, xstate.Gamepad.sThumbRX), false, false);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.RightX), axis_value);
+        axis_value = normalizeAxis(@intCast(xstate.Gamepad.sThumbRX), false, false);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.RightX), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.RightX),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.RightX)],
+                @intFromEnum(joystick.XboxAxis.RightX),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.RightX)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
         }
-        axis_value = normalizeAxis(@intCast(i32, xstate.Gamepad.sThumbRY), false, true);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.RightY), axis_value);
+        axis_value = normalizeAxis(@intCast(xstate.Gamepad.sThumbRY), false, true);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.RightY), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.RightY),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.RightY)],
+                @intFromEnum(joystick.XboxAxis.RightY),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.RightY)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
         }
-        axis_value = normalizeAxis(@intCast(i32, xstate.Gamepad.bLeftTrigger), true, false);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.LTrigger), axis_value);
+        axis_value = normalizeAxis(@intCast(xstate.Gamepad.bLeftTrigger), true, false);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.LTrigger), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.LTrigger),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.LTrigger)],
+                @intFromEnum(joystick.XboxAxis.LTrigger),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.LTrigger)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
         }
-        axis_value = normalizeAxis(@intCast(i32, xstate.Gamepad.bRightTrigger), true, false);
-        updated = joy.setAxis(@enumToInt(joystick.XboxAxis.RTrigger), axis_value);
+        axis_value = normalizeAxis(@intCast(xstate.Gamepad.bRightTrigger), true, false);
+        updated = joy.setAxis(@intFromEnum(joystick.XboxAxis.RTrigger), axis_value);
         if (updated) {
             const ev = event.createJoyAxisEvent(
                 joy_id,
-                @enumToInt(joystick.XboxAxis.RTrigger),
-                joy.axes.items[@enumToInt(joystick.XboxAxis.RTrigger)],
+                @intFromEnum(joystick.XboxAxis.RTrigger),
+                joy.axes.items[@intFromEnum(joystick.XboxAxis.RTrigger)],
                 joy.is_gamepad,
             );
             jss.sendEvent(&ev);
@@ -302,11 +294,11 @@ pub fn pollPadState(jss: *JoystickSubSystemImpl, joy_id: u8, xdata: *XInputData)
         for (buttons, 0..buttons.len) |button, index| {
             // Bitmask of the device digital buttons, A set bit indicates that the corresponding button is pressed.
             const value = if (xstate.Gamepad.wButtons & button != 0) joystick.ButtonState.Pressed else joystick.ButtonState.Released;
-            updated = joy.setButton(@truncate(u8, index), value);
+            updated = joy.setButton(@truncate(index), value);
             if (updated) {
                 const ev = event.createJoyButtonEvent(
                     xdata.id,
-                    @truncate(u8, index),
+                    @truncate(index),
                     value,
                     joy.is_gamepad,
                 );
@@ -324,7 +316,7 @@ pub fn rumble(api: *const XInputInterface, xdata: *const XInputData, magnitude: 
         .wRightMotorSpeed = magnitude,
     };
 
-    if (api.setState(xdata.id, &vibration) != @enumToInt(win32.WIN32_ERROR.NO_ERROR)) {
+    if (api.setState(xdata.id, &vibration) != @intFromEnum(win32.WIN32_ERROR.NO_ERROR)) {
         std.debug.print("SetState error\n", .{});
         return XInputError.FailedToSetState;
     }
