@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const widow = installWidow(b, &target);
+    const widow = createWidowModule(b, &target);
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) !void {
         });
         example.addModule("widow", widow);
         example.linkLibC();
-        const install_step = b.addInstallArtifact(example);
+        const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) !void {
     b.default_step.dependOn(example_step);
 }
 
-fn installWidow(b: *std.Build, target: *const std.zig.CrossTarget) *std.build.Module {
+fn createWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.build.Module {
     // common module
     const common_module = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
 
