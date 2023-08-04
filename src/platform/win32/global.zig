@@ -70,11 +70,12 @@ pub const Win32Context = struct {
     functions: LoadedFunctions,
     var WINDOW_CLASS_NAME: []const u8 = "";
     var HELPER_CLASS_NAME: []const u8 = "";
+    var RESOURCE_ICON_NAME: []const u8 = "";
     var mutex: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
 
     // A global readonly singelton
-    // used to access loaded function and os flag and handles.
+    // used to access loaded function, os flag and handles.
     var globl_instance: Win32Context = Win32Context{
         .flags = Win32Flags{
             .is_win_vista_or_above = false,
@@ -105,7 +106,7 @@ pub const Win32Context = struct {
 
     const Self = @This();
 
-    pub fn initSingleton(comptime wnd_class_name: []const u8) !void {
+    pub fn initSingleton(comptime wnd_class_name: []const u8, comptime res_icon_name: ?[]const u8) !void {
         @setCold(true);
         const g_instance = &Self.globl_instance;
 
@@ -115,7 +116,11 @@ pub const Win32Context = struct {
         if (!Self.g_init) {
             g_instance.handles.hinstance = try module.getProcessHandle();
 
-            g_instance.handles.wnd_class = try registerMainClass(wnd_class_name, g_instance.handles.hinstance);
+            g_instance.handles.wnd_class = try registerMainClass(
+                wnd_class_name,
+                res_icon_name,
+                g_instance.handles.hinstance,
+            );
             g_instance.handles.helper_class = try registerHelperClass(
                 wnd_class_name ++ "_HELPER",
                 g_instance.handles.hinstance,
@@ -123,6 +128,7 @@ pub const Win32Context = struct {
 
             Self.WINDOW_CLASS_NAME = wnd_class_name;
             Self.HELPER_CLASS_NAME = wnd_class_name ++ "_HELPER";
+            Self.RESOURCE_ICON_NAME = res_icon_name orelse "";
 
             // Load the required libraries.
             try g_instance.loadLibraries();
@@ -352,7 +358,11 @@ fn registerHelperClass(comptime helper_class_name: []const u8, hinstance: win32.
     return class;
 }
 
-fn registerMainClass(comptime wnd_class_name: []const u8, hinstance: win32.HINSTANCE) !u16 {
+fn registerMainClass(
+    comptime wnd_class_name: []const u8,
+    comptime res_icon_name: ?[]const u8,
+    hinstance: win32.HINSTANCE,
+) !u16 {
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
     window_class.style = @enumFromInt(
@@ -363,20 +373,29 @@ fn registerMainClass(comptime wnd_class_name: []const u8, hinstance: win32.HINST
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW);
-    var buffer: [wnd_class_name.len * 5]u8 = undefined;
+    const icon_name_len = comptime if (res_icon_name != null) res_icon_name.?.len else 0;
+    var buffer: [(wnd_class_name.len + icon_name_len + 1) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    // Shoudln't fail since the buffer is big enough.
     const wide_class_name = utils.utf8ToWideZ(fba.allocator(), wnd_class_name) catch unreachable;
     window_class.lpszClassName = wide_class_name;
-    // TODO :load ressource icon
-    window_class.hIcon = null;
+    if (res_icon_name) |icon_name| {
+        const wide_icon_name = utils.utf8ToWideZ(fba.allocator(), icon_name) catch unreachable;
+        window_class.hIcon = @ptrCast(win32_window_messaging.LoadImageW(
+            hinstance,
+            wide_icon_name,
+            win32_window_messaging.IMAGE_ICON,
+            0,
+            0,
+            @enumFromInt(@intFromEnum(win32_window_messaging.LR_DEFAULTSIZE) |
+                @intFromEnum(win32_window_messaging.LR_SHARED)),
+        ));
+    }
     if (window_class.hIcon == null) {
         // No Icon was provided or we failed.
-        const IMAGE_ICON = win32_window_messaging.GDI_IMAGE_TYPE.ICON;
         window_class.hIcon = @ptrCast(win32_window_messaging.LoadImageW(
             null,
             win32_window_messaging.IDI_APPLICATION,
-            IMAGE_ICON,
+            win32_window_messaging.IMAGE_ICON,
             0,
             0,
             @enumFromInt(
@@ -394,8 +413,8 @@ fn registerMainClass(comptime wnd_class_name: []const u8, hinstance: win32.HINST
 test "Win32Context Thread safety" {
     const builtin = @import("builtin");
     if (builtin.single_threaded) {
-        try Win32Context.initSingleton("Thread_Test_Class");
-        try Win32Context.initSingleton("Thread_Test_Class");
+        try Win32Context.initSingleton("Thread_Test_Class", null);
+        try Win32Context.initSingleton("Thread_Test_Class", null);
         defer Win32Context.deinitSingleton();
     } else {
         var threads: [10]std.Thread = undefined;
@@ -404,7 +423,7 @@ test "Win32Context Thread safety" {
         for (&threads) |*handle| {
             handle.* = try std.Thread.spawn(.{}, struct {
                 fn thread_fn() !void {
-                    try Win32Context.initSingleton("Thread_Test_Class");
+                    try Win32Context.initSingleton("Thread_Test_Class", null);
                 }
             }.thread_fn, .{});
         }
@@ -412,7 +431,7 @@ test "Win32Context Thread safety" {
 }
 
 test "Win32Context init" {
-    try Win32Context.initSingleton("Init_Test_Class");
+    try Win32Context.initSingleton("Init_Test_Class", null);
     defer Win32Context.deinitSingleton();
     const singleton = Win32Context.singleton();
     std.debug.print("Win32 execution context: {any}\n", .{singleton});
