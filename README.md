@@ -78,9 +78,9 @@ pub fn main() void {
 
 ## Minimum Zig Version
 
-0.11.0-dev.3395+1e7dcaa3a
+0.11.0
 
-the main branch will stick to official release once 0.11.0 is out.
+the main branch will stick to official.
 
 ## Contributing
 
@@ -89,4 +89,4 @@ You can also fork the project and then create a pull request.
 
 ## Dependecies
 
-- [zigwin32](https://github.com/marlersoft/zigwin32/tree/b70e7f818d77a0c0f39b0bd9c549e16439ff5780): Provides binding for Win32 API.
+- [zigwin32](https://github.com/marlersoft/zigwin32): Provides binding for Win32 API.
