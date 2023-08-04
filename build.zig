@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const widow = createWidowModule(b, &target);
+    const widow = exportWidowModule(b, &target);
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) !void {
         "cursor_and_icon",
         "joystick",
     };
-
     for (examples) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
@@ -27,15 +26,9 @@ pub fn build(b: *std.Build) !void {
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
-
-    const all_step = b.step("all", "Build all examples and run all tests.");
-    all_step.dependOn(example_step);
-
-    b.default_step.dependOn(example_step);
 }
 
-fn createWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.build.Module {
-    // common module
+fn exportWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.build.Module {
     const common_module = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
 
     var platform_module: *std.build.Module = switch (target.getOs().tag) {
@@ -60,6 +53,6 @@ fn createWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.bui
         std.build.ModuleDependency{ .name = "platform", .module = platform_module },
     };
 
-    const widow = b.createModule(.{ .source_file = .{ .path = "src/main.zig" }, .dependencies = &deps });
+    const widow = b.addModule("widow", .{ .source_file = .{ .path = "src/main.zig" }, .dependencies = &deps });
     return widow;
 }

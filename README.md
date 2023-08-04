@@ -79,8 +79,7 @@ pub fn main() void {
 ## Minimum Zig Version
 
 0.11.0
-
-the main branch will stick to official.
+The main branch will stick to stable zig releases.
 
 ## Contributing
 
