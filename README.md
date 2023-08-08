@@ -81,6 +81,75 @@ pub fn main() void {
 0.11.0
 The main branch will stick to stable zig releases.
 
+## Usage
+There are 2 ways to use widow in your project.
+### Using the package manager
+Add a dependency entry in you `build.zig.zon`.
+```
+.{
+    .name = "Your project's name",
+    .version = "0.1.0",
+
+    .dependencies = .{
+        .widow = .{
+            .url = "https://github.com/eddineimad0/widow/archive/refs/tags/v0.1.1.tar.gz",
+            .hash = "1220ed79771ad164d3954585fea3201e3bd0c73da2040fcad9a79a5c78afea5141e1"
+        }
+    }
+}
+```
+You can choose a different release and copy it's url, as for the hash every release is contain
+the hash value under `ZON Hash` section.
+
+Next declare the dependency in you `build.zig` and add it to your build step.
+```
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "Executable-Name",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    const remote_dep = b.dependency("widow", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.addModule("widow", remote_dep.module("widow"));
+    b.installArtifact(exe);
+}
+```
+### Manually 
+Downaload one of the releases to your computer and copy the unziped folder
+to a folder in the root of you project folder, next declare the dependency
+inside your `build.zig` and add it to the build step.
+In the following example we put it inside the libs folder.
+```zig
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    const exe = b.addExecutable(.{
+        .name = "Executable-Name",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const local_dep = b.anonymousDependency("libs/widow/", @import("libs/widow/build.zig"), .{
+         .target = target,
+         .optimize = optimize,
+    });
+
+    exe.addModule("widow", local_dep.module("widow"));
+    b.installArtifact(exe);
+}
+```
+
+
 ## Contributing
 
 You can open an issue to detail a bug you encountered or propose a feature you wish to be added.  
