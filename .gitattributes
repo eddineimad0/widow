@@ -1,1 +1,1 @@
-*.zig text=auto eol=lf
+*.zig text eol=lf
