@@ -98,7 +98,7 @@ Add a dependency entry in you `build.zig.zon`.
     }
 }
 ```
-You can choose a different release and copy it's url, as for the hash every release is contain
+You can choose a different release and copy it's url, as for the hash every release contains
 the hash value under `ZON Hash` section.
 
 Next declare the dependency in you `build.zig` and add it to your build step.
@@ -122,7 +122,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 }
 ```
-### Manually 
+### Manually adding the library.
 Downaload one of the releases to your computer and copy the unziped folder
 to a folder in the root of you project folder, next declare the dependency
 inside your `build.zig` and add it to the build step.
