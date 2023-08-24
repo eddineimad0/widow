@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const dbg = builtin.mode == .Debug;
 const common = @import("common");
 const platform = @import("platform");
 const WindowImpl = platform.window_impl.WindowImpl;
@@ -513,8 +515,11 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
-    // # Use only for debug.
+    // Prints some debug information to stdout.
+    // if compiled in non Debug mode it does nothing.
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
-        self.impl.debugInfos(size, flags);
+        if (dbg) {
+            self.impl.debugInfos(size, flags);
+        }
     }
 };

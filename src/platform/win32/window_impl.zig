@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const dbg = builtin.mode == .Debug;
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const common = @import("common");
@@ -446,6 +448,8 @@ pub const WindowImpl = struct {
         // Fullscreen
         if (instance.data.flags.is_fullscreen) {
             instance.data.flags.is_fullscreen = false;
+            // this functions can only switch to fullscreen mode
+            // if the flag is already false.
             try instance.setFullscreen(true, null);
         }
     }
@@ -1195,41 +1199,42 @@ pub const WindowImpl = struct {
         self.win32.dropped_files.clearAndFree();
     }
 
-    // DEBUG
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
-        std.debug.print("0==========================0\n", .{});
-        if (size) {
-            std.debug.print("\nWindow #{}\n", .{self.data.id});
-            const cs = self.clientSize();
-            std.debug.print(
-                "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
-                .{
-                    self.data.client_area.size.width,
-                    self.data.client_area.size.height,
-                    cs.width,
-                    cs.height,
-                },
-            );
-            const ws = windowSize(self.handle);
-            std.debug.print("Window Size (w:{},h:{})\n", .{ ws.width, ws.height });
-            if (self.data.min_size) |*value| {
-                std.debug.print("Min Size: {}\n", .{value.*});
-            } else {
-                std.debug.print("No Min Size:\n", .{});
+        if (dbg) {
+            std.debug.print("0==========================0\n", .{});
+            if (size) {
+                std.debug.print("\nWindow #{}\n", .{self.data.id});
+                const cs = self.clientSize();
+                std.debug.print(
+                    "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
+                    .{
+                        self.data.client_area.size.width,
+                        self.data.client_area.size.height,
+                        cs.width,
+                        cs.height,
+                    },
+                );
+                const ws = windowSize(self.handle);
+                std.debug.print("Window Size (w:{},h:{})\n", .{ ws.width, ws.height });
+                if (self.data.min_size) |*value| {
+                    std.debug.print("Min Size: {}\n", .{value.*});
+                } else {
+                    std.debug.print("No Min Size:\n", .{});
+                }
+                if (self.data.max_size) |*value| {
+                    std.debug.print("Max Size: {}\n", .{value.*});
+                } else {
+                    std.debug.print("No Max Size:\n", .{});
+                }
+                if (self.data.aspect_ratio) |*value| {
+                    std.debug.print("Aspect Ratio: {}/{}\n", .{ value.x, value.y });
+                } else {
+                    std.debug.print("No Aspect Ratio:\n", .{});
+                }
             }
-            if (self.data.max_size) |*value| {
-                std.debug.print("Max Size: {}\n", .{value.*});
-            } else {
-                std.debug.print("No Max Size:\n", .{});
+            if (flags) {
+                std.debug.print("Flags Mode: {}\n", .{self.data.flags});
             }
-            if (self.data.aspect_ratio) |*value| {
-                std.debug.print("Aspect Ratio: {}/{}\n", .{ value.x, value.y });
-            } else {
-                std.debug.print("No Aspect Ratio:\n", .{});
-            }
-        }
-        if (flags) {
-            std.debug.print("Flags Mode: {}\n", .{self.data.flags});
         }
     }
 };
