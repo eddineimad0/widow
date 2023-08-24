@@ -57,13 +57,14 @@ pub const WM_COPYGLOBALDATA = @as(u32, 0x0049);
 pub const XINPUT_GAMEPAD_GUIDE = @as(u32, 0x0400);
 pub const WAIT_TIMEOUT = @as(u32, 0x102);
 
-// Mising from zigwin32.
+// Mising or couldn't find them in zigwin32 library.
 pub const WM_MOUSELEAVE = @as(u32, 0x02A3);
 pub const WM_UNICHAR = @as(u32, 0x0109);
 pub const DIDFT_OPTIONAL = @as(u32, 0x80000000);
 pub const GUID_DEVINTERFACE_HID = GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
-// In zigwin32 'EnumDisplaySettingsExW' uses enum(u32) as the type of `iModeNume` parameter and therfore doesn't
-// allow enumerating all device's graphics mode incrementally through a loop.
+// In zigwin32 'EnumDisplaySettingsExW' uses enum(u32) as the type of `iModeNume` parameter
+// with only 2 possible values and therfore doesn't allow enumerating all
+// device's graphics mode incrementally through a loop.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsexw
 pub const ENUM_CURRENT_SETTINGS = @as(u32, 0xFFFFFFFF);
 pub const ENUM_REGISTRY_SETTINGS = @as(u32, 0xFFFFFFFE);
@@ -74,7 +75,7 @@ pub extern "user32" fn EnumDisplaySettingsExW(
     dwFlags: u32,
 ) callconv(WINAPI) BOOL;
 
-pub const LPCWSTR = if (builtin.cpu.arch == .x86_64) [*:0]align(1) const u16 else [*:0]const u16;
+pub const LPCWSTR = if (builtin.cpu.arch == .x86_64 or builtin.cpu.arch == .i386) [*:0]align(1) const u16 else [*:0]const u16;
 pub extern "user32" fn UnregisterClassW(
     lpClassName: ?LPCWSTR,
     hInstance: ?HINSTANCE,

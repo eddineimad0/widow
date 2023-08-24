@@ -20,8 +20,9 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
         // Might Fail if the data in the clipboard has different format.
         const handle = win32_system_data_exchange.GetClipboardData(win32.CF_UNICODETEXT);
         if (handle != null) {
-            // Pointer returned by windows do not respect data types alignment.
+            // Pointer returned by windows on x86 platform do not respect data types alignment.
             // we'll copy the data to an aligned ptr for this one, so we can use it with std library.
+            // TODO: What about ARM platform ?
             const buffer: ?[*]const u8 = @ptrCast(win32_system_memory.GlobalLock(@bitCast(@intFromPtr(handle))));
             if (buffer) |wide_buffer| {
                 defer _ = win32_system_memory.GlobalUnlock(@bitCast(@intFromPtr(handle)));
@@ -95,7 +96,7 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
 /// Register a window as clipboard viewer, so it can be notified on
 /// clipboard value changes.
 /// On success it returns a handle to the window that's next in the viewer(subscriber) chain.
-/// # Note
+/// # Notes
 /// This API is supported by older versions of windows, it's messages are nonqueued
 /// and deliverd immediately by the system, which makes it perfect for our hidden window.
 /// # Parameters
@@ -124,7 +125,7 @@ test "clipboard_tests" {
     const Win32Context = @import("global.zig").Win32Context;
     const string1 = "Clipboard Test String👌.";
     const string2 = "Another Clipboard Test String👌.";
-    try Win32Context.initSingleton("Clipboard Test");
+    try Win32Context.initSingleton("Clipboard Test", null);
     var internals: Internals = undefined;
     try Internals.setup(&internals);
     defer internals.deinit(std.testing.allocator);
