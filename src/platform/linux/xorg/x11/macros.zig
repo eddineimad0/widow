@@ -11,3 +11,11 @@ pub inline fn DefaultScreen(dpy: *types.Display) i32 {
     const priv_dpy: *types._XPrivDisplay = @ptrCast(@alignCast(dpy));
     return priv_dpy.default_screen;
 }
+
+pub inline fn DefaultVisual(dpy: *types.Display, scr: u32) ?[*]types.Visual {
+    return ScreenOfDisplay(dpy, scr).root_visual;
+}
+
+pub inline fn DefaultDepth(dpy: *types.Display, scr: u32) c_int {
+    return ScreenOfDisplay(dpy, scr).root_depth;
+}
