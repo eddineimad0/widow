@@ -35,7 +35,7 @@ pub const Window = struct {
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
         // Platform dependent cleaning code.
-        self.impl.deinit();
+        self.impl.close();
         // Destroy the allocated data.
         self.allocator.destroy(self.impl);
         self.impl = undefined;
