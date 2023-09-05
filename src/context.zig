@@ -6,8 +6,7 @@ const joystick = common.joystick;
 const geometry = common.geometry;
 
 pub const WidowContext = struct {
-    platform_internals: platform.internals.Internals,
-    monitors: platform.internals.MonitorStore,
+    platform_internals: platform.Internals,
     events_queue: common.event.EventQueue,
     allocator: std.mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
@@ -29,16 +28,11 @@ pub const WidowContext = struct {
     /// 'OutOfMemory': function could fail due to memory allocation failure.
     pub fn create(allocator: std.mem.Allocator) !*Self {
         const self = try allocator.create(Self);
-        try platform.internals.Internals.setup(&self.platform_internals);
-        self.monitors = try platform.internals.MonitorStore.init(allocator);
+        try platform.Internals.setup(&self.platform_internals);
+        try self.platform_internals.initMonitorStore(allocator);
         self.events_queue = common.event.EventQueue.init(allocator);
         self.allocator = allocator;
         self.next_window_id = 0;
-        // The monitors store will recieve updates through the helper window
-        self.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Monitor,
-            @ptrCast(&self.monitors),
-        );
         return self;
     }
 
@@ -51,7 +45,6 @@ pub const WidowContext = struct {
     /// a refrence to it, destroying this one before the others will cause
     /// undefined behaviour and crash you application.
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        self.monitors.deinit();
         self.platform_internals.deinit(self.allocator);
         allocator.destroy(self);
     }
@@ -78,6 +71,10 @@ pub const WidowContext = struct {
     /// `text`: a slice of the data to be copied.
     pub inline fn setClipboardText(self: *Self, text: []const u8) !void {
         return self.platform_internals.setClipboardText(self.allocator, text);
+    }
+
+    pub fn monitorStore(self: *Self) *platform.MonitorStore {
+        return &self.platform_internals.monitor_store;
     }
 
     /// Returns the next available window ID.
@@ -170,10 +167,8 @@ pub const WindowBuilder = struct {
             self.allocator,
             self.title,
             &self.window_attributes,
-            platform.window_impl.WidowProps{
-                .monitors = &self.context.monitors,
-                .events_queue = &self.context.events_queue,
-            },
+            &self.context.events_queue,
+            self.context.monitorStore(),
         );
         return window;
     }
@@ -283,103 +278,99 @@ pub const WindowBuilder = struct {
     }
 };
 
-pub const JoystickSubSystem = struct {
-    impl: platform.joystick.JoystickSubSystemImpl,
-    context: *WidowContext,
-    const Self = @This();
-
-    /// Creates an instance of the JoystickSubSystem struct.
-    /// # Parameters
-    /// `allocator`: the memory allocator to be used when allocating joysticks data.
-    /// `widow_context`: a pointer to a WidowContext instance.
-    /// # Notes
-    /// User should deinitialize the instance once done,
-    /// to free the allocated ressources.
-    /// You might create multiple instances of the JoystickSubSystem but only the
-    /// last one will receive hardware connection and disconnection notifications
-    /// i.e only the last one will have acurate joysick input data.
-    /// # Errors
-    /// 'OutOfMemory': function could fail due to memory allocation failure.
-    pub fn create(allocator: std.mem.Allocator, widow_cntxt: *WidowContext) !*Self {
-        var self = try allocator.create(Self);
-        try platform.joystick.JoystickSubSystemImpl.setup(&self.impl, allocator, &widow_cntxt.events_queue);
-        self.context = widow_cntxt;
-        // TODO: this setState pointer doesn't feel cross platform friendly.
-        widow_cntxt.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Joystick,
-            @ptrCast(&self.impl),
-        );
-        // First poll to detect joystick that are already present.
-        self.impl.queryConnectedJoys();
-        return self;
-    }
-
-    /// Destroys the instance of the JoystickSubSystem struct.
-    /// # Parameters
-    /// `allocator`: the memory allocator to be used to allocate the instance.
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        self.context.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Joystick,
-            null,
-        );
-        self.impl.deinit();
-        allocator.destroy(self);
-    }
-
-    /// Returns the maximum number of supported joysticks by the library.
-    pub inline fn joysticksMaxCount() comptime_int {
-        return joystick.JOYSTICK_MAX_COUNT;
-    }
-
-    /// Returns the maximum number of currently connected joysticks.
-    pub inline fn joysticksCount(self: *const Self) u8 {
-        return self.impl.countConnected();
-    }
-
-    /// Check for any new inputs by the device the corresponds to the joy_id,
-    /// and sends the appropriate events to the Main event queue.
-    /// # Parameters
-    /// `joy_id`: the id of the targeted joystick.
-    /// # Notes
-    /// If no joystick corresponds to the given id, or if the joystick
-    /// it returns immediately.
-    pub inline fn updateJoyState(self: *Self, joy_id: u8) void {
-        self.impl.updateJoystickState(joy_id);
-    }
-
-    /// Returns a slice containing the name for the joystick that corresponds
-    /// to the given joy_id.
-    /// # Parameters
-    /// `joy_id`: the id of the targeted joystick.
-    /// # Notes
-    /// If no joystick corresponds to the given id, or if the joystick
-    /// is disconnected null is returned.
-    /// The returned slice is managed by the library and the user shouldn't free it.
-    /// The returned slice is only valid until the joystick is disconnected.
-    pub inline fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
-        return self.impl.joystickName(joy_id);
-    }
-
-    /// Applys force rumble to the given joystick if it supports it.
-    /// not all joysticks support this feature so the function returns
-    /// true on success and false on fail.
-    /// # Parameters
-    /// `joy_id`: the id of the targeted joystick.
-    /// `magnitude`: the rumble magnitude, a value of 0 means no rumble.
-    pub inline fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
-        return self.impl.rumbleJoystick(joy_id, magnitude);
-    }
-
-    /// Returns the state of the joystick battery.
-    /// # Parameters
-    /// `joy_id`: the id of the targeted joystick.
-    /// # Notes
-    /// If the device is wired it returns `BatteryInfo.Wired`.
-    /// If it fails to retrieve the battery state it returns `BatteryInfo.PowerUnknown`.
-    pub inline fn joystickBattery(self: *Self, joy_id: u8) common.joystick.BatteryInfo {
-        return self.impl.joystickBatteryInfo(joy_id);
-    }
-};
+// pub const JoystickSubSystem = struct {
+//     impl: platform.joystick.JoystickSubSystemImpl,
+//     context: *WidowContext,
+//     const Self = @This();
+//
+//     /// Creates an instance of the JoystickSubSystem struct.
+//     /// # Parameters
+//     /// `allocator`: the memory allocator to be used when allocating joysticks data.
+//     /// `widow_context`: a pointer to a WidowContext instance.
+//     /// # Notes
+//     /// User should deinitialize the instance once done,
+//     /// to free the allocated ressources.
+//     /// You might create multiple instances of the JoystickSubSystem but only the
+//     /// last one will receive hardware connection and disconnection notifications
+//     /// i.e only the last one will have acurate joysick input data.
+//     /// # Errors
+//     /// 'OutOfMemory': function could fail due to memory allocation failure.
+//     pub fn create(allocator: std.mem.Allocator, widow_cntxt: *WidowContext) !*Self {
+//         var self = try allocator.create(Self);
+//         try platform.joystick.JoystickSubSystemImpl.setup(&self.impl, allocator, &widow_cntxt.events_queue);
+//         self.context = widow_cntxt;
+//         // TODO: this setState pointer doesn't feel cross platform friendly.
+//         widow_cntxt.platform_internals.setStatePointer(
+//             platform.internals.Internals.StatePointerMode.Joystick,
+//             @ptrCast(&self.impl),
+//         );
+//         // First poll to detect joystick that are already present.
+//         self.impl.queryConnectedJoys();
+//         return self;
+//     }
+//
+//     /// Destroys the instance of the JoystickSubSystem struct.
+//     /// # Parameters
+//     /// `allocator`: the memory allocator to be used to allocate the instance.
+//     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+//         self.impl.deinit();
+//         allocator.destroy(self);
+//     }
+//
+//     /// Returns the maximum number of supported joysticks by the library.
+//     pub inline fn joysticksMaxCount() comptime_int {
+//         return joystick.JOYSTICK_MAX_COUNT;
+//     }
+//
+//     /// Returns the maximum number of currently connected joysticks.
+//     pub inline fn joysticksCount(self: *const Self) u8 {
+//         return self.impl.countConnected();
+//     }
+//
+//     /// Check for any new inputs by the device the corresponds to the joy_id,
+//     /// and sends the appropriate events to the Main event queue.
+//     /// # Parameters
+//     /// `joy_id`: the id of the targeted joystick.
+//     /// # Notes
+//     /// If no joystick corresponds to the given id, or if the joystick
+//     /// it returns immediately.
+//     pub inline fn updateJoyState(self: *Self, joy_id: u8) void {
+//         self.impl.updateJoystickState(joy_id);
+//     }
+//
+//     /// Returns a slice containing the name for the joystick that corresponds
+//     /// to the given joy_id.
+//     /// # Parameters
+//     /// `joy_id`: the id of the targeted joystick.
+//     /// # Notes
+//     /// If no joystick corresponds to the given id, or if the joystick
+//     /// is disconnected null is returned.
+//     /// The returned slice is managed by the library and the user shouldn't free it.
+//     /// The returned slice is only valid until the joystick is disconnected.
+//     pub inline fn joystickName(self: *const Self, joy_id: u8) ?[]const u8 {
+//         return self.impl.joystickName(joy_id);
+//     }
+//
+//     /// Applys force rumble to the given joystick if it supports it.
+//     /// not all joysticks support this feature so the function returns
+//     /// true on success and false on fail.
+//     /// # Parameters
+//     /// `joy_id`: the id of the targeted joystick.
+//     /// `magnitude`: the rumble magnitude, a value of 0 means no rumble.
+//     pub inline fn rumbleJoystick(self: *Self, joy_id: u8, magnitude: u16) bool {
+//         return self.impl.rumbleJoystick(joy_id, magnitude);
+//     }
+//
+//     /// Returns the state of the joystick battery.
+//     /// # Parameters
+//     /// `joy_id`: the id of the targeted joystick.
+//     /// # Notes
+//     /// If the device is wired it returns `BatteryInfo.Wired`.
+//     /// If it fails to retrieve the battery state it returns `BatteryInfo.PowerUnknown`.
+//     pub inline fn joystickBattery(self: *Self, joy_id: u8) common.joystick.BatteryInfo {
+//         return self.impl.joystickBatteryInfo(joy_id);
+//     }
+// };
 
 test "Widow.init" {
     const testing = std.testing;

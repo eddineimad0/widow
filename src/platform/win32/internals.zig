@@ -24,29 +24,26 @@ pub const HelperData = struct {
 };
 
 pub const Internals = struct {
+    monitor_store: MonitorStore,
+    dev_notif_handle: *anyopaque,
     helper_data: HelperData,
     helper_window: win32.HWND,
-    dev_notif_handle: *anyopaque,
     const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
-    pub const StatePointerMode = enum {
-        Monitor,
-        Joystick,
-    };
-
-    // if we were to use init to create the data on the stack
-    // and then copy it to the heap it will invalidate the pointer
-    // set as for the window (GWLP_USERDATA).
     pub fn setup(self: *Self) !void {
+        // if we were to use init to create the data on the stack
+        // and then copy it to the heap it will invalidate the pointer
+        // set as for the window (GWLP_USERDATA).
         const win32_singelton = Win32Context.singleton();
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
         self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
         self.helper_data.clipboard_change = false;
         self.helper_data.clipboard_text = null;
-        self.helper_data.joysubsys_ptr = null;
         self.helper_data.monitor_store_ptr = null;
+        self.helper_data.joysubsys_ptr = null;
         registerDevicesNotif(self.helper_window, &self.dev_notif_handle);
+
         _ = win32_window_messaging.SetWindowLongPtrW(
             self.helper_window,
             win32_window_messaging.GWLP_USERDATA,
@@ -69,17 +66,14 @@ pub const Internals = struct {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
         }
+
+        self.monitor_store.deinit();
     }
 
-    pub inline fn setStatePointer(self: *Self, mode: StatePointerMode, pointer: ?*anyopaque) void {
-        switch (mode) {
-            StatePointerMode.Monitor => {
-                self.helper_data.monitor_store_ptr = @ptrCast(@alignCast(pointer));
-            },
-            StatePointerMode.Joystick => {
-                self.helper_data.joysubsys_ptr = @ptrCast(@alignCast(pointer));
-            },
-        }
+    /// Init the Monitor store member, and update the helper data refrence.
+    pub fn initMonitorStore(self: *Self, allocator: std.mem.Allocator) !void {
+        self.monitor_store = try MonitorStore.init(allocator);
+        self.helper_data.monitor_store_ptr = &self.monitor_store;
     }
 
     pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
@@ -145,29 +139,36 @@ fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void
 
 /// create a platform icon and set it to the window.
 pub fn createIcon(
-    window: *WindowImpl,
-    pixels: []const u8,
+    pixels: ?[]const u8,
     width: i32,
     height: i32,
-) !void {
-    const sm_handle = try icon.createIcon(pixels, width, height, null, null);
-    const bg_handle = try icon.createIcon(pixels, width, height, null, null);
-    window.setIcon(&icon.Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle });
+) !icon.Icon {
+    if (pixels) |slice| {
+        const sm_handle = try icon.createIcon(slice, width, height, null, null);
+        const bg_handle = try icon.createIcon(slice, width, height, null, null);
+        return icon.Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle };
+    } else {
+        return icon.Icon{ .sm_handle = null, .bg_handle = null };
+    }
 }
 
 /// create a platform cursor and set it to the window.
 pub fn createCursor(
-    window: *WindowImpl,
-    pixels: []const u8,
+    pixels: ?[]const u8,
     width: i32,
     height: i32,
     xhot: u32,
     yhot: u32,
-) !void {
-    const handle = try icon.createIcon(pixels, width, height, xhot, yhot);
-    window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal });
+) !icon.Cursor {
+    if (pixels) |slice| {
+        const handle = try icon.createIcon(slice, width, height, xhot, yhot);
+        return icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal };
+    } else {
+        return icon.Cursor{ .handle = null, .shared = false, .mode = common.cursor.CursorMode.Normal };
+    }
 }
 
+// TODO:
 // Zigwin32 libary doesn't have definitions for IDC constants probably due to alignement issues.
 // pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
 //     const cursor_id = switch (shape) {
@@ -203,10 +204,8 @@ pub const MonitorStore = struct {
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
-            .monitors = undefined,
+            .monitors = try monitor_impl.pollMonitors(allocator),
         };
-
-        self.monitors = try monitor_impl.pollMonitors(allocator);
 
         return self;
     }

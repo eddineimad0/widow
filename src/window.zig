@@ -23,15 +23,20 @@ pub const Window = struct {
     /// # Errors
     /// 'OutOfMemory': failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
-    pub fn init(allocator: Allocator, window_title: []const u8, data: *WindowData, widow_props: WidowProps) !Self {
+    pub fn init(
+        allocator: Allocator,
+        window_title: []const u8,
+        data: *WindowData,
+        events_queue: *common.event.EventQueue,
+        monitor_store: *platform.MonitorStore,
+    ) !Self {
         var self = Self{
             .impl = try allocator.create(WindowImpl),
             .allocator = allocator,
         };
         errdefer allocator.destroy(self.impl);
         self.impl.data = data.*;
-        self.impl.widow = widow_props;
-        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title);
+        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title, events_queue, monitor_store);
         return self;
     }
 
@@ -477,7 +482,7 @@ pub const Window = struct {
 
     /// Sets the window's icon to the RGBA pixels data.
     /// # Parameters
-    /// `pixels`: a slice to the icon's pixel(RGBA) data.
+    /// `pixels`: a slice to the icon's pixel(RGBA) data or null to set the platform default icon.
     /// `width` : the width of the icon in pixels.
     /// `height`: the height of the icon in pixels.
     /// # Notes
@@ -485,15 +490,18 @@ pub const Window = struct {
     /// i.e. each channel's value should not be scaled by the alpha value, and should be
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha last.
-    pub inline fn setIcon(self: *Self, pixels: []const u8, width: i32, height: i32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createIcon(self.impl, pixels, width, height);
+    /// If the pixels slice is null width and height can be set to whatever.
+    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+        if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
+            std.debug.assert(pixels.?.len == (width * height * 4));
+        }
+        try self.impl.setIcon(pixels, width, height);
     }
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.
     /// # Parameters
-    /// `pixels`: a slice to the cursor image's pixel(RGBA) data.
+    /// `pixels`: a slice to the cursor image's pixel(RGBA) data or null to use the platform's default cursor.
     /// `width` : the width of the icon in pixels.
     /// `height`: the height of the icon in pixels.
     /// `xhot`: the x coordinates of the cursor's hotspot.
@@ -508,10 +516,13 @@ pub const Window = struct {
     /// i.e. each channel's value should not be scaled by the alpha value, and should be
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha.
-    pub inline fn setCursor(self: *Self, pixels: []const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createCursor(self.impl, pixels, width, height, xhot, yhot);
+    /// If the pixels slice is null width,height,xhot and yhot can be set to whatever.
+    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+        if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
+            std.debug.assert(pixels.?.len == (width * height * 4));
+        }
+        try self.impl.setCursor(pixels, width, height, xhot, yhot);
     }
 
     /// Returns the descriptor or handle used by the platform to identify the window.

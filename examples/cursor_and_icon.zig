@@ -74,8 +74,7 @@ pub fn main() void {
                                 window.setCursorMode(CursorMode.Normal);
                             },
                             ScanCode.I => {
-                                const black_box = [_]u8{255} ** (32 * 32 * 4);
-                                window.setCursor(&black_box, 32, 32, 0, 0) catch {
+                                window.setCursor(&icon_pixels, 32, 32, 0, 0) catch {
                                     std.debug.print("Failed to set window's cursor.\n", .{});
                                 };
                             },

@@ -6,19 +6,20 @@ const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
+const internals = @import("internals.zig");
 const monitor_impl = @import("monitor_impl.zig");
-const WindowError = @import("errors.zig").WindowError;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
+const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
+const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
+const WindowError = @import("errors.zig").WindowError;
 const Win32Context = @import("global.zig").Win32Context;
-const MonitorStore = @import("internals.zig").MonitorStore;
+const MonitorStore = internals.MonitorStore;
 const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
 const WindowFlags = common.window_data.WindowFlags;
-const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
-const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
@@ -331,7 +332,14 @@ pub const WindowImpl = struct {
         instance: *Self,
         allocator: std.mem.Allocator,
         window_title: []const u8,
+        events_queue: *common.event.EventQueue,
+        monitor_store: *MonitorStore,
     ) !void {
+        instance.widow = WidowProps{
+            .events_queue = events_queue,
+            .monitors = monitor_store,
+        };
+
         const styles = .{ windowStyles(&instance.data.flags), windowExStyles(&instance.data.flags) };
         instance.handle = try createPlatformWindow(allocator, window_title, &instance.data, styles);
 
@@ -1132,38 +1140,6 @@ pub const WindowImpl = struct {
         return win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST).?;
     }
 
-    pub fn setCursorShape(self: *Self, new_cursor: *const icon.Cursor) void {
-        icon.destroyCursor(&self.win32.cursor);
-        self.win32.cursor = new_cursor.*;
-        if (self.data.flags.cursor_in_client) {
-            updateCursorImage(&self.win32.cursor);
-        }
-    }
-
-    pub fn setIcon(self: *Self, new_icon: *const icon.Icon) void {
-        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
-            .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
-        else blk: {
-            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
-            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
-            break :blk .{ bg_icon, sm_icon };
-        };
-        _ = win32_window_messaging.SendMessageW(
-            self.handle,
-            win32_window_messaging.WM_SETICON,
-            win32_window_messaging.ICON_BIG,
-            @bitCast(handles[0]),
-        );
-        _ = win32_window_messaging.SendMessageW(
-            self.handle,
-            win32_window_messaging.WM_SETICON,
-            win32_window_messaging.ICON_SMALL,
-            @bitCast(handles[1]),
-        );
-        icon.destroyIcon(&self.win32.icon);
-        self.win32.icon = new_icon.*;
-    }
-
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
     pub fn droppedFiles(self: *const Self) [][]const u8 {
         return self.win32.dropped_files.items;
@@ -1190,6 +1166,40 @@ pub const WindowImpl = struct {
             allocator.free(item);
         }
         self.win32.dropped_files.clearAndFree();
+    }
+
+    pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+        const new_icon = try internals.createIcon(pixels, width, height);
+        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
+            .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
+        else blk: {
+            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
+            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
+            break :blk .{ bg_icon, sm_icon };
+        };
+        _ = win32_window_messaging.SendMessageW(
+            self.handle,
+            win32_window_messaging.WM_SETICON,
+            win32_window_messaging.ICON_BIG,
+            @bitCast(handles[0]),
+        );
+        _ = win32_window_messaging.SendMessageW(
+            self.handle,
+            win32_window_messaging.WM_SETICON,
+            win32_window_messaging.ICON_SMALL,
+            @bitCast(handles[1]),
+        );
+        icon.destroyIcon(&self.win32.icon);
+        self.win32.icon = new_icon;
+    }
+
+    pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+        const new_cursor = try internals.createCursor(pixels, width, height, xhot, yhot);
+        icon.destroyCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor;
+        if (self.data.flags.cursor_in_client) {
+            updateCursorImage(&self.win32.cursor);
+        }
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
