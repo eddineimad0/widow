@@ -471,10 +471,6 @@ pub const WindowImpl = struct {
         self.freeDroppedFiles();
     }
 
-    pub fn deinit(self: *Self) void {
-        self.close();
-    }
-
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         // Show without activating.
@@ -927,10 +923,7 @@ pub const WindowImpl = struct {
 
     /// Maximize the window.
     pub fn maximize(self: *const Self) void {
-        if (self.data.flags.is_resizable) {
-            // Only maximize a resizable window.
-            _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MAXIMIZE);
-        }
+        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MAXIMIZE);
     }
 
     /// Minimizes the window.
