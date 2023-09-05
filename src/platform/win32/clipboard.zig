@@ -8,12 +8,12 @@ const ClipboardError = @import("errors.zig").ClipboardError;
 const HWND = win32.HWND;
 
 /// Returns the string contained inside the system clipboard.
-/// # Notes
-/// This function fails if the clipboard doesn't contain a proper unicode formatted string.
-/// The caller is responsible for freeing the returned string.
 /// # Parameters
 /// `allocator`: used when to allocate memory for the clipboard data.
 /// `window_handle`: used to gain access to the clipboard.
+/// # Notes
+/// This function fails if the clipboard doesn't contain a proper unicode formatted string.
+/// The caller is responsible for freeing the returned string.
 pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
     if (win32_system_data_exchange.OpenClipboard(window_handle) != 0) {
         defer _ = win32_system_data_exchange.CloseClipboard();
@@ -96,11 +96,11 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
 /// Register a window as clipboard viewer, so it can be notified on
 /// clipboard value changes.
 /// On success it returns a handle to the window that's next in the viewer(subscriber) chain.
+/// # Parameters
+/// `viewer`: the window to be notified.
 /// # Notes
 /// This API is supported by older versions of windows, it's messages are nonqueued
 /// and deliverd immediately by the system, which makes it perfect for our hidden window.
-/// # Parameters
-/// `viewer`: the window to be notified.
 pub fn registerClipboardViewer(viewer: HWND) ClipboardError!?HWND {
     utils.clearThreadError();
     const next_viewer = win32_system_data_exchange.SetClipboardViewer(viewer);

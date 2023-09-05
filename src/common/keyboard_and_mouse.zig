@@ -275,6 +275,12 @@ pub const MouseWheel = enum(u8) {
     }
 };
 
+/// Holds the keyboard and mouse input state for each window.
+/// # Notes
+/// ## Win32
+/// on Windows keeping track of the keyboard state allow
+/// us to emit release events for keys that are not emitted by
+/// the OS.
 pub const InputState = struct {
     keys: [ScanCode.COUNT]KeyState,
     mouse_buttons: [MouseButton.COUNT]MouseButtonState,
