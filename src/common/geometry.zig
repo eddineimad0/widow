@@ -19,7 +19,7 @@ pub const WidowSize = struct {
     pub fn scaleBy(self: *Self, scaler: f64) void {
         std.debug.assert(scaler > 0);
         const fwidth: f64 = @floatFromInt(self.width);
-        const fheight: f64 = @floatFromInt(self.width);
+        const fheight: f64 = @floatFromInt(self.height);
         self.width = @intFromFloat(fwidth * scaler);
         self.height = @intFromFloat(fheight * scaler);
     }
