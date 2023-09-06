@@ -25,6 +25,7 @@ pub const HelperData = struct {
 
 pub const Internals = struct {
     monitor_store: MonitorStore,
+    jss: *JoystickSubSystemImpl,
     dev_notif_handle: *anyopaque,
     helper_data: HelperData,
     helper_window: win32.HWND,
@@ -42,6 +43,7 @@ pub const Internals = struct {
         self.helper_data.clipboard_text = null;
         self.helper_data.monitor_store_ptr = null;
         self.helper_data.joysubsys_ptr = null;
+        // both jss and monitor_store are still undefined.
         registerDevicesNotif(self.helper_window, &self.dev_notif_handle);
 
         _ = win32_window_messaging.SetWindowLongPtrW(
@@ -68,12 +70,22 @@ pub const Internals = struct {
         }
 
         self.monitor_store.deinit();
+        self.jss.deinit();
+        allocator.destroy(self.jss);
     }
 
     /// Init the Monitor store member, and update the helper data refrence.
-    pub fn initMonitorStore(self: *Self, allocator: std.mem.Allocator) !void {
+    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !void {
         self.monitor_store = try MonitorStore.init(allocator);
         self.helper_data.monitor_store_ptr = &self.monitor_store;
+    }
+
+    pub fn initJoySubSysImpl(self: *Self, allocator: std.mem.Allocator, events_queue: *common.event.EventQueue) !*JoystickSubSystemImpl {
+        self.jss = try allocator.create(JoystickSubSystemImpl);
+        errdefer allocator.destroy(self.jss);
+        try JoystickSubSystemImpl.setup(self.jss, allocator, events_queue);
+        self.helper_data.joysubsys_ptr = self.jss;
+        return self.jss;
     }
 
     pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
