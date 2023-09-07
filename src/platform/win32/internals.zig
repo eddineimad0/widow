@@ -32,18 +32,18 @@ pub const Internals = struct {
     const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
-    pub fn setup(self: *Self) !void {
-        // if we were to use init to create the data on the stack
-        // and then copy it to the heap it will invalidate the pointer
-        // set as for the window (GWLP_USERDATA).
+    pub fn create(allocator: std.mem.Allocator) !*Self {
+        var self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
         const win32_singelton = Win32Context.singleton();
+        self.jss = null;
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
-        self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
+        errdefer _ = win32_window_messaging.DestroyWindow(self.helper_window);
         self.helper_data.clipboard_change = false;
         self.helper_data.clipboard_text = null;
+        self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
         self.helper_data.monitor_store_ptr = null;
         self.helper_data.joysubsys_ptr = null;
-        self.jss = null;
         registerDevicesNotif(self.helper_window, &self.dev_notif_handle);
 
         _ = win32_window_messaging.SetWindowLongPtrW(
@@ -51,9 +51,11 @@ pub const Internals = struct {
             win32_window_messaging.GWLP_USERDATA,
             @intCast(@intFromPtr(&self.helper_data)),
         );
+
+        return self;
     }
 
-    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         clipboard.unregisterClipboardViewer(self.helper_window, self.helper_data.next_clipboard_viewer);
         _ = win32_sys_service.UnregisterDeviceNotification(self.dev_notif_handle);
 
@@ -69,17 +71,23 @@ pub const Internals = struct {
             self.helper_data.clipboard_text = null;
         }
 
-        self.monitor_store.deinit();
+        if (self.helper_data.monitor_store_ptr) |_| {
+            // avoid calling deinit on undefined data.
+            self.monitor_store.deinit();
+        }
+
         if (self.jss) |jss| {
             jss.deinit();
             allocator.destroy(jss);
         }
+        allocator.destroy(self);
     }
 
     /// Init the Monitor store member, and update the helper data refrence.
-    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !void {
+    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !*MonitorStore {
         self.monitor_store = try MonitorStore.init(allocator);
         self.helper_data.monitor_store_ptr = &self.monitor_store;
+        return &self.monitor_store;
     }
 
     pub fn initJoySubSysImpl(self: *Self, allocator: std.mem.Allocator, events_queue: *common.event.EventQueue) !*JoystickSubSystemImpl {
