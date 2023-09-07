@@ -14,12 +14,12 @@ pub fn main() void {
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
-    var widow_cntxt = widow.WidowContext.create(allocator) catch {
+    var widow_cntxt = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
     // destroy it when done.
-    defer widow_cntxt.destroy(allocator);
+    defer widow_cntxt.deinit();
 
     // Grab the library's WindowBuilder instance.
     // this action might fail if we fail to allocate space for the title.
@@ -27,14 +27,14 @@ pub fn main() void {
         "cursor and icon",
         1024,
         640,
-        widow_cntxt,
+        &widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;
     };
 
     // create our window,
-    var window = builder.withDPIScaling(true).withResize(true).build() catch |err| {
+    var window = builder.withDPIAware(true).withResize(true).build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };

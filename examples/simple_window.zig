@@ -15,12 +15,12 @@ pub fn main() !void {
     // Start by creating a WidowContext instance.
     // the context is at the heart of the library and keeps track of monitors,clipboard,events...
     // only one instance is needed but you can create as many as you need.
-    var widow_cntxt = widow.WidowContext.create(allocator) catch {
+    var widow_cntxt = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
     // destroy it when done.
-    defer widow_cntxt.destroy(allocator);
+    defer widow_cntxt.deinit();
 
     // create a WindowBuilder.
     // this action might fail if we fail to allocate space for the title.
@@ -28,7 +28,7 @@ pub fn main() !void {
         "Simple window",
         800,
         600,
-        widow_cntxt,
+        &widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;
@@ -36,7 +36,7 @@ pub fn main() !void {
 
     // customize the window to your liking.
     _ = builder.withResize(true)
-        .withDPIScaling(true)
+        .withDPIAware(true)
         .withPosition(200, 200)
         .withSize(800, 600)
         .withDecoration(true);
