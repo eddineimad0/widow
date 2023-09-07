@@ -278,7 +278,7 @@ fn createPlatformWindow(
     // Create the window.
     const window_handle = win32.CreateWindowExW(
         styles[1], // dwExStyles
-        utils.makeIntAtom(win32_globl.handles.wnd_class),
+        utils.MAKEINTATOM(win32_globl.handles.wnd_class),
         window_title, // Window Name
         styles[0], // dwStyles
         frame[0], // X
@@ -1195,6 +1195,15 @@ pub const WindowImpl = struct {
 
     pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
         const new_cursor = try internals.createCursor(pixels, width, height, xhot, yhot);
+        icon.destroyCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor;
+        if (self.data.flags.cursor_in_client) {
+            updateCursorImage(&self.win32.cursor);
+        }
+    }
+
+    pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
+        const new_cursor = try internals.createStandardCursor(cursor_shape);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {

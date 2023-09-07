@@ -12,13 +12,14 @@ pub const CursorMode = enum(u8) {
     }
 };
 
-pub const CursorShape = enum(u8) {
+pub const StandardCursorShape = enum(u8) {
     Default, // Platform Default cursor.
+    Move, // <-|-> Cursor for moving around.
     PointingHand, // Hand with index pointing, used for links on web pages.
     Crosshair, // Crosshair.
     Help, // The `?` cursor.
-    Wait, // Indicate that the user should wait for program.
-    Busy, // Indicate that some processing is going on.
+    BkgrndTask, // Indicate that a task is running in background.
+    Busy, // Indicate that the user should wait for program.
     Forbidden, // Indicate that the attempted action is not allowed.
     Text, // Text input indicator.
 };

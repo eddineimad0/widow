@@ -525,6 +525,13 @@ pub const Window = struct {
         try self.impl.setCursor(pixels, width, height, xhot, yhot);
     }
 
+    /// Sets the Widow's cursor to an image from the RGBA pixels data.
+    /// # Parameters
+    /// `cursor_shape`: the standard cursor to set from the StandardCursorShape enum.
+    pub inline fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
+        try self.impl.setStandardCursor(cursor_shape);
+    }
+
     /// Returns the descriptor or handle used by the platform to identify the window.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
         return self.impl.handle;
