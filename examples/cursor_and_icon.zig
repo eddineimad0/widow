@@ -78,6 +78,11 @@ pub fn main() void {
                                     std.debug.print("Failed to set window's cursor.\n", .{});
                                 };
                             },
+                            ScanCode.U => {
+                                window.setStandardCursor(widow.cursor.StandardCursorShape.Help) catch {
+                                    std.debug.print("Failed to set standard cursor\n", .{});
+                                };
+                            },
                             else => {
                                 std.debug.print("Cursor Position:{}\n", .{window.cursorPosition()});
                             },
