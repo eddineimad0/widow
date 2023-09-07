@@ -48,7 +48,7 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
     return ClipboardError.FailedToOpen;
 }
 
-/// Paste the given `text` to the system clipboard.
+/// Writes the given `text` to the system clipboard.
 /// # Parameters
 /// `allocator`: used when to allocate memory when utf16-encoding the clipboard data.
 /// `window_handle`: used to gain access to the clipboard.

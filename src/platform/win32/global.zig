@@ -1,40 +1,13 @@
 const std = @import("std");
 const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
-const WidowError = @import("errors.zig").WidowWin32Error;
 const module = @import("module.zig");
 const utils = @import("utils.zig");
 const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const mainWindowProc = @import("window_proc.zig").mainWindowProc;
 const win32_sysinfo = zigwin32.system.system_information;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
-
-const proc_SetProcessDPIAware = *const fn () callconv(win32.WINAPI) win32.BOOL;
-
-const proc_RtlVerifyVersionInfo = *const fn (*win32.OSVERSIONINFOEXW, u32, u64) callconv(win32.WINAPI) win32.NTSTATUS;
-
-const proc_SetProcessDpiAwareness = *const fn (win32.PROCESS_DPI_AWARENESS) callconv(win32.WINAPI) win32.HRESULT;
-
-const proc_SetProcessDpiAwarenessContext = *const fn (win32.DPI_AWARENESS_CONTEXT) callconv(win32.WINAPI) win32.HRESULT;
-
-pub const proc_EnableNonClientDpiScaling = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
-
-pub const proc_GetDpiForWindow = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
-
-pub const proc_GetDpiForMonitor = *const fn (
-    win32.HMONITOR,
-    win32.MONITOR_DPI_TYPE,
-    *u32,
-    *u32,
-) callconv(win32.WINAPI) win32.HRESULT;
-
-pub const proc_AdjustWindowRectExForDpi = *const fn (
-    *win32.RECT,
-    u32,
-    i32,
-    u32,
-    u32,
-) callconv(win32.WINAPI) win32.BOOL;
+const WidowError = @import("errors.zig").WidowWin32Error;
 
 const Win32Flags = struct {
     is_win_vista_or_above: bool,
@@ -54,14 +27,14 @@ const Win32Handles = struct {
 };
 
 const LoadedFunctions = struct {
-    RtlVerifyVersionInfo: proc_RtlVerifyVersionInfo,
-    SetProcessDPIAware: ?proc_SetProcessDPIAware,
-    SetProcessDpiAwareness: ?proc_SetProcessDpiAwareness,
-    SetProcessDpiAwarenessContext: ?proc_SetProcessDpiAwarenessContext,
-    GetDpiForMonitor: ?proc_GetDpiForMonitor,
-    GetDpiForWindow: ?proc_GetDpiForWindow,
-    AdjustWindowRectExForDpi: ?proc_AdjustWindowRectExForDpi,
-    EnableNonClientDpiScaling: ?proc_EnableNonClientDpiScaling,
+    RtlVerifyVersionInfo: win32.RtlVerifyVersionInfoProc,
+    SetProcessDPIAware: ?win32.SetProcessDPIAwareProc,
+    SetProcessDpiAwareness: ?win32.SetProcessDpiAwarenessProc,
+    SetProcessDpiAwarenessContext: ?win32.SetProcessDpiAwarenessContextProc,
+    GetDpiForMonitor: ?win32.GetDpiForMonitorProc,
+    GetDpiForWindow: ?win32.GetDpiForWindowProc,
+    AdjustWindowRectExForDpi: ?win32.AdjustWindowRectExForDpiProc,
+    EnableNonClientDpiScaling: ?win32.EnableNonClientDpiScalingProc,
 };
 
 pub const Win32Context = struct {
@@ -256,13 +229,13 @@ pub const Win32Context = struct {
 
             // Unregister the window class.
             _ = win32.UnregisterClassW(
-                utils.makeIntAtom(globl_instance.handles.wnd_class),
+                utils.MAKEINTATOM(globl_instance.handles.wnd_class),
                 Self.globl_instance.handles.hinstance,
             );
 
             // Unregister the helper class.
             _ = win32.UnregisterClassW(
-                utils.makeIntAtom(globl_instance.handles.helper_class),
+                utils.MAKEINTATOM(globl_instance.handles.helper_class),
                 Self.globl_instance.handles.hinstance,
             );
 
@@ -271,7 +244,7 @@ pub const Win32Context = struct {
     }
 };
 
-fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32) bool {
+fn isWin32VersionMinimum(proc: win32.RtlVerifyVersionInfoProc, major: u32, minor: u32) bool {
     // [MSDN]
     // If you must require a particular operating system,
     // be sure to use it as a minimum supported version,
@@ -312,7 +285,7 @@ fn isWin32VersionMinimum(proc: proc_RtlVerifyVersionInfo, major: u32, minor: u32
     return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
-fn isWin10BuildMinimum(proc: proc_RtlVerifyVersionInfo, build: u32) bool {
+fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
     var vi: win32_sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwOSVersionInfoSize = @sizeOf(win32_sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = 10;
@@ -410,7 +383,7 @@ fn registerMainClass(
     return class;
 }
 
-test "Win32Context Thread safety" {
+test "Win32Context_Thread_safety" {
     const builtin = @import("builtin");
     if (builtin.single_threaded) {
         try Win32Context.initSingleton("Thread_Test_Class", null);
@@ -430,9 +403,7 @@ test "Win32Context Thread safety" {
     }
 }
 
-test "Win32Context init" {
+test "Win32Context_init" {
     try Win32Context.initSingleton("Init_Test_Class", null);
     defer Win32Context.deinitSingleton();
-    const singleton = Win32Context.singleton();
-    std.debug.print("Win32 execution context: {any}\n", .{singleton});
 }
