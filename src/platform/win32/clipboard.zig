@@ -120,15 +120,15 @@ pub inline fn unregisterClipboardViewer(viewer: HWND, next_viewer: ?HWND) void {
     _ = win32_system_data_exchange.ChangeClipboardChain(viewer, next_viewer);
 }
 
-test "clipboard_tests" {
+test "clipboard_read_and_write" {
+    const testing = std.testing;
     const Internals = @import("internals.zig").Internals;
     const Win32Context = @import("global.zig").Win32Context;
     const string1 = "Clipboard Test String👌.";
     const string2 = "Another Clipboard Test String👌.";
     try Win32Context.initSingleton("Clipboard Test", null);
-    var internals: Internals = undefined;
-    try Internals.setup(&internals);
-    defer internals.deinit(std.testing.allocator);
+    var internals = try Internals.create(testing.allocator);
+    defer internals.destroy(testing.allocator);
     try setClipboardText(std.testing.allocator, internals.helper_window, string1);
     const copied_string = try clipboardText(std.testing.allocator, internals.helper_window);
     defer std.testing.allocator.free(copied_string);
