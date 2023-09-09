@@ -1,11 +1,11 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
+const joystick = @import("joystick.zig");
 const KeyEvent = input.KeyEvent;
 const KeyModifiers = input.KeyModifiers;
 const MouseButtonEvent = input.MouseButtonEvent;
 const WheelEvent = input.WheelEvent;
-const joystick = @import("joystick.zig");
 const Queue = @import("queue.zig").Queue;
 
 pub const EventType = enum(u8) {
@@ -259,6 +259,7 @@ pub const EventQueue = struct {
 
     pub fn deinit(self: *Self) void {
         self.queue.deinit();
+        self.events_count = 0;
     }
 
     pub fn queueEvent(self: *Self, event: *const Event) void {

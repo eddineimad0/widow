@@ -11,12 +11,12 @@ pub fn main() void {
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
-    var widow_lib = widow.WidowContext.create(allocator) catch {
+    var widow_ctx = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
     // destroy it when done.
-    defer widow_lib.destroy(allocator);
+    defer widow_ctx.deinit();
 
     // Grab the library's WindowBuilder instance.
     // this action might fail if we fail to allocate space for the title.
@@ -24,7 +24,7 @@ pub fn main() void {
         "joystick",
         800,
         600,
-        widow_lib,
+        &widow_ctx,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;
@@ -45,12 +45,10 @@ pub fn main() void {
     defer joy_array.deinit();
 
     // create an instance of the JoystickSubSystem.
-    var joy_sys = widow.JoystickSubSystem.create(allocator, widow_lib) catch |err| {
+    var joy_sys = widow.JoystickSubSystem.init(&widow_ctx) catch |err| {
         std.debug.print("Failed to initialize the JoystickSubSystem,{}\n", .{err});
         return;
     };
-    // destroy when done.
-    defer joy_sys.destroy(allocator);
 
     var event: widow.Event = undefined;
     event_loop: while (true) {
@@ -60,7 +58,7 @@ pub fn main() void {
             joy_sys.updateJoyState(joy_id);
         }
 
-        while (widow_lib.pollEvents(&event)) {
+        while (widow_ctx.pollEvents(&event)) {
             switch (event) {
                 EventType.WindowClose => {
                     // The user has requested to close the window,

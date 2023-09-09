@@ -30,7 +30,6 @@ pub fn createIcon(
     bmp_header.bV5AlphaMask = 0xFF000000;
 
     var dib: [*]u8 = undefined;
-    // var dib_ptr: ?*anyopaque = @ptrCast(dib);
     const dc = win32_gdi.GetDC(null);
     const color_mask = win32_gdi.CreateDIBSection(
         dc,

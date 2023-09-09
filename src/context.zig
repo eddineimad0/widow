@@ -6,8 +6,8 @@ const joystick = common.joystick;
 const geometry = common.geometry;
 
 pub const WidowContext = struct {
-    platform_internals: platform.internals.Internals,
-    monitors: platform.internals.MonitorStore,
+    platform_internals: *platform.Internals,
+    monitor_store: *platform.MonitorStore,
     events_queue: common.event.EventQueue,
     allocator: std.mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
@@ -21,43 +21,37 @@ pub const WidowContext = struct {
     /// An instance of the WidowContext is necessary to use
     /// the library, and is required to initialize a window
     /// instance.
-    /// User should deinitialize the instance once done,
-    /// to free the allocated ressources.
+    /// User should destroy the instance once done using the library,
+    /// to free allocated ressources.
     /// There can only be one instance at a time trying
     /// to initialize more would throw an error.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation failure.
-    pub fn create(allocator: std.mem.Allocator) !*Self {
-        const self = try allocator.create(Self);
-        try platform.internals.Internals.setup(&self.platform_internals);
-        self.monitors = try platform.internals.MonitorStore.init(allocator);
+    pub fn init(allocator: std.mem.Allocator) !Self {
+        var self: Self = undefined;
+        self.platform_internals = try platform.Internals.create(allocator);
+        errdefer self.platform_internals.destroy(allocator);
+        self.monitor_store = try self.platform_internals.initMonitorStoreImpl(allocator);
         self.events_queue = common.event.EventQueue.init(allocator);
         self.allocator = allocator;
         self.next_window_id = 0;
-        // The monitors store will recieve updates through the helper window
-        self.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Monitor,
-            @ptrCast(&self.monitors),
-        );
         return self;
     }
 
-    /// Destroys the instance and free allocated ressources.
+    /// deinitialize the instance and free allocated ressources.
     /// # Parameters
     /// `allocator`: the memory allocator used during initialization.
     /// # Note
-    /// the WidowContext instance should be the last thing you destroy,
+    /// the WidowContext instance should be the last thing you deinitialize,
     /// as all other created library entities(Window,JoystickSubSystem) hold
-    /// a refrence to it, destroying this one before the others will cause
+    /// a refrence to it, deinitializing this one before the others will cause
     /// undefined behaviour and crash you application.
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        self.monitors.deinit();
-        self.platform_internals.deinit(self.allocator);
-        allocator.destroy(self);
+    pub fn deinit(self: *Self) void {
+        self.platform_internals.destroy(self.allocator);
     }
 
     /// Retrieves an event from the event queue,
-    /// returns false if the queue is empty.
+    /// returns false if the queue is empty, true if the `event` parameter was populated.
     /// # Parameters
     /// `event`: pointer to an event variable to be populated.
     pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
@@ -67,15 +61,15 @@ pub const WidowContext = struct {
     /// Returns the current text content of the system clipboard.
     /// # Notes
     /// This function fails if the clipboard doesn't contain a proper unicode formatted string.
-    /// On success the clipboard value is cached for future calls until the clipboard value change.
-    /// The Caller doesn't own the returned slice and shouldn't free it.
+    /// On success the clipboard value is cached for future calls until the clipboard is updated.
+    /// The caller doesn't own the returned slice and shouldn't free it.
     pub inline fn clipboardText(self: *Self) ![]const u8 {
         return self.platform_internals.clipboardText(self.allocator);
     }
 
-    /// Copys the given `text` to the system clipboard.
+    /// Copys the given `text` slice to the system clipboard.
     /// # Parameters
-    /// `text`: a slice of the data to be copied.
+    /// `text`: a slice of the unicode data to be copied.
     pub inline fn setClipboardText(self: *Self, text: []const u8) !void {
         return self.platform_internals.setClipboardText(self.allocator, text);
     }
@@ -170,10 +164,8 @@ pub const WindowBuilder = struct {
             self.allocator,
             self.title,
             &self.window_attributes,
-            platform.window_impl.WidowProps{
-                .monitors = &self.context.monitors,
-                .events_queue = &self.context.events_queue,
-            },
+            &self.context.events_queue,
+            self.context.monitor_store,
         );
         return window;
     }
@@ -196,7 +188,7 @@ pub const WindowBuilder = struct {
     /// `width`: the new width to replace the current one.
     /// `height`: the new height to replace the current one.
     /// # Notes
-    /// If the window is DPI scaled the final width and height
+    /// If the window is DPI aware the final width and height
     /// might be diffrent in window mode but the video mode for
     /// exclusive fullscreen mode retain the given widht and height.
     pub fn withSize(self: *Self, width: i32, height: i32) *Self {
@@ -216,7 +208,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Choose the position of the client(content area)'s top left corner.
-    /// if not set the default is decided by the system.
+    /// If not set the default is decided by the system.
     /// # Parameters
     /// `x`: the y coordinates of the client's top left corner.
     /// `y`: the y coordinates of the client's top left corner.
@@ -226,17 +218,8 @@ pub const WindowBuilder = struct {
         return self;
     }
 
-    /// Starts the window in the chosen fullscreen mode.
-    /// by default the window isn't fullscreen.
-    /// # Parameters
-    /// `value`: the boolean value of the flag.
-    pub fn withFullscreen(self: *Self, value: bool) *Self {
-        self.window_attributes.flags.is_fullscreen = value;
-        return self;
-    }
-
     /// Make the window resizable.
-    /// the window is not resizable by default.
+    /// The window is not resizable by default.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withResize(self: *Self, value: bool) *Self {
@@ -245,7 +228,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Whether the window has a frame or not.
-    /// if not set the default is false.
+    /// The default is true.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDecoration(self: *Self, value: bool) *Self {
@@ -254,7 +237,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Whether the window should stay on top even if it lose focus.
-    /// if not set the default is false.
+    /// The default is false.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withTopMost(self: *Self, value: bool) *Self {
@@ -263,7 +246,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Specify a minimum and maximum window size for resizable windows.
-    /// no size limit is applied by default.
+    /// No size limitation is applied by default.
     /// # Paramters
     /// `min_size`: the minimum possible size for the window.
     /// `max_size`: the maximum possible size fo the window.
@@ -273,57 +256,41 @@ pub const WindowBuilder = struct {
         return self;
     }
 
-    /// Specify whether the window size should be scaled by the monitor Dpi .
+    /// Specify whether the window size should be scaled by the monitor Dpi.
     /// scaling is not applied by default.
     /// # Parameters
     /// `value`: the boolean value of the flag.
-    pub fn withDPIScaling(self: *Self, value: bool) *Self {
+    pub fn withDPIAware(self: *Self, value: bool) *Self {
         self.window_attributes.flags.is_dpi_aware = value;
         return self;
     }
 };
 
 pub const JoystickSubSystem = struct {
-    impl: platform.joystick.JoystickSubSystemImpl,
-    context: *WidowContext,
+    impl: *platform.joystick.JoystickSubSystemImpl,
     const Self = @This();
 
-    /// Creates an instance of the JoystickSubSystem struct.
+    /// Initialize an instance of the JoystickSubSystem struct.
     /// # Parameters
     /// `allocator`: the memory allocator to be used when allocating joysticks data.
     /// `widow_context`: a pointer to a WidowContext instance.
     /// # Notes
-    /// User should deinitialize the instance once done,
-    /// to free the allocated ressources.
-    /// You might create multiple instances of the JoystickSubSystem but only the
-    /// last one will receive hardware connection and disconnection notifications
-    /// i.e only the last one will have acurate joysick input data.
+    /// Every JoystickSubSystem instance is merely a wrapped refrence
+    /// to the library's implementation, that is only created when the first
+    /// JoystickSubSystem instance is created and is destroyed when WidowContext
+    /// instance is deinitialized.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation failure.
-    pub fn create(allocator: std.mem.Allocator, widow_cntxt: *WidowContext) !*Self {
-        var self = try allocator.create(Self);
-        try platform.joystick.JoystickSubSystemImpl.setup(&self.impl, allocator, &widow_cntxt.events_queue);
-        self.context = widow_cntxt;
-        // TODO: this setState pointer doesn't feel cross platform friendly.
-        widow_cntxt.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Joystick,
-            @ptrCast(&self.impl),
-        );
+    pub fn init(widow_cntxt: *WidowContext) !Self {
+        var self = Self{
+            .impl = try widow_cntxt.platform_internals.initJoySubSysImpl(
+                widow_cntxt.allocator,
+                &widow_cntxt.events_queue,
+            ),
+        };
         // First poll to detect joystick that are already present.
         self.impl.queryConnectedJoys();
         return self;
-    }
-
-    /// Destroys the instance of the JoystickSubSystem struct.
-    /// # Parameters
-    /// `allocator`: the memory allocator to be used to allocate the instance.
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-        self.context.platform_internals.setStatePointer(
-            platform.internals.Internals.StatePointerMode.Joystick,
-            null,
-        );
-        self.impl.deinit();
-        allocator.destroy(self);
     }
 
     /// Returns the maximum number of supported joysticks by the library.
@@ -331,13 +298,13 @@ pub const JoystickSubSystem = struct {
         return joystick.JOYSTICK_MAX_COUNT;
     }
 
-    /// Returns the maximum number of currently connected joysticks.
+    /// Returns the number of currently connected joysticks.
     pub inline fn joysticksCount(self: *const Self) u8 {
         return self.impl.countConnected();
     }
 
     /// Check for any new inputs by the device the corresponds to the joy_id,
-    /// and sends the appropriate events to the Main event queue.
+    /// and sends any event to the Main event queue.
     /// # Parameters
     /// `joy_id`: the id of the targeted joystick.
     /// # Notes
@@ -383,14 +350,14 @@ pub const JoystickSubSystem = struct {
 
 test "Widow.init" {
     const testing = std.testing;
-    var cntxt = try WidowContext.create(testing.allocator);
-    defer cntxt.destroy(testing.allocator);
+    var cntxt = try WidowContext.init(testing.allocator);
+    defer cntxt.deinit(testing.allocator);
 }
 
 test "widow.clipboardText" {
     const testing = std.testing;
-    var cntxt = try WidowContext.create(testing.allocator);
-    defer cntxt.destroy(testing.allocator);
+    var cntxt = try WidowContext.init(testing.allocator);
+    defer cntxt.deinit();
     const string1 = "Clipboard Test String👌.";
     const string2 = "Maybe widow is a terrible name for the library.";
     try cntxt.setClipboardText(string1);

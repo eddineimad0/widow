@@ -14,18 +14,18 @@ pub fn main() void {
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
-    var context = widow.WidowContext.create(allocator) catch {
+    var context = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
     // destroy it when done.
-    defer context.destroy(allocator);
+    defer context.deinit();
 
     var builder = widow.WindowBuilder.init(
         "playing with inputs",
         800,
         600,
-        context,
+        &context,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;

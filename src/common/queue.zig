@@ -1,5 +1,4 @@
 const std = @import("std");
-
 pub fn Queue(comptime T: type) type {
     return struct {
         pub const Node = struct {

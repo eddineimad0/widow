@@ -59,12 +59,13 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
 }
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
-/// # Note
-/// wide pointers([*:0]u16) returned by windows are not always properly aligned,
-/// therfore this function will randomly fail in debug mode.
-/// As of now this function is not used anywhere.
-pub inline fn makeIntAtom(atom: u16) ?win32.LPCWSTR {
+pub inline fn MAKEINTATOM(atom: u16) ?win32.LPCWSTR {
     return @ptrFromInt(atom);
+}
+
+/// Replacement for the `MAKEINTRESOURCESA` macro in the windows api.
+pub inline fn MAKEINTRESOURCESA(comptime r: u16) ?[*:0]const u8 {
+    return @ptrFromInt(r);
 }
 
 // Some usefule windows.h Macros.

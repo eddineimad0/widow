@@ -1,4 +1,5 @@
 const std = @import("std");
+const dbg = @import("builtin").mode == .Debug;
 const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
 const win32_gdi = @import("zigwin32").graphics.gdi;
@@ -39,7 +40,7 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
     var dm: win32_gdi.DEVMODEW = undefined;
     dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
     dm.dmDriverExtra = 0;
-    // we need to figure out the rectangle that the monitor occupies on the virtual
+    // We need to figure out the rectangle that the monitor occupies on the virtual
     // desktop.
     if (win32.EnumDisplaySettingsExW(
         @ptrCast(display_adapter.ptr),
@@ -109,7 +110,7 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
 
             // We'll need it when enumerating video modes.
             var is_pruned = (display_adapter.StateFlags & win32_gdi.DISPLAY_DEVICE_MODESPRUNED) != 0;
-            // enumerate all "possible" video modes.
+            // Enumerate all "possible" video modes.
             var modes = try pollVideoModes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
 
@@ -178,7 +179,6 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
 /// Populate the given MonitorInfo struct with the corresponding monitor informations.
 pub inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void {
     mi.cbSize = @sizeOf(win32_gdi.MONITORINFO);
-    // Always succeed.
     _ = win32_gdi.GetMonitorInfoW(
         handle,
         mi,
@@ -193,8 +193,8 @@ pub fn monitorDPI(
 ) u32 {
     var dpi_x: u32 = undefined;
     var dpi_y: u32 = undefined;
-    const globl_data = Win32Context.singleton();
-    if (globl_data.functions.GetDpiForMonitor) |proc| {
+    const singleton = Win32Context.singleton();
+    if (singleton.functions.GetDpiForMonitor) |proc| {
         // [win32api docs]
         // This API is not DPI aware and should not be used if the calling thread is per-monitor DPI aware.
         // For the DPI-aware version of this API, see GetDpiForWindow.
@@ -309,6 +309,7 @@ pub const MonitorImpl = struct {
     /// # Note
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
+        // TODO: what if the monitor is rotated.
         if (video_mode) |mode| {
             const possible_mode = if (self.isModePossible(mode) == true)
                 mode
@@ -373,20 +374,21 @@ pub const MonitorImpl = struct {
         self.window = window;
     }
 
-    // Debug Only.
     pub fn debugInfos(self: *Self, print_video_modes: bool) void {
-        std.debug.print("Handle:{x}\n", .{@intFromPtr(self.handle)});
-        var adapter_name = std.mem.zeroes([32 * 3]u8);
-        _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
-        std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
-        if (print_video_modes) {
-            std.debug.print("video modes:", .{});
-            for (self.modes.items) |*monitor| {
-                std.debug.print("{}", .{monitor.*});
+        if (dbg) {
+            std.debug.print("Handle:{x}\n", .{@intFromPtr(self.handle)});
+            var adapter_name = std.mem.zeroes([32 * 3]u8);
+            _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
+            std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
+            if (print_video_modes) {
+                std.debug.print("video modes:", .{});
+                for (self.modes.items) |*monitor| {
+                    std.debug.print("{}", .{monitor.*});
+                }
             }
+            std.debug.print("\n mode change : {}\n", .{self.current_mode != null});
+            std.debug.print("\n occupying window: {?*}\n", .{self.window});
         }
-        std.debug.print("\n mode change : {}\n", .{self.current_mode != null});
-        std.debug.print("\n occupying window: {?*}\n", .{self.window});
     }
 };
 
@@ -403,7 +405,7 @@ test "monitor_impl init" {
     try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
 }
 
-test "changing primary VideoMode" {
+test "change primary video mode" {
     const testing = std.testing;
     const testing_allocator = testing.allocator;
     var all_monitors = try pollMonitors(testing_allocator);

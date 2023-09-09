@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const WidowPoint2D = struct {
     x: i32,
     y: i32,
@@ -16,8 +17,9 @@ pub const WidowSize = struct {
     const Self = @This();
 
     pub fn scaleBy(self: *Self, scaler: f64) void {
+        std.debug.assert(scaler > 0);
         const fwidth: f64 = @floatFromInt(self.width);
-        const fheight: f64 = @floatFromInt(self.width);
+        const fheight: f64 = @floatFromInt(self.height);
         self.width = @intFromFloat(fwidth * scaler);
         self.height = @intFromFloat(fheight * scaler);
     }

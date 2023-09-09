@@ -1,6 +1,7 @@
 const windows = @import("std").os.windows;
 const zigwin32 = @import("zigwin32");
 const builtin = @import("builtin");
+const utils = @import("utils.zig");
 
 // Windows Data Types:
 pub const HINSTANCE = windows.HINSTANCE;
@@ -57,16 +58,43 @@ pub const WM_COPYGLOBALDATA = @as(u32, 0x0049);
 pub const XINPUT_GAMEPAD_GUIDE = @as(u32, 0x0400);
 pub const WAIT_TIMEOUT = @as(u32, 0x102);
 
-// Mising from zigwin32.
+// Mising or couldn't find them in zigwin32 library.
 pub const WM_MOUSELEAVE = @as(u32, 0x02A3);
 pub const WM_UNICHAR = @as(u32, 0x0109);
 pub const DIDFT_OPTIONAL = @as(u32, 0x80000000);
 pub const GUID_DEVINTERFACE_HID = GUID.initString("4D1E55B2-F16F-11CF-88CB-001111000030");
-// In zigwin32 'EnumDisplaySettingsExW' uses enum(u32) as the type of `iModeNume` parameter and therfore doesn't
-// allow enumerating all device's graphics mode incrementally through a loop.
+// In zigwin32 'EnumDisplaySettingsExW' uses enum(u32) as the type of `iModeNume` parameter
+// with only 2 possible values and therfore doesn't allow enumerating all
+// device's graphics mode incrementally through a loop.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsexw
 pub const ENUM_CURRENT_SETTINGS = @as(u32, 0xFFFFFFFF);
 pub const ENUM_REGISTRY_SETTINGS = @as(u32, 0xFFFFFFFE);
+
+///! IDC_Standard Cursors.
+pub const IDC_ARROW = utils.MAKEINTRESOURCESA(32512); // Normal select.
+pub const IDC_IBEAM = utils.MAKEINTRESOURCESA(32513); // Text select.
+pub const IDC_WAIT = utils.MAKEINTRESOURCESA(32514); // Busy.
+pub const IDC_CROSS = utils.MAKEINTRESOURCESA(32515); // Precision select.
+pub const IDC_SIZEALL = utils.MAKEINTRESOURCESA(32646); // Move.
+pub const IDC_NO = utils.MAKEINTRESOURCESA(32648); // Unavailable.
+pub const IDC_HAND = utils.MAKEINTRESOURCESA(32649); // Link select.
+pub const IDC_APPSTARTING = utils.MAKEINTRESOURCESA(32650); // Working in background.
+pub const IDC_HELP = utils.MAKEINTRESOURCESA(32651); // Help select.
+
+///! OCR_Standard Cursors.
+pub const OCR_NORMAL = @as(u16, 32512);
+pub const OCR_IBEAM = @as(u16, 32513);
+pub const OCR_WAIT = @as(u16, 32514);
+pub const OCR_CROSS = @as(u16, 32515);
+pub const OCR_UP = @as(u16, 32516);
+pub const OCR_SIZENWSE = @as(u16, 32642);
+pub const OCR_SIZENESW = @as(u16, 32643);
+pub const OCR_SIZEWE = @as(u16, 32644);
+pub const OCR_SIZENS = @as(u16, 32645);
+pub const OCR_SIZEALL = @as(u16, 32646);
+pub const OCR_NO = @as(u16, 32648);
+
+///! Functions
 pub extern "user32" fn EnumDisplaySettingsExW(
     lpszDeviceName: ?[*:0]const u16,
     iModeNum: u32,
@@ -74,7 +102,7 @@ pub extern "user32" fn EnumDisplaySettingsExW(
     dwFlags: u32,
 ) callconv(WINAPI) BOOL;
 
-pub const LPCWSTR = if (builtin.cpu.arch == .x86_64) [*:0]align(1) const u16 else [*:0]const u16;
+pub const LPCWSTR = if (builtin.cpu.arch == .x86_64 or builtin.cpu.arch == .i386) [*:0]align(1) const u16 else [*:0]const u16;
 pub extern "user32" fn UnregisterClassW(
     lpClassName: ?LPCWSTR,
     hInstance: ?HINSTANCE,
@@ -94,3 +122,30 @@ pub extern "user32" fn CreateWindowExW(
     hInstance: ?HINSTANCE,
     lpParam: ?*anyopaque,
 ) callconv(WINAPI) ?HWND;
+
+pub const SetProcessDPIAwareProc = *const fn () callconv(WINAPI) BOOL;
+
+pub const RtlVerifyVersionInfoProc = *const fn (*OSVERSIONINFOEXW, u32, u64) callconv(WINAPI) NTSTATUS;
+
+pub const SetProcessDpiAwarenessProc = *const fn (PROCESS_DPI_AWARENESS) callconv(WINAPI) HRESULT;
+
+pub const SetProcessDpiAwarenessContextProc = *const fn (DPI_AWARENESS_CONTEXT) callconv(WINAPI) HRESULT;
+
+pub const EnableNonClientDpiScalingProc = *const fn (HWND) callconv(WINAPI) BOOL;
+
+pub const GetDpiForWindowProc = *const fn (HWND) callconv(WINAPI) DWORD;
+
+pub const GetDpiForMonitorProc = *const fn (
+    HMONITOR,
+    MONITOR_DPI_TYPE,
+    *u32,
+    *u32,
+) callconv(WINAPI) HRESULT;
+
+pub const AdjustWindowRectExForDpiProc = *const fn (
+    *RECT,
+    u32,
+    i32,
+    u32,
+    u32,
+) callconv(WINAPI) BOOL;

@@ -14,7 +14,8 @@ pub const KeyState = enum(u8) {
 
 pub const MouseButtonState = KeyState;
 
-/// The Symbolic name or representation of the keyboard key.
+/// Represent what the hardware key maps to.
+/// Depends on the current keyboard layout.
 pub const VirtualCode = enum(i32) {
     Unknown = -1, // Unknown key
     A = 0, // The A key
@@ -123,6 +124,7 @@ pub const VirtualCode = enum(i32) {
     PlayPause, // The play/pause key
 };
 
+/// Represent the codes emitted by the keybaard hardware to the OS.
 pub const ScanCode = enum(i32) {
     Unknown = -1, // Unknown key
     A = 0, // The A key
@@ -238,7 +240,7 @@ pub const ScanCode = enum(i32) {
     PrevTrack, // The |<< key
     PlayPause, // The play/pause key
     // END
-    VALUES_COUNT,
+    const COUNT = @as(u32, @intCast(@intFromEnum(ScanCode.PlayPause) - @intFromEnum(ScanCode.Unknown)));
 };
 
 pub const KeyModifiers = packed struct {
@@ -256,7 +258,8 @@ pub const MouseButton = enum(u8) {
     Middle, // Middle Mouse Button.
     ExtraButton1, // Additional Mouse Button 1 (backward navigation).
     ExtraButton2, // Additional Mouse Button 2 (forward navigation).
-    VALUES_COUNT,
+    const Self = @This();
+    const COUNT = @intFromEnum(Self.ExtraButton2) - @intFromEnum(Self.Left);
 };
 
 pub const MouseWheel = enum(u8) {
@@ -272,20 +275,25 @@ pub const MouseWheel = enum(u8) {
     }
 };
 
+/// Holds the keyboard and mouse input state for each window.
+/// # Notes
+/// ## Win32
+/// on Windows keeping track of the keyboard state allow
+/// us to emit release events for keys that are not emitted by
+/// the OS.
 pub const InputState = struct {
-    keys: [@intFromEnum(ScanCode.VALUES_COUNT)]KeyState,
-    mouse_buttons: [@intFromEnum(MouseButton.VALUES_COUNT)]MouseButtonState,
+    keys: [ScanCode.COUNT]KeyState,
+    mouse_buttons: [MouseButton.COUNT]MouseButtonState,
     const Self = @This();
     pub fn init() Self {
         return Self{
-            .keys = [1]KeyState{KeyState.Released} ** @intFromEnum(ScanCode.VALUES_COUNT),
-            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** @intFromEnum(MouseButton.VALUES_COUNT),
+            .keys = [1]KeyState{KeyState.Released} ** ScanCode.COUNT,
+            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** MouseButton.COUNT,
         };
     }
 };
 
 // Events.
-//
 pub const KeyEvent = struct {
     window_id: u32, // the window with keyboard focus.
     virtualcode: VirtualCode,

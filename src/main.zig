@@ -12,6 +12,5 @@ pub const VideoMode = common.video_mode.VideoMode;
 pub const WidowContext = cntxt.WidowContext;
 pub const WindowBuilder = cntxt.WindowBuilder;
 pub const JoystickSubSystem = cntxt.JoystickSubSystem;
-
 pub const initWidowPlatform = platform.initPlatform;
 pub const deinitWidowPlatform = platform.deinitPlatform;

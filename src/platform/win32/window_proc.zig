@@ -263,7 +263,7 @@ pub fn mainWindowProc(
             // A positive value indicates that the wheel was rotated forward,
             // away from the user.
             // a negative value indicates that the wheel was rotated backward, toward the user.
-            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = scroll / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.VerticalWheel, wheel_delta);
             return 0;
@@ -273,7 +273,7 @@ pub fn mainWindowProc(
             // Sent to the active window when the mouse's horizontal scroll wheel is tilted or rotated.
             // A positive value indicates that the wheel was rotated left,
             // a negative value indicates that the wheel was rotated right.
-            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = -(scroll) / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.HorizontalWheel, wheel_delta);
             return 0;

@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const dbg = builtin.mode == .Debug;
 const common = @import("common");
 const platform = @import("platform");
 const WindowImpl = platform.window_impl.WindowImpl;
@@ -21,22 +23,28 @@ pub const Window = struct {
     /// # Errors
     /// 'OutOfMemory': failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
-    pub fn init(allocator: Allocator, window_title: []const u8, data: *WindowData, widow_props: WidowProps) !Self {
-        var self: Self = undefined;
-        self.allocator = allocator;
-        self.impl = try allocator.create(WindowImpl);
+    pub fn init(
+        allocator: Allocator,
+        window_title: []const u8,
+        data: *WindowData,
+        events_queue: *common.event.EventQueue,
+        monitor_store: *platform.MonitorStore,
+    ) !Self {
+        var self = Self{
+            .impl = try allocator.create(WindowImpl),
+            .allocator = allocator,
+        };
         errdefer allocator.destroy(self.impl);
         self.impl.data = data.*;
-        self.impl.widow = widow_props;
-        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title);
+        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title, events_queue, monitor_store);
         return self;
     }
 
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
         // Platform dependent cleaning code.
-        self.impl.deinit();
-        // Destroy the allocated data.
+        self.impl.close();
+        // Destroy the allocated implementation.
         self.allocator.destroy(self.impl);
         self.impl = undefined;
     }
@@ -94,6 +102,9 @@ pub const Window = struct {
 
     /// Change the position of the window's top-left corner,
     /// to the newly specified x and y.
+    /// # Parameters
+    /// `x`: the new x coordinate.
+    /// `y`: the new y coordinate.
     /// # Notes
     /// The `x` and `y` parameters should be in virutal desktop coordinates.
     /// if the window is maximized it is automatically restored.
@@ -142,7 +153,7 @@ pub const Window = struct {
     /// If the window isn't resizable this function returns immediately
     /// By default no size limit is specified.
     /// The new size limit must have a width and height greater than zero or it's ignored.
-    /// if the requested minimum size is bigger than an already set maximum size it's ignored
+    /// If the requested minimum size is bigger than an already set maximum size it's ignored
     /// The new size limit only affects window while it isn't full screen mode.
     /// If the window allows dpi scaling the specified size is auto scaled by the window's dpi.
     pub inline fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
@@ -215,7 +226,7 @@ pub const Window = struct {
     /// `visible`: the new visiblity state to be set.
     /// # Notes
     /// This function has no effect on a full screen window.
-    pub inline fn setVisible(self: *Self, visible: bool) void {
+    pub fn setVisible(self: *Self, visible: bool) void {
         if (self.impl.data.flags.is_fullscreen) {
             return;
         }
@@ -237,18 +248,18 @@ pub const Window = struct {
     /// # Notes
     /// Setting false removes the ability to resize the window by draging it's edges,
     /// or maximize it through the caption buttons
-    /// however calls to `Window.setClientSize`, or `Window.set_maximize` functions can still change
+    /// however calls to `Window.setClientSize`, or `Window.setMaximized` functions can still change
     /// the size of the window and emit `EventType.WindowResize` event.
     pub inline fn setResizable(self: *Self, resizable: bool) void {
         self.impl.setResizable(resizable);
     }
 
-    /// Returns true if the window is currently decorated(has a title bar).
+    /// Returns true if the window is currently decorated(has a title bar and borders).
     pub inline fn isDecorated(self: *const Self) bool {
         return self.impl.data.flags.is_decorated;
     }
 
-    /// Sets the window's decorations.
+    /// Sets the window's decorations On or Off.
     /// # Parameters
     /// `decorated`: the new decorated state to be set.
     pub inline fn setDecorated(self: *Self, decorated: bool) void {
@@ -263,11 +274,7 @@ pub const Window = struct {
     /// Minimizes or restores the window.
     /// # Parameters
     /// `minimize`: flag whether to minimize or restore(unminimize).
-    /// # Notes
-    /// If the window is full screen, the function
-    /// will restore the original video mode if it was changed
-    /// before minimizing it, and will switch it back when it restores the window.
-    pub inline fn setMinimized(self: *Self, minimize: bool) void {
+    pub fn setMinimized(self: *Self, minimize: bool) void {
         if (minimize) {
             self.impl.minimize();
         } else {
@@ -284,9 +291,9 @@ pub const Window = struct {
     /// # Parameters
     /// `maximize`: flag whether to maximize or restore(unmaximize).
     /// # Notes
-    /// This function does nothing to a full screen window or a non resizable window.
-    pub inline fn setMaximized(self: *Self, maximize: bool) void {
-        if (self.impl.data.flags.is_fullscreen) {
+    /// This function does nothing to a full screen or a non resizable window.
+    pub fn setMaximized(self: *Self, maximize: bool) void {
+        if (self.impl.data.flags.is_fullscreen or !self.impl.data.flags.is_resizable) {
             return;
         }
         if (maximize) {
@@ -328,7 +335,7 @@ pub const Window = struct {
     /// Focusing a window means stealing input focus from others,
     /// which is anoying for the user.
     /// prefer using `Window.requestUserAttention()` to not disrupt the user.
-    pub inline fn focus(self: *const Self) void {
+    pub fn focus(self: *Self) void {
         if (!self.impl.data.flags.is_focused) {
             self.impl.focus();
         }
@@ -341,18 +348,18 @@ pub const Window = struct {
 
     /// Requests user attention to the window,
     /// this has no effect if the application is already focused.
-    pub inline fn requestUserAttention(self: *const Self) void {
+    pub fn requestUserAttention(self: *const Self) void {
         if (!self.impl.data.flags.is_focused) {
             self.impl.flash();
         }
     }
 
-    /// Switches the window to fullscreen or back(null) to windowed mode.
+    /// Switches the window to fullscreen or back to windowed mode.
     /// if the function succeeds it returns true else it returns false.
     /// # Parameters
     /// `value`: whether to set or exit fullscreen mode.
     /// `video_mode`:  a VideoMode to switch to or null to keep the user's video mode
-    pub inline fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
+    pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
         self.impl.setFullscreen(value, video_mode) catch |err| {
             std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
             return false;
@@ -378,7 +385,7 @@ pub const Window = struct {
     /// it should drawn with 128 physical pixels for it to appear good.
     /// `EventType.DPIChange` can be tracked to monitor changes in the dpi,
     /// and the scale factor.
-    pub inline fn contentScale(self: *const Self) f64 {
+    pub fn contentScale(self: *const Self) f64 {
         var scale: f64 = undefined;
         _ = self.impl.scalingDPI(&scale);
         return scale;
@@ -419,7 +426,7 @@ pub const Window = struct {
     /// The specified position should be relative to the client area's top-left corner.
     /// with everything above it having a negative y-coord,
     /// and everthing to the left of it having a negative x-coord.
-    pub inline fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
+    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
         if (self.isFocused()) {
             self.impl.setCursorPosition(x, y);
         }
@@ -442,7 +449,7 @@ pub const Window = struct {
     }
 
     /// Sets whether the window accepts dropping files or not.
-    /// by default any window created doesn't accept dropped files.
+    /// by default any window created doesn't allow file to be dragged and dropped.
     /// # Parameters
     /// `accepted`: true to allow file dropping, false to block it.
     pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
@@ -451,9 +458,9 @@ pub const Window = struct {
 
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
     /// # Note
-    /// User should only call this function when receiving a FileDrop event.
+    /// User should only call this function when receiving a `EventType.FileDrop` event.
     /// User shouldn't attempt to free or modify the returned slice and should instead
-    /// call `Window.freeDroppedFiles` if they wish to free it.
+    /// call `Window.freeDroppedFiles` if they wish to free the cache.
     /// The returned slice may gets invalidated and mutated during the next file drop event
     pub inline fn droppedFiles(self: *const Self) [][]const u8 {
         return self.impl.droppedFiles();
@@ -471,7 +478,7 @@ pub const Window = struct {
 
     /// Sets the window's icon to the RGBA pixels data.
     /// # Parameters
-    /// `pixels`: a slice to the icon's pixel(RGBA) data.
+    /// `pixels`: a slice to the icon's pixel(RGBA) data or null to set the platform default icon.
     /// `width` : the width of the icon in pixels.
     /// `height`: the height of the icon in pixels.
     /// # Notes
@@ -479,15 +486,18 @@ pub const Window = struct {
     /// i.e. each channel's value should not be scaled by the alpha value, and should be
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha last.
-    pub inline fn setIcon(self: *Self, pixels: []const u8, width: i32, height: i32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createIcon(self.impl, pixels, width, height);
+    /// If the pixels slice is null width and height can be set to whatever.
+    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+        if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
+            std.debug.assert(pixels.?.len == (width * height * 4));
+        }
+        try self.impl.setIcon(pixels, width, height);
     }
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.
     /// # Parameters
-    /// `pixels`: a slice to the cursor image's pixel(RGBA) data.
+    /// `pixels`: a slice to the cursor image's pixel(RGBA) data or null to use the platform's default cursor.
     /// `width` : the width of the icon in pixels.
     /// `height`: the height of the icon in pixels.
     /// `xhot`: the x coordinates of the cursor's hotspot.
@@ -502,10 +512,20 @@ pub const Window = struct {
     /// i.e. each channel's value should not be scaled by the alpha value, and should be
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha.
-    pub inline fn setCursor(self: *Self, pixels: []const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        std.debug.assert(width > 0 and height > 0);
-        std.debug.assert(pixels.len == (width * height * 4));
-        try platform.internals.createCursor(self.impl, pixels, width, height, xhot, yhot);
+    /// If the pixels slice is null width,height,xhot and yhot can be set to whatever.
+    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+        if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
+            std.debug.assert(pixels.?.len == (width * height * 4));
+        }
+        try self.impl.setCursor(pixels, width, height, xhot, yhot);
+    }
+
+    /// Sets the Widow's cursor to an image from the RGBA pixels data.
+    /// # Parameters
+    /// `cursor_shape`: the standard cursor to set from the StandardCursorShape enum.
+    pub inline fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
+        try self.impl.setStandardCursor(cursor_shape);
     }
 
     /// Returns the descriptor or handle used by the platform to identify the window.
@@ -513,8 +533,11 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
-    // # Use only for debug.
+    // Prints some debug information to stdout.
+    // if compiled in non Debug mode it does nothing.
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
-        self.impl.debugInfos(size, flags);
+        if (dbg) {
+            self.impl.debugInfos(size, flags);
+        }
     }
 };
