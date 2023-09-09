@@ -17,7 +17,8 @@ pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
 
 pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
     // TODO: test more keyboards.
-    // Note: the right ALT key is handled as a CTRL+ALT key.
+
+    // The right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
     if (wparam == @intFromEnum(win32_keyboard_mouse.VK_CONTROL)) {
@@ -58,6 +59,7 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
 }
 
 pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
+    // Determine the button.
     const button = switch (msg) {
         win32_window_messaging.WM_LBUTTONUP => common.keyboard_and_mouse.MouseButton.Left,
         win32_window_messaging.WM_RBUTTONUP => common.keyboard_and_mouse.MouseButton.Right,
@@ -77,6 +79,7 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
 
     window.sendEvent(&event);
 
+    // Update window's input state.
     window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_and_mouse.KeyState.Released;
 
     // Release Capture if all keys are released.
@@ -87,7 +90,6 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
             break;
         }
     }
-
     if (!any_button_pressed) {
         _ = win32_keyboard_mouse.ReleaseCapture();
     }
@@ -112,6 +114,7 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
         _ = win32_keyboard_mouse.SetCapture(window.handle);
     }
 
+    // Determine the button.
     const button = switch (msg) {
         win32_window_messaging.WM_LBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Left,
         win32_window_messaging.WM_RBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Right,
@@ -148,6 +151,7 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
     const ulparam: usize = @bitCast(lparam);
     const info: *win32_window_messaging.MINMAXINFO = @ptrFromInt(ulparam);
 
+    // If the size limitation is set.
     if (window.data.min_size != null or window.data.max_size != null) {
 
         // Depending on the styles we might need the window's border width and height
@@ -291,7 +295,7 @@ pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
         for (0..count) |index| {
             const buffer_len = win32_shell.DragQueryFileW(drop_handle, @truncate(index), null, 0);
             if (buffer_len != 0) {
-                // the returned length doesn't account for the null terminator,
+                // The returned length doesn't account for the null terminator,
                 // however DragQueryFile will always write the null terminator even
                 // at the cost of not copying the entire data. so it's necessary to add 1
                 const buffer_lenz = buffer_len + 1;

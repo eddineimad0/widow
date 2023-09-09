@@ -138,24 +138,6 @@ fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
 /// Returns the (width,height) of the entire window frame.
 pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
     var rect: win32.RECT = undefined;
-    // TODO: Fix we want to report the true size but not cause any shrinking bug.
-    // GetWindowRect populate the RECT with the window's size(drop shadow included).
-    // var comp_enabled: win32.BOOL = win32.FALSE;
-    //
-    // if ((win32_dwm.DwmIsCompositionEnabled(&comp_enabled) == win32.S_OK) and comp_enabled == win32.TRUE) {
-    //     // If Dwm Composition is enabled we can get the true window rect(no drop shadow)
-    //     // by calling DwmGetWindowAttributes.
-    //     if (win32_dwm.DwmGetWindowAttribute(
-    //         window_handle,
-    //         win32_dwm.DWMWA_EXTENDED_FRAME_BOUNDS,
-    //         @ptrCast(*anyopaque, &rect),
-    //         @sizeOf(win32.RECT),
-    //     ) != win32.S_OK) {
-    //         _ = win32_window_messaging.GetWindowRect(window_handle, &rect);
-    //     }
-    // } else {
-    //     _ = win32_window_messaging.GetWindowRect(window_handle, &rect);
-    // }
     _ = win32_window_messaging.GetWindowRect(window_handle, &rect);
     const size = common.geometry.WidowSize{
         .width = rect.right - rect.left,
