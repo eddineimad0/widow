@@ -115,27 +115,27 @@ pub fn main() !void {
                             // let's request closing the window on pressing Q key
                             mywindow.queueCloseEvent();
                         }
-                        if (key.virtualcode == VirtualCode.D) {
+                        if (key.virtualcode == .D) {
                             mywindow.debugInfos(true, true);
                         }
-                        if (key.virtualcode == VirtualCode.P) {
+                        if (key.virtualcode == .P) {
                             std.debug.print("ClientPosition:{}\n", .{mywindow.clientPosition()});
                         }
-                        if (key.virtualcode == VirtualCode.M) {
+                        if (key.virtualcode == .M) {
                             mywindow.setClientPosition(0, 0);
                         }
-                        if (key.virtualcode == VirtualCode.C) {
+                        if (key.virtualcode == .C) {
                             mywindow.setClientSize(1024, 640);
                         }
-                        if (key.virtualcode == VirtualCode.R) {
+                        if (key.virtualcode == .R) {
                             const resizable = mywindow.isResizable();
                             mywindow.setResizable(!resizable);
                         }
-                        if (key.virtualcode == VirtualCode.B) {
+                        if (key.virtualcode == .B) {
                             const decorated = mywindow.isDecorated();
                             mywindow.setDecorated(!decorated);
                         }
-                        if (key.virtualcode == VirtualCode.E) {
+                        if (key.virtualcode == .E) {
                             var video = widow.VideoMode.init(800, 600, 60, 32);
                             if (key.mods.shift) {
                                 _ = mywindow.setFullscreen(true, &video);
@@ -143,17 +143,17 @@ pub fn main() !void {
                                 _ = mywindow.setFullscreen(true, null);
                             }
                         }
-                        if (key.virtualcode == VirtualCode.Escape) {
+                        if (key.virtualcode == .Escape) {
                             _ = mywindow.setFullscreen(false, null);
                         }
-                        if (key.virtualcode == VirtualCode.N) {
+                        if (key.virtualcode == .N) {
                             if (key.mods.shift) {
                                 mywindow.setMinSize(null);
                             } else {
                                 mywindow.setMinSize(widow.geometry.WidowSize{ .width = 300, .height = 300 });
                             }
                         }
-                        if (key.virtualcode == VirtualCode.U) {
+                        if (key.virtualcode == .U) {
                             if (key.mods.shift) {
                                 mywindow.setDragAndDrop(true);
                             } else {
