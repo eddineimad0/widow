@@ -274,10 +274,6 @@ pub const Window = struct {
     /// Minimizes or restores the window.
     /// # Parameters
     /// `minimize`: flag whether to minimize or restore(unminimize).
-    /// # Notes
-    /// If the window is full screen, the function
-    /// will restore the original video mode if it was changed
-    /// before minimizing it, and will switch it back when it restores the window.
     pub fn setMinimized(self: *Self, minimize: bool) void {
         if (minimize) {
             self.impl.minimize();
@@ -295,7 +291,7 @@ pub const Window = struct {
     /// # Parameters
     /// `maximize`: flag whether to maximize or restore(unmaximize).
     /// # Notes
-    /// This function does nothing to a full screen window or a non resizable window.
+    /// This function does nothing to a full screen or a non resizable window.
     pub fn setMaximized(self: *Self, maximize: bool) void {
         if (self.impl.data.flags.is_fullscreen or !self.impl.data.flags.is_resizable) {
             return;
