@@ -110,7 +110,7 @@ pub const WindowBuilder = struct {
         context: *WidowContext,
     ) !Self {
         std.debug.assert(width > 0 and height > 0);
-        // can't be sure of the title's lifetime so copy it first.
+        // Can't be sure of the title's lifetime so copy it first.
         const new_title = try context.allocator.alloc(u8, title.len);
         std.mem.copyForwards(u8, new_title, title);
         return Self{
@@ -160,6 +160,7 @@ pub const WindowBuilder = struct {
     pub fn build(self: *Self) !Window {
         // First window has id of 1,
         self.window_attributes.id = self.context.nextWindowId();
+        // The Window should copy the title if needed.
         const window = Window.init(
             self.allocator,
             self.title,
