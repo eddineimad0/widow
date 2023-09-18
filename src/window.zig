@@ -31,21 +31,16 @@ pub const Window = struct {
         monitor_store: *platform.MonitorStore,
     ) !Self {
         var self = Self{
-            .impl = try allocator.create(WindowImpl),
             .allocator = allocator,
+            .impl = try WindowImpl.create(allocator, data, window_title, events_queue, monitor_store),
         };
-        errdefer allocator.destroy(self.impl);
-        self.impl.data = data.*;
-        try platform.window_impl.WindowImpl.setup(self.impl, allocator, window_title, events_queue, monitor_store);
         return self;
     }
 
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
-        // Platform dependent cleaning code.
-        self.impl.close();
         // Destroy the allocated implementation.
-        self.allocator.destroy(self.impl);
+        self.impl.destroy(self.allocator);
         self.impl = undefined;
     }
 

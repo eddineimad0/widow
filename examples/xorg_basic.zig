@@ -12,12 +12,12 @@ pub fn main() !void {
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
-    var widow_cntxt = widow.WidowContext.create(allocator) catch {
+    var widow_cntxt = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
     // destroy it when done.
-    defer widow_cntxt.destroy(allocator);
+    defer widow_cntxt.deinit();
 
     // create a WindowBuilder.
     // this action might fail if we fail to allocate space for the title.
@@ -25,7 +25,7 @@ pub fn main() !void {
         "Simple window",
         800,
         600,
-        widow_cntxt,
+        &widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;

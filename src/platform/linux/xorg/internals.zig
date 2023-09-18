@@ -2,6 +2,7 @@ const std = @import("std");
 const monitor_impl = @import("monitor_impl.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const libx11ext = @import("x11/extensions.zig");
 const X11Context = @import("global.zig").X11Context;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 
@@ -14,6 +15,7 @@ pub const HelperData = struct {
 pub const Internals = struct {
     helper_data: HelperData,
     helper_window: libx11.Window,
+    monitor_store: MonitorStore,
     const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
@@ -22,31 +24,30 @@ pub const Internals = struct {
         Joystick,
     };
 
-    // if we were to use init to create the data on the stack
-    // and then copy it to the heap it will invalidate the pointer
-    // set as for the window (GWLP_USERDATA).
-    pub fn setup(self: *Self) !void {
+    pub fn create(allocator: std.mem.Allocator) !*Self {
+        var self = try allocator.create(Self);
         const x11cntxt = X11Context.singleton();
         _ = x11cntxt;
         self.helper_window = 0;
         self.helper_data.clipboard_text = null;
         self.helper_data.monitor_store_ptr = null;
+        return self;
     }
 
-    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         if (self.helper_data.clipboard_text) |text| {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
         }
+
+        allocator.destroy(self);
     }
 
-    pub inline fn setStatePointer(self: *Self, mode: StatePointerMode, pointer: ?*anyopaque) void {
-        switch (mode) {
-            StatePointerMode.Monitor => {
-                self.helper_data.monitor_store_ptr = @ptrCast(@alignCast(pointer));
-            },
-            else => {},
-        }
+    /// Init the Monitor store member, and update the helper data refrence.
+    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !*MonitorStore {
+        self.monitor_store = try MonitorStore.init(allocator);
+        self.helper_data.monitor_store_ptr = &self.monitor_store;
+        return &self.monitor_store;
     }
 
     pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
@@ -65,23 +66,20 @@ pub const Internals = struct {
 /// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
 fn createHelperWindow() !libx11.Window {}
 
-/// create a platform icon and set it to the window.
+/// create a platform icon.
 pub fn createIcon(
-    window: *WindowImpl,
-    pixels: []const u8,
+    pixels: ?[]const u8,
     width: i32,
     height: i32,
 ) !void {
     _ = height;
     _ = width;
     _ = pixels;
-    _ = window;
 }
 
-/// create a platform cursor and set it to the window.
+/// Creates a platform cursor.
 pub fn createCursor(
-    window: *WindowImpl,
-    pixels: []const u8,
+    pixels: ?[]const u8,
     width: i32,
     height: i32,
     xhot: u32,
@@ -92,30 +90,26 @@ pub fn createCursor(
     _ = height;
     _ = width;
     _ = pixels;
-    _ = window;
 }
 
-// Zigwin32 libary doesn't have definitions for IDC constants probably due to alignement issues.
-// pub fn createStandardCursor(window: *WindowImpl, shape: CursorShape) !void {
-//     const cursor_id = switch (shape) {
-//         CursorShape.PointingHand => win32_window_messaging.IDC_HAND,
-//         CursorShape.Crosshair => win32_window_messaging.IDC_CROSS,
-//         CursorShape.Text => win32_window_messaging.IDC_IBEAM,
-//         CursorShape.Wait => win32_window_messaging.IDC_WAIT,
-//         CursorShape.Help => win32_window_messaging.IDC_HELP,
-//         CursorShape.Busy => win32_window_messaging.IDC_APPSTARTING,
-//         CursorShape.Forbidden => win32_window_messaging.IDC_NO,
-//         else => win32_window_messaging.IDC_ARROW,
-//     };
-//     // LoadCursorW takes a handle to an instance of the module
-//     // whose executable file contains the cursor to be loaded.
-//     const handle = win32_window_messaging.LoadCursorW(0, cursor_id);
-//     if (handle == 0) {
-//         // We failed.
-//         return error.FailedToLoadStdCursor;
-//     }
-//     window.setCursorShape(&icon.Cursor{ .handle = handle, .shared = true, .mode = common.cursor.CursorMode.Normal });
-// }
+/// Returns a handle to a shared(standard) platform cursor.
+pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !void {
+    _ = shape;
+    const CursorShape = common.cursor.StandardCursorShape;
+    _ = CursorShape;
+
+    // const cursor_id = switch (shape) {
+    //     CursorShape.PointingHand => win32.IDC_HAND,
+    //     CursorShape.Crosshair => win32.IDC_CROSS,
+    //     CursorShape.Text => win32.IDC_IBEAM,
+    //     CursorShape.BkgrndTask => win32.IDC_APPSTARTING,
+    //     CursorShape.Help => win32.IDC_HELP,
+    //     CursorShape.Busy => win32.IDC_WAIT,
+    //     CursorShape.Forbidden => win32.IDC_NO,
+    //     CursorShape.Move => win32.IDC_SIZEALL,
+    //     CursorShape.Default => win32.IDC_ARROW,
+    // };
+}
 
 pub const MonitorStore = struct {
     monitors: std.ArrayList(monitor_impl.MonitorImpl),
@@ -126,11 +120,8 @@ pub const MonitorStore = struct {
     pub fn init(allocator: std.mem.Allocator) !Self {
         var self = Self{
             .used_monitors = 0,
-            .monitors = undefined,
+            .monitors = try monitor_impl.pollMonitors(allocator),
         };
-
-        self.monitors = try monitor_impl.pollMonitors(allocator);
-
         return self;
     }
 
@@ -145,6 +136,25 @@ pub const MonitorStore = struct {
             monitor.deinit();
         }
         self.monitors.deinit();
+    }
+
+    /// Returns a refrence to the requested Monitor or an error if the monitor was not found.
+    pub fn findMonitor(self: *Self, monitor_handle: libx11ext.RRCrtc) !*monitor_impl.MonitorImpl {
+        // Find the monitor.
+        var target: ?*monitor_impl.MonitorImpl = null;
+        for (self.monitors.items) |*item| {
+            if (item.handle == monitor_handle) {
+                target = item;
+                break;
+            }
+        }
+        const monitor = target orelse {
+            std.log.err("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
+            //TODO: error defs.
+            return error.MonitorNotFound;
+        };
+
+        return monitor;
     }
 
     // /// Updates the monitors array by removing all disconnected monitors

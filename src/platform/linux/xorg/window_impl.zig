@@ -21,29 +21,41 @@ pub const WindowImpl = struct {
     };
     const Self = @This();
 
-    pub fn setup(
-        instance: *Self,
+    pub fn create(
         allocator: std.mem.Allocator,
+        data: *WindowData,
         window_title: []const u8,
-    ) !void {
-        instance.handle = try createPlatformWindow(window_title, &instance.data);
-        if (instance.data.flags.is_visible) {
-            instance.show();
-            if (instance.data.flags.is_focused) {
+        events_queue: *common.event.EventQueue,
+        monitor_store: *MonitorStore,
+    ) !*Self {
+        var self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
+        self.widow = WidowProps{
+            .events_queue = events_queue,
+            .monitors = monitor_store,
+        };
+        self.data = data.*;
+
+        self.handle = try createPlatformWindow(window_title, data);
+
+        if (self.data.flags.is_visible) {
+            self.show();
+            if (self.data.flags.is_focused) {
                 // instance.focus();
             }
         }
-        _ = allocator;
+
+        return self;
     }
 
-    // Destroy the window
-    pub fn close(self: *Self) void {
+    /// Destroy the window
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
         const x11cntxt = X11Context.singleton();
-
         _ = libX11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
         _ = libX11.XDestroyWindow(x11cntxt.handles.xdisplay, self.handle);
         self.handle = 0;
+        allocator.destroy(self);
     }
 
     /// Shows the hidden window.
