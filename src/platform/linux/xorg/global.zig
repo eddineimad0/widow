@@ -93,14 +93,16 @@ pub const X11Context = struct {
             g_instance.handles.root_window = libx11.RootWindow(g_instance.handles.xdisplay, g_instance.handles.default_screen);
 
             g_instance.loadXExtensions();
-            @atomicStore(bool, &Self.g_init, true, .Release);
+            Self.g_init = true;
         }
     }
 
     pub fn deinitSingleton() void {
         @setCold(true);
+        Self.mutex.lock();
+        defer Self.mutex.unlock();
         if (Self.g_init) {
-            @atomicStore(bool, &Self.g_init, false, .Release);
+            Self.g_init = false;
             _ = libx11.XCloseDisplay(globl_instance.handles.xdisplay);
             globl_instance.unloadXExtensions();
         }
@@ -147,7 +149,7 @@ pub const X11Context = struct {
             var minor: i32 = 0;
             var major: i32 = 0;
             _ = self.extensions.xrandr.XRRQueryVersion(self.handles.xdisplay, &major, &minor);
-            self.extensions.xrandr.is_v1point3 = (major >= 1 and minor >= 5);
+            self.extensions.xrandr.is_v1point3 = (major >= 1 and minor >= 3);
         } else {
             std.log.warn("[X11]: XRandR library not found.\n", .{});
         }
@@ -172,31 +174,35 @@ pub const X11Context = struct {
     }
 };
 
-// test "X11Context Thread safety" {
-//     const testing = std.testing;
-//     const builtin = @import("builtin");
-//     if (builtin.single_threaded) {
-//         const singleton = X11Context.singleton();
-//         const singleton2 = X11Context.singleton();
-//         try testing.expect(singleton != null);
-//         try testing.expect(singleton2 != null);
-//     } else {
-//         var threads: [10]std.Thread = undefined;
-//         defer for (threads) |handle| handle.join();
-//
-//         for (&threads) |*handle| {
-//             handle.* = try std.Thread.spawn(.{}, struct {
-//                 fn thread_fn() void {
-//                     _ = X11Context.singleton();
-//                 }
-//             }.thread_fn, .{});
-//         }
-//     }
-// }
+test "X11Context Thread safety" {
+    const testing = std.testing;
+    _ = testing;
+    const builtin = @import("builtin");
+    if (builtin.single_threaded) {
+        try X11Context.initSingleton();
+        try X11Context.initSingleton();
+        defer X11Context.deinitSingleton();
+    } else {
+        var threads: [10]std.Thread = undefined;
+        defer for (threads) |handle| handle.join();
 
-// test "Win32Context init" {
-//     try X11Context.initSingleton();
-//     const singleton = X11Context.singleton();
-//     std.debug.print("Win32 execution context: {any}\n", .{singleton});
-//     X11Context.deinitSingleton();
-// }
+        for (&threads) |*handle| {
+            handle.* = try std.Thread.spawn(.{}, struct {
+                fn thread_fn() !void {
+                    try X11Context.initSingleton();
+                    defer X11Context.deinitSingleton();
+                }
+            }.thread_fn, .{});
+        }
+    }
+}
+
+test "Win32Context init" {
+    try X11Context.initSingleton();
+    const singleton = X11Context.singleton();
+    std.debug.print("\nX11 execution context:\n", .{});
+    std.debug.print("[+] Handles: {any}\n", .{singleton.handles});
+    std.debug.print("[+] XRRInterface: {any}\n", .{singleton.extensions.xrandr});
+    std.debug.print("[+] XineramaIntef: {any}\n", .{singleton.extensions.xinerama});
+    X11Context.deinitSingleton();
+}

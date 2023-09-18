@@ -74,7 +74,7 @@ pub const XRRScreenResources = extern struct {
     noutput: c_int,
     outputs: [*]RROutput,
     nmode: c_int,
-    modes: *XRRModeInfo,
+    modes: [*]XRRModeInfo,
 };
 
 pub const XRROutputInfo = extern struct {
@@ -92,7 +92,7 @@ pub const XRROutputInfo = extern struct {
     clones: *RROutput,
     nmode: c_int,
     npreferred: c_int,
-    modes: *RRMode,
+    modes: [*]RRMode,
 };
 
 pub const XRRCrtcInfo = extern struct {

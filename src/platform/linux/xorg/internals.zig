@@ -19,11 +19,6 @@ pub const Internals = struct {
     const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
-    pub const StatePointerMode = enum {
-        Monitor,
-        Joystick,
-    };
-
     pub fn create(allocator: std.mem.Allocator) !*Self {
         var self = try allocator.create(Self);
         const x11cntxt = X11Context.singleton();
@@ -39,7 +34,7 @@ pub const Internals = struct {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
         }
-
+        self.monitor_store.deinit();
         allocator.destroy(self);
     }
 
