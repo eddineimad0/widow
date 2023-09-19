@@ -71,7 +71,12 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
 pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
     // Anticipate at least 2 monitors.
     var monitors = try ArrayList(MonitorImpl).initCapacity(allocator, 2);
-    errdefer monitors.deinit();
+    errdefer {
+        for (monitors.items) |*monitor| {
+            monitor.deinit();
+        }
+        monitors.deinit();
+    }
     var display_device: win32_gdi.DISPLAY_DEVICEW = undefined;
     display_device.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
     var display_adapter: win32_gdi.DISPLAY_DEVICEW = undefined;
