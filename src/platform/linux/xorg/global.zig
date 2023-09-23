@@ -24,6 +24,7 @@ const XRRInterface = struct {
     XRRGetOutputPrimary: x11ext.XRRGetOutputPrimaryProc,
     XRRSelectInput: x11ext.XRRSelectInputProc,
     XRRQueryVersion: x11ext.XRRQueryVersionProc,
+    XRRSetCrtcConfig: x11ext.XRRSetCrtcConfigProc,
 };
 
 // XineramaIntef
@@ -65,6 +66,7 @@ pub const X11Context = struct {
                 .XRRGetScreenResources = undefined,
                 .XRRFreeScreenResources = undefined,
                 .XRRQueryVersion = undefined,
+                .XRRSetCrtcConfig = undefined,
             },
             .xinerama = XrmInterface{
                 .is_active = false,
@@ -145,6 +147,9 @@ pub const X11Context = struct {
             );
             self.extensions.xrandr.XRRQueryVersion = @ptrCast(
                 module.moduleSymbol(handle, "XRRQueryVersion"),
+            );
+            self.extensions.xrandr.XRRSetCrtcConfig = @ptrCast(
+                module.moduleSymbol(handle, "XRRSetCrtcConfig"),
             );
             var minor: i32 = 0;
             var major: i32 = 0;
