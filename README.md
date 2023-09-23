@@ -102,7 +102,7 @@ You can choose a different release and copy it's url, as for the hash every rele
 the hash value under `ZON Hash` section.
 
 Next declare the dependency in you `build.zig` and add it to your build step.
-```
+```zig
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
