@@ -32,14 +32,19 @@ pub const Window = struct {
     ) !Self {
         var self = Self{
             .allocator = allocator,
-            .impl = try WindowImpl.create(allocator, data, window_title, events_queue, monitor_store),
+            .impl = try WindowImpl.create(
+                allocator,
+                window_title,
+                data,
+                events_queue,
+                monitor_store,
+            ),
         };
         return self;
     }
 
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
-        // Destroy the allocated implementation.
         self.impl.destroy(self.allocator);
         self.impl = undefined;
     }
