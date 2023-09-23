@@ -23,8 +23,8 @@ pub const WindowImpl = struct {
 
     pub fn create(
         allocator: std.mem.Allocator,
-        data: *WindowData,
         window_title: []const u8,
+        data: *WindowData,
         events_queue: *common.event.EventQueue,
         monitor_store: *MonitorStore,
     ) !*Self {

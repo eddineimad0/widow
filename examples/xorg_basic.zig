@@ -41,5 +41,5 @@ pub fn main() !void {
     builder.deinit();
     // closes the window when done.
     defer mywindow.deinit();
-    while (true) {}
+    std.time.sleep(5 * std.time.ns_per_s);
 }
