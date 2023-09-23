@@ -19,3 +19,11 @@ pub inline fn DefaultVisual(dpy: *types.Display, scr: u32) ?[*]types.Visual {
 pub inline fn DefaultDepth(dpy: *types.Display, scr: u32) c_int {
     return ScreenOfDisplay(dpy, scr).root_depth;
 }
+
+pub inline fn DisplayWidth(dpy: *types.Display, scr: u32) c_int {
+    return ScreenOfDisplay(dpy, scr).width;
+}
+
+pub inline fn DisplayHeight(dpy: *types.Display, scr: u32) c_int {
+    return ScreenOfDisplay(dpy, scr).height;
+}

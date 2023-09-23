@@ -254,6 +254,7 @@ pub const RR_Capability_SourceOutput: c_int = 1;
 pub const RR_Capability_SinkOutput: c_int = 2;
 pub const RR_Capability_SourceOffload: c_int = 4;
 pub const RR_Capability_SinkOffload: c_int = 8;
+pub const RRMode_None: RRMode = 0;
 
 // Function signatures.
 pub const XRRAllocGammaProc = *const fn (size: c_int) callconv(.C) ?*XRRCrtcGamma;
