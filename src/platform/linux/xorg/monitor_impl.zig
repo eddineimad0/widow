@@ -284,25 +284,27 @@ pub const MonitorImpl = struct {
         const scr_res = getScreenRessources();
         if (scr_res) |sr| {
             const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(x11cntxt.handles.xdisplay, sr, self.adapter);
-            var mode_info: ?*x11ext.XRRModeInfo = null;
-            // Find the mode infos.
-            for (0..@intCast(sr.nmode)) |j| {
-                if (sr.modes[j].id == ci.mode) {
-                    mode_info = &sr.modes[j];
-                    break;
-                }
-            }
-            if (ci.rotation != x11ext.RR_Rotate_90 or ci.rotation != x11ext.RR_Rotate_270) {
-                area.size.width = mode_info.?.width;
-                area.size.height = mode_info.?.height;
-            } else {
-                area.size.width = mode_info.?.height;
-                area.size.height = mode_info.?.width;
-            }
-            std.debug.assert(area.size.width == ci.width);
-            std.debug.assert(area.size.height == ci.width);
+            // var mode_info: ?*x11ext.XRRModeInfo = null;
+            // // Find the mode infos.
+            // for (0..@intCast(sr.nmode)) |j| {
+            //     if (sr.modes[j].id == ci.mode) {
+            //         mode_info = &sr.modes[j];
+            //         break;
+            //     }
+            // }
+            // if (ci.rotation != x11ext.RR_Rotate_90 or ci.rotation != x11ext.RR_Rotate_270) {
+            //     area.size.width = @intCast(mode_info.?.width);
+            //     area.size.height = @intCast(mode_info.?.height);
+            // } else {
+            //     area.size.width = @intCast(mode_info.?.height);
+            //     area.size.height = @intCast(mode_info.?.width);
+            // }
+            // std.debug.assert(area.size.width == ci.width);
+            // std.debug.assert(area.size.height == ci.height);
             area.top_left.x = ci.x;
             area.top_left.y = ci.y;
+            area.size.width = @intCast(ci.width);
+            area.size.height = @intCast(ci.height);
 
             x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(ci);
             x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
@@ -459,6 +461,9 @@ test "poll_monitors" {
         var vm: VideoMode = undefined;
         mon.queryCurrentMode(&vm);
         std.debug.print("\n[+] Current Mode {any}\n", .{vm});
+        var area: common.geometry.WidowArea = undefined;
+        mon.monitorFullArea(&area);
+        std.debug.print("\n[+] Current Full Area {any}\n", .{area});
     }
     // width = 1280, .height = 800, .frequency = 60, .color_depth = 24
     const nvm = VideoMode.init(1280, 800, 60, 24);
