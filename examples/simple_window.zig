@@ -160,6 +160,10 @@ pub fn main() !void {
                                 mywindow.setDragAndDrop(false);
                             }
                         }
+                        if (key.virtualcode == .I) {
+                            const minimized = mywindow.isMinimized();
+                            mywindow.setMinimized(!minimized);
+                        }
                     }
                 },
                 EventType.MouseButton => |*mouse_event| {
