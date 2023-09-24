@@ -1062,7 +1062,7 @@ pub const WindowImpl = struct {
         }
     }
 
-    /// Returns the fullscreen mode of the window;
+    /// Switch the window to fullscreen mode and back;
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
 
         // The video mode switch should always be done first
@@ -1119,8 +1119,9 @@ pub const WindowImpl = struct {
         );
     }
 
+    /// Marks the monitor as not being occupied by any window.
     pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.monitors.restoreMonitor(monitor_handle);
+        try self.widow.monitors.releaseMonitor(monitor_handle);
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
