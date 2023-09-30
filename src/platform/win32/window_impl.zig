@@ -489,7 +489,7 @@ pub const WindowImpl = struct {
         }
         if (scaler) |ptr| {
             const fdpi: f64 = @floatFromInt(dpi);
-            ptr.* = (fdpi / win32.FUSER_DEFAULT_SCREEN_DPI);
+            ptr.* = (fdpi / win32.USER_DEFAULT_SCREEN_DPI_F);
         }
         return dpi;
     }
@@ -725,7 +725,7 @@ pub const WindowImpl = struct {
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             const dpi: f64 = @floatFromInt(self.scalingDPI(null));
-            const r_scaler = (win32.FUSER_DEFAULT_SCREEN_DPI / dpi);
+            const r_scaler = (win32.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
