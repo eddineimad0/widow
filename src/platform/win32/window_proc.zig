@@ -297,8 +297,8 @@ pub fn mainWindowProc(
             // SetWindowPos.
             const globl_cntxt = Win32Context.singleton();
             // there is no need to process this message for a dpi aware window
-            // for a non dpi aware window processing this message allows it
-            // to keep a constant width and height.
+            // for a non dpi aware window processing this messsage is necessary
+            // to adjust it's decorations(titlebar,edges...).
             if (!window.data.flags.is_dpi_aware and globl_cntxt.flags.is_win10b1607_or_above) {
                 message_handler.dpiScaledSizeHandler(window, wparam, lparam);
                 return win32.TRUE;
@@ -308,11 +308,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
-            const ulparam: usize = @bitCast(lparam);
-            const suggested_rect: *win32.RECT = @ptrFromInt(ulparam);
+            const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
             const new_dpi = utils.loWord(wparam);
-            const fdpi: f64 = @floatFromInt(new_dpi);
-            const scale = fdpi / win32.FUSER_DEFAULT_SCREEN_DPI;
+            const scale = @as(f64, @floatFromInt(new_dpi)) / win32.USER_DEFAULT_SCREEN_DPI_F;
             const flags = @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
                 @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
                 @intFromEnum(win32_window_messaging.SWP_NOREPOSITION);
