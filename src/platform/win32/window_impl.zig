@@ -292,11 +292,7 @@ pub const WindowWin32Data = struct {
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,
-    size_pos_update: u8, // we will use this to filter repeating size and postion events.
-    pub const NO_SIZE_POSITION_UPDATE = @as(u8, 0x00);
-    pub const SIZE_UPDATE = @as(u8, 0x01);
-    pub const POSITON_UPDATE = @as(u8, 0x02);
-    pub const SIZE_POSITION_UPDATE = @as(u8, 0x03);
+    position_update: bool,
 };
 
 pub const WindowImpl = struct {
@@ -340,9 +336,9 @@ pub const WindowImpl = struct {
             },
             .high_surrogate = 0,
             .frame_action = false,
+            .position_update = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
             .restore_frame = null,
-            .size_pos_update = WindowWin32Data.NO_SIZE_POSITION_UPDATE,
         };
 
         // Process inital events.

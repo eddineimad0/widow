@@ -401,19 +401,16 @@ pub fn mainWindowProc(
 
             window.data.client_area.size.width = new_width;
             window.data.client_area.size.height = new_height;
-            window.win32.size_pos_update |= window_impl.WindowWin32Data.SIZE_UPDATE;
 
-            if (!window.win32.frame_action) {
-                // This message is sent multiple times when the user resizes the window
-                // by dragging it's borders if we were to queue a resize event for each
-                // the user will be bombarded by multiple useless messages so we will only queue the final one.
-                const event = common.event.createResizeEvent(
-                    window.data.id,
-                    new_width,
-                    new_height,
-                );
-                window.sendEvent(&event);
-            }
+            // For windows that allows resizing by dragging it's edges,
+            // this message is received multiple times during the resize process
+            // causing ton of events allocations.
+            const event = common.event.createResizeEvent(
+                window.data.id,
+                new_width,
+                new_height,
+            );
+            window.sendEvent(&event);
 
             return 0;
         },
@@ -424,7 +421,7 @@ pub fn mainWindowProc(
 
             // Our minimized flag is still not set so check using the winapi.
             if (win32_window_messaging.IsIconic(window.handle) != 0) {
-                // When minimized don't change the top left position.
+                // if the window was minimized don't update the top left position.
                 break :blk;
             }
 
@@ -441,7 +438,6 @@ pub fn mainWindowProc(
             window.data.client_area.top_left.x = xpos;
             window.data.client_area.top_left.y = ypos;
 
-            window.win32.size_pos_update |= window_impl.WindowWin32Data.POSITON_UPDATE;
             if (!window.win32.frame_action) {
                 const event = common.event.createMoveEvent(
                     window.data.id,
@@ -450,6 +446,11 @@ pub fn mainWindowProc(
                     false,
                 );
                 window.sendEvent(&event);
+            } else {
+                // If the user is dragging the window around
+                // we'll set this flag and send the final
+                // coordinates once the user stops.
+                window.win32.position_update = true;
             }
         },
 
@@ -539,14 +540,14 @@ pub fn mainWindowProc(
                 return 0;
             }
         },
-        //
+
         win32_window_messaging.WM_ENTERSIZEMOVE => {
-            // Sent one time to a window after it enters the moving or sizing or menu modal loop,
-            // The window enters the moving or sizing or the menu modal
+            // Sent one time to a window after it enters
+            // the moving or sizing loop,
+            // The window enters the moving or sizing
             // loop when the user clicks the window's title bar or sizing border
-            // or interact with the menu.
+
             window.win32.frame_action = true;
-            window.win32.size_pos_update = window_impl.WindowWin32Data.NO_SIZE_POSITION_UPDATE;
         },
 
         win32_window_messaging.WM_EXITSIZEMOVE => {
@@ -560,16 +561,8 @@ pub fn mainWindowProc(
                 window_impl.disableCursor(window.handle);
             }
 
-            if (window.win32.size_pos_update & window_impl.WindowWin32Data.SIZE_UPDATE != 0) {
-                // At the end of a resize loop set the new client size and width.
-                const event = common.event.createResizeEvent(
-                    window.data.id,
-                    window.data.client_area.size.width,
-                    window.data.client_area.size.height,
-                );
-                window.sendEvent(&event);
-            }
-            if (window.win32.size_pos_update & window_impl.WindowWin32Data.POSITON_UPDATE != 0) {
+            // Send any new position events.
+            if (window.win32.position_update) {
                 const event = common.event.createMoveEvent(
                     window.data.id,
                     window.data.client_area.top_left.x,
@@ -577,6 +570,7 @@ pub fn mainWindowProc(
                     false,
                 );
                 window.sendEvent(&event);
+                window.win32.position_update = false;
             }
             window.win32.frame_action = false;
         },
