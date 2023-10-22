@@ -23,7 +23,6 @@ pub fn build(b: *std.Build) !void {
         });
         example.addModule("widow", widow);
         // example.linkSystemLibrary("X11");
-        example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
