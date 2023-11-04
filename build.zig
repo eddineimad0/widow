@@ -51,7 +51,7 @@ fn exportWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.bui
             if (std.mem.orderZ(u8, display_server, "x11") == .eq) {
                 var deps: [1]std.build.ModuleDependency = .{.{ .name = "common", .module = common_module }};
                 break :unix b.createModule(
-                    .{ .source_file = .{ .path = "src/platform/linux/xorg/platform.zig" }, .dependencies = &deps },
+                    .{ .source_file = .{ .path = "src/platform/unix/xorg/platform.zig" }, .dependencies = &deps },
                 );
             } else {
                 @panic("Unsupported display server");

@@ -16,6 +16,14 @@ const ext_libs = switch (b.target.os.tag) {
     else => @compileError("Unsupported Unix Platform"),
 };
 
+const LIB_XRANDR_INDEX = @as(u8, 0);
+const LIB_XINERAMA_INDEX = @as(u8, 1);
+
+pub const XConnectionError = error{
+    ConnectionFailed,
+    XRandRNotFound,
+};
+
 const X11Handles = struct {
     xdisplay: *libx11.Display,
     root_window: libx11.Window,
@@ -93,7 +101,7 @@ pub const X11Context = struct {
 
     const Self = @This();
 
-    pub fn initSingleton() !void {
+    pub fn initSingleton() XConnectionError!void {
         @setCold(true);
 
         Self.mutex.lock();
@@ -102,10 +110,11 @@ pub const X11Context = struct {
             const g_instance = &Self.globl_instance;
             // Open a connection to the X server.
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
-                return error.FailedToConnectToXServer;
+                return XConnectionError.ConnectionFailed;
             };
             // Grab the default screen(monitor) and the root window on it.
             g_instance.handles.default_screen = @intCast(libx11.DefaultScreen(g_instance.handles.xdisplay));
+            // Grab the root window on the default screen.
             g_instance.handles.root_window = libx11.RootWindow(g_instance.handles.xdisplay, g_instance.handles.default_screen);
 
             try g_instance.loadXExtensions();
@@ -125,16 +134,21 @@ pub const X11Context = struct {
         }
     }
 
-    fn loadXExtensions(self: *Self) !void {
-        self.handles.xrandr = module.loadPosixModule(ext_libs[0]);
+    fn loadXExtensions(self: *Self) XConnectionError!void {
+        self.handles.xrandr = module.loadPosixModule(ext_libs[LIB_XRANDR_INDEX]);
         if (self.handles.xrandr) |handle| {
-            self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(module.moduleSymbol(handle, "XRRGetCrtcInfo"));
-            self.extensions.xrandr.XRRFreeCrtcInfo = @ptrCast(module.moduleSymbol(handle, "XRRFreeCrtcInfo"));
-            self.extensions.xrandr.XRRGetOutputInfo = @ptrCast(module.moduleSymbol(handle, "XRRGetOutputInfo"));
-            self.extensions.xrandr.XRRFreeOutputInfo = @ptrCast(module.moduleSymbol(
-                handle,
-                "XRRFreeOutputInfo",
-            ));
+            self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
+                module.moduleSymbol(handle, "XRRGetCrtcInfo"),
+            );
+            self.extensions.xrandr.XRRFreeCrtcInfo = @ptrCast(
+                module.moduleSymbol(handle, "XRRFreeCrtcInfo"),
+            );
+            self.extensions.xrandr.XRRGetOutputInfo = @ptrCast(
+                module.moduleSymbol(handle, "XRRGetOutputInfo"),
+            );
+            self.extensions.xrandr.XRRFreeOutputInfo = @ptrCast(
+                module.moduleSymbol(handle, "XRRFreeOutputInfo"),
+            );
             self.extensions.xrandr.XRRGetOutputPrimary = @ptrCast(
                 module.moduleSymbol(handle, "XRRGetOutputPrimary"),
             );
@@ -159,17 +173,18 @@ pub const X11Context = struct {
             self.extensions.xrandr.is_v1point3 = (major >= 1 and minor >= 3);
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
-            // Err since a lot functionalties rely on xrandr.
-            return error.MissingXorgExtension;
+            // Error out since a lot functionalties rely on xrandr.
+            return XConnectionError.XRandRNotFound;
         }
 
-        self.handles.xinerama = module.loadPosixModule(ext_libs[1]);
+        self.handles.xinerama = module.loadPosixModule(ext_libs[LIB_XINERAMA_INDEX]);
         if (self.handles.xinerama) |handle| {
-            self.extensions.xinerama.IsActive = @ptrCast(module.moduleSymbol(handle, "XineramaIsActive").?);
-            self.extensions.xinerama.QueryScreens = @ptrCast(module.moduleSymbol(
-                handle,
-                "XineramaQueryScreens",
-            ).?);
+            self.extensions.xinerama.IsActive = @ptrCast(
+                module.moduleSymbol(handle, "XineramaIsActive").?,
+            );
+            self.extensions.xinerama.QueryScreens = @ptrCast(
+                module.moduleSymbol(handle, "XineramaQueryScreens").?,
+            );
             self.extensions.xinerama.is_active = (self.extensions.xinerama.IsActive(self.handles.xdisplay) != 0);
         } else {
             std.log.warn("[X11]: Xinerama library not found.\n", .{});
@@ -206,7 +221,7 @@ pub const X11Context = struct {
             var value: libx11.XrmValue = undefined;
             _ = libx11.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &value_type, &value);
             if (value_type) |t| {
-                if (utils.strCmp(t, "String")) {
+                if (utils.strEquals(t, "String")) {
                     var src: []const u8 = undefined;
                     src.len = value.size;
                     src.ptr = value.addr.?;

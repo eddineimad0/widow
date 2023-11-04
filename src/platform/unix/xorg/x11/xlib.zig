@@ -58,5 +58,8 @@ pub extern "X11" fn XDestroyWindow(display: ?*types.Display, window: types.Windo
 pub extern "X11" fn XMapWindow(display: ?*types.Display, window: types.Window) c_int;
 pub extern "X11" fn XUnmapWindow(display: ?*types.Display, window: types.Window) c_int;
 
+// Events
+pub extern "X11" fn XNextEvent(arg0: *types.Display, arg1: *types.XEvent) c_int;
+
 // Misc
 pub extern "X11" fn XFree(data: *anyopaque) c_int;

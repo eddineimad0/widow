@@ -2,9 +2,11 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
 const VirtualCode = widow.keyboard_and_mouse.VirtualCode;
-const allocator = std.heap.c_allocator;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(gpa.deinit() == .ok);
+    var allocator = gpa.allocator();
     // first we need to preform some platform specific initialization.
     // an options tuple can be passed to customize the platform init
     // e.g on windows we can set the WNDClass name to a comptime string of our choice,
@@ -41,5 +43,8 @@ pub fn main() !void {
     builder.deinit();
     // closes the window when done.
     defer mywindow.deinit();
-    std.time.sleep(5 * std.time.ns_per_s);
+
+    while (mywindow.impl.data.flags.is_visible) {
+        mywindow.processEvents();
+    }
 }

@@ -4,6 +4,11 @@ const libX11 = @import("x11/xlib.zig");
 const MonitorStore = @import("internals.zig").MonitorStore;
 const WindowData = common.window_data.WindowData;
 const X11Context = @import("global.zig").X11Context;
+const Allocator = std.mem.Allocator;
+
+pub const WindowError = error{
+    WindowCreationFailure,
+};
 
 /// Holds all the refrences we use to communitcate with the WidowContext.
 pub const WidowProps = struct {
@@ -22,12 +27,12 @@ pub const WindowImpl = struct {
     const Self = @This();
 
     pub fn create(
-        allocator: std.mem.Allocator,
+        allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
         monitor_store: *MonitorStore,
-    ) !*Self {
+    ) (Allocator.Error || WindowError)!*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.widow = WidowProps{
@@ -58,6 +63,16 @@ pub const WindowImpl = struct {
         allocator.destroy(self);
     }
 
+    pub fn processEvents(self: *Self) void {
+        var e: libX11.XEvent = undefined;
+        const g_instance = X11Context.singleton();
+        _ = libX11.XNextEvent(g_instance.handles.xdisplay, &e);
+        if (e.type == libX11.KeyPress) {
+            // Temp for breaking.
+            self.hide();
+        }
+    }
+
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         std.debug.assert(self.handle != 0);
@@ -78,7 +93,7 @@ pub const WindowImpl = struct {
 fn createPlatformWindow(
     title: []const u8,
     data: *const WindowData,
-) !libX11.Window {
+) WindowError!libX11.Window {
     const EVENT_MASK = libX11.KeyReleaseMask | libX11.KeyPressMask | libX11.ButtonPressMask |
         libX11.ButtonReleaseMask | libX11.EnterWindowMask | libX11.LeaveWindowMask |
         libX11.FocusChangeMask | libX11.VisibilityChangeMask | libX11.PointerMotionMask |
@@ -106,7 +121,7 @@ fn createPlatformWindow(
     );
 
     if (handle == 0) {
-        return error.WindowCreationFailure;
+        return WindowError.WindowCreationFailure;
     }
 
     return handle;
@@ -129,7 +144,6 @@ test "local_window_test" {
     };
     _ = window;
     // try WindowImpl.setup(&window, std.testing.allocator, "Local Window");
-    std.time.sleep(std.time.ns_per_s * 3);
     // window.close();
     // X11Context.deinitSingleton();
 }

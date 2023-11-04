@@ -5,6 +5,7 @@ const libx11 = @import("x11/xlib.zig");
 const libx11ext = @import("x11/extensions.zig");
 const X11Context = @import("global.zig").X11Context;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
+const Allocator = std.mem.Allocator;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
@@ -19,17 +20,15 @@ pub const Internals = struct {
     const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
-    pub fn create(allocator: std.mem.Allocator) !*Self {
+    pub fn create(allocator: Allocator) Allocator.Error!*Self {
         var self = try allocator.create(Self);
-        const x11cntxt = X11Context.singleton();
-        _ = x11cntxt;
         self.helper_window = 0;
         self.helper_data.clipboard_text = null;
         self.helper_data.monitor_store_ptr = null;
         return self;
     }
 
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn destroy(self: *Self, allocator: Allocator) void {
         if (self.helper_data.clipboard_text) |text| {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
@@ -39,18 +38,18 @@ pub const Internals = struct {
     }
 
     /// Init the Monitor store member, and update the helper data refrence.
-    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !*MonitorStore {
+    pub fn initMonitorStoreImpl(self: *Self, allocator: Allocator) Allocator.Error!*MonitorStore {
         self.monitor_store = try MonitorStore.init(allocator);
         self.helper_data.monitor_store_ptr = &self.monitor_store;
         return &self.monitor_store;
     }
 
-    pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
+    pub fn clipboardText(self: *Self, allocator: Allocator) Allocator.Error![]u8 {
         _ = allocator;
         _ = self;
     }
 
-    pub fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
+    pub fn setClipboardText(self: *Self, allocator: Allocator, text: []const u8) Allocator.Error!void {
         _ = text;
         _ = allocator;
         _ = self;
@@ -106,13 +105,14 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !void {
     // };
 }
 
+pub const MonitorStoreError = error{};
 pub const MonitorStore = struct {
     monitors: std.ArrayList(monitor_impl.MonitorImpl),
     used_monitors: u8,
     const Self = @This();
 
     /// Initialize the `MonitorStore` struct.
-    pub fn init(allocator: std.mem.Allocator) !Self {
+    pub fn init(allocator: Allocator) Allocator.Error!Self {
         var self = Self{
             .used_monitors = 0,
             .monitors = try monitor_impl.pollMonitors(allocator),
@@ -134,7 +134,7 @@ pub const MonitorStore = struct {
     }
 
     /// Returns a refrence to the requested Monitor or an error if the monitor was not found.
-    pub fn findMonitor(self: *Self, monitor_handle: libx11ext.RRCrtc) !*monitor_impl.MonitorImpl {
+    pub fn findMonitor(self: *Self, monitor_handle: libx11ext.RRCrtc) ?*monitor_impl.MonitorImpl {
         // Find the monitor.
         var target: ?*monitor_impl.MonitorImpl = null;
         for (self.monitors.items) |*item| {
@@ -143,13 +143,8 @@ pub const MonitorStore = struct {
                 break;
             }
         }
-        const monitor = target orelse {
-            std.log.err("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
-            //TODO: error defs.
-            return error.MonitorNotFound;
-        };
 
-        return monitor;
+        return target;
     }
 
     // /// Updates the monitors array by removing all disconnected monitors
