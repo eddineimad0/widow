@@ -57,9 +57,57 @@ pub extern "X11" fn XCreateWindow(
 pub extern "X11" fn XDestroyWindow(display: ?*types.Display, window: types.Window) c_int;
 pub extern "X11" fn XMapWindow(display: ?*types.Display, window: types.Window) c_int;
 pub extern "X11" fn XUnmapWindow(display: ?*types.Display, window: types.Window) c_int;
+pub extern "X11" fn XChangeProperty(
+    display: ?*types.Display,
+    w: types.Window,
+    property: types.Atom,
+    prop_type: types.Atom,
+    format: c_int,
+    mode: c_int,
+    data: [*]const u8,
+    nelements: c_int,
+) void;
 
 // Events
-pub extern "X11" fn XNextEvent(arg0: *types.Display, arg1: *types.XEvent) c_int;
+pub extern "X11" fn XNextEvent(display: *types.Display, x_event: *types.XEvent) c_int;
+pub extern "X11" fn XPending(display: *types.Display) c_int;
+pub extern "X11" fn XSendEvent(
+    display: *types.Display,
+    w: types.Window,
+    propagate: types.Bool,
+    event_mask: c_long,
+    event: *types.XEvent,
+) types.Status;
+
+// Output buffer handler
+pub extern "X11" fn XSync(display: *types.Display, discard: types.Bool) void;
+pub extern "X11" fn XFlush(Display: *types.Display) c_int;
+
+// Errors
+pub const XErrorHandlerFunc = fn (display: ?*types.Display, err: *types.XErrorEvent) callconv(.C) c_int;
+const XIOErrorHandlerFunc = fn (display: ?*types.Display) callconv(.C) c_int;
+pub extern "X11" fn XSetErrorHandler(handler: ?*const XErrorHandlerFunc) ?*XErrorHandlerFunc;
 
 // Misc
+pub extern "X11" fn XGetWindowProperty(
+    display: ?*types.Display,
+    w: types.Window,
+    property: types.Atom,
+    long_offset: c_long,
+    long_lenght: c_long,
+    delete: types.Bool,
+    req_type: types.Atom,
+    actual_type_return: *types.Atom,
+    actual_format_return: *c_int,
+    nitems_return: *c_ulong,
+    bytes_after_return: *c_ulong,
+    prop_return: ?[*]?[*]u8,
+) c_int;
+
+pub extern "X11" fn XInternAtom(
+    display: ?*types.Display,
+    atom_name: [*:0]const u8,
+    if_exist: types.Bool,
+) types.Atom;
+
 pub extern "X11" fn XFree(data: *anyopaque) c_int;

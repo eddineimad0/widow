@@ -1,5 +1,8 @@
 //! This file contains helper function to use on the linux platforms
 const std = @import("std");
+const maxInt = std.math.maxInt;
+
+pub const MAX_C_LONG = @as(c_long, maxInt(c_long));
 
 /// Drop in replacement for strCpy.
 pub inline fn strCpy(src: [*:0]const u8, dst: [*]u8, count: usize) void {
