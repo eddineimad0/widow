@@ -29,7 +29,7 @@ pub const Window = struct {
         data: *WindowData,
         events_queue: *common.event.EventQueue,
         monitor_store: *platform.MonitorStore,
-    ) !Self {
+    ) (Allocator.Error || platform.window_impl.WindowError)!Self {
         var self = Self{
             .allocator = allocator,
             .impl = try WindowImpl.create(

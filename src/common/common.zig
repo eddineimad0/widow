@@ -7,4 +7,4 @@ pub const keyboard_and_mouse = @import("keyboard_and_mouse.zig");
 pub const cursor = @import("cursor.zig");
 pub const joystick = @import("joystick.zig");
 
-pub const IS_DEBUG = @import("builtin").mode == .DEBUG;
+pub const IS_DEBUG = @import("builtin").mode == .Debug;

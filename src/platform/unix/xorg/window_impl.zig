@@ -1,13 +1,15 @@
 const std = @import("std");
 const common = @import("common");
 const libX11 = @import("x11/xlib.zig");
+const utils = @import("utils.zig");
 const MonitorStore = @import("internals.zig").MonitorStore;
-const WindowData = common.window_data.WindowData;
 const X11Context = @import("global.zig").X11Context;
+const WindowData = common.window_data.WindowData;
 const Allocator = std.mem.Allocator;
 
 pub const WindowError = error{
-    WindowCreationFailure,
+    FailedToCreateWindow,
+    FailedToCopyTitle,
 };
 
 /// Holds all the refrences we use to communitcate with the WidowContext.
@@ -43,7 +45,7 @@ pub const WindowImpl = struct {
 
         self.handle = try createPlatformWindow(data);
 
-        self.setTitle(window_title);
+        self.setTitle(allocator, window_title);
         if (self.data.flags.is_visible) {
             self.show();
             if (self.data.flags.is_focused) {
@@ -406,7 +408,8 @@ pub const WindowImpl = struct {
     // }
 
     /// Changes the title of the window.
-    pub fn setTitle(self: *Self, new_title: []const u8) void {
+    /// the allocator parameter is accepted for compatibility reasons.
+    pub fn setTitle(self: *Self, _: std.mem.Allocator, new_title: []const u8) void {
         const x11cntxt = X11Context.singleton();
         const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0) x11cntxt.ewmh._NET_WM_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_NAME;
         const icon_atom = if (x11cntxt.ewmh._NET_WM_ICON_NAME != 0) x11cntxt.ewmh._NET_WM_ICON_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_ICON_NAME;
@@ -435,10 +438,23 @@ pub const WindowImpl = struct {
     }
 
     /// Returns the title of the window.
-    pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        _ = allocator;
-        _ = self;
-        return WindowError.FailedToCopyTitle;
+    pub inline fn title(self: *const Self, allocator: Allocator) (WindowError || Allocator.Error)![]u8 {
+        const x11cntxt = X11Context.singleton();
+        var data: [*]u8 = undefined;
+        const data_len = utils.x11WindowProperty(
+            x11cntxt.handles.xdisplay,
+            self.handle,
+            x11cntxt.ewmh._NET_WM_NAME,
+            x11cntxt.ewmh.UTF8_STRING,
+            @ptrCast(&data),
+        ) catch |e| {
+            utils.debugPropError(e, x11cntxt.ewmh._NET_WM_NAME);
+            return WindowError.FailedToCopyTitle;
+        };
+        defer _ = libX11.XFree(data);
+        var window_title = try allocator.alloc(u8, data_len);
+        @memcpy(window_title, data);
+        return window_title;
     }
 
     // /// Returns the window's current opacity
@@ -752,7 +768,7 @@ fn createPlatformWindow(
     );
 
     if (handle == 0) {
-        return WindowError.WindowCreationFailure;
+        return WindowError.FailedToCreateWindow;
     }
 
     return handle;

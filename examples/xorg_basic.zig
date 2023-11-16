@@ -24,7 +24,7 @@ pub fn main() !void {
     // create a WindowBuilder.
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
-        "Simple window",
+        "Xorg window",
         800,
         600,
         &widow_cntxt,
@@ -47,4 +47,7 @@ pub fn main() !void {
     while (mywindow.impl.data.flags.is_visible) {
         mywindow.processEvents();
     }
+    const mywindow_title = try mywindow.title(allocator);
+    defer allocator.free(mywindow_title);
+    std.debug.print("Closing {s}\n", .{mywindow_title});
 }

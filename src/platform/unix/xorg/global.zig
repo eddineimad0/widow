@@ -19,7 +19,7 @@ const ext_libs = switch (b.target.os.tag) {
 const LIB_XRANDR_INDEX = @as(u8, 0);
 const LIB_XINERAMA_INDEX = @as(u8, 1);
 
-pub const XConnectionError = error{
+pub const X11Error = error{
     ConnectionFailed,
     XRandRNotFound,
 };
@@ -170,7 +170,7 @@ pub const X11Context = struct {
 
     const Self = @This();
 
-    pub fn initSingleton() XConnectionError!void {
+    pub fn initSingleton() X11Error!void {
         @setCold(true);
 
         Self.g_init_mutex.lock();
@@ -179,7 +179,7 @@ pub const X11Context = struct {
             const g_instance = &Self.globl_instance;
             // Open a connection to the X server.
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
-                return XConnectionError.ConnectionFailed;
+                return X11Error.ConnectionFailed;
             };
             // Grab the default screen(monitor) and the root window on it.
             g_instance.handles.default_screen = @intCast(libx11.DefaultScreen(g_instance.handles.xdisplay));
@@ -189,25 +189,13 @@ pub const X11Context = struct {
             try g_instance.loadXExtensions();
             g_instance.getSystemGlobalScale();
 
-            // read root window properties
-            g_instance.ewmh._NET_SUPPORTING_WM_CHECK = libx11.XInternAtom(
-                g_instance.handles.xdisplay,
-                "_NET_SUPPORTING_WM_CHECK",
-                libx11.False,
-            );
-            g_instance.ewmh._NET_SUPPORTED = libx11.XInternAtom(
-                g_instance.handles.xdisplay,
-                "_NET_SUPPORTED",
-                libx11.False,
-            );
+            g_instance.queryEWMH();
 
             g_instance.ewmh.UTF8_STRING = libx11.XInternAtom(
                 g_instance.handles.xdisplay,
                 "UTF8_STRING",
                 libx11.False,
             );
-
-            g_instance.queryEWMH();
 
             Self.g_init = true;
         }
@@ -224,7 +212,7 @@ pub const X11Context = struct {
         }
     }
 
-    fn loadXExtensions(self: *Self) XConnectionError!void {
+    fn loadXExtensions(self: *Self) X11Error!void {
         self.handles.xrandr = module.loadPosixModule(ext_libs[LIB_XRANDR_INDEX]);
         if (self.handles.xrandr) |handle| {
             self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
@@ -264,7 +252,7 @@ pub const X11Context = struct {
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
             // Error out since a lot functionalties rely on xrandr.
-            return XConnectionError.XRandRNotFound;
+            return X11Error.XRandRNotFound;
         }
 
         self.handles.xinerama = module.loadPosixModule(ext_libs[LIB_XINERAMA_INDEX]);
@@ -328,43 +316,40 @@ pub const X11Context = struct {
     /// Note: 2 calls to this function must be separated by a call to
     /// unsetXErrorHandler,
     pub fn setXErrorHandler(self: *Self) void {
-        std.debug.print("\nlast_error_handler:{?}\n", .{self.last_error_handler});
-        std.debug.assert(self.last_error_handler == null);
-        // clear last error.
-        self.last_error_code = 0;
-        self.last_error_handler = libx11.XSetErrorHandler(handleXError);
+        _ = self;
     }
 
     /// returns an error if the last error_code is not 0.
-    pub fn unsetXErrorHandler(self: *Self) !void {
-        libx11.XSync(self.handles.xdisplay, libx11.False);
-        _ = libx11.XSetErrorHandler(self.last_error_handler);
-        self.last_error_handler = null;
-        if (self.last_error_code != 0) {
-            // TODO:
-            std.debug.print("\n[-] Error \n", .{});
-            return error.ConnectionError;
-        }
+    pub fn unsetXErrorHandler(self: *Self) void {
+        _ = self;
     }
-
-    // TODO: report error
-    // pub fn errorMsg()
 
     fn queryEWMH(self: *Self) void {
 
         // if the _NET_WM_SUPPORTING_WM_CHECK is missing client should
         // assume a non conforming window manager is present
+        // read root window properties
+        self.ewmh._NET_SUPPORTING_WM_CHECK = libx11.XInternAtom(
+            self.handles.xdisplay,
+            "_NET_SUPPORTING_WM_CHECK",
+            libx11.False,
+        );
+
+        self.setXErrorHandler();
+        defer self.unsetXErrorHandler();
+
         var window_ptr: ?*libx11.Window = null;
-        if (x11WindowProperty(
+        _ = utils.x11WindowProperty(
             self.handles.xdisplay,
             self.handles.root_window,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
             libx11.XA_WINDOW,
             @ptrCast(&window_ptr),
-        ) == 0) {
+        ) catch |e| {
+            utils.debugPropError(e, self.ewmh._NET_SUPPORTING_WM_CHECK);
             // non conforming.
             return;
-        }
+        };
 
         std.debug.assert(window_ptr != null);
         defer _ = libx11.XFree(window_ptr.?);
@@ -375,15 +360,17 @@ pub const X11Context = struct {
         // set to the same id(the id of the child window).
 
         var child_window_ptr: ?*libx11.Window = null;
-        if (x11WindowProperty(
+        _ = utils.x11WindowProperty(
             self.handles.xdisplay,
             window_ptr.?.*,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
             libx11.XA_WINDOW,
             @ptrCast(&child_window_ptr),
-        ) == 0) {
+        ) catch |e| {
+            utils.debugPropError(e, self.ewmh._NET_SUPPORTING_WM_CHECK);
+            // non conforming.
             return;
-        }
+        };
 
         std.debug.assert(child_window_ptr != null);
         defer _ = libx11.XFree(child_window_ptr.?);
@@ -397,76 +384,84 @@ pub const X11Context = struct {
         // a list of all supported features through the _NET_SUPPORTED
         // property on the root window.
 
+        self.ewmh._NET_SUPPORTED = libx11.XInternAtom(
+            self.handles.xdisplay,
+            "_NET_SUPPORTED",
+            libx11.False,
+        );
+
         var supported: ?[*]libx11.Atom = null;
-        const atom_count = x11WindowProperty(
+        const atom_count = utils.x11WindowProperty(
             self.handles.xdisplay,
             self.handles.root_window,
             self.ewmh._NET_SUPPORTED,
             libx11.XA_ATOM,
             @ptrCast(&supported),
-        );
-
-        if (atom_count == 0) {
-            std.debug.print("\n 0 Supported atoms\n", .{});
+        ) catch |e| {
+            utils.debugPropError(e, self.ewmh._NET_SUPPORTED);
             return;
-        }
+        };
 
         std.debug.assert(supported != null);
         defer _ = libx11.XFree(supported.?);
 
-        self.ewmh._NET_WM_STATE = atomIfSupported(
+        self.ewmh._NET_WM_STATE = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WM_STATE",
         );
-        self.ewmh._NET_WM_STATE_DEMANDS_ATTENTION = atomIfSupported(
+
+        self.ewmh._NET_WM_STATE_DEMANDS_ATTENTION = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WM_STATE_DEMANDS_ATTENTION",
         );
-        self.ewmh._NET_WORKAREA = atomIfSupported(
+
+        self.ewmh._NET_WORKAREA = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WORKAREA",
         );
-        self.ewmh._NET_CURRENT_DESKTOP = atomIfSupported(
+
+        self.ewmh._NET_CURRENT_DESKTOP = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_CURRENT_DESKTOP",
         );
-        self.ewmh._NET_ACTIVE_WINDOW = atomIfSupported(
+
+        self.ewmh._NET_ACTIVE_WINDOW = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_ACTIVE_WINDOW",
         );
 
-        self.ewmh._NET_WM_NAME = atomIfSupported(
+        self.ewmh._NET_WM_NAME = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WM_NAME",
         );
 
-        self.ewmh._NET_WM_VISIBLE_NAME = atomIfSupported(
+        self.ewmh._NET_WM_VISIBLE_NAME = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WM_VISIBLE_NAME",
         );
 
-        self.ewmh._NET_WM_ICON_NAME = atomIfSupported(
+        self.ewmh._NET_WM_ICON_NAME = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
             "_NET_WM_ICON_NAME",
         );
 
-        self.ewmh._NET_WM_VISIBLE_ICON_NAME = atomIfSupported(
+        self.ewmh._NET_WM_VISIBLE_ICON_NAME = x11InternAtomIfSupported(
             self.handles.xdisplay,
             supported.?,
             atom_count,
@@ -482,7 +477,7 @@ pub const X11Context = struct {
         //     if (comptime std.mem.eql(u8, "_NET_SUPPORTED", f.name)) {
         //         continue;
         //     }
-        //     @field(self.ewmh, f.name) = atomIfSupported(
+        //     @field(self.ewmh, f.name) = x11InternAtomIfSupported(
         //         self.handles.xdisplay,
         //         supported.?,
         //         atom_count,
@@ -497,14 +492,9 @@ pub const X11Context = struct {
     pub fn flushXRequests(self: *const Self) void {
         _ = libx11.XFlush(self.handles.xdisplay);
     }
+
     // Enfoce readonly.
     pub fn singleton() *const Self {
-        std.debug.assert(g_init == true);
-        return &Self.globl_instance;
-    }
-
-    // TODO: find a better way to check for X11 errors.
-    pub fn mutSingelton() *Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
     }
@@ -513,7 +503,7 @@ pub const X11Context = struct {
 /// check the supported atoms for a specified atom name
 /// if found it returns the atom
 /// if not it returns 0.
-fn atomIfSupported(display: ?*libx11.Display, supported: [*]libx11.Atom, atom_count: u32, atom_name: [*:0]const u8) libx11.Atom {
+fn x11InternAtomIfSupported(display: ?*libx11.Display, supported: [*]libx11.Atom, atom_count: u32, atom_name: [*:0]const u8) libx11.Atom {
     const atom = libx11.XInternAtom(display, atom_name, libx11.False);
 
     for (0..atom_count) |i| {
@@ -525,37 +515,9 @@ fn atomIfSupported(display: ?*libx11.Display, supported: [*]libx11.Atom, atom_co
     return 0;
 }
 
-pub fn x11WindowProperty(display: ?*libx11.Display, w: libx11.Window, property: libx11.Atom, prop_type: libx11.Atom, value: ?[*]?[*]u8) u32 {
-    var actual_type: libx11.Atom = undefined;
-    var actual_format: c_int = undefined;
-    var nitems: c_ulong = 0;
-    var bytes_after: c_ulong = undefined;
-    _ = libx11.XGetWindowProperty(
-        display,
-        w,
-        property,
-        0,
-        utils.MAX_C_LONG,
-        libx11.False,
-        prop_type,
-        &actual_type,
-        &actual_format,
-        &nitems,
-        &bytes_after,
-        value,
-    );
-    // make sure no bytes are left behind.
-    std.debug.assert(bytes_after == 0);
-    return @intCast(nitems);
-}
-
 fn handleXError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
-    const x11cntxt = X11Context.mutSingelton();
-    if (x11cntxt.handles.xdisplay != display) {
-        return 0;
-    }
-    // TODO: saftey concerns ? of mutating the global constant.
-    x11cntxt.last_error_code = err.error_code;
+    _ = err;
+    _ = display;
     return 0;
 }
 
