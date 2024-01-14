@@ -21,11 +21,11 @@ pub inline fn moduleSymbol(module_handle: *anyopaque, symbol_name: [*:0]const u8
     return libc.dlsym(module_handle, symbol_name);
 }
 
-test "Loading and freeing win32 libraries" {
+test "Loading and freeing libraries" {
     const testing = std.testing;
-    const module = loadPosixModule("libXrandr.so.2");
+    const module = loadPosixModule("libz.so");
     try testing.expect(@intFromPtr(module) != 0);
-    const symbol = moduleSymbol(module.?, "XRRGetScreenResourcesCurrent");
+    const symbol = moduleSymbol(module.?, "deflate");
     try testing.expect(@intFromPtr(symbol) != 0);
     freePosixModule(module.?);
 }

@@ -572,3 +572,27 @@ pub const XEvent = extern union {
     xcookie: XGenericEventCookie,
     pad: [24]c_long,
 };
+pub const XSizeHints = extern struct {
+    flags: c_long,
+    x: c_int,
+    y: c_int,
+    width: c_int,
+    height: c_int,
+    min_width: c_int,
+    min_height: c_int,
+    max_width: c_int,
+    max_height: c_int,
+    width_inc: c_int,
+    height_inc: c_int,
+    min_aspect: extern struct {
+        x: c_int,
+        y: c_int,
+    },
+    max_aspect: extern struct {
+        x: c_int,
+        y: c_int,
+    },
+    base_width: c_int,
+    base_height: c_int,
+    win_gravity: c_int,
+};

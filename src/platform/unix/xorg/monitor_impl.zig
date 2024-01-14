@@ -3,7 +3,7 @@ const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
-const dbg = @import("builtin").mode == .Debug;
+const dbg = common.IS_DEBUG;
 const X11Context = @import("global.zig").X11Context;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
@@ -20,7 +20,8 @@ pub const MonitorError = error{
 /// if the a frequency value can't be calcluated it returns 0;
 inline fn calculateMonitorFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
     // If the dot clock is zero, then all of the timing
-    // parameters and flags are not used,
+    // parameters and flags are not used, and must be zero as this
+    // indicates that the timings are unknown or otherwise unused.
     if (mode_info.dotClock == 0) {
         // Unknown refresh rate.
         return 0;
@@ -33,7 +34,6 @@ inline fn calculateMonitorFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
 
 /// Fills the output parameters from the video mode info
 fn videoModeFromRRMode(mode: *const x11ext.XRRModeInfo, rotated: bool, output: *VideoMode) bool {
-    // TODO: explain why
     if (mode.modeFlags & x11ext.RR_Interlace != 0) {
         return false;
     }
@@ -224,7 +224,7 @@ pub const MonitorImpl = struct {
     output: x11ext.RROutput,
     xinerama_index: ?i32,
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
-    modes_ids: ArrayList(x11ext.RRMode),
+    modes_ids: ArrayList(x11ext.RRMode), // Used for mapping between our modes array and xrandr.
     orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
     window: ?*WindowImpl, // A pointer to the window occupying(fullscreen) the monitor.
 

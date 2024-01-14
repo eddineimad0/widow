@@ -24,12 +24,23 @@ pub inline fn strEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
+pub inline fn isBitSet(bitset: isize, comptime pos: comptime_int) bool {
+    return (bitset & (1 << pos)) != 0;
+}
+
 pub const WindowPropError = error{
     BadPropType,
     PropNotFound,
 };
+
 /// a helper function for simplifying reading x11 windows properties
-pub fn x11WindowProperty(display: ?*libx11.Display, w: libx11.Window, property: libx11.Atom, prop_type: libx11.Atom, value: ?[*]?[*]u8) WindowPropError!u32 {
+pub fn x11WindowProperty(
+    display: ?*libx11.Display,
+    w: libx11.Window,
+    property: libx11.Atom,
+    prop_type: libx11.Atom,
+    value: ?[*]?[*]u8,
+) WindowPropError!u32 {
     var actual_type: libx11.Atom = undefined;
     var actual_format: c_int = undefined;
     var nitems: c_ulong = 0;
@@ -67,4 +78,18 @@ pub fn debugPropError(e: WindowPropError, property: libx11.Atom) void {
             WindowPropError.BadPropType => std.log.debug("Specified type for property:{} doesn't match the actual type\n", .{property}),
         }
     }
+}
+
+/// Returns the state of the Key Modifiers for the current event,
+/// by decoding the state field.
+pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
+    var mods = common.keyboard_and_mouse.KeyModifiers{
+        .shift = (state & libx11.ShiftMask != 0),
+        .ctrl = (state & libx11.ControlMask != 0),
+        .alt = (state & libx11.Mod1Mask != 0),
+        .num_lock = (state & libx11.Mod2Mask != 0),
+        .meta = (state & libx11.Mod4Mask != 0),
+        .caps_lock = (state & libx11.LockMask != 0),
+    };
+    return mods;
 }

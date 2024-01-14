@@ -63,16 +63,16 @@ const X11Extensions = struct {
 /// https://specifications.freedesktop.org/wm-spec/wm-spce-1.3.html
 const X11EWMH = struct {
     //########### Root Window Propeties ##############
-    _NET_SUPPORTING_WM_CHECK: libx11.Atom,
     // gives the window of the active WM.
-    _NET_SUPPORTED: libx11.Atom,
+    _NET_SUPPORTING_WM_CHECK: libx11.Atom,
     // lists all the EWMH protocols supported by this WM.
-    _NET_CURRENT_DESKTOP: libx11.Atom,
+    _NET_SUPPORTED: libx11.Atom,
     // gives the index of the current desktop.
-    _NET_ACTIVE_WINDOW: libx11.Atom,
+    _NET_CURRENT_DESKTOP: libx11.Atom,
     // gives the currently active window.
-    _NET_WORKAREA: libx11.Atom,
+    _NET_ACTIVE_WINDOW: libx11.Atom,
     // contains a geometry for each desktop.
+    _NET_WORKAREA: libx11.Atom,
 
     // _NET_NUMBER_OF_DESKTOPS: libx11.Atom,
     // indicates the number of virtual desktops.
@@ -101,6 +101,7 @@ const X11EWMH = struct {
     _NET_WM_ICON_NAME: libx11.Atom,
     _NET_WM_VISIBLE_ICON_NAME: libx11.Atom,
     _NET_WM_DESKTOP: libx11.Atom,
+    _NET_WM_WINDOW_OPACITY: libx11.Atom,
 
     //########## Property Types ################
     UTF8_STRING: libx11.Atom,
@@ -159,6 +160,7 @@ pub const X11Context = struct {
             ._NET_WM_ICON_NAME = 0,
             ._NET_WM_VISIBLE_ICON_NAME = 0,
             ._NET_WM_DESKTOP = 0,
+            ._NET_WM_WINDOW_OPACITY = 0,
 
             .UTF8_STRING = 0,
         },
@@ -282,11 +284,11 @@ pub const X11Context = struct {
     }
 
     fn getSystemGlobalScale(self: *Self) void {
-        // https://dec05eba.com/2021/10/11/x11-multiple-monitor-dpi-trick/
         // INFO:
         // there is no per monitor dpi property in X11, there is only a global dpi property.
         // the property is set by the user to a value that works best for his highest resolution monitor
         // using it should give the user the best experience.
+        // https://dec05eba.com/2021/10/11/x11-multiple-monitor-dpi-trick/
 
         // if we fail set dpi to 96 default.
         var dpi: f32 = 96.0;
@@ -316,11 +318,13 @@ pub const X11Context = struct {
     /// Note: 2 calls to this function must be separated by a call to
     /// unsetXErrorHandler,
     pub fn setXErrorHandler(self: *Self) void {
+        // TODO:
         _ = self;
     }
 
     /// returns an error if the last error_code is not 0.
     pub fn unsetXErrorHandler(self: *Self) void {
+        // TODO:
         _ = self;
     }
 
@@ -466,6 +470,13 @@ pub const X11Context = struct {
             supported.?,
             atom_count,
             "_NET_WM_VISIBLE_ICON_NAME",
+        );
+
+        self.ewmh._NET_WM_WINDOW_OPACITY = x11InternAtomIfSupported(
+            self.handles.xdisplay,
+            supported.?,
+            atom_count,
+            "_NET_WM_WINDOW_OPACITY",
         );
 
         // Easy shortcut but require the field.name to be sentinel terminated since it will be passed to a c function.
