@@ -6,7 +6,7 @@ const window_impl = @import("window_impl.zig");
 const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const win32_foundation = zigwin32.foundation;
 const ScanCode = common.keyboard_and_mouse.ScanCode;
-const VirtualCode = common.keyboard_and_mouse.VirtualCode;
+const KeyCode = common.keyboard_and_mouse.KeyCode;
 const KeyState = common.keyboard_and_mouse.KeyState;
 
 /// For comparing wide c strings.
@@ -140,7 +140,7 @@ pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
 }
 
 /// figure out the scancode and appropriate virtual key.
-pub fn getKeyCodes(keycode: u16, lparam: win32.LPARAM) struct { VirtualCode, ScanCode } {
+pub fn getKeyCodes(keycode: u16, lparam: win32.LPARAM) struct { KeyCode, ScanCode } {
     const MAPVK_VK_TO_VSC = 0;
     // The extended bit is necessary to find the correct scancode
     const ulparm: usize = @bitCast((lparam >> 16) & 0x1FF);
@@ -170,273 +170,273 @@ pub fn getKeyCodes(keycode: u16, lparam: win32.LPARAM) struct { VirtualCode, Sca
 }
 
 /// Maps a Windows virtual key code to a widow virtual Key Code.
-fn platformKeyToVirutal(keycode: u16) VirtualCode {
-    const WINDOWS_VK_TABLE = comptime [255]VirtualCode{
-        VirtualCode.Unknown, //0x00
-        VirtualCode.Unknown, //0x01
-        VirtualCode.Unknown, //0x02
-        VirtualCode.Unknown, //0x03
-        VirtualCode.Unknown, //0x04
-        VirtualCode.Unknown, //0x05
-        VirtualCode.Unknown, //0x06
-        VirtualCode.Unknown, //0x07
-        VirtualCode.Backspace, //0x08
-        VirtualCode.Tab, //0x09
-        VirtualCode.Unknown, //0x0A
-        VirtualCode.Unknown, //0x0B
-        VirtualCode.Unknown, //0x0C
-        VirtualCode.Return, //0x0D
-        VirtualCode.Unknown, //0x0E
-        VirtualCode.Unknown, //0x0F
-        VirtualCode.Shift, //0x10
-        VirtualCode.Control, //0x11
-        VirtualCode.Alt, //0x12
-        VirtualCode.Pause, //0x13
-        VirtualCode.CapsLock, //0x14
-        VirtualCode.Unknown, //0x15
-        VirtualCode.Unknown, //0x16
-        VirtualCode.Unknown, //0x17
-        VirtualCode.Unknown, //0x18
-        VirtualCode.Unknown, //0x19
-        VirtualCode.Unknown, //0x1A
-        VirtualCode.Escape, //0x1B
-        VirtualCode.Unknown, //0x1C
-        VirtualCode.Unknown, //0x1D
-        VirtualCode.Unknown, //0x1E
-        VirtualCode.Unknown, //0x1F
-        VirtualCode.Space, //0x20
-        VirtualCode.PageUp, //0x21
-        VirtualCode.PageDown, //0x22
-        VirtualCode.End, //0x23
-        VirtualCode.Home, //0x24
-        VirtualCode.Left, //0x25
-        VirtualCode.Up, //0x26
-        VirtualCode.Right, //0x27
-        VirtualCode.Down, //0x28
-        VirtualCode.Unknown, //0x29 VK_SELECT
-        VirtualCode.Unknown, //0x2A VK_PRINT
-        VirtualCode.Unknown, //0x2B //VK_EXECUTE
-        VirtualCode.PrintScreen, //0x2C
-        VirtualCode.Insert, //0x2D
-        VirtualCode.Delete, //0x2E
-        VirtualCode.Unknown, //0x2F VK_HELP
-        VirtualCode.Num0, //0x30
-        VirtualCode.Num1, //0x31
-        VirtualCode.Num2, //0x32
-        VirtualCode.Num3, //0x33
-        VirtualCode.Num4, //0x34
-        VirtualCode.Num5, //0x35
-        VirtualCode.Num6, //0x36
-        VirtualCode.Num7, //0x37
-        VirtualCode.Num8, //0x38
-        VirtualCode.Num9, //0x39
-        VirtualCode.Unknown, //0x3A
-        VirtualCode.Unknown, //0x3B
-        VirtualCode.Unknown, //0x3C
-        VirtualCode.Unknown, //0x3D
-        VirtualCode.Unknown, //0x3E
-        VirtualCode.Unknown, //0x3F
-        VirtualCode.Unknown, //0x40
-        VirtualCode.A, //0x41
-        VirtualCode.B, //0x42
-        VirtualCode.C, //0x43
-        VirtualCode.D, //0x44
-        VirtualCode.E, //0x45
-        VirtualCode.F, //0x46
-        VirtualCode.G, //0x47
-        VirtualCode.H, //0x48
-        VirtualCode.I, //0x49
-        VirtualCode.J, //0x4A
-        VirtualCode.K, //0x4B
-        VirtualCode.L, //0x4C
-        VirtualCode.M, //0x4D
-        VirtualCode.N, //0x4E
-        VirtualCode.O, //0x4F
-        VirtualCode.P, //0x50
-        VirtualCode.Q, //0x51
-        VirtualCode.R, //0x52
-        VirtualCode.S, //0x53
-        VirtualCode.T, //0x54
-        VirtualCode.U, //0x55
-        VirtualCode.V, //0x56
-        VirtualCode.W, //0x57
-        VirtualCode.X, //0x58
-        VirtualCode.Y, //0x59
-        VirtualCode.Z, //0x5A
-        VirtualCode.Meta, //0x5B
-        VirtualCode.Meta, //0x5C
-        VirtualCode.Unknown, //0x5D VK_APPS
-        VirtualCode.Unknown, //0x5E
-        VirtualCode.Unknown, //0x5F VK_SLEEP
-        VirtualCode.Numpad0, //0x60
-        VirtualCode.Numpad1, //0x61
-        VirtualCode.Numpad2, //0x62
-        VirtualCode.Numpad3, //0x63
-        VirtualCode.Numpad4, //0x64
-        VirtualCode.Numpad5, //0x65
-        VirtualCode.Numpad6, //0x66
-        VirtualCode.Numpad7, //0x67
-        VirtualCode.Numpad8, //0x68
-        VirtualCode.Numpad9, //0x69
-        VirtualCode.Multiply, //0x6A
-        VirtualCode.Add, //0x6B
-        VirtualCode.Unknown, //0x6C VK_SEPERATOR
-        VirtualCode.Substract, //0x6D
-        VirtualCode.Period, //0x6E
-        VirtualCode.Divide, //0x6F
-        VirtualCode.F1, //0x70
-        VirtualCode.F2, //0x71
-        VirtualCode.F3, //0x72
-        VirtualCode.F4, //0x73
-        VirtualCode.F5, //0x74
-        VirtualCode.F6, //0x75
-        VirtualCode.F7, //0x76
-        VirtualCode.F8, //0x77
-        VirtualCode.F9, //0x78
-        VirtualCode.F10, //0x79
-        VirtualCode.F11, //0x7A
-        VirtualCode.F12, //0x7B
+fn platformKeyToVirutal(keycode: u16) KeyCode {
+    const WINDOWS_VK_TABLE = comptime [255]KeyCode{
+        KeyCode.Unknown, //0x00
+        KeyCode.Unknown, //0x01
+        KeyCode.Unknown, //0x02
+        KeyCode.Unknown, //0x03
+        KeyCode.Unknown, //0x04
+        KeyCode.Unknown, //0x05
+        KeyCode.Unknown, //0x06
+        KeyCode.Unknown, //0x07
+        KeyCode.Backspace, //0x08
+        KeyCode.Tab, //0x09
+        KeyCode.Unknown, //0x0A
+        KeyCode.Unknown, //0x0B
+        KeyCode.Unknown, //0x0C
+        KeyCode.Return, //0x0D
+        KeyCode.Unknown, //0x0E
+        KeyCode.Unknown, //0x0F
+        KeyCode.Shift, //0x10
+        KeyCode.Control, //0x11
+        KeyCode.Alt, //0x12
+        KeyCode.Pause, //0x13
+        KeyCode.CapsLock, //0x14
+        KeyCode.Unknown, //0x15
+        KeyCode.Unknown, //0x16
+        KeyCode.Unknown, //0x17
+        KeyCode.Unknown, //0x18
+        KeyCode.Unknown, //0x19
+        KeyCode.Unknown, //0x1A
+        KeyCode.Escape, //0x1B
+        KeyCode.Unknown, //0x1C
+        KeyCode.Unknown, //0x1D
+        KeyCode.Unknown, //0x1E
+        KeyCode.Unknown, //0x1F
+        KeyCode.Space, //0x20
+        KeyCode.PageUp, //0x21
+        KeyCode.PageDown, //0x22
+        KeyCode.End, //0x23
+        KeyCode.Home, //0x24
+        KeyCode.Left, //0x25
+        KeyCode.Up, //0x26
+        KeyCode.Right, //0x27
+        KeyCode.Down, //0x28
+        KeyCode.Unknown, //0x29 VK_SELECT
+        KeyCode.Unknown, //0x2A VK_PRINT
+        KeyCode.Unknown, //0x2B //VK_EXECUTE
+        KeyCode.PrintScreen, //0x2C
+        KeyCode.Insert, //0x2D
+        KeyCode.Delete, //0x2E
+        KeyCode.Unknown, //0x2F VK_HELP
+        KeyCode.Num0, //0x30
+        KeyCode.Num1, //0x31
+        KeyCode.Num2, //0x32
+        KeyCode.Num3, //0x33
+        KeyCode.Num4, //0x34
+        KeyCode.Num5, //0x35
+        KeyCode.Num6, //0x36
+        KeyCode.Num7, //0x37
+        KeyCode.Num8, //0x38
+        KeyCode.Num9, //0x39
+        KeyCode.Unknown, //0x3A
+        KeyCode.Unknown, //0x3B
+        KeyCode.Unknown, //0x3C
+        KeyCode.Unknown, //0x3D
+        KeyCode.Unknown, //0x3E
+        KeyCode.Unknown, //0x3F
+        KeyCode.Unknown, //0x40
+        KeyCode.A, //0x41
+        KeyCode.B, //0x42
+        KeyCode.C, //0x43
+        KeyCode.D, //0x44
+        KeyCode.E, //0x45
+        KeyCode.F, //0x46
+        KeyCode.G, //0x47
+        KeyCode.H, //0x48
+        KeyCode.I, //0x49
+        KeyCode.J, //0x4A
+        KeyCode.K, //0x4B
+        KeyCode.L, //0x4C
+        KeyCode.M, //0x4D
+        KeyCode.N, //0x4E
+        KeyCode.O, //0x4F
+        KeyCode.P, //0x50
+        KeyCode.Q, //0x51
+        KeyCode.R, //0x52
+        KeyCode.S, //0x53
+        KeyCode.T, //0x54
+        KeyCode.U, //0x55
+        KeyCode.V, //0x56
+        KeyCode.W, //0x57
+        KeyCode.X, //0x58
+        KeyCode.Y, //0x59
+        KeyCode.Z, //0x5A
+        KeyCode.Meta, //0x5B
+        KeyCode.Meta, //0x5C
+        KeyCode.Unknown, //0x5D VK_APPS
+        KeyCode.Unknown, //0x5E
+        KeyCode.Unknown, //0x5F VK_SLEEP
+        KeyCode.Numpad0, //0x60
+        KeyCode.Numpad1, //0x61
+        KeyCode.Numpad2, //0x62
+        KeyCode.Numpad3, //0x63
+        KeyCode.Numpad4, //0x64
+        KeyCode.Numpad5, //0x65
+        KeyCode.Numpad6, //0x66
+        KeyCode.Numpad7, //0x67
+        KeyCode.Numpad8, //0x68
+        KeyCode.Numpad9, //0x69
+        KeyCode.Multiply, //0x6A
+        KeyCode.Add, //0x6B
+        KeyCode.Unknown, //0x6C VK_SEPERATOR
+        KeyCode.Substract, //0x6D
+        KeyCode.Period, //0x6E
+        KeyCode.Divide, //0x6F
+        KeyCode.F1, //0x70
+        KeyCode.F2, //0x71
+        KeyCode.F3, //0x72
+        KeyCode.F4, //0x73
+        KeyCode.F5, //0x74
+        KeyCode.F6, //0x75
+        KeyCode.F7, //0x76
+        KeyCode.F8, //0x77
+        KeyCode.F9, //0x78
+        KeyCode.F10, //0x79
+        KeyCode.F11, //0x7A
+        KeyCode.F12, //0x7B
         // 0x7C - 0x87: F13-F24,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
         // 0x88 - 0x8F: unassigned
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.NumLock, //0x90
-        VirtualCode.ScrollLock, //0x91
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.NumLock, //0x90
+        KeyCode.ScrollLock, //0x91
         // 0x92 - 0x9F unassigned.
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
         // 0xA0 - 0xAC : No mapped enum variant.
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.VolumeMute, //0xAD
-        VirtualCode.VolumeDown, //0xAE
-        VirtualCode.VolumeUp, //0xAF
-        VirtualCode.NextTrack, //0xB0
-        VirtualCode.PrevTrack, //0xB1
-        VirtualCode.Unknown, //0xB2 VK_MEDIA_STOP
-        VirtualCode.PlayPause, //0xB3
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.VolumeMute, //0xAD
+        KeyCode.VolumeDown, //0xAE
+        KeyCode.VolumeUp, //0xAF
+        KeyCode.NextTrack, //0xB0
+        KeyCode.PrevTrack, //0xB1
+        KeyCode.Unknown, //0xB2 VK_MEDIA_STOP
+        KeyCode.PlayPause, //0xB3
         // 0xB4 - 0xBA: No enum variant.
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Equals, //0xBB
-        VirtualCode.Comma, //0xBC
-        VirtualCode.Hyphen, //0xBD
-        VirtualCode.Period, //0xBE
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Equals, //0xBB
+        KeyCode.Comma, //0xBC
+        KeyCode.Hyphen, //0xBD
+        KeyCode.Period, //0xBE
         // 0xBF - 0xFF: Not mapped.
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
-        VirtualCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
+        KeyCode.Unknown,
     };
 
     if (keycode >= 255) {
-        return VirtualCode.Unknown;
+        return KeyCode.Unknown;
     }
 
     switch (keycode) {
@@ -970,18 +970,18 @@ pub fn mapWindowsScancode(scancode: u32) ScanCode {
     return WINDOWS_SCANCODE_TABLE[scancode];
 }
 
-fn keyTextToVirtual(keycode: u16) VirtualCode {
+fn keyTextToVirtual(keycode: u16) KeyCode {
     const MAPVK_VK_TO_CHAR = 2;
     const key_text = win32_keyboard_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
     switch (key_text) {
-        ';' => return VirtualCode.Semicolon,
-        '/' => return VirtualCode.Slash,
-        '`' => return VirtualCode.Grave,
-        '[' => return VirtualCode.LBracket,
-        '\\' => return VirtualCode.Backslash,
-        ']' => return VirtualCode.RBracket,
-        '\'' => return VirtualCode.Quote,
-        else => return VirtualCode.Unknown,
+        ';' => return KeyCode.Semicolon,
+        '/' => return KeyCode.Slash,
+        '`' => return KeyCode.Grave,
+        '[' => return KeyCode.LBracket,
+        '\\' => return KeyCode.Backslash,
+        ']' => return KeyCode.RBracket,
+        '\'' => return KeyCode.Quote,
+        else => return KeyCode.Unknown,
     }
 }
 
@@ -1005,11 +1005,11 @@ pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
         win32_keyboard_mouse.VK_RWIN,
     };
 
-    const virtual_codes = comptime [4]VirtualCode{
-        VirtualCode.Shift,
-        VirtualCode.Shift,
-        VirtualCode.Meta,
-        VirtualCode.Meta,
+    const virtual_codes = comptime [4]KeyCode{
+        KeyCode.Shift,
+        KeyCode.Shift,
+        KeyCode.Meta,
+        KeyCode.Meta,
     };
 
     for (0..4) |index| {

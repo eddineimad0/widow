@@ -1,7 +1,7 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
-const VirtualCode = widow.keyboard_and_mouse.VirtualCode;
+const KeyCode = widow.keyboard_and_mouse.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
@@ -99,45 +99,46 @@ pub fn main() !void {
                     break :event_loop;
                 },
                 EventType.KeyBoard => |*key| {
-                    // This event holds the keyboard key virtualcode (symbolic representation that
-                    // depends on the language settigns) and scancode (Hardware representation of the key),
+                    // This event holds the keyboard key keycode (symbolic representation that
+                    // depends on the language settigns)
+                    // and scancode (Hardware representation of the key, i.e the symbol of the key on the keyboard. ),
                     // in short scancode is the symbol of the key on the keyboard,the virtual key is the
                     // symbol the key represents with the current input language settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
                     // std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
                     //     key.window_id,
-                    //     key.virtualcode,
+                    //     key.keycode,
                     //     key.scancode,
                     //     key.state,
                     //     key.mods,
                     // });
                     if (key.state.isPressed()) {
-                        if (key.virtualcode == VirtualCode.Q) {
+                        if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on pressing Q key
                             mywindow.queueCloseEvent();
                         }
-                        if (key.virtualcode == .D) {
+                        if (key.keycode == .D) {
                             mywindow.debugInfos(true, true);
                         }
-                        if (key.virtualcode == .P) {
+                        if (key.keycode == .P) {
                             std.debug.print("ClientPosition:{}\n", .{mywindow.clientPosition()});
                         }
-                        if (key.virtualcode == .M) {
+                        if (key.keycode == .M) {
                             mywindow.setClientPosition(0, 0);
                         }
-                        if (key.virtualcode == .C) {
+                        if (key.keycode == .C) {
                             mywindow.setClientSize(1024, 640);
                         }
-                        if (key.virtualcode == .R) {
+                        if (key.keycode == .R) {
                             const resizable = mywindow.isResizable();
                             mywindow.setResizable(!resizable);
                         }
-                        if (key.virtualcode == .B) {
+                        if (key.keycode == .B) {
                             const decorated = mywindow.isDecorated();
                             mywindow.setDecorated(!decorated);
                         }
-                        if (key.virtualcode == .E) {
+                        if (key.keycode == .E) {
                             var video = widow.VideoMode.init(800, 600, 60, 32);
                             if (key.mods.shift) {
                                 _ = mywindow.setFullscreen(true, &video);
@@ -145,24 +146,24 @@ pub fn main() !void {
                                 _ = mywindow.setFullscreen(true, null);
                             }
                         }
-                        if (key.virtualcode == .Escape) {
+                        if (key.keycode == .Escape) {
                             _ = mywindow.setFullscreen(false, null);
                         }
-                        if (key.virtualcode == .N) {
+                        if (key.keycode == .N) {
                             if (key.mods.shift) {
                                 mywindow.setMinSize(null);
                             } else {
                                 mywindow.setMinSize(widow.geometry.WidowSize{ .width = 300, .height = 300 });
                             }
                         }
-                        if (key.virtualcode == .U) {
+                        if (key.keycode == .U) {
                             if (key.mods.shift) {
                                 mywindow.setDragAndDrop(true);
                             } else {
                                 mywindow.setDragAndDrop(false);
                             }
                         }
-                        if (key.virtualcode == .I) {
+                        if (key.keycode == .I) {
                             const minimized = mywindow.isMinimized();
                             mywindow.setMinimized(!minimized);
                         }
