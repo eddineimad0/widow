@@ -89,6 +89,7 @@ pub fn main() !void {
                 // MouseLeave => The mouse exited the client area of the window.
                 // DPIChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
+                // RedrawRequest => Request from the system to redraw the window's client area.
 
                 EventType.WindowClose => |window_id| {
                     // The user has requested to close the window,

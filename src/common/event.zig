@@ -28,6 +28,7 @@ pub const EventType = enum(u8) {
     MouseLeave, // The mouse exited the client area of the window.
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
+    RedrawRequest, // Request from the system to redraw the window's client area.
     JoystickConnected, // Device inserted into the system.
     JoystickRemoved, // Device removed from the system.
     JoystickButtonAction, // Device button was pressed or released.
@@ -86,6 +87,7 @@ pub const Event = union(EventType) {
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
+    RedrawRequest: u32,
     JoystickConnected: u8, // Device inserted into the system.
     JoystickRemoved: u8, // Device removed from the system.
     JoystickButtonAction: joystick.JoyButtonEvent, // Device button was pressed or released.
@@ -214,6 +216,10 @@ pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyMod
         .codepoint = @truncate(codepoint),
         .mods = mods,
     } };
+}
+
+pub inline fn createRedrawEvent(window_id: u32) Event {
+    return Event{ .RedrawRequest = window_id };
 }
 
 pub inline fn createJoyConnectEvent(id: u8, gamepad: bool) Event {
