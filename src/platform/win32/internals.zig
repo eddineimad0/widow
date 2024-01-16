@@ -360,7 +360,7 @@ pub const MonitorStore = struct {
     }
 
     /// Called by the window instance to release any occupied monitor
-    pub fn restoreMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
+    pub fn releaseMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         const monitor = try self.findMonitor(monitor_handle);
         monitor.setWindow(null);
 

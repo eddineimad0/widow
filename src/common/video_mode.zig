@@ -1,4 +1,5 @@
-const math = @import("std").math;
+const std = @import("std");
+const math = std.math;
 const MAX_U32 = math.maxInt(u32);
 
 /// Holds the Display's current video mode
@@ -26,10 +27,13 @@ pub const VideoMode = struct {
             self.frequency == other.frequency);
     }
 
-    /// This function returns the closest possible video mode to the `desired_mode`
-    /// from a slice of supported video modes.
-    pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) *const VideoMode {
-        var result = desired_mode;
+    /// This function returns the index of the closest possible video mode to the `desired_mode`
+    /// from a slice of supported modes.
+    pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) usize {
+        // avoids garbage result.
+        std.debug.assert(modes.len != 0);
+        var best_index: usize = 0;
+        // var result = desired_mode;
         var size_diff: i32 = undefined;
         var width_diff: i32 = undefined;
         var height_diff: i32 = undefined;
@@ -38,7 +42,7 @@ pub const VideoMode = struct {
         var least_distance: u32 = MAX_U32;
         var current_distance: u32 = undefined;
 
-        for (modes) |*mode| {
+        for (0..modes.len, modes) |i, *mode| {
 
             // Euclidean distance.
             color_diff = @intCast(mode.color_depth);
@@ -59,10 +63,11 @@ pub const VideoMode = struct {
             current_distance = math.sqrt(distance_square);
 
             if (current_distance < least_distance) {
-                result = mode;
+                // result = mode;
+                best_index = @intCast(i);
                 least_distance = @intCast(current_distance);
             }
         }
-        return result;
+        return best_index;
     }
 };

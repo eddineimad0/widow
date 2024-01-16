@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) !void {
         "playing_with_inputs",
         "cursor_and_icon",
         "joystick",
+        // "xorg_basic",
     };
     for (examples) |example_name| {
         const example = b.addExecutable(.{
@@ -21,7 +22,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         example.addModule("widow", widow);
-        example.linkLibC();
+        // example.linkSystemLibrary("X11");
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
@@ -43,6 +44,18 @@ fn exportWidowModule(b: *std.Build, target: *const std.zig.CrossTarget) *std.bui
                 .{ .source_file = .{ .path = "src/platform/win32/platform.zig" }, .dependencies = &deps },
             );
         },
+        // .linux => unix: {
+        //     // need to determine what display server is being used
+        //     const display_server = std.os.getenv("XDG_SESSION_TYPE") orelse @panic("Couldn't determine display server session\n");
+        //     if (std.mem.orderZ(u8, display_server, "x11") == .eq) {
+        //         var deps: [1]std.build.ModuleDependency = .{.{ .name = "common", .module = common_module }};
+        //         break :unix b.createModule(
+        //             .{ .source_file = .{ .path = "src/platform/linux/xorg/platform.zig" }, .dependencies = &deps },
+        //         );
+        //     } else {
+        //         @panic("Unsupported display server");
+        //     }
+        // },
         else => {
             @panic("Unsupported platform");
         },

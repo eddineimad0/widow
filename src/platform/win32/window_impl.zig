@@ -292,11 +292,7 @@ pub const WindowWin32Data = struct {
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,
-    size_pos_update: u8, // we will use this to filter repeating size and postion events.
-    pub const NO_SIZE_POSITION_UPDATE = @as(u8, 0x00);
-    pub const SIZE_UPDATE = @as(u8, 0x01);
-    pub const POSITON_UPDATE = @as(u8, 0x02);
-    pub const SIZE_POSITION_UPDATE = @as(u8, 0x03);
+    position_update: bool,
 };
 
 pub const WindowImpl = struct {
@@ -310,23 +306,25 @@ pub const WindowImpl = struct {
     };
     const Self = @This();
 
-    pub fn setup(
-        instance: *Self,
+    pub fn create(
         allocator: std.mem.Allocator,
         window_title: []const u8,
+        data: *WindowData,
         events_queue: *common.event.EventQueue,
         monitor_store: *MonitorStore,
-    ) !void {
-        instance.widow = WidowProps{
+    ) !*Self {
+        var self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
+        self.widow = WidowProps{
             .events_queue = events_queue,
             .monitors = monitor_store,
         };
-
-        const styles = .{ windowStyles(&instance.data.flags), windowExStyles(&instance.data.flags) };
-        instance.handle = try createPlatformWindow(allocator, window_title, &instance.data, styles);
+        self.data = data.*;
+        const styles = .{ windowStyles(&data.flags), windowExStyles(&data.flags) };
+        self.handle = try createPlatformWindow(allocator, window_title, data, styles);
 
         // Finish setting up the window.
-        instance.win32 = WindowWin32Data{
+        self.win32 = WindowWin32Data{
             .cursor = Cursor{
                 .handle = null,
                 .mode = common.cursor.CursorMode.Normal,
@@ -338,31 +336,31 @@ pub const WindowImpl = struct {
             },
             .high_surrogate = 0,
             .frame_action = false,
+            .position_update = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
             .restore_frame = null,
-            .size_pos_update = WindowWin32Data.NO_SIZE_POSITION_UPDATE,
         };
 
         // Process inital events.
         // these events aren't reported.
-        instance.processEvents();
+        self.processEvents();
 
         _ = win32_window_messaging.SetWindowLongPtrW(
-            instance.handle,
+            self.handle,
             win32_window_messaging.GWLP_USERDATA,
-            @intCast(@intFromPtr(instance)),
+            @intCast(@intFromPtr(self)),
         );
 
         // Now we can handle DPI adjustments.
-        if (instance.data.flags.is_dpi_aware) {
+        if (self.data.flags.is_dpi_aware) {
             var client_rect = win32.RECT{
                 .left = 0,
                 .top = 0,
-                .right = instance.data.client_area.size.width,
-                .bottom = instance.data.client_area.size.height,
+                .right = self.data.client_area.size.width,
+                .bottom = self.data.client_area.size.height,
             };
             var dpi_scale: f64 = undefined;
-            const dpi = instance.scalingDPI(&dpi_scale);
+            const dpi = self.scalingDPI(&dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
             const fwidth: f64 = @floatFromInt(client_rect.right);
             const fheight: f64 = @floatFromInt(client_rect.bottom);
@@ -379,7 +377,7 @@ pub const WindowImpl = struct {
             var window_rect: win32.RECT = undefined;
             // [MSDN]:If the window has not been shown before,
             // GetWindowRect will not include the area of the drop shadow.
-            _ = win32_window_messaging.GetWindowRect(instance.handle, &window_rect);
+            _ = win32_window_messaging.GetWindowRect(self.handle, &window_rect);
             // Offset and readjust the created window's frame.
             _ = win32_gdi.OffsetRect(
                 &client_rect,
@@ -387,7 +385,7 @@ pub const WindowImpl = struct {
                 window_rect.top - client_rect.top,
             );
 
-            const top = if (instance.data.flags.is_topmost)
+            const top = if (self.data.flags.is_topmost)
                 win32_window_messaging.HWND_TOPMOST
             else
                 win32_window_messaging.HWND_NOTOPMOST;
@@ -395,7 +393,7 @@ pub const WindowImpl = struct {
                 @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
                 @intFromEnum(win32_window_messaging.SWP_NOOWNERZORDER);
             setWindowPositionIntern(
-                instance.handle,
+                self.handle,
                 top,
                 POSITION_FLAGS,
                 client_rect.left,
@@ -409,42 +407,44 @@ pub const WindowImpl = struct {
         if (Win32Context.singleton().flags.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                instance.handle,
+                self.handle,
                 win32_window_messaging.WM_DROPFILES,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                instance.handle,
+                self.handle,
                 win32_window_messaging.WM_COPYDATA,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
             _ = win32_window_messaging.ChangeWindowMessageFilterEx(
-                instance.handle,
+                self.handle,
                 win32.WM_COPYGLOBALDATA,
                 win32_window_messaging.MSGFLT_ALLOW,
                 null,
             );
         }
 
-        if (instance.data.flags.is_visible) {
-            instance.show();
-            if (instance.data.flags.is_focused) {
-                instance.focus();
+        if (self.data.flags.is_visible) {
+            self.show();
+            if (self.data.flags.is_focused) {
+                self.focus();
             }
         }
 
         // Fullscreen
-        if (instance.data.flags.is_fullscreen) {
-            instance.data.flags.is_fullscreen = false;
+        if (self.data.flags.is_fullscreen) {
+            self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            try instance.setFullscreen(true, null);
+            try self.setFullscreen(true, null);
         }
+
+        return self;
     }
 
-    pub fn close(self: *Self) void {
+    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
@@ -459,6 +459,7 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, 0);
         _ = win32_window_messaging.DestroyWindow(self.handle);
         self.freeDroppedFiles();
+        allocator.destroy(self);
     }
 
     /// Shows the hidden window.
@@ -488,7 +489,7 @@ pub const WindowImpl = struct {
         }
         if (scaler) |ptr| {
             const fdpi: f64 = @floatFromInt(dpi);
-            ptr.* = (fdpi / win32.FUSER_DEFAULT_SCREEN_DPI);
+            ptr.* = (fdpi / win32.USER_DEFAULT_SCREEN_DPI_F);
         }
         return dpi;
     }
@@ -724,7 +725,7 @@ pub const WindowImpl = struct {
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             const dpi: f64 = @floatFromInt(self.scalingDPI(null));
-            const r_scaler = (win32.FUSER_DEFAULT_SCREEN_DPI / dpi);
+            const r_scaler = (win32.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
@@ -1057,7 +1058,7 @@ pub const WindowImpl = struct {
         }
     }
 
-    /// Returns the fullscreen mode of the window;
+    /// Switch the window to fullscreen mode and back;
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
 
         // The video mode switch should always be done first
@@ -1114,8 +1115,9 @@ pub const WindowImpl = struct {
         );
     }
 
+    /// Marks the monitor as not being occupied by any window.
     pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.monitors.restoreMonitor(monitor_handle);
+        try self.widow.monitors.releaseMonitor(monitor_handle);
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {

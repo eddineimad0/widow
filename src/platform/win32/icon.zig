@@ -23,14 +23,16 @@ pub fn createIcon(
     bmp_header.bV5Height = -height;
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
-    bmp_header.bV5Compression = win32_gdi.BI_BITFIELDS; // No compression
-    bmp_header.bV5RedMask = 0x00FF0000;
-    bmp_header.bV5GreenMask = 0x0000FF00;
-    bmp_header.bV5BlueMask = 0x000000FF;
+    // No compression and we will provide the color masks.
+    bmp_header.bV5Compression = win32_gdi.BI_BITFIELDS;
     bmp_header.bV5AlphaMask = 0xFF000000;
+    bmp_header.bV5BlueMask = 0x00FF0000;
+    bmp_header.bV5GreenMask = 0x0000FF00;
+    bmp_header.bV5RedMask = 0x000000FF;
 
     var dib: [*]u8 = undefined;
     const dc = win32_gdi.GetDC(null);
+    defer _ = win32_gdi.ReleaseDC(null, dc);
     const color_mask = win32_gdi.CreateDIBSection(
         dc,
         @ptrCast(&bmp_header),
@@ -39,7 +41,6 @@ pub fn createIcon(
         null,
         0,
     );
-    _ = win32_gdi.ReleaseDC(null, dc);
     if (color_mask == null) {
         return IconError.NullColorMask;
     }
@@ -51,15 +52,9 @@ pub fn createIcon(
     }
     defer _ = win32_gdi.DeleteObject(monochrome_mask);
 
-    var i: usize = 0;
-    // RGBA -> BGRA.
-    while (i < pixels.len) {
-        dib[i] = pixels[i + 2];
-        dib[i + 1] = pixels[i + 1];
-        dib[i + 2] = pixels[i];
-        dib[i + 3] = pixels[i + 3];
-        i += 4;
-    }
+    // TODO: What about ARM?
+    @memcpy(dib, pixels);
+
     var xspot: u32 = undefined;
     var yspot: u32 = undefined;
     var icon_flag: BOOL = TRUE;
@@ -84,7 +79,7 @@ pub fn createIcon(
 
 pub const Cursor = struct {
     handle: ?win32_window_messaging.HCURSOR,
-    shared: bool, // As to not try deleting system owned cursors.
+    shared: bool, // As to avoid deleting system owned cursors.
     mode: common.cursor.CursorMode,
 };
 
