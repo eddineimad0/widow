@@ -1,5 +1,6 @@
 //! This file contains helper function to use on the linux platforms
 const std = @import("std");
+const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const maxInt = std.math.maxInt;
 
@@ -48,4 +49,18 @@ pub fn x11WindowProperty(
     // make sure no bytes are left behind.
     std.debug.assert(bytes_after == 0);
     return @intCast(nitems);
+}
+
+/// Returns the state of the Key Modifiers for the current event,
+/// by decoding the state field.
+pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
+    var mods = common.keyboard_and_mouse.KeyModifiers{
+        .shift = (state & libx11.ShiftMask != 0),
+        .ctrl = (state & libx11.ControlMask != 0),
+        .alt = (state & libx11.Mod1Mask != 0),
+        .num_lock = (state & libx11.Mod2Mask != 0),
+        .meta = (state & libx11.Mod4Mask != 0),
+        .caps_lock = (state & libx11.LockMask != 0),
+    };
+    return mods;
 }

@@ -1,11 +1,13 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const utils = @import("utils.zig");
 const posix = common.posix;
 const MonitorStore = @import("internals.zig").MonitorStore;
 const WindowData = common.window_data.WindowData;
 const X11Context = @import("global.zig").X11Context;
 const Allocator = std.mem.Allocator;
+const handleXEvent = @import("event_handler.zig").handleXEvent;
 
 pub const WindowError = error{
     WindowCreationFailure,
@@ -70,14 +72,7 @@ pub const WindowImpl = struct {
         const x11cntxt = X11Context.singleton();
         x11cntxt.flushXRequests();
         while (x11cntxt.nextXEvent(&e)) {
-            if (e.type == libx11.KeyPress) {
-                // Temp for breaking.
-                // A
-                if (e.xkey.keycode == 65) {
-                    self.minimize();
-                }
-                _ = self.flash();
-            }
+            handleXEvent(&e, self);
         }
     }
 
@@ -170,9 +165,54 @@ pub const WindowImpl = struct {
         );
     }
 
-    /// Updates the registered window styles to match the current window config.
-    fn updateStyles(self: *Self) void {
-        _ = self;
+    /// Updates the size hints to match the the window current state.
+    /// the window's size, minimum size and maximum size should be
+    /// updated with the desired value before calling this function.
+    /// Note:
+    /// If the window is fullscreen the function returns immmediately.
+    fn updateNormalHints(self: *Self) void {
+        if (self.data.flags.is_fullscreen) {
+            return;
+        }
+        var size_hints = libx11.XAllocSizeHints();
+        if (size_hints) |hints| {
+            const x11cntxt = X11Context.singleton();
+            var supplied: u32 = 0;
+            _ = libx11.XGetWMNormalHints(
+                x11cntxt.handle.xdisplay,
+                self.handle,
+                hints,
+                &supplied,
+            );
+            hints.flags &= ~(libx11.PMinSize | libx11.PMaxSize | libx11.PAspect);
+            if (self.data.flags.is_resizable) {
+                if (self.data.min_size) |size| {
+                    hints.flags |= libx11.PMinSize;
+                    hints.min_width = size.width;
+                    hints.min_height = size.height;
+                }
+                if (self.data.max_size) |size| {
+                    hints.flags |= libx11.PMaxSize;
+                    hints.max_width = size.width;
+                    hints.max_height = size.height;
+                }
+                if (self.data.aspect_ratio) |ratio| {
+                    hints.flags |= libx11.PAspect;
+                    hints.min_aspect.x = ratio.x;
+                    hints.min_aspect.y = ratio.y;
+                    hints.max_aspect.x = ratio.x;
+                    hints.max_aspect.y = ratio.y;
+                }
+            } else {
+                hints.flags |= (libx11.PMinSize | libx11.PMaxSize);
+                hints.min_width = self.data.client_area.size.width;
+                hints.min_height = self.data.client_area.size.height;
+                hints.max_width = self.data.client_area.size.width;
+                hints.max_height = self.data.client_area.size.height;
+            }
+            _ = libx11.XSetWMNormalHints(x11cntxt.handle.xdisplay, self.handle, hints);
+            _ = libx11.XFree(hints);
+        }
     }
 
     pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
@@ -286,132 +326,89 @@ pub const WindowImpl = struct {
     //         );
     //     }
     // }
-    //
-    // pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
-    //     if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
-    //         // No need to do anything.
-    //         return;
-    //     }
-    //
-    //     if (min_size != null) {
-    //         var size = min_size.?;
-    //         // min size shouldn't be negative.
-    //         std.debug.assert(size.width > 0);
-    //         std.debug.assert(size.height > 0);
-    //
-    //         if (self.data.max_size) |*max_size| {
-    //             // the min size shouldn't be superior to the max size.
-    //             if (max_size.width < size.width or max_size.height < size.height) {
-    //                 std.log.err(
-    //                     "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
-    //                     .{ size.width, size.height, max_size.width, max_size.height },
-    //                 );
-    //                 return;
-    //             }
-    //         }
-    //
-    //         if (self.data.flags.is_dpi_aware) {
-    //             var scaler: f64 = undefined;
-    //             _ = self.scalingDPI(&scaler);
-    //             size.scaleBy(scaler);
-    //         }
-    //
-    //         self.data.min_size = size;
-    //     } else {
-    //         self.data.min_size = null;
-    //     }
-    //
-    //     const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOMOVE);
-    //
-    //     const size = windowSize(self.handle);
-    //
-    //     const top = if (self.data.flags.is_topmost)
-    //         win32_window_messaging.HWND_TOPMOST
-    //     else
-    //         win32_window_messaging.HWND_NOTOPMOST;
-    //     // We need the system to post a WM_MINMAXINFO.
-    //     // in order for the new size limits to be applied,
-    //     setWindowPositionIntern(
-    //         self.handle,
-    //         top,
-    //         POSITION_FLAGS,
-    //         0,
-    //         0,
-    //         size.width,
-    //         size.height,
-    //     );
-    // }
-    //
-    // pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
-    //     if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
-    //         // No need to do anything.
-    //         return;
-    //     }
-    //
-    //     if (max_size != null) {
-    //         var size = max_size.?;
-    //         // max size shouldn't be negative.
-    //         std.debug.assert(size.width > 0);
-    //         std.debug.assert(size.height > 0);
-    //         if (self.data.min_size) |*min_size| {
-    //             // the max size should be superior or equal to the min size.
-    //             if (size.width < min_size.width or size.height < min_size.height) {
-    //                 std.log.err(
-    //                     "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
-    //                     .{ size.width, size.height, min_size.width, min_size.height },
-    //                 );
-    //                 return;
-    //             }
-    //         }
-    //         if (self.data.flags.is_dpi_aware) {
-    //             var scaler: f64 = undefined;
-    //             _ = self.scalingDPI(&scaler);
-    //             size.scaleBy(scaler);
-    //         }
-    //         self.data.max_size = size;
-    //     } else {
-    //         self.data.max_size = null;
-    //     }
-    //
-    //     const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOMOVE);
-    //
-    //     const size = windowSize(self.handle);
-    //
-    //     const top = if (self.data.flags.is_topmost)
-    //         win32_window_messaging.HWND_TOPMOST
-    //     else
-    //         win32_window_messaging.HWND_NOTOPMOST;
-    //     // We need the system to post a WM_MINMAXINFO.
-    //     // in order for the new size limits to be applied,
-    //     setWindowPositionIntern(
-    //         self.handle,
-    //         top,
-    //         POSITION_FLAGS,
-    //         0,
-    //         0,
-    //         size.width,
-    //         size.height,
-    //     );
-    // }
-    //
-    // /// Hides the window, this is different from minimizing it.
-    // pub fn hide(self: *Self) void {
-    //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_HIDE);
-    //     self.data.flags.is_visible = false;
-    // }
-    //
-    // /// Toggles window resizablitity on(true) or off(false).
-    // pub fn setResizable(self: *Self, value: bool) void {
-    //     self.data.flags.is_resizable = value;
-    //     self.updateStyles();
-    // }
-    //
+
+    pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
+        if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
+            // No need to do anything.
+            return;
+        }
+
+        if (min_size != null) {
+            var size = min_size.?;
+            // min size shouldn't be negative.
+            std.debug.assert(size.width > 0);
+            std.debug.assert(size.height > 0);
+
+            if (self.data.max_size) |*max_size| {
+                // the min size shouldn't be superior to the max size.
+                if (max_size.width < size.width or max_size.height < size.height) {
+                    std.log.err(
+                        "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
+                        .{ size.width, size.height, max_size.width, max_size.height },
+                    );
+                    return;
+                }
+            }
+
+            if (self.data.flags.is_dpi_aware) {
+                var scaler: f64 = undefined;
+                _ = self.scalingDPI(&scaler);
+                size.scaleBy(scaler);
+            }
+
+            self.data.min_size = size;
+        } else {
+            self.data.min_size = null;
+        }
+
+        self.updateNormalHints();
+    }
+
+    pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
+        if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
+            // No need to do anything.
+            return;
+        }
+
+        if (max_size != null) {
+            var size = max_size.?;
+            // max size shouldn't be negative.
+            std.debug.assert(size.width > 0);
+            std.debug.assert(size.height > 0);
+            if (self.data.min_size) |*min_size| {
+                // the max size should be superior or equal to the min size.
+                if (size.width < min_size.width or size.height < min_size.height) {
+                    std.log.err(
+                        "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
+                        .{ size.width, size.height, min_size.width, min_size.height },
+                    );
+                    return;
+                }
+            }
+            if (self.data.flags.is_dpi_aware) {
+                var scaler: f64 = undefined;
+                _ = self.scalingDPI(&scaler);
+                size.scaleBy(scaler);
+            }
+            self.data.max_size = size;
+        } else {
+            self.data.max_size = null;
+        }
+
+        self.updateNormalHints();
+    }
+
+    pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.AspectRatio) void {
+        self.data.aspect_ratio = ratio;
+        self.updateNormalHints();
+    }
+
+    /// Toggles window resizablitity on(true) or off(false).
+    pub fn setResizable(self: *Self, value: bool) void {
+        self.data.flags.is_resizable = value;
+        self.updateNormalHints();
+    }
+
     // /// Toggles window resizablitity on(true) or off(false).
     // pub fn setDecorated(self: *Self, value: bool) void {
     //     self.data.flags.is_decorated = value;
@@ -476,114 +473,59 @@ pub const WindowImpl = struct {
         return WindowError.FailedToCopyTitle;
     }
 
-    // /// Returns the window's current opacity
-    // /// # Note
-    // /// The value is between 1.0 and 0.0
-    // /// with 1 being opaque and 0 being full transparent.
-    // pub fn opacity(self: *const Self) f32 {
-    //     const ex_styles = win32_window_messaging.GetWindowLongPtrW(self.handle, win32_window_messaging.GWL_EXSTYLE);
-    //     if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) != 0) {
-    //         var alpha: u8 = undefined;
-    //         var flags: win32_window_messaging.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
-    //         _ = win32_window_messaging.GetLayeredWindowAttributes(self.handle, null, &alpha, &flags);
-    //         if ((@intFromEnum(flags) & @intFromEnum(win32_window_messaging.LWA_ALPHA)) != 0) {
-    //             const falpha: f32 = @floatFromInt(alpha);
-    //             return (falpha / 255.0);
-    //         }
-    //     }
-    //     return 1.0;
-    // }
-    //
-    // /// Sets the window's opacity
-    // /// # Note
-    // /// The value is between 1.0 and 0.0
-    // /// with 1 being opaque and 0 being full transparent.
-    // pub fn setOpacity(self: *Self, value: f32) void {
-    //     var ex_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
-    //         self.handle,
-    //         win32_window_messaging.GWL_EXSTYLE,
-    //     ));
-    //
-    //     if (value == @as(f32, 1.0)) {
-    //         ex_styles &= ~@intFromEnum(win32_window_messaging.WS_EX_LAYERED);
-    //     } else {
-    //         const alpha: u32 = @intFromFloat(value * 255.0);
-    //
-    //         if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) == 0) {
-    //             ex_styles |= @intFromEnum(win32_window_messaging.WS_EX_LAYERED);
-    //         }
-    //
-    //         _ = win32_window_messaging.SetLayeredWindowAttributes(
-    //             self.handle,
-    //             0,
-    //             @truncate(alpha),
-    //             win32_window_messaging.LWA_ALPHA,
-    //         );
-    //     }
-    //     _ = win32_window_messaging.SetWindowLongPtrW(
-    //         self.handle,
-    //         win32_window_messaging.GWL_EXSTYLE,
-    //         @bitCast(ex_styles),
-    //     );
-    // }
-    //
-    // pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.AspectRatio) void {
-    //     // shamlessly copied from GLFW library.
-    //     self.data.aspect_ratio = ratio;
-    //     if (ratio != null) {
-    //         var rect: win32.RECT = undefined;
-    //         _ = win32_window_messaging.GetWindowRect(self.handle, &rect);
-    //         self.applyAspectRatio(&rect, win32_window_messaging.WMSZ_BOTTOMLEFT);
-    //         _ = win32_window_messaging.MoveWindow(
-    //             self.handle,
-    //             rect.left,
-    //             rect.top,
-    //             rect.right - rect.left,
-    //             rect.bottom - rect.top,
-    //             win32.TRUE,
-    //         );
-    //     }
-    // }
-    //
-    // pub fn applyAspectRatio(self: *const Self, client: *win32_foundation.RECT, edge: u32) void {
-    //     const faspect_x: f64 = @floatFromInt(self.data.aspect_ratio.?.x);
-    //     const faspect_y: f64 = @floatFromInt(self.data.aspect_ratio.?.y);
-    //     const ratio: f64 = faspect_x / faspect_y;
-    //
-    //     var rect = win32_foundation.RECT{
-    //         .left = 0,
-    //         .top = 0,
-    //         .right = 0,
-    //         .bottom = 0,
-    //     };
-    //
-    //     adjustWindowRect(
-    //         &rect,
-    //         windowStyles(&self.data.flags),
-    //         windowExStyles(&self.data.flags),
-    //         self.scalingDPI(null),
-    //     );
-    //
-    //     switch (edge) {
-    //         win32_window_messaging.WMSZ_LEFT, win32_window_messaging.WMSZ_RIGHT, win32_window_messaging.WMSZ_BOTTOMLEFT, win32_window_messaging.WMSZ_BOTTOMRIGHT => {
-    //             client.bottom = client.top + (rect.bottom - rect.top);
-    //             const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
-    //             client.bottom += @intFromFloat(fborder_width / ratio);
-    //         },
-    //         win32_window_messaging.WMSZ_TOPLEFT, win32_window_messaging.WMSZ_TOPRIGHT => {
-    //             client.top = client.bottom - (rect.bottom - rect.top);
-    //             const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
-    //             client.top -= @intFromFloat(fborder_width / ratio);
-    //         },
-    //         win32_window_messaging.WMSZ_TOP, win32_window_messaging.WMSZ_BOTTOM => {
-    //             client.right = client.left + (rect.right - rect.left);
-    //             const fborder_height: f64 = @floatFromInt((client.bottom - client.top) - (rect.bottom - rect.top));
-    //             client.bottom += @intFromFloat(fborder_height * ratio);
-    //         },
-    //         else => unreachable,
-    //     }
-    // }
-    //
+    /// Returns the window's current opacity
+    /// # Note
+    /// The value is between 1.0 and 0.0
+    /// with 1 being opaque and 0 being full transparent.
+    pub fn opacity(self: *const Self) f64 {
+        const x11cntxt = X11Context.singleton();
+        var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
+        const OPAQUE = @as(u32, 0xFFFFFFFF);
+        _ = utils.x11WindowProperty(
+            x11cntxt.handles.xdisplay,
+            self.handle,
+            x11cntxt.ewmh._NET_WM_WINDOW_OPACITY,
+            libx11.XA_CARDINAL,
+            &cardinal,
+        ) catch return 1.0;
+        std.debug.assert(cardinal != null);
+        defer _ = libx11.XFree(cardinal.?);
+        return (@as(f64, @floatFromInt(cardinal.?.*)) / @as(f64, @floatFromInt(OPAQUE)));
+    }
+
+    /// Sets the window's opacity
+    /// # Note
+    /// The value is between 1.0 and 0.0
+    /// with 1 being opaque and 0 being full transparent.
+    pub fn setOpacity(self: *Self, value: f64) bool {
+        const x11cntxt = X11Context.singleton();
+        if (x11cntxt.ewmh._NET_WM_WINDOW_OPACITY == 0) {
+            return false;
+        }
+
+        if (value == @as(f64, 1.0)) {
+            // it's faster to just delete the property.
+            libx11.XDeleteProperty(
+                x11cntxt.handles.xdisplay,
+                self.handle,
+                x11cntxt.ewmh._NET_WM_WINDOW_OPACITY,
+            );
+        } else {
+            const OPAQUE = @as(u32, 0xFFFFFFFF);
+            const alpha: libx11.XID = @intFromFloat(value * @as(f64, @floatFromInt(OPAQUE)));
+            libx11.XChangeProperty(
+                x11cntxt.handles.xdisplay,
+                self.handle,
+                x11cntxt.ewmh._NET_WM_WINDOW_OPACITY,
+                libx11.XA_CARDINAL,
+                32,
+                libx11.PropModeReplace,
+                @ptrCast(&alpha),
+                1,
+            );
+        }
+        return true;
+    }
     // /// Returns the fullscreen mode of the window;
     // pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
     //
@@ -791,25 +733,4 @@ fn createPlatformWindow(
     }
 
     return handle;
-}
-
-test "local_window_test" {
-    try X11Context.initSingleton();
-    var window = WindowImpl{
-        .data = WindowData{
-            .client_area = common.geometry.WidowArea.init(0, 0, 800, 600),
-            .id = 1,
-            .flags = undefined,
-            .input = undefined,
-            .min_size = null,
-            .max_size = null,
-            .aspect_ratio = null,
-        },
-        .widow = undefined,
-        .handle = 0,
-    };
-    _ = window;
-    // try WindowImpl.setup(&window, std.testing.allocator, "Local Window");
-    // window.close();
-    // X11Context.deinitSingleton();
 }

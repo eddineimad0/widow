@@ -43,7 +43,59 @@ pub fn main() !void {
     // closes the window when done.
     defer mywindow.deinit();
 
-    while (mywindow.impl.data.flags.is_visible) {
-        _ = mywindow.waitEvent();
+    var event: widow.Event = undefined;
+    event_loop: while (true) {
+        mywindow.waitEvent();
+
+        while (widow_cntxt.pollEvents(&event)) {
+            switch (event) {
+                EventType.WindowClose => |window_id| {
+                    // The user has requested to close the window,
+                    // and the application should proceed to calling deinit on the window instance.
+                    // This is merely a notification nothing is done to window in the background,
+                    // ignore it if you want to continue execution as normal.
+                    std.debug.print("closing Window #{}\n", .{window_id});
+                    break :event_loop;
+                },
+                EventType.MouseButton => |*mouse_event| {
+                    // This event holds the mouse button (left,middle,right,...),
+                    // the action that was done to the button (pressed or released),
+                    // and the keymodifiers state during the event pressed(true) or released(false).
+                    std.debug.print("Window #{}\nMouse Button:{}\nState:{}\nmods:{}\n", .{
+                        mouse_event.window_id,
+                        mouse_event.button,
+                        mouse_event.state,
+                        mouse_event.mods,
+                    });
+                },
+                EventType.MouseScroll => |*scroll| {
+                    // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
+                    std.debug.print("Window #{}\nwheel:{} Scrolled by :{d}\n", .{
+                        scroll.window_id,
+                        scroll.wheel,
+                        scroll.delta,
+                    });
+                },
+                EventType.MouseEnter => |window_id| {
+                    std.debug.print("Mouse Entered the client area of window #{}\n", .{window_id});
+                },
+                EventType.MouseLeave => |window_id| {
+                    std.debug.print("Mouse Left the client area window #{}\n", .{window_id});
+                },
+                EventType.WindowFocus => |*focus_event| {
+                    // This event holds a boolean flag on whether the window got or lost focus.
+                    std.debug.print("Focus ", .{});
+                    if (focus_event.has_focus) {
+                        std.debug.print("Gained", .{});
+                    } else {
+                        std.debug.print("Lost", .{});
+                    }
+                    std.debug.print("By window #{}\n", .{focus_event.window_id});
+                },
+                else => {
+                    continue;
+                },
+            }
+        }
     }
 }

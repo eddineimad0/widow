@@ -328,6 +328,8 @@ pub const Button2: c_uint = 2;
 pub const Button3: c_uint = 3;
 pub const Button4: c_uint = 4;
 pub const Button5: c_uint = 5;
+pub const Button6: c_uint = 6;
+pub const Button7: c_uint = 7;
 
 pub const USPosition: c_long = 0x0001;
 pub const USSize: c_long = 0x0002;
