@@ -318,8 +318,11 @@ pub const MonitorImpl = struct {
         if (video_mode) |mode| {
             const possible_mode = if (self.isModePossible(mode) == true)
                 mode
-            else
-                mode.selectBestMatch(self.modes.items);
+            else blk: {
+                const index = mode.selectBestMatch(self.modes.items);
+                break :blk &self.modes.items[index];
+            };
+
             var current_mode: VideoMode = undefined;
             self.queryCurrentMode(&current_mode);
             if (possible_mode.*.equals(&current_mode)) {

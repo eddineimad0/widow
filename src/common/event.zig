@@ -162,7 +162,12 @@ pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Ev
         } };
 }
 
-pub inline fn createMouseButtonEvent(window_id: u32, button: input.MouseButton, state: input.MouseButtonState, mods: input.KeyModifiers) Event {
+pub inline fn createMouseButtonEvent(
+    window_id: u32,
+    button: input.MouseButton,
+    state: input.MouseButtonState,
+    mods: input.KeyModifiers,
+) Event {
     return Event{ .MouseButton = MouseButtonEvent{
         .window_id = window_id,
         .button = button,
@@ -171,10 +176,16 @@ pub inline fn createMouseButtonEvent(window_id: u32, button: input.MouseButton, 
     } };
 }
 
-pub inline fn createKeyboardEvent(window_id: u32, virtualcode: input.VirtualCode, scancode: input.ScanCode, state: input.KeyState, mods: input.KeyModifiers) Event {
+pub inline fn createKeyboardEvent(
+    window_id: u32,
+    keycode: input.KeyCode,
+    scancode: input.ScanCode,
+    state: input.KeyState,
+    mods: input.KeyModifiers,
+) Event {
     return Event{ .KeyBoard = KeyEvent{
         .window_id = window_id,
-        .virtualcode = virtualcode,
+        .keycode = keycode,
         .scancode = scancode,
         .state = state,
         .mods = mods,
@@ -229,7 +240,12 @@ pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f32, gamepad: bool) Ev
     }
 }
 
-pub inline fn createJoyButtonEvent(id: u8, button: u8, state: joystick.ButtonState, gamepad: bool) Event {
+pub inline fn createJoyButtonEvent(
+    id: u8,
+    button: u8,
+    state: joystick.ButtonState,
+    gamepad: bool,
+) Event {
     if (gamepad) {
         return Event{ .GamepadButtonAction = joystick.GamepadButtonEvent{
             .joy_id = id,

@@ -16,7 +16,7 @@ pub const MouseButtonState = KeyState;
 
 /// Represent what the hardware key maps to.
 /// Depends on the current keyboard layout.
-pub const VirtualCode = enum(i32) {
+pub const KeyCode = enum(i32) {
     Unknown = -1, // Unknown key
     A = 0, // The A key
     B = 1, // The B key
@@ -296,7 +296,7 @@ pub const InputState = struct {
 // Events.
 pub const KeyEvent = struct {
     window_id: u32, // the window with keyboard focus.
-    virtualcode: VirtualCode,
+    keycode: KeyCode,
     scancode: ScanCode,
     state: KeyState,
     mods: KeyModifiers,

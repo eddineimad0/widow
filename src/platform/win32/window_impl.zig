@@ -292,11 +292,7 @@ pub const WindowWin32Data = struct {
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,
-    size_pos_update: u8, // we will use this to filter repeating size and postion events.
-    pub const NO_SIZE_POSITION_UPDATE = @as(u8, 0x00);
-    pub const SIZE_UPDATE = @as(u8, 0x01);
-    pub const POSITON_UPDATE = @as(u8, 0x02);
-    pub const SIZE_POSITION_UPDATE = @as(u8, 0x03);
+    position_update: bool,
 };
 
 pub const WindowImpl = struct {
@@ -340,9 +336,9 @@ pub const WindowImpl = struct {
             },
             .high_surrogate = 0,
             .frame_action = false,
+            .position_update = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
             .restore_frame = null,
-            .size_pos_update = WindowWin32Data.NO_SIZE_POSITION_UPDATE,
         };
 
         // Process inital events.
@@ -493,7 +489,7 @@ pub const WindowImpl = struct {
         }
         if (scaler) |ptr| {
             const fdpi: f64 = @floatFromInt(dpi);
-            ptr.* = (fdpi / win32.FUSER_DEFAULT_SCREEN_DPI);
+            ptr.* = (fdpi / win32.USER_DEFAULT_SCREEN_DPI_F);
         }
         return dpi;
     }
@@ -729,7 +725,7 @@ pub const WindowImpl = struct {
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             const dpi: f64 = @floatFromInt(self.scalingDPI(null));
-            const r_scaler = (win32.FUSER_DEFAULT_SCREEN_DPI / dpi);
+            const r_scaler = (win32.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
@@ -1062,7 +1058,7 @@ pub const WindowImpl = struct {
         }
     }
 
-    /// Returns the fullscreen mode of the window;
+    /// Switch the window to fullscreen mode and back;
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
 
         // The video mode switch should always be done first
@@ -1119,8 +1115,9 @@ pub const WindowImpl = struct {
         );
     }
 
+    /// Marks the monitor as not being occupied by any window.
     pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.monitors.restoreMonitor(monitor_handle);
+        try self.widow.monitors.releaseMonitor(monitor_handle);
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
