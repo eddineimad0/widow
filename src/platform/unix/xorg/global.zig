@@ -27,7 +27,7 @@ pub const XConnectionError = error{
 const X11Handles = struct {
     xdisplay: *libx11.Display,
     root_window: libx11.Window,
-    default_screen: u32,
+    default_screen: c_int,
     xrandr: ?*anyopaque,
     xinerama: ?*anyopaque,
 };
@@ -178,16 +178,16 @@ pub const X11Context = struct {
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
             // Open a connection to the X server.
+            _ = libx11.XInitThreads();
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
                 return XConnectionError.ConnectionFailed;
             };
             // Grab the default screen(monitor) and the root window on it.
-            g_instance.handles.default_screen = @intCast(libx11.DefaultScreen(g_instance.handles.xdisplay));
-            // Grab the root window on the default screen.
+            g_instance.handles.default_screen = libx11.DefaultScreen(g_instance.handles.xdisplay);
             g_instance.handles.root_window = libx11.RootWindow(g_instance.handles.xdisplay, g_instance.handles.default_screen);
 
             try g_instance.loadXExtensions();
-            g_instance.getSystemGlobalScale();
+            g_instance.readSystemGlobalDPI();
 
             // read root window properties
             g_instance.ewmh._NET_SUPPORTING_WM_CHECK = libx11.XInternAtom(
@@ -293,14 +293,14 @@ pub const X11Context = struct {
         }
     }
 
-    fn getSystemGlobalScale(self: *Self) void {
-        // https://dec05eba.com/2021/10/11/x11-multiple-monitor-dpi-trick/
+    fn readSystemGlobalDPI(self: *Self) void {
         // INFO:
         // there is no per monitor dpi property in X11, there is only a global dpi property.
         // the property is set by the user to a value that works best for his highest resolution monitor
         // using it should give the user the best experience.
+        // https://dec05eba.com/2021/10/11/x11-multiple-monitor-dpi-trick/
 
-        // if we fail set dpi to 96 default.
+        // if we fail dpi will default to 96.
         var dpi: f32 = 96.0;
         libx11.XrmInitialize();
         const res_str = libx11.XResourceManagerString(self.handles.xdisplay);
@@ -355,7 +355,7 @@ pub const X11Context = struct {
         // if the _NET_WM_SUPPORTING_WM_CHECK is missing client should
         // assume a non conforming window manager is present
         var window_ptr: ?*libx11.Window = null;
-        if (x11WindowProperty(
+        if (utils.x11WindowProperty(
             self.handles.xdisplay,
             self.handles.root_window,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
@@ -375,7 +375,7 @@ pub const X11Context = struct {
         // set to the same id(the id of the child window).
 
         var child_window_ptr: ?*libx11.Window = null;
-        if (x11WindowProperty(
+        if (utils.x11WindowProperty(
             self.handles.xdisplay,
             window_ptr.?.*,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
@@ -398,7 +398,7 @@ pub const X11Context = struct {
         // property on the root window.
 
         var supported: ?[*]libx11.Atom = null;
-        const atom_count = x11WindowProperty(
+        const atom_count = utils.x11WindowProperty(
             self.handles.xdisplay,
             self.handles.root_window,
             self.ewmh._NET_SUPPORTED,
@@ -414,89 +414,55 @@ pub const X11Context = struct {
         std.debug.assert(supported != null);
         defer _ = libx11.XFree(supported.?);
 
-        self.ewmh._NET_WM_STATE = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_STATE",
-        );
-        self.ewmh._NET_WM_STATE_DEMANDS_ATTENTION = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_STATE_DEMANDS_ATTENTION",
-        );
-        self.ewmh._NET_WORKAREA = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WORKAREA",
-        );
-        self.ewmh._NET_CURRENT_DESKTOP = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_CURRENT_DESKTOP",
-        );
-        self.ewmh._NET_ACTIVE_WINDOW = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_ACTIVE_WINDOW",
-        );
-
-        self.ewmh._NET_WM_NAME = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_NAME",
-        );
-
-        self.ewmh._NET_WM_VISIBLE_NAME = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_VISIBLE_NAME",
-        );
-
-        self.ewmh._NET_WM_ICON_NAME = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_ICON_NAME",
-        );
-
-        self.ewmh._NET_WM_VISIBLE_ICON_NAME = atomIfSupported(
-            self.handles.xdisplay,
-            supported.?,
-            atom_count,
-            "_NET_WM_VISIBLE_ICON_NAME",
-        );
-
-        // Easy shortcut but require the field.name to be sentinel terminated since it will be passed to a c function.
-        // const info = @typeInfo(X11EWMH);
-        // inline for (info.Struct.fields) |*f| {
-        //     if (comptime std.mem.eql(u8, "_NET_SUPPORTING_WM_CHECK", f.name)) {
-        //         continue;
-        //     }
-        //     if (comptime std.mem.eql(u8, "_NET_SUPPORTED", f.name)) {
-        //         continue;
-        //     }
-        //     @field(self.ewmh, f.name) = atomIfSupported(
-        //         self.handles.xdisplay,
-        //         supported.?,
-        //         atom_count,
-        //         f.name.ptr,
-        //     );
-        // }
+        // Easy shortcut but require the field.name to be 0 terminated
+        // since it will be passed to a c function.
+        const MAX_NAME_LENGTH = 256;
+        var field_name: [MAX_NAME_LENGTH]u8 = undefined;
+        const info = @typeInfo(X11EWMH);
+        inline for (info.Struct.fields) |*f| {
+            // skip those that were already set
+            if (comptime std.mem.eql(u8, "_NET_SUPPORTING_WM_CHECK", f.name)) {
+                continue;
+            }
+            if (comptime std.mem.eql(u8, "_NET_SUPPORTED", f.name)) {
+                continue;
+            }
+            if (comptime std.mem.eql(u8, "UTF8_STRING", f.name)) {
+                continue;
+            }
+            if (comptime f.name.len > MAX_NAME_LENGTH) {
+                @compileError("EWMH Field name is greater than the maximum buffer length");
+            }
+            std.mem.copyForwards(u8, &field_name, f.name);
+            field_name[f.name.len] = 0;
+            @field(self.ewmh, f.name) = atomIfSupported(
+                self.handles.xdisplay,
+                supported.?,
+                atom_count,
+                @ptrCast(&field_name),
+            );
+        }
     }
 
     /// Sends all requests currently in the xlib output bufffer
     /// to the x server.
     /// doesn't block since it use XFlush.
-    pub fn flushXRequests(self: *const Self) void {
+    pub inline fn flushXRequests(self: *const Self) void {
         _ = libx11.XFlush(self.handles.xdisplay);
     }
+
+    /// Attempts to read an event from the event queue without blocking
+    /// and copys it to the event param.
+    /// returns true if the event parameter was populated,
+    /// false otherwise.
+    pub inline fn nextXEvent(self: *const Self, e: *libx11.XEvent) bool {
+        if (libx11.XQLength(self.handles.xdisplay) == 0) {
+            return false;
+        }
+        _ = libx11.XNextEvent(self.handles.xdisplay, e);
+        return true;
+    }
+
     // Enfoce readonly.
     pub fn singleton() *const Self {
         std.debug.assert(g_init == true);
@@ -523,30 +489,6 @@ fn atomIfSupported(display: ?*libx11.Display, supported: [*]libx11.Atom, atom_co
     }
 
     return 0;
-}
-
-pub fn x11WindowProperty(display: ?*libx11.Display, w: libx11.Window, property: libx11.Atom, prop_type: libx11.Atom, value: ?[*]?[*]u8) u32 {
-    var actual_type: libx11.Atom = undefined;
-    var actual_format: c_int = undefined;
-    var nitems: c_ulong = 0;
-    var bytes_after: c_ulong = undefined;
-    _ = libx11.XGetWindowProperty(
-        display,
-        w,
-        property,
-        0,
-        utils.MAX_C_LONG,
-        libx11.False,
-        prop_type,
-        &actual_type,
-        &actual_format,
-        &nitems,
-        &bytes_after,
-        value,
-    );
-    // make sure no bytes are left behind.
-    std.debug.assert(bytes_after == 0);
-    return @intCast(nitems);
 }
 
 fn handleXError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {

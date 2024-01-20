@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("common");
-const libX11 = @import("x11/xlib.zig");
+const libx11 = @import("x11/xlib.zig");
+const posix = common.posix;
 const MonitorStore = @import("internals.zig").MonitorStore;
 const WindowData = common.window_data.WindowData;
 const X11Context = @import("global.zig").X11Context;
@@ -19,7 +20,7 @@ pub const WidowProps = struct {
 pub const WindowImpl = struct {
     data: WindowData,
     widow: WidowProps,
-    handle: libX11.Window,
+    handle: libx11.Window,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = 0,
         .y = 0,
@@ -58,31 +59,70 @@ pub const WindowImpl = struct {
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
         const x11cntxt = X11Context.singleton();
-        _ = libX11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
-        _ = libX11.XDestroyWindow(x11cntxt.handles.xdisplay, self.handle);
+        _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
+        _ = libx11.XDestroyWindow(x11cntxt.handles.xdisplay, self.handle);
         self.handle = 0;
         allocator.destroy(self);
     }
 
     pub fn processEvents(self: *Self) void {
-        var e: libX11.XEvent = undefined;
-        const g_instance = X11Context.singleton();
-        _ = libX11.XNextEvent(g_instance.handles.xdisplay, &e);
-        if (e.type == libX11.KeyPress) {
-            // Temp for breaking.
-            // A
-            if (e.xkey.keycode == 65) {
-                self.hide();
+        var e: libx11.XEvent = undefined;
+        const x11cntxt = X11Context.singleton();
+        x11cntxt.flushXRequests();
+        while (x11cntxt.nextXEvent(&e)) {
+            if (e.type == libx11.KeyPress) {
+                // Temp for breaking.
+                // A
+                if (e.xkey.keycode == 65) {
+                    self.minimize();
+                }
+                _ = self.flash();
             }
-            _ = self.flash();
         }
+    }
+
+    pub fn waitEvent(self: *Self) void {
+        // Indefinetly wait for event
+        const x11cntxt = X11Context.singleton();
+        var ready: u32 = 0;
+        // start by flushing and checking for available events.
+        while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
+            _ = posix.poll(
+                libx11.ConnectionNumber(x11cntxt.handles.xdisplay),
+                posix.PollFlag.IORead,
+                -1,
+                &ready,
+            );
+        }
+        self.processEvents();
+    }
+
+    /// Waits for an event or the timeout interval elapses.
+    pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
+        const timeout_ns = timeout * std.time.ns_per_ms;
+        const x11cntxt = X11Context.singleton();
+        var ready: u32 = 0;
+        // start by flushing and checking for available events.
+        while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
+            if (posix.poll(
+                libx11.ConnectionNumber(x11cntxt.handles.xdisplay),
+                posix.PollFlag.IORead,
+                timeout_ns,
+                &ready,
+            ) == false) {
+                // timeout or error
+                return false;
+            }
+        }
+        self.processEvents();
+        return true;
     }
 
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         std.debug.assert(self.handle != 0);
         const x11cntxt = X11Context.singleton();
-        _ = libX11.XMapWindow(x11cntxt.handles.xdisplay, self.handle);
+        _ = libx11.XMapWindow(x11cntxt.handles.xdisplay, self.handle);
         self.data.flags.is_visible = true;
     }
 
@@ -90,7 +130,7 @@ pub const WindowImpl = struct {
     pub fn hide(self: *Self) void {
         std.debug.assert(self.handle != 0);
         const x11cntxt = X11Context.singleton();
-        _ = libX11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
+        _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
         self.data.flags.is_visible = false;
     }
 
@@ -102,7 +142,7 @@ pub const WindowImpl = struct {
     /// Add an event to the X Server.
     pub fn sendXEvent(
         self: *const Self,
-        msg_type: libX11.Atom,
+        msg_type: libx11.Atom,
         l0: c_long,
         l1: c_long,
         l2: c_long,
@@ -110,36 +150,24 @@ pub const WindowImpl = struct {
         l4: c_long,
     ) void {
         const x11cntxt = X11Context.singleton();
-        var event = libX11.XEvent{ .xclient = libX11.XClientMessageEvent{
-            .type = libX11.ClientMessage,
+        var event = libx11.XEvent{ .xclient = libx11.XClientMessageEvent{
+            .type = libx11.ClientMessage,
             .display = x11cntxt.handles.xdisplay,
             .window = self.handle,
             .message_type = msg_type,
             .data = .{ .l = [5]c_long{ l0, l1, l2, l3, l4 } },
             .format = 32,
             .serial = 0,
-            .send_event = libX11.True,
+            .send_event = libx11.True,
         } };
         // [https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#idm45717752103616]
-        _ = libX11.XSendEvent(
+        _ = libx11.XSendEvent(
             x11cntxt.handles.xdisplay,
             x11cntxt.handles.root_window,
-            libX11.False,
-            libX11.SubstructureNotifyMask | libX11.SubstructureRedirectMask,
+            libx11.False,
+            libx11.SubstructureNotifyMask | libx11.SubstructureRedirectMask,
             &event,
         );
-    }
-
-    pub fn waitEvent() void {
-        const x11cntxt = X11Context.singleton();
-        _ = libX11.XPending(x11cntxt.handles.xdisplay);
-    }
-
-    /// the window should belong to the thread calling this function.
-    /// Waits for an input event or the timeout interval elapses.
-    pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
-        _ = timeout;
-        _ = self;
     }
 
     /// Updates the registered window styles to match the current window config.
@@ -394,12 +422,19 @@ pub const WindowImpl = struct {
     // pub fn maximize(self: *const Self) void {
     //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MAXIMIZE);
     // }
-    //
-    // /// Minimizes the window.
-    // pub fn minimize(self: *const Self) void {
-    //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MINIMIZE);
-    // }
-    //
+
+    /// Minimizes the window.
+    pub fn minimize(self: *Self) void {
+        const x11cntxt = X11Context.singleton();
+        _ = libx11.XIconifyWindow(
+            x11cntxt.handles.xdisplay,
+            self.handle,
+            x11cntxt.handles.default_screen,
+        );
+        x11cntxt.flushXRequests();
+        self.data.flags.is_minimized = true;
+    }
+
     // /// Restores the minimized or maximized window to a normal window.
     // pub fn restore(self: *const Self) void {
     //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_RESTORE);
@@ -410,24 +445,24 @@ pub const WindowImpl = struct {
         const x11cntxt = X11Context.singleton();
         const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0) x11cntxt.ewmh._NET_WM_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_NAME;
         const icon_atom = if (x11cntxt.ewmh._NET_WM_ICON_NAME != 0) x11cntxt.ewmh._NET_WM_ICON_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_ICON_NAME;
-        libX11.XChangeProperty(
+        libx11.XChangeProperty(
             x11cntxt.handles.xdisplay,
             self.handle,
             name_atom,
             x11cntxt.ewmh.UTF8_STRING,
             8,
-            libX11.PropModeReplace,
+            libx11.PropModeReplace,
             new_title.ptr,
             @intCast(new_title.len),
         );
 
-        libX11.XChangeProperty(
+        libx11.XChangeProperty(
             x11cntxt.handles.xdisplay,
             self.handle,
             icon_atom,
             x11cntxt.ewmh.UTF8_STRING,
             8,
-            libX11.PropModeReplace,
+            libx11.PropModeReplace,
             new_title.ptr,
             @intCast(new_title.len),
         );
@@ -725,18 +760,18 @@ pub const WindowImpl = struct {
 
 fn createPlatformWindow(
     data: *const WindowData,
-) WindowError!libX11.Window {
-    const EVENT_MASK = libX11.KeyReleaseMask | libX11.KeyPressMask | libX11.ButtonPressMask |
-        libX11.ButtonReleaseMask | libX11.EnterWindowMask | libX11.LeaveWindowMask |
-        libX11.FocusChangeMask | libX11.VisibilityChangeMask | libX11.PointerMotionMask |
-        libX11.StructureNotifyMask | libX11.PropertyChangeMask | libX11.ExposureMask;
+) WindowError!libx11.Window {
+    const EVENT_MASK = libx11.KeyReleaseMask | libx11.KeyPressMask | libx11.ButtonPressMask |
+        libx11.ButtonReleaseMask | libx11.EnterWindowMask | libx11.LeaveWindowMask |
+        libx11.FocusChangeMask | libx11.VisibilityChangeMask | libx11.PointerMotionMask |
+        libx11.StructureNotifyMask | libx11.PropertyChangeMask | libx11.ExposureMask;
 
     const x11cntxt = X11Context.singleton();
-    const visual = libX11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
-    const depth = libX11.DefaultDepth(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
-    var attrib: libX11.XSetWindowAttributes = std.mem.zeroes(libX11.XSetWindowAttributes);
+    const visual = libx11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
+    const depth = libx11.DefaultDepth(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
+    var attrib: libx11.XSetWindowAttributes = std.mem.zeroes(libx11.XSetWindowAttributes);
     attrib.event_mask = EVENT_MASK;
-    const handle = libX11.XCreateWindow(
+    const handle = libx11.XCreateWindow(
         x11cntxt.handles.xdisplay,
         x11cntxt.handles.root_window,
         data.client_area.top_left.x,
@@ -745,9 +780,9 @@ fn createPlatformWindow(
         @intCast(data.client_area.size.height),
         0,
         depth,
-        libX11.InputOutput,
+        libx11.InputOutput,
         visual,
-        libX11.CWEventMask,
+        libx11.CWEventMask,
         @ptrCast(&attrib),
     );
 

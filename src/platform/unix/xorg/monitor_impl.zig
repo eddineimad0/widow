@@ -33,7 +33,6 @@ inline fn calculateMonitorFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
 
 /// Fills the output parameters from the video mode info
 fn videoModeFromRRMode(mode: *const x11ext.XRRModeInfo, rotated: bool, output: *VideoMode) bool {
-    // TODO: explain why
     if (mode.modeFlags & x11ext.RR_Interlace != 0) {
         return false;
     }
@@ -45,8 +44,9 @@ fn videoModeFromRRMode(mode: *const x11ext.XRRModeInfo, rotated: bool, output: *
         output.width = @intCast(mode.width);
         output.height = @intCast(mode.height);
     }
-    // TODO: what if the returned frequency is 0.
     output.frequency = calculateMonitorFrequency(mode);
+    // TODO: what if the returned frequency is 0.
+    std.debug.assert(output.frequency != 0);
     output.color_depth = @intCast(libx11.DefaultDepth(
         x11cntxt.handles.xdisplay,
         x11cntxt.handles.default_screen,

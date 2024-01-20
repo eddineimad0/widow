@@ -57,6 +57,27 @@ pub extern "X11" fn XCreateWindow(
 pub extern "X11" fn XDestroyWindow(display: ?*types.Display, window: types.Window) c_int;
 pub extern "X11" fn XMapWindow(display: ?*types.Display, window: types.Window) c_int;
 pub extern "X11" fn XUnmapWindow(display: ?*types.Display, window: types.Window) c_int;
+pub extern "X11" fn XMoveWindow(
+    display: ?*types.Display,
+    window: types.Window,
+    x: c_int,
+    y: c_int,
+) c_int;
+
+pub extern "X11" fn XResizeWindow(
+    display: ?*types.Display,
+    window: types.Window,
+    width: c_uint,
+    height: c_uint,
+) c_int;
+
+pub extern "X11" fn XIconifyWindow(
+    display: ?*types.Display,
+    window: types.Window,
+    screen_number: c_int,
+) types.Status;
+
+// Properties
 pub extern "X11" fn XChangeProperty(
     display: ?*types.Display,
     w: types.Window,
@@ -68,9 +89,16 @@ pub extern "X11" fn XChangeProperty(
     nelements: c_int,
 ) void;
 
+pub extern "X11" fn XDeleteProperty(
+    display: ?*types.Display,
+    w: types.Window,
+    property: types.Atom,
+) void;
+
 // Events
 pub extern "X11" fn XNextEvent(display: *types.Display, x_event: *types.XEvent) c_int;
 pub extern "X11" fn XPending(display: *types.Display) c_int;
+pub extern "X11" fn XQLength(display: *types.Display) c_int;
 pub extern "X11" fn XSendEvent(
     display: *types.Display,
     w: types.Window,
