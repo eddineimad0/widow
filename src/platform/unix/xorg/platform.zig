@@ -7,6 +7,7 @@ pub const window_impl = @import("window_impl.zig");
 const monitor_impl = @import("monitor_impl.zig");
 
 pub fn initPlatform(options: anytype) !void {
+    // TODO: Check for possible customization.
     _ = options;
     try X11Context.initSingleton();
 }

@@ -21,58 +21,67 @@ const allocator = std.heap.c_allocator;
 
 pub fn main() void {
 
-    // First we need to preform some platform specific initialization.
-    widow.initWidowPlatform(.{}) catch {
-        std.debug.print("Failed to start Widow library\n", .{});
-    };
-    // Clean up code to be called, when done using the library.
+    // first we need to preform some platform specific initialization.
+    // an options tuple can be passed to customize the platform init
+    // e.g on windows we can set the WNDClass name to a comptime string of our choice,
+    try widow.initWidowPlatform(.{ .wnd_class = "Zig_is_awesome" });
+    // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
-
 
     // Start by creating a WidowContext instance.
     // the context is at the heart of the library and keeps track of monitors,clipboard,events...
     // only one instance is needed but you can create as many as you need.
-    var widow_cntxt = widow.WidowContext.create(allocator) catch {
+    var widow_cntxt = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
     };
-    // Destroy it when done.
-    defer widow_cntxt.destroy(allocator);
+    // deinit it when done.
+    defer widow_cntxt.deinit();
 
-    // Create a WindowBuilder.
+    // create a WindowBuilder.
     // this action might fail if we fail to allocate space for the title.
     var builder = widow.WindowBuilder.init(
         "Simple window",
         800,
         600,
-        widow_cntxt,
+        &widow_cntxt,
     ) catch |err| {
         std.debug.print("Failed to create a window builder {}\n", .{err});
         return;
     };
 
-    // Customize the window to your liking.
+    defer builder.deinit();
+
+    // customize the window to your liking.
     _ = builder.withResize(true)
-        .withDPIScaling(false)
+        .withDPIAware(true)
         .withPosition(200, 200)
         .withSize(800, 600)
         .withDecoration(true);
 
-    _ = builder.withTitle("Re:Simple Window") catch |err| {
-        std.debug.print("Failed to change window title,{}\n", .{err});
-        return;
-    };
-
-    // Create the window,
+    // create the window,
     var mywindow = builder.build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
-    // No longer nedded.
-    builder.deinit();
-    // Deinitialize when done.
+    // closes the window when done.
     defer mywindow.deinit();
+
+    var event: widow.Event = undefined;
+    event_loop: while (true) {
+        // Process window events posted by the system.
+        mywindow.waitEvent();
+
+        // All entities in the library(Window,joystick) send their
+        // events to a central event queue in the WidowContext instance.
+        // specified at their creation.
+        while (widow_cntxt.pollEvents(&event)) {
+            switch (event) {
+                //...
+            }
+        }
+    }
 }
 ```
 
