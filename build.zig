@@ -37,12 +37,6 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         example.addModule("widow", widow);
-        switch (display_target.?) {
-            .Xorg => {
-                example.linkSystemLibrary("X11");
-            },
-            else => {},
-        }
         example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);

@@ -1,5 +1,7 @@
 //! X11 constants
 const types = @import("types.zig");
+const builtin = @import("builtin");
+
 const Atom = types.Atom;
 const Time = types.Time;
 const Bool = types.Bool;
@@ -743,3 +745,18 @@ pub const XCompoundTextStyle: c_int = 1;
 pub const XTextStyle: c_int = 2;
 pub const XStdICCTextStyle: c_int = 3;
 pub const XUTF8StringStyle: c_int = 4;
+
+/// Determine the modules name at comptime.
+pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
+    .linux => [_][*:0]const u8{
+        "libX11.so.6", "libXrandr.so.2", "libXinerama.so.1",
+    },
+    .freebsd, .netbsd, .openbsd => [_][*:0]const u8{
+        "libX11.so", "libXrandr.so", "libXinerama.so",
+    },
+    else => @compileError("Unsupported Unix Platform"),
+};
+
+pub const LIB_X11_INDEX = @as(u8, 0);
+pub const LIB_XRANDR_INDEX = @as(u8, 1);
+pub const LIB_XINERAMA_INDEX = @as(u8, 2);

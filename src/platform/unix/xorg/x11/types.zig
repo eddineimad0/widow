@@ -574,3 +574,6 @@ pub const XEvent = extern union {
     xcookie: XGenericEventCookie,
     pad: [24]c_long,
 };
+
+pub const XErrorHandlerFunc = fn (display: ?*Display, err: *XErrorEvent) callconv(.C) c_int;
+const XIOErrorHandlerFunc = fn (display: ?*Display) callconv(.C) c_int;

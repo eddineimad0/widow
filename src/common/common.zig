@@ -8,5 +8,5 @@ pub const cursor = @import("cursor.zig");
 pub const joystick = @import("joystick.zig");
 
 const builtin = @import("builtin");
-pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix.zig");
+pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix/posix.zig");
 pub const IS_DEBUG = builtin.mode == .Debug;

@@ -1,23 +1,8 @@
 const std = @import("std");
-const b = @import("builtin");
-const module = @import("module.zig");
+const posix = @import("common").posix;
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions.zig");
 const utils = @import("utils.zig");
-
-/// Determine the modules name at comptime.
-const ext_libs = switch (b.target.os.tag) {
-    .linux => [_][*:0]const u8{
-        "libXrandr.so.2", "libXinerama.so.1",
-    },
-    .freebsd, .netbsd, .openbsd => [_][*:0]const u8{
-        "libXrandr.so", "libXinerama.so",
-    },
-    else => @compileError("Unsupported Unix Platform"),
-};
-
-const LIB_XRANDR_INDEX = @as(u8, 0);
-const LIB_XINERAMA_INDEX = @as(u8, 1);
 
 pub const XConnectionError = error{
     ConnectionFailed,
@@ -233,37 +218,37 @@ pub const X11Context = struct {
     }
 
     fn loadXExtensions(self: *Self) XConnectionError!void {
-        self.handles.xrandr = module.loadPosixModule(ext_libs[LIB_XRANDR_INDEX]);
+        self.handles.xrandr = posix.loadPosixModule(libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_INDEX]);
         if (self.handles.xrandr) |handle| {
             self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
-                module.moduleSymbol(handle, "XRRGetCrtcInfo"),
+                posix.moduleSymbol(handle, "XRRGetCrtcInfo"),
             );
             self.extensions.xrandr.XRRFreeCrtcInfo = @ptrCast(
-                module.moduleSymbol(handle, "XRRFreeCrtcInfo"),
+                posix.moduleSymbol(handle, "XRRFreeCrtcInfo"),
             );
             self.extensions.xrandr.XRRGetOutputInfo = @ptrCast(
-                module.moduleSymbol(handle, "XRRGetOutputInfo"),
+                posix.moduleSymbol(handle, "XRRGetOutputInfo"),
             );
             self.extensions.xrandr.XRRFreeOutputInfo = @ptrCast(
-                module.moduleSymbol(handle, "XRRFreeOutputInfo"),
+                posix.moduleSymbol(handle, "XRRFreeOutputInfo"),
             );
             self.extensions.xrandr.XRRGetOutputPrimary = @ptrCast(
-                module.moduleSymbol(handle, "XRRGetOutputPrimary"),
+                posix.moduleSymbol(handle, "XRRGetOutputPrimary"),
             );
             self.extensions.xrandr.XRRGetScreenResourcesCurrent = @ptrCast(
-                module.moduleSymbol(handle, "XRRGetScreenResourcesCurrent"),
+                posix.moduleSymbol(handle, "XRRGetScreenResourcesCurrent"),
             );
             self.extensions.xrandr.XRRGetScreenResources = @ptrCast(
-                module.moduleSymbol(handle, "XRRGetScreenResources"),
+                posix.moduleSymbol(handle, "XRRGetScreenResources"),
             );
             self.extensions.xrandr.XRRFreeScreenResources = @ptrCast(
-                module.moduleSymbol(handle, "XRRFreeScreenResources"),
+                posix.moduleSymbol(handle, "XRRFreeScreenResources"),
             );
             self.extensions.xrandr.XRRQueryVersion = @ptrCast(
-                module.moduleSymbol(handle, "XRRQueryVersion"),
+                posix.moduleSymbol(handle, "XRRQueryVersion"),
             );
             self.extensions.xrandr.XRRSetCrtcConfig = @ptrCast(
-                module.moduleSymbol(handle, "XRRSetCrtcConfig"),
+                posix.moduleSymbol(handle, "XRRSetCrtcConfig"),
             );
             var minor: i32 = 0;
             var major: i32 = 0;
@@ -275,13 +260,13 @@ pub const X11Context = struct {
             return XConnectionError.XRandRNotFound;
         }
 
-        self.handles.xinerama = module.loadPosixModule(ext_libs[LIB_XINERAMA_INDEX]);
+        self.handles.xinerama = posix.loadPosixModule(libx11.XORG_LIBS_NAME[libx11.LIB_XINERAMA_INDEX]);
         if (self.handles.xinerama) |handle| {
             self.extensions.xinerama.IsActive = @ptrCast(
-                module.moduleSymbol(handle, "XineramaIsActive").?,
+                posix.moduleSymbol(handle, "XineramaIsActive").?,
             );
             self.extensions.xinerama.QueryScreens = @ptrCast(
-                module.moduleSymbol(handle, "XineramaQueryScreens").?,
+                posix.moduleSymbol(handle, "XineramaQueryScreens").?,
             );
             self.extensions.xinerama.is_active = (self.extensions.xinerama.IsActive(self.handles.xdisplay) != 0);
         } else {
@@ -291,12 +276,12 @@ pub const X11Context = struct {
 
     fn unloadXExtensions(self: *Self) void {
         if (self.handles.xinerama) |handle| {
-            module.freePosixModule(handle);
+            posix.freePosixModule(handle);
             self.handles.xinerama = null;
         }
 
         if (self.handles.xrandr) |handle| {
-            module.freePosixModule(handle);
+            posix.freePosixModule(handle);
             self.handles.xrandr = null;
         }
     }
@@ -438,7 +423,7 @@ pub const X11Context = struct {
             if (comptime std.mem.eql(u8, "UTF8_STRING", f.name)) {
                 continue;
             }
-            if (comptime f.name.len > MAX_NAME_LENGTH) {
+            if (comptime f.name.len > MAX_NAME_LENGTH - 1) {
                 @compileError("EWMH Field name is greater than the maximum buffer length");
             }
             std.mem.copyForwards(u8, &field_name, f.name);
