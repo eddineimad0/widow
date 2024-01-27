@@ -9,7 +9,11 @@ const DisplayProtocol = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    var display_target = b.option(DisplayProtocol, "display_protocol", "Specify the display protocol to compile for.");
+    var display_target = b.option(
+        DisplayProtocol,
+        "widow_display_protocol",
+        "Specify the display protocol to compile for.",
+    );
 
     if (display_target) |t| {
         if (!isDisplayTargetValid(&target, t)) {
