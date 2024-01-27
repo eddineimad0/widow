@@ -26,6 +26,8 @@ pub extern "X11" fn XrmGetResource(
     value_return: *types.XrmValue,
 ) types.Bool;
 
+pub extern "X11" fn XrmUniqueQuark() types.XrmQuark;
+
 // Window Management
 pub extern "X11" fn XCreateSimpleWindow(
     display: ?*types.Display,
@@ -115,6 +117,29 @@ pub extern "X11" fn XFlush(Display: *types.Display) c_int;
 pub const XErrorHandlerFunc = fn (display: ?*types.Display, err: *types.XErrorEvent) callconv(.C) c_int;
 const XIOErrorHandlerFunc = fn (display: ?*types.Display) callconv(.C) c_int;
 pub extern "X11" fn XSetErrorHandler(handler: ?*const XErrorHandlerFunc) ?*XErrorHandlerFunc;
+
+// XUtil
+pub const XUniqueContext = XrmUniqueQuark;
+
+pub extern "X11" fn XSaveContext(
+    display: ?*types.Display,
+    rid: types.XID,
+    context: types.XContext,
+    data: types.XPointer,
+) c_int;
+
+pub extern "X11" fn XFindContext(
+    display: ?*types.Display,
+    rid: types.XID,
+    context: types.XContext,
+    data_return: *types.XPointer,
+) c_int;
+
+pub extern "X11" fn XDeleteContext(
+    display: ?*types.Display,
+    rid: types.XID,
+    context: types.XContext,
+) c_int;
 
 // Misc
 pub extern "X11" fn XGetWindowProperty(

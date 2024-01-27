@@ -46,6 +46,11 @@ pub const WindowImpl = struct {
 
         self.handle = try createPlatformWindow(data);
 
+        const x11cntxt = X11Context.singleton();
+        if (!x11cntxt.addToXContext(self.handle, @ptrCast(self))) {
+            return WindowError.WindowCreationFailure;
+        }
+
         self.setTitle(window_title);
         if (self.data.flags.is_visible) {
             self.show();
@@ -63,16 +68,19 @@ pub const WindowImpl = struct {
         const x11cntxt = X11Context.singleton();
         _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(x11cntxt.handles.xdisplay, self.handle);
+        _ = x11cntxt.removeFromXContext(self.handle);
         self.handle = 0;
         allocator.destroy(self);
     }
 
-    pub fn processEvents(self: *Self) void {
+    pub fn processEvents(self: *const Self) void {
+        _ = self;
         var e: libx11.XEvent = undefined;
         const x11cntxt = X11Context.singleton();
         x11cntxt.flushXRequests();
         while (x11cntxt.nextXEvent(&e)) {
-            handleXEvent(&e, self);
+            const window = windowFromId(e.xany.window);
+            handleXEvent(&e, window);
         }
     }
 
@@ -733,4 +741,15 @@ fn createPlatformWindow(
     }
 
     return handle;
+}
+
+fn windowFromId(window_id: libx11.Window) *WindowImpl {
+    const x11cntxt = X11Context.singleton();
+    const window = x11cntxt.findInXContext(window_id);
+    if (window == null) {
+        // Something isn't quit write
+        std.log.err("Window:#{} has no corresponding data in Xcontext\n", .{window_id});
+        @panic("Logic Error.");
+    }
+    return @ptrCast(@alignCast(window.?));
 }

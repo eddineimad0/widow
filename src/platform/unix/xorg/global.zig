@@ -22,12 +22,14 @@ const LIB_XINERAMA_INDEX = @as(u8, 1);
 pub const XConnectionError = error{
     ConnectionFailed,
     XRandRNotFound,
+    XContextNoMem,
 };
 
 const X11Handles = struct {
     xdisplay: *libx11.Display,
     root_window: libx11.Window,
     default_screen: c_int,
+    xcontext: libx11.XContext,
     xrandr: ?*anyopaque,
     xinerama: ?*anyopaque,
 };
@@ -122,6 +124,7 @@ pub const X11Context = struct {
             .xdisplay = undefined,
             .root_window = undefined,
             .default_screen = undefined,
+            .xcontext = undefined,
             .xrandr = null,
             .xinerama = null,
         },
@@ -208,6 +211,11 @@ pub const X11Context = struct {
             );
 
             g_instance.queryEWMH();
+
+            g_instance.handles.xcontext = libx11.XUniqueContext();
+            if (g_instance.handles.xcontext == 0) {
+                return XConnectionError.XContextNoMem;
+            }
 
             Self.g_init = true;
         }
@@ -463,6 +471,47 @@ pub const X11Context = struct {
         return true;
     }
 
+    pub inline fn addToXContext(
+        self: *const Self,
+        window_id: libx11.Window,
+        data: [*]u8,
+    ) bool {
+        return (libx11.XSaveContext(
+            self.handles.xdisplay,
+            window_id,
+            self.handles.xcontext,
+            data,
+        ) == 0);
+    }
+
+    pub inline fn removeFromXContext(
+        self: *const Self,
+        window_id: libx11.Window,
+    ) bool {
+        return (libx11.XDeleteContext(
+            self.handles.xdisplay,
+            window_id,
+            self.handles.xcontext,
+        ) == 0);
+    }
+
+    pub inline fn findInXContext(
+        self: *const Self,
+        window_id: libx11.Window,
+    ) ?[*]u8 {
+        var data_return: ?[*]u8 = null;
+        var result = libx11.XFindContext(
+            self.handles.xdisplay,
+            window_id,
+            self.handles.xcontext,
+            &data_return,
+        );
+        if (result != 0) {
+            std.debug.assert(data_return == null);
+        }
+        return data_return;
+    }
+
     // Enfoce readonly.
     pub fn singleton() *const Self {
         std.debug.assert(g_init == true);
@@ -524,7 +573,7 @@ test "X11Context Thread safety" {
     }
 }
 
-test "Win32Context init" {
+test "X11Context init" {
     try X11Context.initSingleton();
     const singleton = X11Context.singleton();
     std.debug.print("\nX11 execution context:\n", .{});
@@ -534,4 +583,19 @@ test "Win32Context init" {
     std.debug.print("[+] XineramaIntef: {any}\n", .{singleton.extensions.xinerama});
     std.debug.print("[+] EWMH:{any}\n", .{singleton.ewmh});
     X11Context.deinitSingleton();
+}
+
+test "XContext management" {
+    const testing = std.testing;
+    try X11Context.initSingleton();
+    const singleton = X11Context.singleton();
+    var msg: [5]u8 = .{ 'H', 'E', 'L', 'L', 'O' };
+    try testing.expect(singleton.addToXContext(1, &msg));
+    var msg_alias_ptr = singleton.findInXContext(1);
+    try testing.expect(msg_alias_ptr != null);
+    std.debug.print("\nMSG={s}\n", .{@as(*[5]u8, @ptrCast(msg_alias_ptr.?)).*});
+    try testing.expect(singleton.removeFromXContext(1));
+    try testing.expect(!singleton.removeFromXContext(1));
+    msg_alias_ptr = singleton.findInXContext(1);
+    try testing.expect(msg_alias_ptr == null);
 }
