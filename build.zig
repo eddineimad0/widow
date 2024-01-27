@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const DisplayTarget = enum {
+const DisplayProtocol = enum {
     Win32,
     Xorg,
     Wayland,
@@ -9,10 +9,17 @@ const DisplayTarget = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    var display_target = b.option(DisplayProtocol, "display_protocol", "Specify the display protocol to compile for.");
 
-    const display_target = detectDispalyTarget(&target);
+    if (display_target) |t| {
+        if (!isDisplayTargetValid(&target, t)) {
+            @panic("The specified Os target and display_protocol combination isn't supported.");
+        }
+    } else {
+        display_target = detectDispalyTarget(&target, b.allocator);
+    }
 
-    const widow = prepareWidowModule(b, display_target);
+    const widow = prepareWidowModule(b, display_target.?);
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
@@ -30,7 +37,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         example.addModule("widow", widow);
-        switch (display_target) {
+        switch (display_target.?) {
             .Xorg => {
                 example.linkSystemLibrary("X11");
             },
@@ -43,15 +50,31 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-fn detectDispalyTarget(target: *const std.zig.CrossTarget) DisplayTarget {
-    return switch (target.getOs().tag) {
+fn isDisplayTargetValid(os_target: *const std.zig.CrossTarget, protocol_choise: DisplayProtocol) bool {
+    return switch (os_target.getOs().tag) {
+        .windows => protocol_choise == .Win32,
+        .linux, .freebsd, .netbsd => (protocol_choise == .Xorg or protocol_choise == .Wayland),
+        else => false,
+    };
+}
+
+fn detectDispalyTarget(os_target: *const std.zig.CrossTarget, allocator: std.mem.Allocator) DisplayProtocol {
+    const TYPE_X11: [*:0]const u8 = "x11";
+    const TYPE_Wayland: [*:0]const u8 = "wayland";
+
+    return switch (os_target.getOs().tag) {
         .windows => .Win32,
         .linux, .freebsd, .netbsd => unix: {
             // need to determine what display server is being used
-            const display_server = std.os.getenv("XDG_SESSION_TYPE") orelse @panic("Couldn't determine display server session\n");
-            if (std.mem.orderZ(u8, display_server, "x11") == .eq) {
+            const display_server_type = std.process.getEnvVarOwned(allocator, "XDG_SESSION_TYPE") catch @panic("Couldn't determine display server type\n");
+            defer allocator.free(display_server_type);
+            if (display_server_type.len == 0) {
+                @panic("XDG_SESSION_TYPE env variable not set");
+            }
+
+            if (std.mem.eql(u8, display_server_type, std.mem.span(TYPE_X11))) {
                 break :unix .Xorg;
-            } else if (std.mem.orderZ(u8, display_server, "wayland") == .eq) {
+            } else if (std.mem.eql(u8, display_server_type, std.mem.span(TYPE_Wayland))) {
                 break :unix .Wayland;
             } else {
                 @panic("Unsupported unix display server");
@@ -61,7 +84,7 @@ fn detectDispalyTarget(target: *const std.zig.CrossTarget) DisplayTarget {
     };
 }
 
-fn prepareWidowModule(b: *std.Build, target: DisplayTarget) *std.build.Module {
+fn prepareWidowModule(b: *std.Build, target: DisplayProtocol) *std.build.Module {
     const common_module = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
     const common_dep = std.build.ModuleDependency{ .name = "common", .module = common_module };
     var platform_dep: *std.build.Module = switch (target) {
