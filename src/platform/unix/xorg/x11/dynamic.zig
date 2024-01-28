@@ -174,7 +174,7 @@ pub const XSetErrorHandlerProc = *const fn (
 // Misc
 pub const XFreeProc = *const fn (data: *anyopaque) callconv(.C) c_int;
 
-pub const DynApi = struct {
+pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
     // pub var XInitExtension: XInitExtensionProc = undefined;
@@ -227,7 +227,7 @@ pub fn initDynamicApi() posix.ModuleError!void {
     // Easy shortcut but require the field.name to be 0 terminated
     // since it will be passed to a c function.
     const MAX_NAME_LENGTH = 256;
-    const info = @typeInfo(DynApi);
+    const info = @typeInfo(dyn_api);
     var field_name: [MAX_NAME_LENGTH]u8 = undefined;
     __libx11_module = posix.loadPosixModule(defs.XORG_LIBS_NAME[defs.LIB_X11_INDEX]);
     if (__libx11_module) |m| {
@@ -238,7 +238,7 @@ pub fn initDynamicApi() posix.ModuleError!void {
             std.mem.copyForwards(u8, &field_name, d.name);
             field_name[d.name.len] = 0;
             const symbol = posix.moduleSymbol(m, @ptrCast(&field_name)) orelse return posix.ModuleError.UndefinedSymbol;
-            @field(DynApi, d.name) = @ptrCast(symbol);
+            @field(dyn_api, d.name) = @ptrCast(symbol);
         }
     } else {
         return posix.ModuleError.NotFound;
