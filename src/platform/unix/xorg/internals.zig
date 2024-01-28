@@ -57,7 +57,7 @@ pub const Internals = struct {
 };
 
 /// Create an invisible helper window that lives as long as the internals struct.
-/// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
+/// the helper window is used for handeling monitor,clipboard messages related messages.
 fn createHelperWindow() !libx11.Window {}
 
 /// create a platform icon.

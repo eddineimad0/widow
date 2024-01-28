@@ -1,7 +1,6 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
 const input = @import("keyboard_and_mouse.zig");
-const joystick = @import("joystick.zig");
 const KeyEvent = input.KeyEvent;
 const KeyModifiers = input.KeyModifiers;
 const MouseButtonEvent = input.MouseButtonEvent;
@@ -29,14 +28,6 @@ pub const EventType = enum(u8) {
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
     RedrawRequest, // Request from the system to redraw the window's client area.
-    JoystickConnected, // Device inserted into the system.
-    JoystickRemoved, // Device removed from the system.
-    JoystickButtonAction, // Device button was pressed or released.
-    JoystickAxisMotion, // Device Axis value changed.
-    GamepadConnected, // Gamepad inserted.
-    GamepadRemoved, // Gamepad removed.
-    GamepadButtonAction, // Gamepad button was pressed or released.
-    GamepadAxisMotion, // Gamepad axis value changed
 };
 
 pub const ResizeEvent = struct {
@@ -88,14 +79,6 @@ pub const Event = union(EventType) {
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
     RedrawRequest: u32,
-    JoystickConnected: u8, // Device inserted into the system.
-    JoystickRemoved: u8, // Device removed from the system.
-    JoystickButtonAction: joystick.JoyButtonEvent, // Device button was pressed or released.
-    JoystickAxisMotion: joystick.JoyAxisEvent, // Device Axis value changed.
-    GamepadConnected: u8, // Gamepad inserted.
-    GamepadRemoved: u8, // Gamepad removed.
-    GamepadButtonAction: joystick.GamepadButtonEvent, // Gamepad button was pressed or released.
-    GamepadAxisMotion: joystick.GamepadAxisEvent, // Gamepad axis value changed
 };
 
 pub inline fn createCloseEvent(window_id: u32) Event {
@@ -220,51 +203,6 @@ pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyMod
 
 pub inline fn createRedrawEvent(window_id: u32) Event {
     return Event{ .RedrawRequest = window_id };
-}
-
-pub inline fn createJoyConnectEvent(id: u8, gamepad: bool) Event {
-    return if (gamepad) Event{ .GamepadConnected = id } else Event{ .JoystickConnected = id };
-}
-
-pub inline fn createJoyRemoveEvent(id: u8, gamepad: bool) Event {
-    return if (gamepad) Event{ .GamepadRemoved = id } else Event{ .JoystickRemoved = id };
-}
-
-pub inline fn createJoyAxisEvent(id: u8, axis: u8, value: f32, gamepad: bool) Event {
-    if (gamepad) {
-        return Event{ .GamepadAxisMotion = joystick.GamepadAxisEvent{
-            .joy_id = id,
-            .axis = axis,
-            .value = value,
-        } };
-    } else {
-        return Event{ .JoystickAxisMotion = joystick.JoyAxisEvent{
-            .joy_id = id,
-            .axis = axis,
-            .value = value,
-        } };
-    }
-}
-
-pub inline fn createJoyButtonEvent(
-    id: u8,
-    button: u8,
-    state: joystick.ButtonState,
-    gamepad: bool,
-) Event {
-    if (gamepad) {
-        return Event{ .GamepadButtonAction = joystick.GamepadButtonEvent{
-            .joy_id = id,
-            .button = button,
-            .state = state,
-        } };
-    } else {
-        return Event{ .JoystickButtonAction = joystick.JoyButtonEvent{
-            .joy_id = id,
-            .button = button,
-            .state = state,
-        } };
-    }
 }
 
 pub const EventQueue = struct {

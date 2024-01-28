@@ -5,7 +5,6 @@ pub const event = @import("event.zig");
 pub const list = @import("queue.zig");
 pub const keyboard_and_mouse = @import("keyboard_and_mouse.zig");
 pub const cursor = @import("cursor.zig");
-pub const joystick = @import("joystick.zig");
 
 const builtin = @import("builtin");
 pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix/posix.zig");

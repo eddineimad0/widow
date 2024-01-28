@@ -73,7 +73,7 @@ pub fn main() void {
         // Process window events posted by the system.
         mywindow.waitEvent();
 
-        // All entities in the library(Window,joystick) send their
+        // All entities in the library send their
         // events to a central event queue in the WidowContext instance.
         // specified at their creation.
         while (widow_cntxt.pollEvents(&event)) {

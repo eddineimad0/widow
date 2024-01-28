@@ -2,9 +2,9 @@ const internals = @import("internals.zig");
 const win32 = @import("win32_defs.zig");
 
 pub const window_impl = @import("window_impl.zig");
-pub const joystick = @import("joystick_impl.zig");
 pub const MonitorStore = internals.MonitorStore;
 pub const Internals = internals.Internals;
+
 // Platform handles
 pub const MonitorHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
