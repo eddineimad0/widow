@@ -91,6 +91,12 @@ pub const XIconifyWindowProc = *const fn (
 ) callconv(.C) types.Status;
 
 // Properties
+pub const XSetWMProtocolsProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    atoms: ?[*]types.Atom,
+    count: c_int,
+) types.Status;
 pub const XChangePropertyProc = *const fn (
     display: ?*types.Display,
     w: types.Window,
@@ -211,6 +217,7 @@ pub const dyn_api = struct {
     pub var XSync: XSyncProc = undefined;
     pub var XFlush: XFlushProc = undefined;
     // Properties
+    pub var XSetWMProtocols: XSetWMProtocolsProc = undefined;
     pub var XChangeProperty: XChangePropertyProc = undefined;
     pub var XDeleteProperty: XDeletePropertyProc = undefined;
     pub var XGetWindowProperty: XGetWindowPropertyProc = undefined;

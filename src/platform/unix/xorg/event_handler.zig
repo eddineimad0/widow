@@ -94,6 +94,33 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
     window.sendEvent(&button_event);
 }
 
+/// handles ICCCM messages.
+fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) void {
+    const x11cntxt = X11Context.singleton();
+    if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
+        if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
+            const event = common.event.createCloseEvent(w.data.id);
+            w.sendEvent(&event);
+        }
+        if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh._NET_WM_PING) {
+            // ping from the wm to ensure application responsivity.
+            // we just need to keep sending ping until the communication
+            // is over.
+            var reply: libx11.XEvent = undefined;
+            reply.type = libx11.ClientMessage;
+            reply.xclient.serial = e.serial;
+            reply.xclient.send_event = e.send_event;
+            reply.xclient.display = x11cntxt.handles.xdisplay;
+            reply.xclient.window = x11cntxt.handles.root_window;
+            reply.xclient.message_type = e.message_type;
+            reply.xclient.format = e.format;
+            reply.xclient.data.l[0] = @intCast(x11cntxt.ewmh._NET_WM_PING);
+
+            x11cntxt.sendXEvent(&reply);
+        }
+    }
+}
+
 pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
     switch (ev.type) {
         libx11.ButtonPress => handleButtonPress(&ev.xbutton, window),
@@ -109,11 +136,7 @@ pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
             const event = common.event.createMouseLeftEvent(window.data.id);
             window.sendEvent(&event);
         },
-        libx11.DestroyNotify => {
-            // TODO: this event doesn't seem to be sent.
-            const event = common.event.createCloseEvent(window.data.id);
-            window.sendEvent(&event);
-        },
+        libx11.ClientMessage => handleClientMessage(&ev.xclient, window),
         else => {},
     }
 }

@@ -51,6 +51,8 @@ pub const WindowImpl = struct {
             return WindowError.WindowCreationFailure;
         }
 
+        setInitialWindowPropeties(self.handle);
+
         self.setTitle(window_title);
         if (self.data.flags.is_visible) {
             self.show();
@@ -749,6 +751,19 @@ fn createPlatformWindow(
     }
 
     return handle;
+}
+
+fn setInitialWindowPropeties(window: libx11.Window) void {
+    // communication protocols
+    const x11cntxt = X11Context.singleton();
+    var protocols = [2]libx11.Atom{
+        // this allows us to recieve close request from the window manager.
+        // instead of it closing the socket and crashing our app
+        x11cntxt.ewmh.WM_DELETE_WINDOW,
+        // this allows the window manager to check if a window is still alive and responding
+        x11cntxt.ewmh._NET_WM_PING,
+    };
+    _ = libx11.XSetWMProtocols(x11cntxt.handles.xdisplay, window, &protocols, protocols.len);
 }
 
 fn windowFromId(window_id: libx11.Window) *WindowImpl {
