@@ -30,8 +30,3 @@ pub const WindowError = error{
     FailedToCreate,
     FailedToCopyTitle,
 };
-
-pub const XInputError = error{
-    FailedToLoadDLL,
-    FailedToSetState,
-};

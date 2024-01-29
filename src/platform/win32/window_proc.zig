@@ -60,32 +60,6 @@ pub fn helperWindowProc(
                 // last in the chain.
                 return 0;
             },
-            win32_window_messaging.WM_DEVICECHANGE => exit_point: {
-                // Notifies an application of a change to the hardware configuration
-                // of a device or the computer.
-                const jss = devices.joysubsys_ptr orelse break :exit_point;
-                const ulparam: usize = @bitCast(lparam);
-                const dbh_ptr: ?*win32_sys_service.DEV_BROADCAST_HDR = @ptrFromInt(ulparam);
-                switch (wparam) {
-                    win32_sys_service.DBT_DEVICEARRIVAL => {
-                        if (dbh_ptr) |ptr| {
-                            if (ptr.dbch_devicetype == win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE) {
-                                jss.queryConnectedJoys();
-                            }
-                        }
-                    },
-                    win32_sys_service.DBT_DEVICEREMOVECOMPLETE => {
-                        if (dbh_ptr) |ptr| {
-                            if (ptr.dbch_devicetype == win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE) {
-                                jss.queryDisconnectedJoys();
-                            }
-                        }
-                    },
-                    else => {
-                        break :exit_point;
-                    },
-                }
-            },
             else => {},
         }
     }
