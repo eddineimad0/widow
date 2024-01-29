@@ -711,10 +711,18 @@ pub const WindowImpl = struct {
 fn createPlatformWindow(
     data: *const WindowData,
 ) WindowError!libx11.Window {
-    const EVENT_MASK = libx11.KeyReleaseMask | libx11.KeyPressMask | libx11.ButtonPressMask |
-        libx11.ButtonReleaseMask | libx11.EnterWindowMask | libx11.LeaveWindowMask |
-        libx11.FocusChangeMask | libx11.VisibilityChangeMask | libx11.PointerMotionMask |
-        libx11.StructureNotifyMask | libx11.PropertyChangeMask | libx11.ExposureMask;
+    const EVENT_MASK = libx11.KeyReleaseMask |
+        libx11.KeyPressMask |
+        libx11.ButtonPressMask |
+        libx11.ButtonReleaseMask |
+        libx11.EnterWindowMask |
+        libx11.LeaveWindowMask |
+        libx11.FocusChangeMask |
+        libx11.VisibilityChangeMask |
+        libx11.PointerMotionMask |
+        libx11.StructureNotifyMask |
+        libx11.PropertyChangeMask |
+        libx11.ExposureMask;
 
     const x11cntxt = X11Context.singleton();
     const visual = libx11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);

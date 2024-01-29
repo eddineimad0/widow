@@ -50,9 +50,6 @@ const X11Extensions = struct {
 /// https://specifications.freedesktop.org/wm-spec/wm-spce-1.3.html
 const X11EWMH = struct {
     //########### Root Window Propeties ##############
-    _NET_SUPPORTING_WM_CHECK: libx11.Atom,
-    // gives the window of the active WM.
-    _NET_SUPPORTED: libx11.Atom,
     // lists all the EWMH protocols supported by this WM.
     _NET_CURRENT_DESKTOP: libx11.Atom,
     // gives the index of the current desktop.
@@ -91,6 +88,21 @@ const X11EWMH = struct {
 
     //########## Property Types ################
     UTF8_STRING: libx11.Atom,
+    WM_PROTOCOLS: libx11.Atom,
+    WM_STATE: libx11.Atom,
+    WM_DELETE_WINDOW: libx11.Atom,
+    _NET_SUPPORTING_WM_CHECK: libx11.Atom,
+    // gives the window of the active WM.
+    _NET_SUPPORTED: libx11.Atom,
+    _NET_SUPPORTING_WM_CHECK: libx11.Atom,
+    _NET_WM_ICON: libx11.Atom,
+    _NET_WM_PING: libx11.Atom,
+    _NET_WM_PID: libx11.Atom,
+    _NET_WM_NAME: libx11.Atom,
+    _NET_WM_ICON_NAME: libx11.Atom,
+    _NET_WM_BYPASS_COMPOSITOR: libx11.Atom,
+    _NET_WM_WINDOW_OPACITY: libx11.Atom,
+    _MOTIF_WM_HINTS: libx11.Atom,
 };
 
 pub const X11Context = struct {
@@ -149,6 +161,7 @@ pub const X11Context = struct {
             ._NET_WM_DESKTOP = 0,
 
             .UTF8_STRING = 0,
+            .WM_DELETE_WINDOW = 0,
         },
         .g_dpi = 0.0,
         .g_scale = 0.0,
@@ -192,6 +205,12 @@ pub const X11Context = struct {
             g_instance.ewmh.UTF8_STRING = libx11.XInternAtom(
                 g_instance.handles.xdisplay,
                 "UTF8_STRING",
+                libx11.False,
+            );
+
+            g_instance.ewmh.WM_DELETE_WINDOW = libx11.XInternAtom(
+                g_instance.handles.xdisplay,
+                "WM_DELETE_WINDOW",
                 libx11.False,
             );
 
@@ -423,6 +442,9 @@ pub const X11Context = struct {
             if (comptime std.mem.eql(u8, "UTF8_STRING", f.name)) {
                 continue;
             }
+            if (comptime std.mem.eql(u8, "WM_DELETE_WINDOW", f.name)) {
+                continue;
+            }
             if (comptime f.name.len > MAX_NAME_LENGTH - 1) {
                 @compileError("EWMH Field name is greater than the maximum buffer length");
             }
@@ -536,8 +558,9 @@ fn handleXError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C
 }
 
 test "X11Context Thread safety" {
-    const testing = std.testing;
-    _ = testing;
+    const init = @import("x11/dynamic.zig").initDynamicApi;
+    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
+    try init();
     const builtin = @import("builtin");
     if (builtin.single_threaded) {
         try X11Context.initSingleton();
@@ -556,9 +579,13 @@ test "X11Context Thread safety" {
             }.thread_fn, .{});
         }
     }
+    deinit();
 }
 
 test "X11Context init" {
+    const init = @import("x11/dynamic.zig").initDynamicApi;
+    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
+    try init();
     try X11Context.initSingleton();
     const singleton = X11Context.singleton();
     std.debug.print("\nX11 execution context:\n", .{});
@@ -568,9 +595,13 @@ test "X11Context init" {
     std.debug.print("[+] XineramaIntef: {any}\n", .{singleton.extensions.xinerama});
     std.debug.print("[+] EWMH:{any}\n", .{singleton.ewmh});
     X11Context.deinitSingleton();
+    deinit();
 }
 
 test "XContext management" {
+    const init = @import("x11/dynamic.zig").initDynamicApi;
+    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
+    try init();
     const testing = std.testing;
     try X11Context.initSingleton();
     const singleton = X11Context.singleton();
@@ -583,4 +614,6 @@ test "XContext management" {
     try testing.expect(!singleton.removeFromXContext(1));
     msg_alias_ptr = singleton.findInXContext(1);
     try testing.expect(msg_alias_ptr == null);
+    X11Context.deinitSingleton();
+    deinit();
 }

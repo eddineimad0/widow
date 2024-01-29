@@ -45,7 +45,6 @@ fn videoModeFromRRMode(mode: *const x11ext.XRRModeInfo, rotated: bool, output: *
         output.height = @intCast(mode.height);
     }
     output.frequency = calculateMonitorFrequency(mode);
-    // TODO: what if the returned frequency is 0.
     std.debug.assert(output.frequency != 0);
     output.color_depth = @intCast(libx11.DefaultDepth(
         x11cntxt.handles.xdisplay,

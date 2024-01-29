@@ -37,15 +37,23 @@ pub fn main() !void {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
+    _ = try builder.withTitle("Extra window");
+    // create the window,
+    var mywindow2 = builder.build() catch |err| {
+        std.debug.print("Failed to build the window,{}\n", .{err});
+        return;
+    };
 
     // No longer nedded.
     builder.deinit();
     // closes the window when done.
     defer mywindow.deinit();
+    defer mywindow2.deinit();
 
     var event: widow.Event = undefined;
     event_loop: while (true) {
         mywindow.waitEvent();
+        mywindow2.waitEvent();
 
         while (widow_cntxt.pollEvents(&event)) {
             switch (event) {
