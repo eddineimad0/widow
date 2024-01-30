@@ -122,6 +122,7 @@ pub const X11Context = struct {
     handles: X11Handles,
     extensions: X11Extensions,
     ewmh: X11EWMH,
+    pid: i32,
     g_dpi: f32,
     g_scale: f32,
     var g_init_mutex: std.Thread.Mutex = std.Thread.Mutex{};
@@ -158,6 +159,7 @@ pub const X11Context = struct {
             },
         },
         .ewmh = undefined,
+        .pid = undefined,
         .g_dpi = 0.0,
         .g_scale = 0.0,
     };
@@ -191,6 +193,7 @@ pub const X11Context = struct {
                 return XConnectionError.XContextNoMem;
             }
 
+            g_instance.pid = posix.getpid();
             Self.g_init = true;
         }
     }
@@ -411,7 +414,7 @@ pub const X11Context = struct {
         // this window must also have _NET_WM_SUPPORTING_WM_CHECK property
         // set to the same id(the id of the child window).
 
-        self.setXErrorHandler(filterBadWindowError);
+        self.setXErrorHandler(X11ErrorFilter(libx11.BadWindow).filter);
         var child_window_ptr: ?*libx11.Window = null;
         if (utils.x11WindowProperty(
             self.handles.xdisplay,
@@ -455,10 +458,11 @@ pub const X11Context = struct {
         return true;
     }
 
-    pub inline fn sendXEvent(self: *const Self, e: *libx11.XEvent) void {
+    pub inline fn sendXEvent(self: *const Self, e: *libx11.XEvent, destination: libx11.Window) void {
+        // [https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#idm45717752103616]
         _ = libx11.XSendEvent(
             self.handles.xdisplay,
-            self.handles.root_window,
+            destination,
             libx11.False,
             libx11.SubstructureNotifyMask | libx11.SubstructureRedirectMask,
             e,
@@ -487,6 +491,10 @@ pub const X11Context = struct {
             window_id,
             self.handles.xcontext,
         ) == 0);
+    }
+
+    pub inline fn windowManagerId(self: *const Self) libx11.Window {
+        return self.handles.root_window;
     }
 
     pub inline fn findInXContext(
@@ -529,13 +537,26 @@ fn atomIfSupported(
     return 0;
 }
 
-fn filterBadWindowError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
-    const x11cntxt = X11Context.singleton();
-    if (x11cntxt.handles.xdisplay != display or err.error_code == libx11.BadWindow) {
-        return 0;
-    } else {
-        return X11Context.last_error_handler.?(display, err);
-    }
+// fn filterBadWindowError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
+//     const x11cntxt = X11Context.singleton();
+//     if (x11cntxt.handles.xdisplay != display or err.error_code == libx11.BadWindow) {
+//         return 0;
+//     } else {
+//         return X11Context.last_error_handler.?(display, err);
+//     }
+// }
+
+fn X11ErrorFilter(comptime filtered_error_code: u8) type {
+    return struct {
+        pub fn filter(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
+            const x11cntxt = X11Context.singleton();
+            if (x11cntxt.handles.xdisplay != display or err.error_code == filtered_error_code) {
+                return 0;
+            } else {
+                return X11Context.last_error_handler.?(display, err);
+            }
+        }
+    };
 }
 
 test "X11Context Thread safety" {

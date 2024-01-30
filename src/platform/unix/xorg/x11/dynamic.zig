@@ -236,6 +236,11 @@ pub fn initDynamicApi() posix.ModuleError!void {
     const MAX_NAME_LENGTH = 256;
     const info = @typeInfo(dyn_api);
     var field_name: [MAX_NAME_LENGTH]u8 = undefined;
+
+    if (__libx11_module != null) {
+        return;
+    }
+
     __libx11_module = posix.loadPosixModule(defs.XORG_LIBS_NAME[defs.LIB_X11_INDEX]);
     if (__libx11_module) |m| {
         inline for (info.Struct.decls) |*d| {

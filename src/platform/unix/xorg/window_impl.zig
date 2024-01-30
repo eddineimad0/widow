@@ -75,8 +75,7 @@ pub const WindowImpl = struct {
         allocator.destroy(self);
     }
 
-    pub fn processEvents(self: *const Self) void {
-        _ = self;
+    pub fn processEvents(_: *const Self) void {
         var e: libx11.XEvent = undefined;
         const x11cntxt = X11Context.singleton();
         x11cntxt.flushXRequests();
@@ -142,37 +141,6 @@ pub const WindowImpl = struct {
     /// Add an event to the events queue.
     pub fn sendEvent(self: *Self, event: *const common.event.Event) void {
         self.widow.events_queue.queueEvent(event);
-    }
-
-    /// Add an event to the X Server.
-    pub fn sendXEvent(
-        self: *const Self,
-        msg_type: libx11.Atom,
-        l0: c_long,
-        l1: c_long,
-        l2: c_long,
-        l3: c_long,
-        l4: c_long,
-    ) void {
-        const x11cntxt = X11Context.singleton();
-        var event = libx11.XEvent{ .xclient = libx11.XClientMessageEvent{
-            .type = libx11.ClientMessage,
-            .display = x11cntxt.handles.xdisplay,
-            .window = self.handle,
-            .message_type = msg_type,
-            .data = .{ .l = [5]c_long{ l0, l1, l2, l3, l4 } },
-            .format = 32,
-            .serial = 0,
-            .send_event = libx11.True,
-        } };
-        // [https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#idm45717752103616]
-        _ = libx11.XSendEvent(
-            x11cntxt.handles.xdisplay,
-            x11cntxt.handles.root_window,
-            libx11.False,
-            libx11.SubstructureNotifyMask | libx11.SubstructureRedirectMask,
-            &event,
-        );
     }
 
     /// Updates the size hints to match the the window current state.
@@ -243,22 +211,35 @@ pub const WindowImpl = struct {
     /// returns true on success.
     pub fn flash(self: *const Self) bool {
         const x11cntxt = X11Context.singleton();
-        if (x11cntxt.ewmh._NET_WM_STATE_DEMANDS_ATTENTION == 0) {
-            // Silently return.
+        if (x11cntxt.ewmh._NET_WM_STATE_DEMANDS_ATTENTION == 0 or
+            x11cntxt.ewmh._NET_WM_STATE == 0)
+        {
+            // unsupported by the current window manager.
             return false;
         }
-        // TODO: refactor.
+        // TODO: refactor + Test.
         const _NET_WM_STATE_ADD = @as(c_long, 1);
 
         std.debug.print("\nFlashin\n", .{});
-        self.sendXEvent(
-            x11cntxt.ewmh._NET_WM_STATE,
-            _NET_WM_STATE_ADD,
-            @intCast(x11cntxt.ewmh._NET_WM_STATE_DEMANDS_ATTENTION),
-            0,
-            1,
-            0,
-        );
+        var event = libx11.XEvent{
+            .xclient = libx11.XClientMessageEvent{
+                .type = libx11.ClientMessage,
+                .display = x11cntxt.handles.xdisplay,
+                .window = self.handle,
+                .message_type = x11cntxt.ewmh._NET_WM_STATE,
+                .format = 32,
+                .serial = 0,
+                .send_event = libx11.True,
+                .data = .{ .l = [5]c_long{
+                    _NET_WM_STATE_ADD,
+                    x11cntxt.ewmh._NET_WM_STATE_DEMANDS_ATTENTION,
+                    0,
+                    1,
+                    0,
+                } },
+            },
+        };
+        x11cntxt.sendXEvent(&event, x11cntxt.windowManagerId());
         return true;
     }
 
@@ -450,8 +431,15 @@ pub const WindowImpl = struct {
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, new_title: []const u8) void {
         const x11cntxt = X11Context.singleton();
-        const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0) x11cntxt.ewmh._NET_WM_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_NAME;
-        const icon_atom = if (x11cntxt.ewmh._NET_WM_ICON_NAME != 0) x11cntxt.ewmh._NET_WM_ICON_NAME else x11cntxt.ewmh._NET_WM_VISIBLE_ICON_NAME;
+        const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0)
+            x11cntxt.ewmh._NET_WM_NAME
+        else
+            x11cntxt.ewmh._NET_WM_VISIBLE_NAME;
+        const icon_atom = if (x11cntxt.ewmh._NET_WM_ICON_NAME != 0)
+            x11cntxt.ewmh._NET_WM_ICON_NAME
+        else
+            x11cntxt.ewmh._NET_WM_VISIBLE_ICON_NAME;
+
         libx11.XChangeProperty(
             x11cntxt.handles.xdisplay,
             self.handle,
@@ -764,6 +752,22 @@ fn setInitialWindowPropeties(window: libx11.Window) void {
         x11cntxt.ewmh._NET_WM_PING,
     };
     _ = libx11.XSetWMProtocols(x11cntxt.handles.xdisplay, window, &protocols, protocols.len);
+
+    libx11.XChangeProperty(
+        x11cntxt.handles.xdisplay,
+        window,
+        x11cntxt.ewmh._NET_WM_PID,
+        libx11.XA_CARDINAL,
+        32,
+        libx11.PropModeReplace,
+        @ptrCast(&x11cntxt.pid),
+        1,
+    );
+
+    // NET_WM_WINDOW_TYPE ?
+    // WMHints ?
+    // WMNormalHints ?
+    // WMClassHints ?
 }
 
 fn windowFromId(window_id: libx11.Window) *WindowImpl {

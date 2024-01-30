@@ -7,6 +7,10 @@ const keyboard_and_mouse = common.keyboard_and_mouse;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 
 fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
+    // TODO: what about the button cache store.
+    if (comptime common.LOG_WINDOW_EVENTS) {
+        std.debug.print("window: {} recieved ButtonRelease\n", .{window.handle});
+    }
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
             window.data.id,
@@ -42,6 +46,9 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void 
 }
 
 fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
+    if (comptime common.LOG_WINDOW_EVENTS) {
+        std.debug.print("window: {} recieved ButtonPress\n", .{window.handle});
+    }
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
             window.data.id,
@@ -99,24 +106,22 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
     const x11cntxt = X11Context.singleton();
     if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
+            if (comptime common.LOG_WINDOW_EVENTS) {
+                std.debug.print("window: {} recieved ClientMessage:WM_DELETE_WINDOW\n", .{w.handle});
+            }
             const event = common.event.createCloseEvent(w.data.id);
             w.sendEvent(&event);
         }
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh._NET_WM_PING) {
+            if (comptime common.LOG_WINDOW_EVENTS) {
+                std.debug.print("window: {} recieved ClientMessage:_NET_WM_PING\n", .{w.handle});
+            }
             // ping from the wm to ensure application responsivity.
             // we just need to keep sending ping until the communication
             // is over.
-            var reply: libx11.XEvent = undefined;
-            reply.type = libx11.ClientMessage;
-            reply.xclient.serial = e.serial;
-            reply.xclient.send_event = e.send_event;
-            reply.xclient.display = x11cntxt.handles.xdisplay;
-            reply.xclient.window = x11cntxt.handles.root_window;
-            reply.xclient.message_type = e.message_type;
-            reply.xclient.format = e.format;
-            reply.xclient.data.l[0] = @intCast(x11cntxt.ewmh._NET_WM_PING);
-
-            x11cntxt.sendXEvent(&reply);
+            var reply = libx11.XEvent{ .xclient = e.* };
+            reply.xclient.window = x11cntxt.windowManagerId();
+            x11cntxt.sendXEvent(&reply, x11cntxt.windowManagerId());
         }
     }
 }
@@ -127,11 +132,17 @@ pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
         libx11.ButtonRelease => handleButtonRelease(&ev.xbutton, window),
 
         libx11.EnterNotify => {
+            if (comptime common.LOG_WINDOW_EVENTS) {
+                std.debug.print("window: {} recieved EnterNotify\n", .{window.handle});
+            }
             const event = common.event.createMouseEnterEvent(window.data.id);
             window.sendEvent(&event);
             window.data.flags.cursor_in_client = true;
         },
         libx11.LeaveNotify => {
+            if (comptime common.LOG_WINDOW_EVENTS) {
+                std.debug.print("window: {} recieved LeaveNotify\n", .{window.handle});
+            }
             window.data.flags.cursor_in_client = false;
             const event = common.event.createMouseLeftEvent(window.data.id);
             window.sendEvent(&event);

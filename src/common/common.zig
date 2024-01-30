@@ -9,3 +9,6 @@ pub const cursor = @import("cursor.zig");
 const builtin = @import("builtin");
 pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix/posix.zig");
 pub const IS_DEBUG = builtin.mode == .Debug;
+
+//TODO: can this be set through build flags ?.
+pub const LOG_WINDOW_EVENTS = true;
