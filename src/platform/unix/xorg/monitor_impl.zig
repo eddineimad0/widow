@@ -1,6 +1,6 @@
 const std = @import("std");
 const libx11 = @import("x11/xlib.zig");
-const x11ext = @import("x11/extensions.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const dbg = @import("builtin").mode == .Debug;

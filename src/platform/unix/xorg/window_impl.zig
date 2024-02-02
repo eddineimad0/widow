@@ -343,9 +343,8 @@ pub const WindowImpl = struct {
             }
 
             if (self.data.flags.is_dpi_aware) {
-                var scaler: f64 = undefined;
-                _ = self.scalingDPI(&scaler);
-                size.scaleBy(scaler);
+                const x11cntxt = X11Context.singleton();
+                size.scaleBy(x11cntxt.g_screen_scale);
             }
 
             self.data.min_size = size;
@@ -378,9 +377,8 @@ pub const WindowImpl = struct {
                 }
             }
             if (self.data.flags.is_dpi_aware) {
-                var scaler: f64 = undefined;
-                _ = self.scalingDPI(&scaler);
-                size.scaleBy(scaler);
+                const x11cntxt = X11Context.singleton();
+                size.scaleBy(x11cntxt.g_screen_scale);
             }
             self.data.max_size = size;
         } else {
@@ -747,8 +745,7 @@ fn createPlatformWindow(
 
     var window_size = data.client_area.size;
     if (data.flags.is_dpi_aware) {
-        var scaler = x11cntxt.g_dpi / utils.DEFAULT_SCREEN_DPI;
-        window_size.scaleBy(scaler);
+        window_size.scaleBy(x11cntxt.g_screen_scale);
     }
 
     const handle = libx11.XCreateWindow(

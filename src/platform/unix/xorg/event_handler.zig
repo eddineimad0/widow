@@ -126,10 +126,20 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
     }
 }
 
+fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
+    _ = window;
+    switch (ev.type) {
+        libx11.KeyPress => std.debug.print("KeyPress:code {}\n", .{ev.keycode}),
+        libx11.KeyRelease => std.debug.print("KeyRelease:code {}\n", .{ev.keycode}),
+        else => unreachable,
+    }
+}
+
 pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
     switch (ev.type) {
         libx11.ButtonPress => handleButtonPress(&ev.xbutton, window),
         libx11.ButtonRelease => handleButtonRelease(&ev.xbutton, window),
+        libx11.KeyPress, libx11.KeyRelease => handleKeyPress(&ev.xkey, window),
 
         libx11.EnterNotify => {
             if (comptime common.LOG_WINDOW_EVENTS) {

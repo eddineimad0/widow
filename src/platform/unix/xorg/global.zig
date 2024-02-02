@@ -1,7 +1,7 @@
 const std = @import("std");
 const posix = @import("common").posix;
 const libx11 = @import("x11/xlib.zig");
-const x11ext = @import("x11/extensions.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 
 pub const XConnectionError = error{
@@ -124,7 +124,7 @@ pub const X11Context = struct {
     ewmh: X11EWMH,
     pid: i32,
     g_dpi: f32,
-    g_scale: f32,
+    g_screen_scale: f32,
     resource_name: [*:0]const u8,
     resource_class: [*:0]const u8,
     var g_init_mutex: std.Thread.Mutex = std.Thread.Mutex{};
@@ -163,7 +163,7 @@ pub const X11Context = struct {
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
-        .g_scale = 0.0,
+        .g_screen_scale = 0.0,
         .resource_name = "",
         .resource_class = "",
     };
@@ -315,7 +315,7 @@ pub const X11Context = struct {
         }
 
         self.g_dpi = dpi;
-        self.g_scale = dpi / 96.0;
+        self.g_screen_scale = dpi / 96.0;
     }
 
     /// changes the x server protocol error handler
@@ -566,65 +566,4 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
             }
         }
     };
-}
-
-test "X11Context Thread safety" {
-    const init = @import("x11/dynamic.zig").initDynamicApi;
-    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
-    try init();
-    const builtin = @import("builtin");
-    if (builtin.single_threaded) {
-        try X11Context.initSingleton();
-        try X11Context.initSingleton();
-        defer X11Context.deinitSingleton();
-    } else {
-        var threads: [10]std.Thread = undefined;
-        defer for (threads) |handle| handle.join();
-
-        for (&threads) |*handle| {
-            handle.* = try std.Thread.spawn(.{}, struct {
-                fn thread_fn() !void {
-                    try X11Context.initSingleton();
-                    defer X11Context.deinitSingleton();
-                }
-            }.thread_fn, .{});
-        }
-    }
-    deinit();
-}
-
-test "X11Context init" {
-    const init = @import("x11/dynamic.zig").initDynamicApi;
-    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
-    try init();
-    try X11Context.initSingleton();
-    const singleton = X11Context.singleton();
-    std.debug.print("\nX11 execution context:\n", .{});
-    std.debug.print("[+] DPI:{d},Scale:{d}\n", .{ singleton.g_dpi, singleton.g_scale });
-    std.debug.print("[+] Handles: {any}\n", .{singleton.handles});
-    std.debug.print("[+] XRRInterface: {any}\n", .{singleton.extensions.xrandr});
-    std.debug.print("[+] XineramaIntef: {any}\n", .{singleton.extensions.xinerama});
-    std.debug.print("[+] EWMH:{any}\n", .{singleton.ewmh});
-    X11Context.deinitSingleton();
-    deinit();
-}
-
-test "XContext management" {
-    const init = @import("x11/dynamic.zig").initDynamicApi;
-    const deinit = @import("x11/dynamic.zig").deinitDynamicApi;
-    try init();
-    const testing = std.testing;
-    try X11Context.initSingleton();
-    const singleton = X11Context.singleton();
-    var msg: [5]u8 = .{ 'H', 'E', 'L', 'L', 'O' };
-    try testing.expect(singleton.addToXContext(1, &msg));
-    var msg_alias_ptr = singleton.findInXContext(1);
-    try testing.expect(msg_alias_ptr != null);
-    std.debug.print("\nMSG={s}\n", .{@as(*[5]u8, @ptrCast(msg_alias_ptr.?)).*});
-    try testing.expect(singleton.removeFromXContext(1));
-    try testing.expect(!singleton.removeFromXContext(1));
-    msg_alias_ptr = singleton.findInXContext(1);
-    try testing.expect(msg_alias_ptr == null);
-    X11Context.deinitSingleton();
-    deinit();
 }

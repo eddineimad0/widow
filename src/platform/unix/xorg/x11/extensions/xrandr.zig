@@ -1,123 +1,6 @@
-const types = @import("types.zig");
+const types = @import("../types.zig");
 
-// Xinerama
-// Types
-pub const XineramaScreenInfo = extern struct {
-    screen_number: c_int,
-    x_org: c_short,
-    y_org: c_short,
-    width: c_short,
-    height: c_short,
-};
-
-// Function Signature.
-pub const XineramaIsActiveProc = *const fn (dpy: *types.Display) callconv(.C) types.Bool;
-pub const XineramaQueryExtension = *const fn (
-    dpy: *types.Display,
-    event_base_return: *c_int,
-    error_base_return: *c_int,
-) callconv(.C) types.Bool;
-pub const XineramaQueryVersion = *const fn (
-    dpy: *types.Display,
-    version_major: *c_int,
-    version_minor: *c_int,
-) callconv(.C) types.Status;
-pub const XineramaQueryScreens = *const fn (
-    dpy: *types.Display,
-    number: *c_int,
-) callconv(.C) ?[*]XineramaScreenInfo;
-
-// XRandR
-// Types
-pub const Connection = c_ushort;
-pub const Rotation = c_ushort;
-pub const SizeID = c_ushort;
-pub const SubpixelOrder = c_ushort;
-pub const XRRModeFlags = c_ulong;
-
-pub const RROutput = types.XID;
-pub const RRCrtc = types.XID;
-pub const RRMode = types.XID;
-pub const RRProvider = types.XID;
-
-pub const XRRScreenSize = extern struct {
-    width: c_int,
-    height: c_int,
-    mwidth: c_int,
-    mheight: c_int,
-};
-
-pub const XRRScreenConfiguration = opaque {};
-
-pub const XRRModeInfo = extern struct {
-    id: RRMode,
-    width: c_uint,
-    height: c_uint,
-    dotClock: c_ulong,
-    hSyncStart: c_uint,
-    hSyncEnd: c_uint,
-    hTotal: c_uint,
-    hSkew: c_uint,
-    vSyncStart: c_uint,
-    vSyncEnd: c_uint,
-    vTotal: c_uint,
-    name: [*:0]u8,
-    nameLength: c_uint,
-    modeFlags: XRRModeFlags,
-};
-
-pub const XRRScreenResources = extern struct {
-    timestamp: types.Time,
-    configTimestamp: types.Time,
-    ncrtc: c_int,
-    crtcs: [*]RRCrtc,
-    noutput: c_int,
-    outputs: [*]RROutput,
-    nmode: c_int,
-    modes: [*]XRRModeInfo,
-};
-
-pub const XRROutputInfo = extern struct {
-    timestamp: types.Time,
-    crtc: RRCrtc,
-    name: [*:0]u8,
-    nameLen: c_int,
-    mm_width: c_ulong,
-    mm_height: c_ulong,
-    connection: Connection,
-    subpixel_order: SubpixelOrder,
-    ncrtc: c_int,
-    crtcs: *RRCrtc,
-    nclone: c_int,
-    clones: *RROutput,
-    nmode: c_int,
-    npreferred: c_int,
-    modes: [*]RRMode,
-};
-
-pub const XRRCrtcInfo = extern struct {
-    timestamp: types.Time,
-    x: c_int,
-    y: c_int,
-    width: c_uint,
-    height: c_uint,
-    mode: RRMode,
-    rotation: Rotation,
-    noutput: c_int,
-    outputs: *RROutput,
-    rotations: Rotation,
-    npossible: c_int,
-    possible: *RROutput,
-};
-
-pub const XRRCrtcGamma = extern struct {
-    size: c_int,
-    red: *c_ushort,
-    green: *c_ushort,
-    blue: *c_ushort,
-};
-
-// constants
+// Constants
 pub const RANDR_NAME = "RANDR";
 pub const RANDR_MAJOR: c_int = 1;
 pub const RANDR_MINOR: c_int = 5;
@@ -256,7 +139,96 @@ pub const RR_Capability_SourceOffload: c_int = 4;
 pub const RR_Capability_SinkOffload: c_int = 8;
 pub const RRMode_None: RRMode = 0;
 
-// Function signatures.
+// Types
+pub const Connection = c_ushort;
+pub const Rotation = c_ushort;
+pub const SizeID = c_ushort;
+pub const SubpixelOrder = c_ushort;
+pub const XRRModeFlags = c_ulong;
+
+pub const RROutput = types.XID;
+pub const RRCrtc = types.XID;
+pub const RRMode = types.XID;
+pub const RRProvider = types.XID;
+
+pub const XRRScreenSize = extern struct {
+    width: c_int,
+    height: c_int,
+    mwidth: c_int,
+    mheight: c_int,
+};
+
+pub const XRRScreenConfiguration = opaque {};
+
+pub const XRRModeInfo = extern struct {
+    id: RRMode,
+    width: c_uint,
+    height: c_uint,
+    dotClock: c_ulong,
+    hSyncStart: c_uint,
+    hSyncEnd: c_uint,
+    hTotal: c_uint,
+    hSkew: c_uint,
+    vSyncStart: c_uint,
+    vSyncEnd: c_uint,
+    vTotal: c_uint,
+    name: [*:0]u8,
+    nameLength: c_uint,
+    modeFlags: XRRModeFlags,
+};
+
+pub const XRRScreenResources = extern struct {
+    timestamp: types.Time,
+    configTimestamp: types.Time,
+    ncrtc: c_int,
+    crtcs: [*]RRCrtc,
+    noutput: c_int,
+    outputs: [*]RROutput,
+    nmode: c_int,
+    modes: [*]XRRModeInfo,
+};
+
+pub const XRROutputInfo = extern struct {
+    timestamp: types.Time,
+    crtc: RRCrtc,
+    name: [*:0]u8,
+    nameLen: c_int,
+    mm_width: c_ulong,
+    mm_height: c_ulong,
+    connection: Connection,
+    subpixel_order: SubpixelOrder,
+    ncrtc: c_int,
+    crtcs: *RRCrtc,
+    nclone: c_int,
+    clones: *RROutput,
+    nmode: c_int,
+    npreferred: c_int,
+    modes: [*]RRMode,
+};
+
+pub const XRRCrtcInfo = extern struct {
+    timestamp: types.Time,
+    x: c_int,
+    y: c_int,
+    width: c_uint,
+    height: c_uint,
+    mode: RRMode,
+    rotation: Rotation,
+    noutput: c_int,
+    outputs: *RROutput,
+    rotations: Rotation,
+    npossible: c_int,
+    possible: *RROutput,
+};
+
+pub const XRRCrtcGamma = extern struct {
+    size: c_int,
+    red: *c_ushort,
+    green: *c_ushort,
+    blue: *c_ushort,
+};
+
+// Functions signatures.
 pub const XRRAllocGammaProc = *const fn (size: c_int) callconv(.C) ?*XRRCrtcGamma;
 pub const XRRFreeGammaProc = *const fn (gamma: *XRRCrtcGamma) callconv(.C) void;
 pub const XRRFreeCrtcInfoProc = *const fn (crtcInfo: *XRRCrtcInfo) callconv(.C) void;
