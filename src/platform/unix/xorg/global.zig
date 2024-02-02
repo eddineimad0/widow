@@ -125,6 +125,8 @@ pub const X11Context = struct {
     pid: i32,
     g_dpi: f32,
     g_scale: f32,
+    resource_name: [*:0]const u8,
+    resource_class: [*:0]const u8,
     var g_init_mutex: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
     var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;
@@ -162,17 +164,24 @@ pub const X11Context = struct {
         .pid = undefined,
         .g_dpi = 0.0,
         .g_scale = 0.0,
+        .resource_name = "",
+        .resource_class = "",
     };
 
     const Self = @This();
 
-    pub fn initSingleton() XConnectionError!void {
+    pub fn initSingleton(
+        res_name: [*:0]const u8,
+        res_class: [*:0]const u8,
+    ) XConnectionError!void {
         @setCold(true);
 
         Self.g_init_mutex.lock();
         defer g_init_mutex.unlock();
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
+            g_instance.resource_name = res_name;
+            g_instance.resource_class = res_class;
             // Open a connection to the X server.
             _ = libx11.XInitThreads();
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
@@ -357,7 +366,7 @@ pub const X11Context = struct {
             self.ewmh._NET_SUPPORTED,
             libx11.XA_ATOM,
             @ptrCast(&supported),
-        );
+        ) catch unreachable;
 
         if (atom_count == 0) {
             return;
@@ -395,16 +404,16 @@ pub const X11Context = struct {
         // if the _NET_WM_SUPPORTING_WM_CHECK is missing client should
         // assume a non conforming window manager is present
         var window_ptr: ?*libx11.Window = null;
-        if (utils.x11WindowProperty(
+        _ = utils.x11WindowProperty(
             self.handles.xdisplay,
             self.handles.root_window,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
             libx11.XA_WINDOW,
             @ptrCast(&window_ptr),
-        ) == 0) {
+        ) catch {
             // non conforming.
             return;
-        }
+        };
 
         std.debug.assert(window_ptr != null);
         defer _ = libx11.XFree(window_ptr.?);
@@ -416,15 +425,15 @@ pub const X11Context = struct {
 
         self.setXErrorHandler(X11ErrorFilter(libx11.BadWindow).filter);
         var child_window_ptr: ?*libx11.Window = null;
-        if (utils.x11WindowProperty(
+        _ = utils.x11WindowProperty(
             self.handles.xdisplay,
             window_ptr.?.*,
             self.ewmh._NET_SUPPORTING_WM_CHECK,
             libx11.XA_WINDOW,
             @ptrCast(&child_window_ptr),
-        ) == 0) {
+        ) catch {
             return;
-        }
+        };
         self.setXErrorHandler(null);
 
         std.debug.assert(child_window_ptr != null);

@@ -10,13 +10,22 @@ pub const MonitorStore = internals.MonitorStore;
 pub const window_impl = @import("window_impl.zig");
 
 pub fn initPlatform(options: anytype) !void {
-    // TODO: Check for possible customization.
-    _ = options;
+    const res_name = if (@hasField(@TypeOf(options), "xres_name"))
+        @field(options, "xres_name")
+    else
+        std.c.getenv("RESOURCE_NAME") orelse "";
+
+    const res_class = if (@hasField(@TypeOf(options), "xres_class"))
+        @field(options, "xres_class")
+    else
+        "WIDOW_CLASS";
+
     dyn_x11.initDynamicApi() catch |e| {
         std.log.err("[X11] {s}\n", .{posix.moduleErrorMsg()});
         return e;
     };
-    try X11Context.initSingleton();
+
+    try X11Context.initSingleton(res_name, res_class);
 }
 
 pub fn deinitPlatform() void {

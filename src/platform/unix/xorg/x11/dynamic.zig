@@ -7,35 +7,35 @@ const posix = @import("common").posix;
 const types = @import("types.zig");
 const defs = @import("defs.zig");
 
-pub const XOpenDisplayProc = *const fn (display_name: ?[*:0]u8) callconv(.C) ?*types.Display;
-pub const XCloseDisplayProc = *const fn (display: ?*types.Display) callconv(.C) c_int;
-pub const XInitExtensionProc = *const fn (
+const XOpenDisplayProc = *const fn (display_name: ?[*:0]u8) callconv(.C) ?*types.Display;
+const XCloseDisplayProc = *const fn (display: ?*types.Display) callconv(.C) c_int;
+const XInitExtensionProc = *const fn (
     display: ?*types.Display,
     ext_name: ?[*:0]const u8,
 ) callconv(.C) ?[*]types.XExtCodes;
-pub const XAddExtensionProc = *const fn (display: ?*types.Display) callconv(.C) ?[*]types.XExtCodes;
+const XAddExtensionProc = *const fn (display: ?*types.Display) callconv(.C) ?[*]types.XExtCodes;
 
 // Multithreading routines.
-pub const XInitThreadsProc = *const fn () callconv(.C) c_int;
-pub const XLockDisplayProc = *const fn (dispaly: ?*types.Display) callconv(.C) void;
-pub const XUnlockDisplayProc = *const fn (display: ?*types.Display) callconv(.C) void;
+const XInitThreadsProc = *const fn () callconv(.C) c_int;
+const XLockDisplayProc = *const fn (dispaly: ?*types.Display) callconv(.C) void;
+const XUnlockDisplayProc = *const fn (display: ?*types.Display) callconv(.C) void;
 
 // Ressource Manager
-pub const XrmInitializeProc = *const fn () callconv(.C) void;
-pub const XResourceManagerStringProc = *const fn (display: ?*types.Display) callconv(.C) ?[*:0]const u8;
-pub const XrmGetStringDatabaseProc = *const fn (data: ?[*:0]const u8) callconv(.C) types.XrmDatabase;
-pub const XrmDestroyDatabaseProc = *const fn (db: types.XrmDatabase) callconv(.C) void;
-pub const XrmGetResourceProc = *const fn (
+const XrmInitializeProc = *const fn () callconv(.C) void;
+const XResourceManagerStringProc = *const fn (display: ?*types.Display) callconv(.C) ?[*:0]const u8;
+const XrmGetStringDatabaseProc = *const fn (data: ?[*:0]const u8) callconv(.C) types.XrmDatabase;
+const XrmDestroyDatabaseProc = *const fn (db: types.XrmDatabase) callconv(.C) void;
+const XrmGetResourceProc = *const fn (
     db: types.XrmDatabase,
     str_name: [*:0]const u8,
     str_class: [*:0]const u8,
     str_type_return: *?[*:0]const u8,
     value_return: *types.XrmValue,
 ) callconv(.C) types.Bool;
-pub const XrmUniqueQuarkProc = *const fn () callconv(.C) types.XrmQuark;
+const XrmUniqueQuarkProc = *const fn () callconv(.C) types.XrmQuark;
 
 // Window Management
-pub const XCreateSimpleWindowProc = *const fn (
+const XCreateSimpleWindowProc = *const fn (
     display: ?*types.Display,
     parent: types.Window,
     x: c_int,
@@ -46,7 +46,7 @@ pub const XCreateSimpleWindowProc = *const fn (
     border: c_ulong,
     background: c_ulong,
 ) callconv(.C) types.Window;
-pub const XCreateWindowProc = *const fn (
+const XCreateWindowProc = *const fn (
     display: ?*types.Display,
     parent: types.Window,
     x: c_int,
@@ -60,44 +60,44 @@ pub const XCreateWindowProc = *const fn (
     value_mask: c_ulong,
     attributes: ?[*]types.XSetWindowAttributes,
 ) callconv(.C) types.Window;
-pub const XDestroyWindowProc = *const fn (
+const XDestroyWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
 ) callconv(.C) c_int;
-pub const XMapWindowProc = *const fn (
+const XMapWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
 ) callconv(.C) c_int;
-pub const XUnmapWindowProc = *const fn (
+const XUnmapWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
 ) callconv(.C) c_int;
-pub const XMoveWindowProc = *const fn (
+const XMoveWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
     x: c_int,
     y: c_int,
 ) callconv(.C) c_int;
-pub const XResizeWindowProc = *const fn (
+const XResizeWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
     width: c_uint,
     height: c_uint,
 ) callconv(.C) c_int;
-pub const XIconifyWindowProc = *const fn (
+const XIconifyWindowProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
     screen_number: c_int,
 ) callconv(.C) types.Status;
 
 // Properties
-pub const XSetWMProtocolsProc = *const fn (
+const XSetWMProtocolsProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
     atoms: ?[*]types.Atom,
     count: c_int,
 ) types.Status;
-pub const XChangePropertyProc = *const fn (
+const XChangePropertyProc = *const fn (
     display: ?*types.Display,
     w: types.Window,
     property: types.Atom,
@@ -107,12 +107,12 @@ pub const XChangePropertyProc = *const fn (
     data: [*]const u8,
     nelements: c_int,
 ) callconv(.C) void;
-pub const XDeletePropertyProc = *const fn (
+const XDeletePropertyProc = *const fn (
     display: ?*types.Display,
     w: types.Window,
     property: types.Atom,
 ) callconv(.C) void;
-pub const XGetWindowPropertyProc = *const fn (
+const XGetWindowPropertyProc = *const fn (
     display: ?*types.Display,
     w: types.Window,
     property: types.Atom,
@@ -126,59 +126,74 @@ pub const XGetWindowPropertyProc = *const fn (
     bytes_after_return: *c_ulong,
     prop_return: ?[*]?[*]u8,
 ) callconv(.C) c_int;
-pub const XInternAtomProc = *const fn (
+const XInternAtomProc = *const fn (
     display: ?*types.Display,
     atom_name: [*:0]const u8,
     if_exist: types.Bool,
 ) callconv(.C) types.Atom;
 
 // XUtil
-pub const XUniqueContextProc = XrmUniqueQuarkProc;
-pub const XSaveContextProc = *const fn (
+const XUniqueContextProc = XrmUniqueQuarkProc;
+const XSaveContextProc = *const fn (
     display: ?*types.Display,
     rid: types.XID,
     context: types.XContext,
     data: types.XPointer,
 ) callconv(.C) c_int;
-pub const XFindContextProc = *const fn (
+const XFindContextProc = *const fn (
     display: ?*types.Display,
     rid: types.XID,
     context: types.XContext,
     data_return: *types.XPointer,
 ) callconv(.C) c_int;
-pub const XDeleteContextProc = *const fn (
+const XDeleteContextProc = *const fn (
     display: ?*types.Display,
     rid: types.XID,
     context: types.XContext,
 ) callconv(.C) c_int;
 
 // Events
-pub const XNextEventProc = *const fn (
+const XNextEventProc = *const fn (
     display: *types.Display,
     x_event: *types.XEvent,
 ) callconv(.C) c_int;
-pub const XPendingProc = *const fn (display: *types.Display) callconv(.C) c_int;
-pub const XQLengthProc = *const fn (display: *types.Display) callconv(.C) c_int;
-pub const XSendEventProc = *const fn (
+const XPendingProc = *const fn (display: *types.Display) callconv(.C) c_int;
+const XQLengthProc = *const fn (display: *types.Display) callconv(.C) c_int;
+const XSendEventProc = *const fn (
     display: *types.Display,
     w: types.Window,
     propagate: types.Bool,
     event_mask: c_long,
     event: *types.XEvent,
 ) callconv(.C) types.Status;
-pub const XSyncProc = *const fn (
+const XSyncProc = *const fn (
     display: *types.Display,
     discard: types.Bool,
 ) callconv(.C) void;
-pub const XFlushProc = *const fn (Display: *types.Display) callconv(.C) c_int;
+const XFlushProc = *const fn (Display: *types.Display) callconv(.C) c_int;
 
 // Errors
-pub const XSetErrorHandlerProc = *const fn (
+const XSetErrorHandlerProc = *const fn (
     handler: ?*const types.XErrorHandlerFunc,
 ) ?*const types.XErrorHandlerFunc;
 
 // Misc
-pub const XFreeProc = *const fn (data: *anyopaque) callconv(.C) c_int;
+const XFreeProc = *const fn (data: *anyopaque) callconv(.C) c_int;
+const XAllocWMHintsProc = *const fn () callconv(.C) ?*types.XWMHints;
+const XAllocClassHintProc = *const fn () callconv(.C) ?*types.XClassHint;
+const XAllocSizeHintsProc = *const fn () callconv(.C) ?*types.XSizeHints;
+// const XAllocIconSize = *const fn () ?*XIconSize;
+// const XAllocStandardColormap = *const fn () ?*XStandardColormap;
+const XSetWMHintsProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    hints: ?[*]types.XWMHints,
+) callconv(.C) void;
+const XSetClassHintProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    hints: ?[*]types.XClassHint,
+) callconv(.C) c_int;
 
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
@@ -226,6 +241,11 @@ pub const dyn_api = struct {
     pub var XSetErrorHandler: XSetErrorHandlerProc = undefined;
     // Misc
     pub var XFree: XFreeProc = undefined;
+    pub var XAllocWMHints: XAllocWMHintsProc = undefined;
+    pub var XAllocSizeHints: XAllocSizeHintsProc = undefined;
+    pub var XAllocClassHint: XAllocClassHintProc = undefined;
+    pub var XSetWMHints: XSetWMHintsProc = undefined;
+    pub var XSetClassHint: XSetClassHintProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

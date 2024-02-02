@@ -746,6 +746,9 @@ pub const XTextStyle: c_int = 2;
 pub const XStdICCTextStyle: c_int = 3;
 pub const XUTF8StringStyle: c_int = 4;
 
+pub const NormalState: c_int = 1;
+pub const IconicState: c_int = 3;
+
 /// Determine the modules name at comptime.
 pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{

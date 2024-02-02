@@ -11,6 +11,7 @@ const handleXEvent = @import("event_handler.zig").handleXEvent;
 
 pub const WindowError = error{
     WindowCreationFailure,
+    FailedToCopyTitle,
 };
 
 /// Holds all the refrences we use to communitcate with the WidowContext.
@@ -51,7 +52,7 @@ pub const WindowImpl = struct {
             return WindowError.WindowCreationFailure;
         }
 
-        setInitialWindowPropeties(self.handle);
+        try setInitialWindowPropeties(self.handle);
 
         self.setTitle(window_title);
         if (self.data.flags.is_visible) {
@@ -465,10 +466,31 @@ pub const WindowImpl = struct {
     }
 
     /// Returns the title of the window.
-    pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        _ = allocator;
-        _ = self;
-        return WindowError.FailedToCopyTitle;
+    pub inline fn title(
+        self: *const Self,
+        allocator: std.mem.Allocator,
+    ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
+        const x11cntxt = X11Context.singleton();
+        const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0)
+            x11cntxt.ewmh._NET_WM_NAME
+        else
+            x11cntxt.ewmh._NET_WM_VISIBLE_NAME;
+
+        var data: [*]u8 = undefined;
+        const data_len = utils.x11WindowProperty(
+            x11cntxt.handles.xdisplay,
+            self.handle,
+            name_atom,
+            x11cntxt.ewmh.UTF8_STRING,
+            @ptrCast(&data),
+        ) catch {
+            return WindowError.FailedToCopyTitle;
+        };
+
+        defer _ = libx11.XFree(data);
+        var window_title = try allocator.alloc(u8, data_len);
+        @memcpy(window_title, data);
+        return window_title;
     }
 
     /// Returns the window's current opacity
@@ -715,23 +737,33 @@ fn createPlatformWindow(
         libx11.ExposureMask;
 
     const x11cntxt = X11Context.singleton();
+
     const visual = libx11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
     const depth = libx11.DefaultDepth(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
-    var attrib: libx11.XSetWindowAttributes = std.mem.zeroes(libx11.XSetWindowAttributes);
-    attrib.event_mask = EVENT_MASK;
+
+    var attribs: libx11.XSetWindowAttributes = std.mem.zeroes(libx11.XSetWindowAttributes);
+
+    attribs.event_mask = EVENT_MASK;
+
+    var window_size = data.client_area.size;
+    if (data.flags.is_dpi_aware) {
+        var scaler = x11cntxt.g_dpi / utils.DEFAULT_SCREEN_DPI;
+        window_size.scaleBy(scaler);
+    }
+
     const handle = libx11.XCreateWindow(
         x11cntxt.handles.xdisplay,
         x11cntxt.handles.root_window,
         data.client_area.top_left.x,
         data.client_area.top_left.y,
-        @intCast(data.client_area.size.width),
-        @intCast(data.client_area.size.height),
+        @intCast(window_size.width),
+        @intCast(window_size.height),
         0,
         depth,
         libx11.InputOutput,
         visual,
         libx11.CWEventMask,
-        @ptrCast(&attrib),
+        @ptrCast(&attribs),
     );
 
     if (handle == 0) {
@@ -741,7 +773,7 @@ fn createPlatformWindow(
     return handle;
 }
 
-fn setInitialWindowPropeties(window: libx11.Window) void {
+fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
     // communication protocols
     const x11cntxt = X11Context.singleton();
     var protocols = [2]libx11.Atom{
@@ -764,17 +796,48 @@ fn setInitialWindowPropeties(window: libx11.Window) void {
         1,
     );
 
-    // NET_WM_WINDOW_TYPE ?
-    // WMHints ?
-    // WMNormalHints ?
+    if (x11cntxt.ewmh._NET_WM_WINDOW_TYPE != 0 and x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0) {
+        libx11.XChangeProperty(
+            x11cntxt.handles.xdisplay,
+            window,
+            x11cntxt.ewmh._NET_WM_WINDOW_TYPE,
+            libx11.XA_ATOM,
+            32,
+            libx11.PropModeReplace,
+            @ptrCast(&x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
+            1,
+        );
+    }
+
+    // WMHints.
+
+    var hints = libx11.XAllocWMHints() orelse return WindowError.WindowCreationFailure;
+    defer _ = libx11.XFree(hints);
+    hints.flags = libx11.StateHint;
+    hints.initial_state = libx11.NormalState;
+    _ = libx11.XSetWMHints(x11cntxt.handles.xdisplay, window, @ptrCast(hints));
+
+    // resizablitity
+    // var size_hints = libx11.XAllocSizeHints() orelse return WindowError.WindowCreationFailure;
+
     // WMClassHints ?
+    var class_hints = libx11.XAllocClassHint() orelse return WindowError.WindowCreationFailure;
+    defer _ = libx11.XFree(class_hints);
+
+    if (utils.strLen(x11cntxt.resource_name) != 0) {
+        class_hints.res_name = x11cntxt.resource_name;
+    }
+
+    class_hints.res_class = x11cntxt.resource_class;
+
+    _ = libx11.XSetClassHint(x11cntxt.handles.xdisplay, window, @ptrCast(class_hints));
 }
 
 fn windowFromId(window_id: libx11.Window) *WindowImpl {
     const x11cntxt = X11Context.singleton();
     const window = x11cntxt.findInXContext(window_id);
     if (window == null) {
-        // Something isn't quit write
+        // Something isn't quit right with our program logic
         std.log.err("Window:#{} has no corresponding data in Xcontext\n", .{window_id});
         @panic("Logic Error.");
     }

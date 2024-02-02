@@ -434,6 +434,65 @@ pub const XCirculateRequestEvent = extern struct {
     window: Window,
     place: c_int,
 };
+pub const XWMHints = extern struct {
+    flags: c_long,
+    input: c_int,
+    initial_state: c_int,
+    icon_pixmap: Pixmap,
+    icon_window: Window,
+    icon_x: c_int,
+    icon_y: c_int,
+    icon_mask: Pixmap,
+    window_group: XID,
+};
+pub const XSizeHints = extern struct {
+    flags: c_long,
+    x: c_int,
+    y: c_int,
+    width: c_int,
+    height: c_int,
+    min_width: c_int,
+    min_height: c_int,
+    max_width: c_int,
+    max_height: c_int,
+    width_inc: c_int,
+    height_inc: c_int,
+    min_aspect: extern struct {
+        x: c_int,
+        y: c_int,
+    },
+    max_aspect: extern struct {
+        x: c_int,
+        y: c_int,
+    },
+    base_width: c_int,
+    base_height: c_int,
+    win_gravity: c_int,
+};
+pub const XIconSize = extern struct {
+    min_width: c_int,
+    min_height: c_int,
+    max_width: c_int,
+    max_height: c_int,
+    width_inc: c_int,
+    height_inc: c_int,
+};
+pub const XClassHint = extern struct {
+    res_name: ?[*]const u8,
+    res_class: ?[*]const u8,
+};
+pub const XStandardColormap = extern struct {
+    colormap: Colormap,
+    red_max: c_ulong,
+    red_mult: c_ulong,
+    green_max: c_ulong,
+    green_mult: c_ulong,
+    blue_max: c_ulong,
+    blue_mult: c_ulong,
+    base_pixel: c_ulong,
+    visualid: VisualID,
+    killid: XID,
+};
 pub const XPropertyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
@@ -576,4 +635,3 @@ pub const XEvent = extern union {
 };
 
 pub const XErrorHandlerFunc = fn (display: ?*Display, err: *XErrorEvent) callconv(.C) c_int;
-const XIOErrorHandlerFunc = fn (display: ?*Display) callconv(.C) c_int;
