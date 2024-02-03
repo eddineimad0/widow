@@ -4,7 +4,7 @@ const x11ext = @import("x11/extensions/extensions.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const dbg = @import("builtin").mode == .Debug;
-const X11Context = @import("global.zig").X11Context;
+const X11Driver = @import("driver.zig").X11Driver;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const VideoMode = common.video_mode.VideoMode;
@@ -36,7 +36,7 @@ fn videoModeFromRRMode(mode: *const x11ext.XRRModeInfo, rotated: bool, output: *
     if (mode.modeFlags & x11ext.RR_Interlace != 0) {
         return false;
     }
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     if (rotated) {
         output.width = @intCast(mode.height);
         output.height = @intCast(mode.width);
@@ -106,7 +106,7 @@ fn pollVideoModes(
 
 /// Querys the x server for the current connected screens.
 fn getScreenRessources() *x11ext.XRRScreenResources {
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     return if (x11cntxt.extensions.xrandr.is_v1point3)
         // Faster than XRRGetScreenResources.
         x11cntxt.extensions.xrandr.XRRGetScreenResourcesCurrent(
@@ -125,7 +125,7 @@ fn getScreenRessources() *x11ext.XRRScreenResources {
 /// Construct a Vector with all currently connected monitors.
 pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl) {
     const screens_res = getScreenRessources();
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     // the number of crtcs match the number of video devices(GPUs) which matches the number
     // of possible monitors.
     var monitors = try ArrayList(MonitorImpl).initCapacity(allocator, @intCast(screens_res.ncrtc));
@@ -243,7 +243,7 @@ pub const MonitorImpl = struct {
 
     /// Populate the output with the current VideoMode of the monitor.
     pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         const res = getScreenRessources();
         defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(res);
         const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(x11cntxt.handles.xdisplay, res, self.adapter);
@@ -268,7 +268,7 @@ pub const MonitorImpl = struct {
 
     /// Populate the `area` with the monitor's full area.
     pub inline fn monitorFullArea(self: *const Self, area: *common.geometry.WidowArea) void {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         const sr = getScreenRessources();
         defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
         const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(x11cntxt.handles.xdisplay, sr, self.adapter);
@@ -310,7 +310,7 @@ pub const MonitorImpl = struct {
                 // The desired mode is already current.
                 return;
             }
-            const x11cntxt = X11Context.singleton();
+            const x11cntxt = X11Driver.singleton();
             const sr = getScreenRessources();
             defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
             const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
@@ -349,7 +349,7 @@ pub const MonitorImpl = struct {
         if (self.orig_mode == x11ext.RRMode_None) {
             return;
         }
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         const sr = getScreenRessources();
         defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
         const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
@@ -396,8 +396,10 @@ pub const MonitorImpl = struct {
 };
 
 test "poll_monitors" {
-    try X11Context.initSingleton();
-    defer X11Context.deinitSingleton();
+    const dyn = @import("x11/dynamic.zig");
+    try dyn.initDynamicApi();
+    try X11Driver.initSingleton("", "");
+    defer X11Driver.deinitSingleton();
     const mons = try pollMonitors(std.testing.allocator);
     defer {
         for (mons.items) |*mon| {

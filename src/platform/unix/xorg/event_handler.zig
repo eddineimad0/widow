@@ -2,7 +2,7 @@ const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
-const X11Context = @import("global.zig").X11Context;
+const X11Driver = @import("driver.zig").X11Driver;
 const keyboard_and_mouse = common.keyboard_and_mouse;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 
@@ -103,7 +103,7 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
 
 /// handles ICCCM messages.
 fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) void {
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
             if (comptime common.LOG_WINDOW_EVENTS) {

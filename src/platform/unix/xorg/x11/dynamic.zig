@@ -6,6 +6,7 @@ const std = @import("std");
 const posix = @import("common").posix;
 const types = @import("types.zig");
 const defs = @import("defs.zig");
+const xkb = @import("extensions/xkb.zig");
 
 const XOpenDisplayProc = *const fn (display_name: ?[*:0]u8) callconv(.C) ?*types.Display;
 const XCloseDisplayProc = *const fn (display: ?*types.Display) callconv(.C) c_int;
@@ -246,6 +247,19 @@ pub const dyn_api = struct {
     pub var XAllocClassHint: XAllocClassHintProc = undefined;
     pub var XSetWMHints: XSetWMHintsProc = undefined;
     pub var XSetClassHint: XSetClassHintProc = undefined;
+    // xkb
+    pub var XkbLibraryVersion: xkb.XkbLibraryVersionProc = undefined;
+    pub var XkbQueryExtension: xkb.XkbQueryExtensionProc = undefined;
+    pub var XkbGetDetectableAutoRepeat: xkb.XkbGetDetectableAutorepeatProc = undefined;
+    pub var XkbSetDetectableAutoRepeat: xkb.XkbSetDetectableAutorepeatProc = undefined;
+    pub var XkbGetNames: xkb.XkbGetNamesProc = undefined;
+    pub var XkbFreeNames: xkb.XkbFreeNamesProc = undefined;
+    pub var XkbGetState: xkb.XkbGetStateProc = undefined;
+    pub var XkbGetMap: xkb.XkbGetMapProc = undefined;
+    pub var XkbKeycodeToKeysym: xkb.XkbKeycodeToKeysymProc = undefined;
+    pub var XkbAllocKeyboard: xkb.XkbAllocKeyboardProc = undefined;
+    pub var XkbFreeKeyboard: xkb.XkbFreeKeyboardProc = undefined;
+    pub var XkbSelectEventDetails: xkb.XkbSelectEventDetailsProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
@@ -274,11 +288,5 @@ pub fn initDynamicApi() posix.ModuleError!void {
         }
     } else {
         return posix.ModuleError.NotFound;
-    }
-}
-
-pub fn deinitDynamicApi() void {
-    if (__libx11_module) |m| {
-        posix.freePosixModule(m);
     }
 }

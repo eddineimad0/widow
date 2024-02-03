@@ -2,8 +2,7 @@ const std = @import("std");
 const monitor_impl = @import("monitor_impl.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const libx11ext = @import("x11/extensions.zig");
-const X11Context = @import("global.zig").X11Context;
+const libx11ext = @import("x11/extensions/extensions.zig");
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const Allocator = std.mem.Allocator;
 

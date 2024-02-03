@@ -5,7 +5,7 @@ const utils = @import("utils.zig");
 const posix = common.posix;
 const MonitorStore = @import("internals.zig").MonitorStore;
 const WindowData = common.window_data.WindowData;
-const X11Context = @import("global.zig").X11Context;
+const X11Driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 const handleXEvent = @import("event_handler.zig").handleXEvent;
 
@@ -47,7 +47,7 @@ pub const WindowImpl = struct {
 
         self.handle = try createPlatformWindow(data);
 
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         if (!x11cntxt.addToXContext(self.handle, @ptrCast(self))) {
             return WindowError.WindowCreationFailure;
         }
@@ -68,7 +68,7 @@ pub const WindowImpl = struct {
     /// Destroy the window
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(x11cntxt.handles.xdisplay, self.handle);
         _ = x11cntxt.removeFromXContext(self.handle);
@@ -78,7 +78,7 @@ pub const WindowImpl = struct {
 
     pub fn processEvents(_: *const Self) void {
         var e: libx11.XEvent = undefined;
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         x11cntxt.flushXRequests();
         while (x11cntxt.nextXEvent(&e)) {
             const window = windowFromId(e.xany.window);
@@ -88,7 +88,7 @@ pub const WindowImpl = struct {
 
     pub fn waitEvent(self: *Self) void {
         // Indefinetly wait for event
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         var ready: u32 = 0;
         // start by flushing and checking for available events.
         while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
@@ -105,7 +105,7 @@ pub const WindowImpl = struct {
     /// Waits for an event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
         const timeout_ns = timeout * std.time.ns_per_ms;
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         var ready: u32 = 0;
         // start by flushing and checking for available events.
         while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
@@ -126,7 +126,7 @@ pub const WindowImpl = struct {
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         std.debug.assert(self.handle != 0);
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         _ = libx11.XMapWindow(x11cntxt.handles.xdisplay, self.handle);
         self.data.flags.is_visible = true;
     }
@@ -134,7 +134,7 @@ pub const WindowImpl = struct {
     /// Hide the window.
     pub fn hide(self: *Self) void {
         std.debug.assert(self.handle != 0);
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
         self.data.flags.is_visible = false;
     }
@@ -155,7 +155,7 @@ pub const WindowImpl = struct {
         }
         var size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
-            const x11cntxt = X11Context.singleton();
+            const x11cntxt = X11Driver.singleton();
             var supplied: u32 = 0;
             _ = libx11.XGetWMNormalHints(
                 x11cntxt.handle.xdisplay,
@@ -211,7 +211,7 @@ pub const WindowImpl = struct {
     /// Requires window manager support.
     /// returns true on success.
     pub fn flash(self: *const Self) bool {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         if (x11cntxt.ewmh._NET_WM_STATE_DEMANDS_ATTENTION == 0 or
             x11cntxt.ewmh._NET_WM_STATE == 0)
         {
@@ -343,7 +343,7 @@ pub const WindowImpl = struct {
             }
 
             if (self.data.flags.is_dpi_aware) {
-                const x11cntxt = X11Context.singleton();
+                const x11cntxt = X11Driver.singleton();
                 size.scaleBy(x11cntxt.g_screen_scale);
             }
 
@@ -377,7 +377,7 @@ pub const WindowImpl = struct {
                 }
             }
             if (self.data.flags.is_dpi_aware) {
-                const x11cntxt = X11Context.singleton();
+                const x11cntxt = X11Driver.singleton();
                 size.scaleBy(x11cntxt.g_screen_scale);
             }
             self.data.max_size = size;
@@ -412,7 +412,7 @@ pub const WindowImpl = struct {
 
     /// Minimizes the window.
     pub fn minimize(self: *Self) void {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         _ = libx11.XIconifyWindow(
             x11cntxt.handles.xdisplay,
             self.handle,
@@ -429,7 +429,7 @@ pub const WindowImpl = struct {
 
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, new_title: []const u8) void {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0)
             x11cntxt.ewmh._NET_WM_NAME
         else
@@ -468,7 +468,7 @@ pub const WindowImpl = struct {
         self: *const Self,
         allocator: std.mem.Allocator,
     ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         const name_atom = if (x11cntxt.ewmh._NET_WM_NAME != 0)
             x11cntxt.ewmh._NET_WM_NAME
         else
@@ -496,7 +496,7 @@ pub const WindowImpl = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn opacity(self: *const Self) f64 {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
         const OPAQUE = @as(u32, 0xFFFFFFFF);
         _ = utils.x11WindowProperty(
@@ -516,7 +516,7 @@ pub const WindowImpl = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f64) bool {
-        const x11cntxt = X11Context.singleton();
+        const x11cntxt = X11Driver.singleton();
         if (x11cntxt.ewmh._NET_WM_WINDOW_OPACITY == 0) {
             return false;
         }
@@ -734,7 +734,7 @@ fn createPlatformWindow(
         libx11.PropertyChangeMask |
         libx11.ExposureMask;
 
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
 
     const visual = libx11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
     const depth = libx11.DefaultDepth(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
@@ -772,7 +772,7 @@ fn createPlatformWindow(
 
 fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
     // communication protocols
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     var protocols = [2]libx11.Atom{
         // this allows us to recieve close request from the window manager.
         // instead of it closing the socket and crashing our app
@@ -831,7 +831,7 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
 }
 
 fn windowFromId(window_id: libx11.Window) *WindowImpl {
-    const x11cntxt = X11Context.singleton();
+    const x11cntxt = X11Driver.singleton();
     const window = x11cntxt.findInXContext(window_id);
     if (window == null) {
         // Something isn't quit right with our program logic

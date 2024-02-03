@@ -513,6 +513,332 @@ pub const XkbCompatMapRec = extern struct {
     size_si: c_ushort,
 };
 
+pub const XkbPropertyRec = extern struct {
+    // char *      name;            /* property name */
+    // char *      value;           /* property value */
+    name: [*:0]u8,
+    value: [*:0]u8,
+};
+
+pub const XkbColorRec = extern struct {
+    // unsigned int      pixel;     /* color */
+    // char *            spec;      /* color name */
+    pixel: c_uint,
+    spec: [*:0]u8,
+};
+
+pub const XkbPointRec = extern struct {
+    // /* x,y coordinates */
+    //   short      x;
+    //   short      y;
+    x: c_short,
+    y: c_short,
+};
+
+pub const XkbOutlineRec = extern struct {
+    // unsigned short      num_points;     /* number of points in the outline */
+    // unsigned short      sz_points;      /* size of the points array */
+    // unsigned short      corner_radius;  /* draw corners as circles with this radius */
+    // XkbPointPtr         points;         /* array of points defining the outline */
+    num_points: c_ushort,
+    sz_points: c_ushort,
+    corner_radius: c_ushort,
+    points: ?[*]XkbPointRec,
+};
+
+pub const XkbBoundsRec = extern struct {
+    // short      x1,y1;            /* upper left corner of the bounds,
+    //                                 in mm/10 */
+    //  short      x2,y2;            /* lower right corner of the bounds, in
+    //                                 mm/10 */
+    x1: c_short,
+    y1: c_short,
+    x2: c_short,
+    y2: c_short,
+};
+
+pub const XkbShapeRec = extern struct {
+    // Atom              name;           /* shape’s name */
+    // unsigned short    num_outlines;   /* number of outlines for the shape */
+    // unsigned short    sz_outlines;    /* size of the outlines array */
+    // XkbOutlinePtr     outlines;       /* array of outlines for the shape */
+    // XkbOutlinePtr     approx;         /* pointer into the array to the approximating outline */
+    // XkbOutlinePtr     primary;        /* pointer into the array to the primary outline */
+    // XkbBoundsRec      bounds;         /* bounding box for the shape; encompasses all outlines */
+    name: types.Atom,
+    num_outlines: c_ushort,
+    sz_outlines: c_ushort,
+    outlines: ?[*]XkbOutlineRec,
+    approx: ?*XkbOutlineRec,
+    primary: ?*XkbOutlineRec,
+    bounds: ?*XkbBoundsRec,
+};
+
+pub const XkbKeyRec = extern struct {
+    // /* key in a row */
+    //   XkbKeyNameRec    name;     /* key name */
+    //   short            gap;      /* gap in mm/10 from previous key in row */
+    //   unsigned char    shape_ndx;      /* index of shape for key */
+    //   unsigned char    color_ndx;      /* index of color for key body */
+    name: XkbNamesRec,
+    gap: c_short,
+    shape_ndx: u8,
+    color_ndx: u8,
+};
+
+pub const XkbRowRec = extern struct {
+    // /* row in a section */
+    //   short               top;       /* top coordinate of row origin, relative to section’s origin */
+    //   short               left;      /* left coordinate of row origin, relative to section’s origin */
+    //   unsigned short      num_keys;  /* number of keys in the keys array */
+    //   unsigned short      sz_keys;   /* size of the keys array */
+    //   int                 vertical;  /* True =>vertical row,
+    //                                      False =>horizontal row */
+    //   XkbKeyPtr           keys;      /* array of keys in the row*/
+    //   XkbBoundsRec        bounds;    /* bounding box for the row */
+    top: c_short,
+    left: c_short,
+    num_keys: c_ushort,
+    sz_keys: c_ushort,
+    vertical: c_int,
+    keys: ?[*]XkbKeyRec,
+    bounds: XkbBoundsRec,
+};
+
+pub const XkbOverlayRec = extern struct {
+    // Atom              name;           /* overlay name */
+    // XkbSectionPtr     section_under;  /* the section under this overlay */
+    // unsigned short    num_rows;       /* number of rows in the rows array */
+    // unsigned short    sz_rows;        /* size of the rows array */
+    // XkbOverlayRowPtr  rows;           /* array of rows in the overlay */
+    // XkbBoundsPtr      bounds;         /* bounding box for the overlay */
+    name: types.Atom,
+    section_under: ?*XkbSectionRec,
+    num_rows: c_ushort,
+    sz_rows: c_ushort,
+    rows: ?[*]XkbOverlayRowRec,
+    bounds: ?*XkbBoundsRec,
+};
+
+pub const XkbOverlayRowRec = extern struct {
+    // unsigned short      row_under;     /* index into the row under this overlay row */
+    // unsigned short      num_keys;      /* number of keys in the keys array */
+    // unsigned short      sz_keys;       /* size of the keys array */
+    // XkbOverlayKeyPtr    keys;          /* array of keys in the overlay row */
+    row_under: c_ushort,
+    num_keys: c_ushort,
+    sz_keys: c_ushort,
+    keys: ?[*]XkbOverlayKeyRec,
+};
+
+pub const XkbOverlayKeyRec = extern struct {
+    // XkbKeyNameRec      over;      /* name of this overlay key */
+    // XkbKeyNameRec      under;     /* name of the key under this overlay key */
+    over: XkbKeyNameRec,
+    under: XkbKeyNameRec,
+};
+
+pub const XkbSectionRec = extern struct {
+    // Atom            name;          /* section name */
+    // unsigned char   priority;      /* drawing priority, 0=>highest, 255=>lowest */
+    // short           top;           /* top coordinate of section origin */
+    // short           left;          /* left coordinate of row origin */
+    // unsigned short  width;         /* section width, in mm/10 */
+    // unsigned short  height;        /* section height, in mm/10 */
+    // short           angle;         /* angle of section rotation, counterclockwise */
+    // unsigned short  num_rows;      /* number of rows in the rows array */
+    // unsigned short  num_doodads;   /* number of doodads in the doodads array */
+    // unsigned short  num_overlays;  /* number of overlays in the overlays array */
+    // unsigned short  sz_rows;       /* size of the rows array */
+    // unsigned short  sz_doodads;    /* size of the doodads array */
+    // unsigned short  sz_overlays;   /* size of the overlays array */
+    // XkbRowPtr       rows;          /* section rows array */
+    // XkbDoodadPtr    doodads;       /* section doodads array */
+    // XkbBoundsRec    bounds;        /* bounding box for the section, before rotation*/
+    // XkbOverlayPtr   overlays;      /* section overlays array */
+    name: types.Atom,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    width: c_ushort,
+    height: c_ushort,
+    angle: c_short,
+    num_rows: c_ushort,
+    num_doodads: c_ushort,
+    num_overlays: c_ushort,
+    sz_rows: c_ushort,
+    sz_doodads: c_ushort,
+    sz_overlays: c_ushort,
+    rows: ?[*]XkbRowRec,
+    doodads: ?[*]XkbDoodadRec,
+    bounds: XkbBoundsRec,
+    overlays: ?[*]XkbOverlayRec,
+};
+
+pub const XkbDoodadRec = extern union {
+    // XkbAnyDoodadRec        any;
+    // XkbShapeDoodadRec      shape;
+    // XkbTextDoodadRec       text;
+    // XkbIndicatorDoodadRec  indicator;
+    // XkbLogoDoodadRec       logo;
+    any: XkbAnyDoodadRec,
+    shap: XkbShapeDoodadRec,
+    text: XkbTextDoodadRec,
+    indicator: XkbIndicatorDoodadRec,
+    logo: XkbLogoDoodadRec,
+};
+
+pub const XkbAnyDoodadRec = extern union {
+    name: types.Atom,
+    type: u8,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    angle: c_short,
+};
+
+pub const XkbShapeDoodadRec = extern struct {
+    // Atom       name;                /* doodad name */
+    // unsigned char      type;        /* XkbOutlineDoodad
+    //                                    or XkbSolidDoodad */
+    // unsigned char      priority;    /* drawing priority,
+    //                                    0=>highest, 255=>lowest */
+    // short      top;                 /* top coordinate, in mm/10 */
+    // short      left;                /* left coordinate, in mm/10 */
+    // short      angle;               /* angle of rotation, clockwise, in 1/10 degrees */
+    // unsigned short      color_ndx;  /* doodad color */
+    // unsigned short      shape_ndx;  /* doodad shape */
+    name: types.Atom,
+    type: u8,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    angle: c_short,
+    color_ndx: c_ushort,
+    shape_ndx: c_ushort,
+};
+
+pub const XkbTextDoodadRec = extern struct {
+    // Atom            name;         /* doodad name */
+    // unsigned char   type;         /*  XkbTextDoodad */
+    // unsigned char   priority;     /* drawing priority,
+    //                                  0=>highest, 255=>lowest */
+    // short           top;          /* top coordinate, in mm/10 */
+    // short           left;         /* left coordinate, in mm/10 */
+    // short           angle;        /* angle of rotation, clockwise, in 1/10 degrees */
+    // short           width;        /* width in mm/10 */
+    // short           height;       /* height in mm/10 */
+    // unsigned short  color_ndx;    /* doodad color */
+    // char *           text;        /* doodad text */
+    // char *           font;        /* arbitrary font name for doodad text */
+    name: types.Atom,
+    type: u8,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    angle: c_short,
+    width: c_short,
+    height: c_short,
+    color_ndx: c_ushort,
+    text: ?[*:0]u8,
+    font: ?[*:0]u8,
+};
+
+pub const XkbIndicatorDoodadRec = extern struct {
+    // Atom           name;          /* doodad name */
+    // unsigned char  type;          /* XkbIndicatorDoodad */
+    // unsigned char  priority;      /* drawing priority, 0=>highest, 255=>lowest */
+    // short          top;           /* top coordinate, in mm/10 */
+    // short          left;          /* left coordinate, in mm/10 */
+    // short          angle;         /* angle of rotation, clockwise, in 1/10 degrees */
+    // unsigned short shape_ndx;     /* doodad shape */
+    // unsigned short on_color_ndx;  /* color for doodad if indicator is on */
+    // unsigned short off_color_ndx; /* color for doodad if indicator is off */
+    name: types.Atom,
+    type: u8,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    angle: c_short,
+    shape_ndx: c_ushort,
+    on_color_ndx: c_ushort,
+    off_color_ndx: c_ushort,
+};
+
+pub const XkbLogoDoodadRec = extern struct {
+    // Atom               name;        /* doodad name */
+    // unsigned char      type;        /*  XkbLogoDoodad */
+    // unsigned char      priority;    /* drawing priority, 0=>highest, 255=>lowest */
+    // short              top;         /* top coordinate, in mm/10 */
+    // short              left;        /* left coordinate, in mm/10 */
+    // short              angle;       /* angle of rotation, clockwise, in 1/10 degrees */
+    // unsigned short      color_ndx;  /* doodad color */
+    // unsigned short      shape_ndx;  /* doodad shape */
+    // char *      logo_name;          /* text for logo */
+    name: types.Atom,
+    type: u8,
+    priority: u8,
+    top: c_short,
+    left: c_short,
+    angle: c_short,
+    color_ndx: c_ushort,
+    shape_ndx: c_ushort,
+    logo_name: ?[*:0]u8,
+};
+
+pub const XkbGeometryRec = extern struct {
+    // /* top-level keyboard geometry structure */
+    // Atom                name;            /* keyboard name */
+    // unsigned short      width_mm;        /* keyboard width in  mm / 10 */
+    // unsigned short      height_mm;       /* keyboard height in  mm / 10 */
+    // char *              label_font;      /* font for key labels */
+    // XkbColorPtr         label_color;     /* color for key labels - pointer into colors array */
+    // XkbColorPtr         base_color;      /* color for basic keyboard - pointer into colors array */
+    // unsigned short      sz_properties;   /* size of properties array */
+    // unsigned short      sz_colors;       /* size of colors array */
+    // unsigned short      sz_shapes;       /* size of shapes array */
+    // unsigned short      sz_sections;     /* size of sections array */
+    // unsigned short      sz_doodads;      /* size of doodads array */
+    // unsigned short      sz_key_aliases;  /* size of key aliases array */
+    // unsigned short      num_properties;  /* number of properties in the properties array */
+    // unsigned short      num_colors;      /* number of colors in the colors array */
+    // unsigned short      num_shapes;      /* number of shapes in the shapes array */
+    // unsigned short      num_sections;    /* number of sections in the sections array */
+    // unsigned short      num_doodads;     /* number of doodads in the doodads array */
+    // unsigned short      num_key_aliases; /* number of key aliases in the key */
+    // XkbPropertyPtr      properties;      /* properties array */
+    // XkbColorPtr         colors;          /* colors array */
+    // XkbShapePtr         shapes;          /* shapes array */
+    // XkbSectionPtr       sections;        /* sections array */
+    // XkbDoodadPtr        doodads;         /* doodads array */
+    // XkbKeyAliasPtr      key_aliases;     /* key aliases array */
+    name: types.Atom,
+    width_mm: c_ushort,
+    height_mm: c_ushort,
+    label_font: [*:0]u8,
+    label_color: ?*XkbColorRec,
+    base_color: ?*XkbColorRec,
+    sz_properties: c_ushort,
+    sz_colors: c_ushort,
+    sz_shapes: c_ushort,
+    sz_sections: c_ushort,
+    sz_doodads: c_ushort,
+    sz_key_aliases: c_ushort,
+    num_properties: c_ushort,
+    num_colors: c_ushort,
+    num_shapes: c_ushort,
+    num_sections: c_ushort,
+    num_doodads: c_ushort,
+    num_key_aliases: c_ushort,
+    //TODO:
+    properties: ?[*]XkbPropertyRec,
+    colors: ?[*]XkbColorRec,
+    shapes: ?[*]XkbShapeRec,
+    sections: ?[*]XkbSectionRec,
+    doodads: ?[*]XkbDoodadRec,
+    key_aliases: ?[*]XkbKeyAliasRec,
+};
+
 pub const XkbDescRec = extern struct {
     //       struct _XDisplay *                  display;            /* connection to
     // X server */
@@ -546,8 +872,7 @@ pub const XkbDescRec = extern struct {
     indicators: ?*XkbIndicatorRec,
     names: ?*XkbNamesRec,
     compat: ?*XkbCompatMapRec,
-    //TODO:
-    geom: anyopaque,
+    geom: ?*XkbGeometryRec,
 };
 
 // Functions signatures
@@ -556,7 +881,7 @@ pub const XkbLibraryVersionProc = *const fn (
     lib_minor_in_out: ?*c_int,
 ) callconv(.C) types.Bool;
 pub const XkbQueryExtensionProc = *const fn (
-    dpy: ??*types.Display,
+    dpy: ?*types.Display,
     opcode_rtrn: ?*c_int,
     event_rtrn: ?*c_int,
     error_rtrn: ?*c_int,
@@ -590,13 +915,13 @@ pub const XkbGetMapProc = *const fn (
 pub const XkbFreeNamesProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
-    free_map: type.Bool,
+    free_map: types.Bool,
 ) callconv(.C) void;
 pub const XkbAllocKeyboardProc = *const fn () callconv(.C) ?*XkbDescRec;
 pub const XkbFreeKeyboardProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
-    free_all: type.Bool,
+    free_all: types.Bool,
 ) callconv(.C) void;
 pub const XkbKeycodeToKeysymProc = *const fn (
     display: ?*types.Display,

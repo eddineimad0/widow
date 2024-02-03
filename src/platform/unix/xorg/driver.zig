@@ -41,9 +41,15 @@ const XrmInterface = struct {
     QueryScreens: x11ext.XineramaQueryScreens,
 };
 
+const XkbInterface = struct {
+    is_available: bool,
+    is_auto_repeat_detectable: bool,
+};
+
 const X11Extensions = struct {
     xrandr: XRRInterface,
     xinerama: XrmInterface,
+    xkb: XkbInterface,
 };
 
 /// holds the various hints a window manager can have.
@@ -116,9 +122,10 @@ const X11EWMH = struct {
     _NET_ACTIVE_WINDOW: libx11.Atom,
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
+    //TODO: document.
 };
 
-pub const X11Context = struct {
+pub const X11Driver = struct {
     handles: X11Handles,
     extensions: X11Extensions,
     ewmh: X11EWMH,
@@ -131,7 +138,7 @@ pub const X11Context = struct {
     var g_init: bool = false;
     var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;
 
-    var globl_instance: X11Context = X11Context{
+    var globl_instance: X11Driver = X11Driver{
         .handles = X11Handles{
             .xdisplay = undefined,
             .root_window = undefined,
@@ -140,26 +147,26 @@ pub const X11Context = struct {
             .xrandr = null,
             .xinerama = null,
         },
-        .extensions = X11Extensions{
-            .xrandr = XRRInterface{
-                .is_v1point3 = false,
-                .XRRGetCrtcInfo = undefined,
-                .XRRFreeCrtcInfo = undefined,
-                .XRRGetOutputInfo = undefined,
-                .XRRFreeOutputInfo = undefined,
-                .XRRGetOutputPrimary = undefined,
-                .XRRGetScreenResourcesCurrent = undefined,
-                .XRRGetScreenResources = undefined,
-                .XRRFreeScreenResources = undefined,
-                .XRRQueryVersion = undefined,
-                .XRRSetCrtcConfig = undefined,
-            },
-            .xinerama = XrmInterface{
-                .is_active = false,
-                .IsActive = undefined,
-                .QueryScreens = undefined,
-            },
-        },
+        .extensions = X11Extensions{ .xrandr = XRRInterface{
+            .is_v1point3 = false,
+            .XRRGetCrtcInfo = undefined,
+            .XRRFreeCrtcInfo = undefined,
+            .XRRGetOutputInfo = undefined,
+            .XRRFreeOutputInfo = undefined,
+            .XRRGetOutputPrimary = undefined,
+            .XRRGetScreenResourcesCurrent = undefined,
+            .XRRGetScreenResources = undefined,
+            .XRRFreeScreenResources = undefined,
+            .XRRQueryVersion = undefined,
+            .XRRSetCrtcConfig = undefined,
+        }, .xinerama = XrmInterface{
+            .is_active = false,
+            .IsActive = undefined,
+            .QueryScreens = undefined,
+        }, .xkb = XkbInterface{
+            .is_available = false,
+            .is_auto_repeat_detectable = false,
+        } },
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
@@ -272,6 +279,29 @@ pub const X11Context = struct {
             self.extensions.xinerama.is_active = (self.extensions.xinerama.IsActive(self.handles.xdisplay) != 0);
         } else {
             std.log.warn("[X11]: Xinerama library not found.\n", .{});
+        }
+
+        var xkb_major: c_int = 1;
+        var xkb_minor: c_int = 0;
+        var opcode: c_int = undefined;
+        var base_event_code: c_int = undefined;
+        var base_error_code: c_int = undefined;
+        self.extensions.xkb.is_available = libx11.XkbQueryExtension(
+            self.handles.xdisplay,
+            &opcode,
+            &base_event_code,
+            &base_error_code,
+            &xkb_major,
+            &xkb_minor,
+        ) == libx11.True;
+
+        if (self.extensions.xkb.is_available) {
+            var auto_repeat_support: libx11.Bool = libx11.False;
+            _ = libx11.XkbGetDetectableAutoRepeat(self.handles.xdisplay, &auto_repeat_support);
+            self.extensions.xkb.is_auto_repeat_detectable = auto_repeat_support == libx11.True;
+            if (self.extensions.xkb.is_auto_repeat_detectable) {
+                _ = libx11.XkbSetDetectableAutoRepeat(self.handles.xdisplay, libx11.True, null);
+            }
         }
     }
 
@@ -524,6 +554,7 @@ pub const X11Context = struct {
     }
 
     // Enfoce readonly.
+    // TODO: might require refrence counting.
     pub fn singleton() *const Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
@@ -546,24 +577,47 @@ fn atomIfSupported(
     return 0;
 }
 
-// fn filterBadWindowError(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
-//     const x11cntxt = X11Context.singleton();
-//     if (x11cntxt.handles.xdisplay != display or err.error_code == libx11.BadWindow) {
-//         return 0;
-//     } else {
-//         return X11Context.last_error_handler.?(display, err);
-//     }
-// }
-
 fn X11ErrorFilter(comptime filtered_error_code: u8) type {
     return struct {
         pub fn filter(display: ?*libx11.Display, err: *libx11.XErrorEvent) callconv(.C) c_int {
-            const x11cntxt = X11Context.singleton();
+            const x11cntxt = X11Driver.singleton();
             if (x11cntxt.handles.xdisplay != display or err.error_code == filtered_error_code) {
                 return 0;
             } else {
-                return X11Context.last_error_handler.?(display, err);
+                return X11Driver.last_error_handler.?(display, err);
             }
         }
     };
+}
+
+test "X11Driver init" {
+    const dyn = @import("x11/dynamic.zig");
+    try dyn.initDynamicApi();
+    try X11Driver.initSingleton("", "");
+    const singleton = X11Driver.singleton();
+    std.debug.print("\nX11 execution context:\n", .{});
+    std.debug.print("[+] DPI:{d},Scale:{d}\n", .{ singleton.g_dpi, singleton.g_screen_scale });
+    std.debug.print("[+] Handles: {any}\n", .{singleton.handles});
+    std.debug.print("[+] XRRInterface: {any}\n", .{singleton.extensions.xrandr});
+    std.debug.print("[+] XineramaIntef: {any}\n", .{singleton.extensions.xinerama});
+    std.debug.print("[+] EWMH:{any}\n", .{singleton.ewmh});
+    X11Driver.deinitSingleton();
+}
+
+test "XContext management" {
+    const testing = std.testing;
+    const dyn = @import("x11/dynamic.zig");
+    try dyn.initDynamicApi();
+    try X11Driver.initSingleton("", "");
+    const singleton = X11Driver.singleton();
+    var msg: [5]u8 = .{ 'H', 'E', 'L', 'L', 'O' };
+    try testing.expect(singleton.addToXContext(1, &msg));
+    var msg_alias_ptr = singleton.findInXContext(1);
+    try testing.expect(msg_alias_ptr != null);
+    std.debug.print("\nMSG={s}\n", .{@as(*[5]u8, @ptrCast(msg_alias_ptr.?)).*});
+    try testing.expect(singleton.removeFromXContext(1));
+    try testing.expect(!singleton.removeFromXContext(1));
+    msg_alias_ptr = singleton.findInXContext(1);
+    try testing.expect(msg_alias_ptr == null);
+    X11Driver.deinitSingleton();
 }
