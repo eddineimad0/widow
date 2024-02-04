@@ -99,7 +99,7 @@ fn prepareWidowModule(b: *std.Build, target: DisplayProtocol) *std.build.Module 
         .Xorg => xorg: {
             var deps: [1]std.build.ModuleDependency = .{common_dep};
             break :xorg b.createModule(
-                .{ .source_file = .{ .path = "src/platform/unix/xorg/platform.zig" }, .dependencies = &deps },
+                .{ .source_file = .{ .path = "src/platform/linuxbsd/xorg/platform.zig" }, .dependencies = &deps },
             );
         },
         else => {
