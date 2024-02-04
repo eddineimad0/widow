@@ -127,13 +127,14 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
 }
 
 fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
+    const driver = X11Driver.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
             std.debug.print("KeyPress:code {}\n", .{ev.keycode});
             const event = common.event.createKeyboardEvent(
                 window.data.id,
-                @enumFromInt(0),
-                utils.keycodeToScancode(ev.keycode),
+                driver.lookupKeyCode(@intCast(ev.keycode)),
+                utils.keycodeToScancode(@intCast(ev.keycode)),
                 keyboard_and_mouse.KeyState.Pressed,
                 utils.decodeKeyMods(ev.state),
             );

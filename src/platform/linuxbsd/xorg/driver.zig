@@ -1,8 +1,11 @@
 const std = @import("std");
-const posix = @import("common").posix;
+const common = @import("common");
+const KeyCode = common.keyboard_and_mouse.KeyCode;
+const posix = common.posix;
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
+const keymaps = @import("keymaps.zig");
 
 pub const XConnectionError = error{
     ConnectionFailed,
@@ -42,8 +45,10 @@ const XrmInterface = struct {
 };
 
 const XkbInterface = struct {
+    pub const KEY_CODE_MAP_SIZE = 256;
     is_available: bool,
     is_auto_repeat_detectable: bool,
+    keycode_lookup_table: [KEY_CODE_MAP_SIZE]KeyCode,
 };
 
 const X11Extensions = struct {
@@ -166,6 +171,7 @@ pub const X11Driver = struct {
         }, .xkb = XkbInterface{
             .is_available = false,
             .is_auto_repeat_detectable = false,
+            .keycode_lookup_table = undefined,
         } },
         .ewmh = undefined,
         .pid = undefined,
@@ -203,6 +209,7 @@ pub const X11Driver = struct {
 
             g_instance.ewmh = std.mem.zeroes(@TypeOf(g_instance.ewmh));
             g_instance.initEWMH();
+            g_instance.initKeyCodeTable();
 
             g_instance.handles.xcontext = libx11.XUniqueContext();
             if (g_instance.handles.xcontext == 0) {
@@ -357,12 +364,44 @@ pub const X11Driver = struct {
     /// The default x11 error handler quits the process upon receiving any error,
     /// it's beneficial to change it when we anticipate errors that our error
     /// can recover from, then restoring it when we are done.
-    pub fn setXErrorHandler(self: *Self, handler: ?*const libx11.XErrorHandlerFunc) void {
+    pub fn setXErrorHandler(self: *const Self, handler: ?*const libx11.XErrorHandlerFunc) void {
         libx11.XSync(self.handles.xdisplay, libx11.False);
         if (handler) |h| {
             Self.last_error_handler = libx11.XSetErrorHandler(h);
         } else {
             _ = libx11.XSetErrorHandler(Self.last_error_handler);
+        }
+    }
+
+    pub fn initKeyCodeTable(self: *Self) void {
+        @memset(&self.extensions.xkb.keycode_lookup_table, KeyCode.Unknown);
+        var min_scancode: c_int = 0;
+        var max_scancode: c_int = 0;
+        var keysym_size: c_int = 0;
+        _ = libx11.XDisplayKeycodes(self.handles.xdisplay, &min_scancode, &max_scancode);
+        const keysym_array = libx11.XGetKeyboardMapping(
+            self.handles.xdisplay,
+            @intCast(min_scancode),
+            max_scancode - min_scancode + 1,
+            &keysym_size,
+        );
+        var min: u32 = @intCast(min_scancode);
+        var max: u32 = @intCast(max_scancode);
+        var size: u32 = @intCast(keysym_size);
+        if (keysym_array) |array| {
+            defer _ = libx11.XFree(array);
+            for (min..(max + 1)) |scancode| {
+                const offset = (scancode - min) * size;
+                // TODO: alphabet isn't being maped.
+                self.extensions.xkb.keycode_lookup_table[scancode] =
+                    keymaps.mapXKeySymToWidowKeyCode(array[offset]);
+
+                if (self.extensions.xkb.keycode_lookup_table[scancode] == KeyCode.Unknown and size > 1) {
+                    // try again.
+                    self.extensions.xkb.keycode_lookup_table[scancode] =
+                        keymaps.mapXKeySymToWidowKeyCode(array[offset + 1]);
+                }
+            }
         }
     }
 
@@ -554,6 +593,10 @@ pub const X11Driver = struct {
             std.debug.assert(data_return == null);
         }
         return data_return;
+    }
+
+    pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
+        return self.extensions.xkb.keycode_lookup_table[xkeycode];
     }
 
     // Enfoce readonly.

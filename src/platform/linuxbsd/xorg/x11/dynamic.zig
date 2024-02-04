@@ -196,6 +196,20 @@ const XSetClassHintProc = *const fn (
     hints: ?[*]types.XClassHint,
 ) callconv(.C) c_int;
 
+// Keyboard.
+const XDisplayKeycodesProc = *const fn (
+    display: ?*types.Display,
+    min_keycodes_return: *c_int,
+    max_keycodes_return: *c_int,
+) callconv(.C) c_int;
+
+const XGetKeyboardMappingProc = *const fn (
+    display: ?*types.Display,
+    first_keycode: types.KeyCode,
+    keycode_count: c_int,
+    keysyms_per_keycode_return: *c_int,
+) callconv(.C) ?[*]types.KeySym;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -260,6 +274,9 @@ pub const dyn_api = struct {
     pub var XkbAllocKeyboard: xkb.XkbAllocKeyboardProc = undefined;
     pub var XkbFreeKeyboard: xkb.XkbFreeKeyboardProc = undefined;
     pub var XkbSelectEventDetails: xkb.XkbSelectEventDetailsProc = undefined;
+    // keyboard
+    pub var XDisplayKeycodes: XDisplayKeycodesProc = undefined;
+    pub var XGetKeyboardMapping: XGetKeyboardMappingProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
