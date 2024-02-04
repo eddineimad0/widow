@@ -127,9 +127,18 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
 }
 
 fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
-    _ = window;
     switch (ev.type) {
-        libx11.KeyPress => std.debug.print("KeyPress:code {}\n", .{ev.keycode}),
+        libx11.KeyPress => {
+            std.debug.print("KeyPress:code {}\n", .{ev.keycode});
+            const event = common.event.createKeyboardEvent(
+                window.data.id,
+                @enumFromInt(0),
+                utils.keycodeToScancode(ev.keycode),
+                keyboard_and_mouse.KeyState.Pressed,
+                utils.decodeKeyMods(ev.state),
+            );
+            window.sendEvent(&event);
+        },
         libx11.KeyRelease => std.debug.print("KeyRelease:code {}\n", .{ev.keycode}),
         else => unreachable,
     }

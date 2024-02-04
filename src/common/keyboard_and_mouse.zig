@@ -213,7 +213,7 @@ pub const ScanCode = enum(i32) {
     Numpad9, // The numpad 9 key
     NumpadReturn, // The numpad Enter/Return key
     NumpadAdd, // The numpad + key
-    NumpadSubstract, // The numpad - key
+    NumpadSubtract, // The numpad - key
     NumpadMultiply, // The Numpad * key
     NumpadDivide, // The Numpad / key
     NumpadEquals, // The Numpad = key

@@ -59,6 +59,9 @@ pub fn main() !void {
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
+                EventType.KeyBoard => |*key| {
+                    std.debug.print("Key Event:{}", .{key.*});
+                },
                 EventType.MouseButton => |*mouse_event| {
                     // This event holds the mouse button (left,middle,right,...),
                     // the action that was done to the button (pressed or released),

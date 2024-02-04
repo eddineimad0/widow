@@ -5,7 +5,7 @@
 const std = @import("std");
 const posix = @import("common").posix;
 const types = @import("types.zig");
-const defs = @import("defs.zig");
+const defs = @import("constants.zig");
 const xkb = @import("extensions/xkb.zig");
 
 const XOpenDisplayProc = *const fn (display_name: ?[*:0]u8) callconv(.C) ?*types.Display;

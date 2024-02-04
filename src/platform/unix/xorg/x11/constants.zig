@@ -8,10 +8,6 @@ const Bool = types.Bool;
 
 pub const AllocNone: c_int = 0;
 pub const AllocAll: c_int = 1;
-pub const XkbKeyNameLength: usize = 4;
-pub const XkbNumIndicators: usize = 32;
-pub const XkbNumKbdGroups: usize = 4;
-pub const XkbNumVirtualMods: usize = 16;
 
 pub const XA_PRIMARY: Atom = 1;
 pub const XA_SECONDARY: Atom = 2;
@@ -651,70 +647,6 @@ pub const XLookupNone: i32 = 1;
 pub const XLookupChars: i32 = 2;
 pub const XLookupKeySym: i32 = 3;
 pub const XLookupBoth: i32 = 4;
-
-// Xkb constants
-pub const XkbActionMessageLength: usize = 6;
-
-pub const XkbOD_Success: c_int = 0;
-pub const XkbOD_BadLibraryVersion: c_int = 1;
-pub const XkbOD_ConnectionRefused: c_int = 2;
-pub const XkbOD_NonXkbServer: c_int = 3;
-pub const XkbOD_BadServerVersion: c_int = 4;
-
-pub const XkbLC_ForceLatinLookup: c_uint = 1 << 0;
-pub const XkbLC_ConsumeLookupMods: c_uint = 1 << 1;
-pub const XkbLC_AlwaysConsumeShiftAndLock: c_uint = 1 << 2;
-pub const XkbLC_IgnoreNewKeyboards: c_uint = 1 << 3;
-pub const XkbLC_ControlFallback: c_uint = 1 << 4;
-pub const XkbLC_ConsumeKeysOnComposeFail: c_uint = 1 << 29;
-pub const XkbLC_ComposeLED: c_uint = 1 << 30;
-pub const XkbLC_BeepOnComposeFail: c_uint = 1 << 31;
-
-pub const XkbLC_AllComposeControls: c_uint = 0xc000_0000;
-pub const XkbLC_AllControls: c_uint = 0xc000_001f;
-
-pub const XkbNewKeyboardNotify: c_int = 0;
-pub const XkbMapNotify: c_int = 1;
-pub const XkbStateNotify: c_int = 2;
-pub const XkbControlsNotify: c_int = 3;
-pub const XkbIndicatorStateNotify: c_int = 4;
-pub const XkbIndicatorMapNotify: c_int = 5;
-pub const XkbNamesNotify: c_int = 6;
-pub const XkbCompatMapNotify: c_int = 7;
-pub const XkbBellNotify: c_int = 8;
-pub const XkbActionMessage: c_int = 9;
-pub const XkbAccessXNotify: c_int = 10;
-pub const XkbExtensionDeviceNotify: c_int = 11;
-
-pub const XkbNewKeyboardNotifyMask: c_ulong = 1 << 0;
-pub const XkbMapNotifyMask: c_ulong = 1 << 1;
-pub const XkbStateNotifyMask: c_ulong = 1 << 2;
-pub const XkbControlsNotifyMask: c_ulong = 1 << 3;
-pub const XkbIndicatorStateNotifyMask: c_ulong = 1 << 4;
-pub const XkbIndicatorMapNotifyMask: c_ulong = 1 << 5;
-pub const XkbNamesNotifyMask: c_ulong = 1 << 6;
-pub const XkbCompatMapNotifyMask: c_ulong = 1 << 7;
-pub const XkbBellNotifyMask: c_ulong = 1 << 8;
-pub const XkbActionMessageMask: c_ulong = 1 << 9;
-pub const XkbAccessXNotifyMask: c_ulong = 1 << 10;
-pub const XkbExtensionDeviceNotifyMask: c_ulong = 1 << 11;
-pub const XkbAllEventsMask: c_ulong = 0xfff;
-
-pub const XkbModifierStateMask: c_ulong = 1 << 0;
-pub const XkbModifierBaseMask: c_ulong = 1 << 1;
-pub const XkbModifierLatchMask: c_ulong = 1 << 2;
-pub const XkbModifierLockMask: c_ulong = 1 << 3;
-pub const XkbGroupStateMask: c_ulong = 1 << 4;
-pub const XkbGroupBaseMask: c_ulong = 1 << 5;
-pub const XkbGroupLatchMask: c_ulong = 1 << 6;
-pub const XkbGroupLockMask: c_ulong = 1 << 7;
-pub const XkbCompatStateMask: c_ulong = 1 << 8;
-pub const XkbGrabModsMask: c_ulong = 1 << 9;
-pub const XkbCompatGrabModsMask: c_ulong = 1 << 10;
-pub const XkbLookupModsMask: c_ulong = 1 << 11;
-pub const XkbCompatLookupModsMask: c_ulong = 1 << 12;
-pub const XkbPointerButtonMask: c_ulong = 1 << 13;
-pub const XkbAllStateComponentsMask: c_ulong = 0x3fff;
 
 pub const NoValue: c_int = 0x0000;
 pub const XValue: c_int = 0x0001;

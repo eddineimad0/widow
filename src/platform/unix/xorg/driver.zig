@@ -296,12 +296,15 @@ pub const X11Driver = struct {
         ) == libx11.True;
 
         if (self.extensions.xkb.is_available) {
+            // enable key auto repeat.
             var auto_repeat_support: libx11.Bool = libx11.False;
             _ = libx11.XkbGetDetectableAutoRepeat(self.handles.xdisplay, &auto_repeat_support);
             self.extensions.xkb.is_auto_repeat_detectable = auto_repeat_support == libx11.True;
             if (self.extensions.xkb.is_auto_repeat_detectable) {
                 _ = libx11.XkbSetDetectableAutoRepeat(self.handles.xdisplay, libx11.True, null);
             }
+
+            //TODO: select events to receive.
         }
     }
 
