@@ -122,6 +122,8 @@ pub inline fn unregisterClipboardViewer(viewer: HWND, next_viewer: ?HWND) void {
 
 test "clipboard_read_and_write" {
     const testing = std.testing;
+    // preapre the console for unicode output.
+    _ = zigwin32.system.console.SetConsoleOutputCP(zigwin32.globalization.CP_UTF8);
     const Internals = @import("internals.zig").Internals;
     const Win32Context = @import("global.zig").Win32Context;
     const string1 = "Clipboard Test String👌.";

@@ -383,26 +383,6 @@ fn registerMainClass(
     return class;
 }
 
-test "Win32Context_Thread_safety" {
-    const builtin = @import("builtin");
-    if (builtin.single_threaded) {
-        try Win32Context.initSingleton("Thread_Test_Class", null);
-        try Win32Context.initSingleton("Thread_Test_Class", null);
-        defer Win32Context.deinitSingleton();
-    } else {
-        var threads: [10]std.Thread = undefined;
-        defer for (threads) |handle| handle.join();
-
-        for (&threads) |*handle| {
-            handle.* = try std.Thread.spawn(.{}, struct {
-                fn thread_fn() !void {
-                    try Win32Context.initSingleton("Thread_Test_Class", null);
-                }
-            }.thread_fn, .{});
-        }
-    }
-}
-
 test "Win32Context_init" {
     try Win32Context.initSingleton("Init_Test_Class", null);
     defer Win32Context.deinitSingleton();

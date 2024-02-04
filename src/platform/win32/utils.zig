@@ -281,7 +281,7 @@ fn platformKeyToVirutal(keycode: u16) KeyCode {
         KeyCode.Multiply, //0x6A
         KeyCode.Add, //0x6B
         KeyCode.Unknown, //0x6C VK_SEPERATOR
-        KeyCode.Substract, //0x6D
+        KeyCode.Subtract, //0x6D
         KeyCode.Period, //0x6E
         KeyCode.Divide, //0x6F
         KeyCode.F1, //0x70
@@ -527,7 +527,7 @@ pub fn mapWindowsScancode(scancode: u32) ScanCode {
         ScanCode.Numpad7, //0x047
         ScanCode.Numpad8, //0x04r
         ScanCode.Numpad9, //0x049
-        ScanCode.NumpadSubstract, //0x04A
+        ScanCode.NumpadSubtract, //0x04A
         ScanCode.Numpad4, //0x04B
         ScanCode.Numpad5, //0x04C
         ScanCode.Numpad6, //0x04D
