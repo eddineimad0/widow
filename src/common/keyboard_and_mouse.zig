@@ -68,7 +68,7 @@ pub const KeyCode = enum(i32) {
     Slash, // The / and ? key
     Backslash, // The \ and | key
     Grave, // The ` and ~ key
-    Equals, // The = key
+    Equal, // The = key
     Hyphen, // The - key (hyphen)
     Space, // The Space key
     Return, // The Enter/Return keys
@@ -99,7 +99,7 @@ pub const KeyCode = enum(i32) {
     Numpad8, // The numpad 8 key
     Numpad9, // The numpad 9 key
     Add, // The numpad + key
-    Substract, // The numpad - key
+    Subtract, // The numpad - key
     Multiply, // The Numpad * key
     Divide, // The Numpad / key
     NumLock, // The Num Lock key
@@ -181,7 +181,7 @@ pub const ScanCode = enum(i32) {
     Slash, // The / and ? key
     Backslash, // The \ and | key
     Grave, // The ` and ~ key
-    Equals, // The = key
+    Equal, // The = key
     Hyphen, // The - key (hyphen)
     Space, // The Space key
     Return, // The Enter/Return keys
@@ -216,7 +216,7 @@ pub const ScanCode = enum(i32) {
     NumpadSubtract, // The numpad - key
     NumpadMultiply, // The Numpad * key
     NumpadDivide, // The Numpad / key
-    NumpadEquals, // The Numpad = key
+    NumpadEqual, // The Numpad = key
     NumpadDecimal, // The numpad period(.) key
     NumLock, // The Num Lock key
     ScrollLock, // The ScrLk key

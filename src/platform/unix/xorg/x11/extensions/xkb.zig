@@ -1,87 +1,87 @@
 const types = @import("../types.zig");
 
 // Constants
-pub const XkbMaxLegalKeyCode: c_uint = 255;
-pub const XkbPerKeyBitArraySize: c_uint = ((XkbMaxLegalKeyCode + 1) / 8);
-pub const XkbNumVirtualMods: c_uint = 16;
-pub const XkbAnyActionDataSize: c_uint = 7;
-pub const XkbNumIndicators: c_uint = 32;
-pub const XkbNumKbdGroups: c_uint = 4;
-pub const XkbMaxKbdGroup: c_uint = (XkbNumKbdGroups - 1);
-pub const XkbActionMessageLength: c_uint = 6;
-pub const XkbKeyNameLength: c_uint = 4;
-pub const XkbKeyNumVirtualMods: c_uint = 16;
-pub const XkbKeyNumIndicators: c_uint = 32;
-pub const XkbKeyNumKbdGroups: c_uint = 4;
-pub const XkbMaxRadioGroups: c_uint = 32;
+pub const XkbMaxLegalKeyCode = 255;
+pub const XkbPerKeyBitArraySize = ((XkbMaxLegalKeyCode + 1) / 8);
+pub const XkbNumVirtualMods = 16;
+pub const XkbAnyActionDataSize = 7;
+pub const XkbNumIndicators = 32;
+pub const XkbNumKbdGroups = 4;
+pub const XkbMaxKbdGroup = (XkbNumKbdGroups - 1);
+pub const XkbActionMessageLength = 6;
+pub const XkbKeyNameLength = 4;
+pub const XkbKeyNumVirtualMods = 16;
+pub const XkbKeyNumIndicators = 32;
+pub const XkbKeyNumKbdGroups = 4;
+pub const XkbMaxRadioGroups = 32;
 
-pub const XkbOD_Success: c_int = 0;
-pub const XkbOD_BadLibraryVersion: c_int = 1;
-pub const XkbOD_ConnectionRefused: c_int = 2;
-pub const XkbOD_NonXkbServer: c_int = 3;
-pub const XkbOD_BadServerVersion: c_int = 4;
+pub const XkbOD_Success = 0;
+pub const XkbOD_BadLibraryVersion = 1;
+pub const XkbOD_ConnectionRefused = 2;
+pub const XkbOD_NonXkbServer = 3;
+pub const XkbOD_BadServerVersion = 4;
 
-pub const XkbLC_ForceLatinLookup: c_uint = 1 << 0;
-pub const XkbLC_ConsumeLookupMods: c_uint = 1 << 1;
-pub const XkbLC_AlwaysConsumeShiftAndLock: c_uint = 1 << 2;
-pub const XkbLC_IgnoreNewKeyboards: c_uint = 1 << 3;
-pub const XkbLC_ControlFallback: c_uint = 1 << 4;
-pub const XkbLC_ConsumeKeysOnComposeFail: c_uint = 1 << 29;
-pub const XkbLC_ComposeLED: c_uint = 1 << 30;
-pub const XkbLC_BeepOnComposeFail: c_uint = 1 << 31;
+pub const XkbLC_ForceLatinLookup = 1 << 0;
+pub const XkbLC_ConsumeLookupMods = 1 << 1;
+pub const XkbLC_AlwaysConsumeShiftAndLock = 1 << 2;
+pub const XkbLC_IgnoreNewKeyboards = 1 << 3;
+pub const XkbLC_ControlFallback = 1 << 4;
+pub const XkbLC_ConsumeKeysOnComposeFail = 1 << 29;
+pub const XkbLC_ComposeLED = 1 << 30;
+pub const XkbLC_BeepOnComposeFail = 1 << 31;
 
-pub const XkbLC_AllComposeControls: c_uint = 0xc000_0000;
-pub const XkbLC_AllControls: c_uint = 0xc000_001f;
+pub const XkbLC_AllComposeControls = 0xc000_0000;
+pub const XkbLC_AllControls = 0xc000_001f;
 
-pub const XkbNewKeyboardNotify: c_int = 0;
-pub const XkbMapNotify: c_int = 1;
-pub const XkbStateNotify: c_int = 2;
-pub const XkbControlsNotify: c_int = 3;
-pub const XkbIndicatorStateNotify: c_int = 4;
-pub const XkbIndicatorMapNotify: c_int = 5;
-pub const XkbNamesNotify: c_int = 6;
-pub const XkbCompatMapNotify: c_int = 7;
-pub const XkbBellNotify: c_int = 8;
-pub const XkbActionMessage: c_int = 9;
-pub const XkbAccessXNotify: c_int = 10;
-pub const XkbExtensionDeviceNotify: c_int = 11;
+pub const XkbNewKeyboardNotify = 0;
+pub const XkbMapNotify = 1;
+pub const XkbStateNotify = 2;
+pub const XkbControlsNotify = 3;
+pub const XkbIndicatorStateNotify = 4;
+pub const XkbIndicatorMapNotify = 5;
+pub const XkbNamesNotify = 6;
+pub const XkbCompatMapNotify = 7;
+pub const XkbBellNotify = 8;
+pub const XkbActionMessage = 9;
+pub const XkbAccessXNotify = 10;
+pub const XkbExtensionDeviceNotify = 11;
 
-pub const XkbNewKeyboardNotifyMask: c_ulong = 1 << 0;
-pub const XkbMapNotifyMask: c_ulong = 1 << 1;
-pub const XkbStateNotifyMask: c_ulong = 1 << 2;
-pub const XkbControlsNotifyMask: c_ulong = 1 << 3;
-pub const XkbIndicatorStateNotifyMask: c_ulong = 1 << 4;
-pub const XkbIndicatorMapNotifyMask: c_ulong = 1 << 5;
-pub const XkbNamesNotifyMask: c_ulong = 1 << 6;
-pub const XkbCompatMapNotifyMask: c_ulong = 1 << 7;
-pub const XkbBellNotifyMask: c_ulong = 1 << 8;
-pub const XkbActionMessageMask: c_ulong = 1 << 9;
-pub const XkbAccessXNotifyMask: c_ulong = 1 << 10;
-pub const XkbExtensionDeviceNotifyMask: c_ulong = 1 << 11;
-pub const XkbAllEventsMask: c_ulong = 0xfff;
+pub const XkbNewKeyboardNotifyMask = 1 << 0;
+pub const XkbMapNotifyMask = 1 << 1;
+pub const XkbStateNotifyMask = 1 << 2;
+pub const XkbControlsNotifyMask = 1 << 3;
+pub const XkbIndicatorStateNotifyMask = 1 << 4;
+pub const XkbIndicatorMapNotifyMask = 1 << 5;
+pub const XkbNamesNotifyMask = 1 << 6;
+pub const XkbCompatMapNotifyMask = 1 << 7;
+pub const XkbBellNotifyMask = 1 << 8;
+pub const XkbActionMessageMask = 1 << 9;
+pub const XkbAccessXNotifyMask = 1 << 10;
+pub const XkbExtensionDeviceNotifyMask = 1 << 11;
+pub const XkbAllEventsMask = 0xfff;
 
-pub const XkbModifierStateMask: c_ulong = 1 << 0;
-pub const XkbModifierBaseMask: c_ulong = 1 << 1;
-pub const XkbModifierLatchMask: c_ulong = 1 << 2;
-pub const XkbModifierLockMask: c_ulong = 1 << 3;
-pub const XkbGroupStateMask: c_ulong = 1 << 4;
-pub const XkbGroupBaseMask: c_ulong = 1 << 5;
-pub const XkbGroupLatchMask: c_ulong = 1 << 6;
-pub const XkbGroupLockMask: c_ulong = 1 << 7;
-pub const XkbCompatStateMask: c_ulong = 1 << 8;
-pub const XkbGrabModsMask: c_ulong = 1 << 9;
-pub const XkbCompatGrabModsMask: c_ulong = 1 << 10;
-pub const XkbLookupModsMask: c_ulong = 1 << 11;
-pub const XkbCompatLookupModsMask: c_ulong = 1 << 12;
-pub const XkbPointerButtonMask: c_ulong = 1 << 13;
-pub const XkbAllStateComponentsMask: c_ulong = 0x3fff;
-pub const XkbUseCoreKbd: c_ushort = 0x0100;
-pub const XkbUseCorePtr: c_ushort = 0x0200;
-pub const XkbDfltXIClass: c_ushort = 0x0300;
-pub const XkbDfltXIId: c_ushort = 0x0400;
-pub const XkbAllXIClasses: c_ushort = 0x0500;
-pub const XkbAllXIIds: c_ushort = 0x0600;
-pub const XkbXINone: c_ushort = 0xff00;
+pub const XkbModifierStateMask = 1 << 0;
+pub const XkbModifierBaseMask = 1 << 1;
+pub const XkbModifierLatchMask = 1 << 2;
+pub const XkbModifierLockMask = 1 << 3;
+pub const XkbGroupStateMask = 1 << 4;
+pub const XkbGroupBaseMask = 1 << 5;
+pub const XkbGroupLatchMask = 1 << 6;
+pub const XkbGroupLockMask = 1 << 7;
+pub const XkbCompatStateMask = 1 << 8;
+pub const XkbGrabModsMask = 1 << 9;
+pub const XkbCompatGrabModsMask = 1 << 10;
+pub const XkbLookupModsMask = 1 << 11;
+pub const XkbCompatLookupModsMask = 1 << 12;
+pub const XkbPointerButtonMask = 1 << 13;
+pub const XkbAllStateComponentsMask = 0x3fff;
+pub const XkbUseCoreKbd = 0x0100;
+pub const XkbUseCorePtr = 0x0200;
+pub const XkbDfltXIClass = 0x0300;
+pub const XkbDfltXIId = 0x0400;
+pub const XkbAllXIClasses = 0x0500;
+pub const XkbAllXIIds = 0x0600;
+pub const XkbXINone = 0xff00;
 
 // Types
 pub const XkbAnyEvent = extern struct {
@@ -179,7 +179,7 @@ pub const XkbISOAction = extern struct {
     flags: u8,
     mask: u8,
     real_mods: u8,
-    group_XXX: c_char,
+    group_XXX: u8,
     affect: u8,
     vmods1: u8,
     vmods2: u8,
@@ -191,7 +191,7 @@ pub const XkbGroupAction = extern struct {
     // char            group_XXX;  /* represents a group index or delta */
     type: u8,
     flags: u8,
-    group_XXX: c_char,
+    group_XXX: u8,
 };
 
 pub const XkbPtrAction = extern struct {
@@ -230,7 +230,7 @@ pub const XkbPtrDfltAction = extern struct {
     type: u8,
     flags: u8,
     affect: u8,
-    valueXXX: c_char,
+    valueXXX: u8,
 };
 
 pub const XkbSwitchScreenAction = extern struct {
@@ -239,7 +239,7 @@ pub const XkbSwitchScreenAction = extern struct {
     // char            screenXXX;   /* screen number or delta */
     type: u8,
     flags: u8,
-    screenXXX: c_char,
+    screenXXX: u8,
 };
 
 pub const XkbCtrlsAction = extern struct {
@@ -508,7 +508,7 @@ pub const XkbIndicatorRec = extern struct {
 
 pub const XkbKeyNameRec = extern struct {
     // char      name[XkbKeyNameLength];      /* symbolic key names */
-    name: [XkbKeyNameLength]c_char,
+    name: [XkbKeyNameLength]u8,
 };
 
 pub const XkbKeyAliasRec = extern struct {
@@ -516,8 +516,8 @@ pub const XkbKeyAliasRec = extern struct {
     //           /* this key name must be in the keys array */
     // char      alias[XkbKeyNameLength];
     //           /* symbolic key name as alias for the key */
-    real: [XkbKeyNameLength]c_char,
-    alias: [XkbKeyNameLength]c_char,
+    real: [XkbKeyNameLength]u8,
+    alias: [XkbKeyNameLength]u8,
 };
 
 pub const XkbNamesRec = extern struct {
