@@ -130,15 +130,30 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
     const driver = X11Driver.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
-            std.debug.print("KeyPress:code {}\n", .{ev.keycode});
-            const event = common.event.createKeyboardEvent(
+            if (comptime common.LOG_WINDOW_EVENTS) {
+                std.debug.print("window: {} recieved KeyPress:code {}\n", .{ window.handle, ev.keycode });
+            }
+            const mods = utils.decodeKeyMods(ev.state);
+            var event = common.event.createKeyboardEvent(
                 window.data.id,
                 driver.lookupKeyCode(@intCast(ev.keycode)),
                 utils.keycodeToScancode(@intCast(ev.keycode)),
                 keyboard_and_mouse.KeyState.Pressed,
-                utils.decodeKeyMods(ev.state),
+                mods,
             );
             window.sendEvent(&event);
+            var keysym: libx11.KeySym = 0;
+            _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
+            if (driver.lookupKeyCharacter(keysym)) |codepoint| {
+                if (comptime common.LOG_WINDOW_EVENTS) {
+                    std.debug.print(
+                        "window: {} recieved Character:codepoint {}\n",
+                        .{ window.handle, codepoint },
+                    );
+                }
+                event = common.event.createCharEvent(window.data.id, codepoint, mods);
+                window.sendEvent(&event);
+            }
         },
         libx11.KeyRelease => std.debug.print("KeyRelease:code {}\n", .{ev.keycode}),
         else => unreachable,

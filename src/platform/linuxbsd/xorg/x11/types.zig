@@ -445,6 +445,11 @@ pub const XWMHints = extern struct {
     icon_mask: Pixmap,
     window_group: XID,
 };
+pub const XComposeStatus = extern struct {
+    compose_ptr: XPointer,
+    chars_matched: c_int,
+};
+
 pub const XSizeHints = extern struct {
     flags: c_long,
     x: c_int,

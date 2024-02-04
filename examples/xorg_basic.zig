@@ -60,7 +60,14 @@ pub fn main() !void {
                     break :event_loop;
                 },
                 EventType.KeyBoard => |*key| {
-                    std.debug.print("Key Event:{}", .{key.*});
+                    std.debug.print("Key Event:{}\n", .{key.*});
+                },
+                EventType.Character => |*char| {
+                    std.debug.print("target window #{},character:'{u}'\nmods:{}\n", .{
+                        char.window_id,
+                        char.codepoint,
+                        char.mods,
+                    });
                 },
                 EventType.MouseButton => |*mouse_event| {
                     // This event holds the mouse button (left,middle,right,...),

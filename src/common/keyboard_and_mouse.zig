@@ -55,10 +55,10 @@ pub const KeyCode = enum(i32) {
     Num8, // The 8 key
     Num9, // The 9 key
     Escape, // The Escape key
-    Control, // The left Control key
-    Shift, // The left Shift key
-    Alt, // The left Alt key
-    Meta, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    Control, // The Control key (left or right)
+    Shift, // The Shift key (left or right)
+    Alt, // The Alt key (left or right)
+    Meta, // The OS specific key (left or right): window (Windows and Linux), apple (MacOS X), ...
     LBracket, // The [ and { key
     RBracket, // The ] and } key
     Semicolon, // The ; and : key

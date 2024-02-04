@@ -210,6 +210,14 @@ const XGetKeyboardMappingProc = *const fn (
     keysyms_per_keycode_return: *c_int,
 ) callconv(.C) ?[*]types.KeySym;
 
+const XLookupStringProc = *const fn (
+    event_struct: *types.XKeyEvent,
+    buffer_return: ?[*:0]u8,
+    bytes_buffer: c_int,
+    keysym_return: ?*types.KeySym,
+    status_in_out: ?*types.XComposeStatus,
+) callconv(.C) c_int;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -277,6 +285,7 @@ pub const dyn_api = struct {
     // keyboard
     pub var XDisplayKeycodes: XDisplayKeycodesProc = undefined;
     pub var XGetKeyboardMapping: XGetKeyboardMappingProc = undefined;
+    pub var XLookupString: XLookupStringProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

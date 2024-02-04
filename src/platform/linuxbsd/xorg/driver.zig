@@ -1,11 +1,12 @@
 const std = @import("std");
 const common = @import("common");
-const KeyCode = common.keyboard_and_mouse.KeyCode;
-const posix = common.posix;
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 const keymaps = @import("keymaps.zig");
+const posix = common.posix;
+const HashMapU32 = std.AutoArrayHashMap(u32, u32);
+const KeyCode = common.keyboard_and_mouse.KeyCode;
 
 pub const XConnectionError = error{
     ConnectionFailed,
@@ -45,10 +46,13 @@ const XrmInterface = struct {
 };
 
 const XkbInterface = struct {
-    pub const KEY_CODE_MAP_SIZE = 256;
+    pub const KEYCODE_MAP_SIZE = 256;
+    pub const UNICODE_MAP_SIZE = 0x400;
     is_available: bool,
     is_auto_repeat_detectable: bool,
-    keycode_lookup_table: [KEY_CODE_MAP_SIZE]KeyCode,
+    keycode_lookup_table: [KEYCODE_MAP_SIZE]KeyCode,
+    // xkeysym_unicode_mapping: [UNICODE_MAP_SIZE]u32,
+    xkeysym_unicode_mapping: HashMapU32,
 };
 
 const X11Extensions = struct {
@@ -172,6 +176,7 @@ pub const X11Driver = struct {
             .is_available = false,
             .is_auto_repeat_detectable = false,
             .keycode_lookup_table = undefined,
+            .xkeysym_unicode_mapping = HashMapU32.init(std.heap.c_allocator),
         } },
         .ewmh = undefined,
         .pid = undefined,
@@ -186,7 +191,7 @@ pub const X11Driver = struct {
     pub fn initSingleton(
         res_name: [*:0]const u8,
         res_class: [*:0]const u8,
-    ) XConnectionError!void {
+    ) (XConnectionError || std.mem.Allocator.Error)!void {
         @setCold(true);
 
         Self.g_init_mutex.lock();
@@ -210,6 +215,7 @@ pub const X11Driver = struct {
             g_instance.ewmh = std.mem.zeroes(@TypeOf(g_instance.ewmh));
             g_instance.initEWMH();
             g_instance.initKeyCodeTable();
+            try keymaps.initUnicodeKeysymMapping(&g_instance.extensions.xkb.xkeysym_unicode_mapping);
 
             g_instance.handles.xcontext = libx11.XUniqueContext();
             if (g_instance.handles.xcontext == 0) {
@@ -597,6 +603,25 @@ pub const X11Driver = struct {
 
     pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
         return self.extensions.xkb.keycode_lookup_table[xkeycode];
+    }
+
+    pub inline fn lookupKeyCharacter(self: *const Self, xkeysym: libx11.KeySym) ?u32 {
+        // Latin-1
+        if ((xkeysym <= 0xFF and xkeysym >= 0xA0) or (xkeysym >= 0x20 and xkeysym <= 0x7E)) {
+            return @truncate(xkeysym);
+        }
+
+        // Latin-1 from Keypad.
+        if (xkeysym == 0xFFBD or (xkeysym <= 0xFFB9 and xkeysym >= 0xFFAA)) {
+            return @truncate(xkeysym - 0xFF80);
+        }
+
+        // Unicode (may be present).
+        if ((xkeysym & 0xFF000000) == 0x01000000) {
+            return @truncate(xkeysym & 0x00FFFFFF);
+        }
+
+        return self.extensions.xkb.xkeysym_unicode_mapping.get(@truncate(xkeysym));
     }
 
     // Enfoce readonly.
