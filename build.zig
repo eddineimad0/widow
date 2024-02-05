@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) !void {
         "widow_display_protocol",
         "Specify the display protocol to compile for.",
     );
+    const log_platform_events = b.option(bool, "log_platform_events", "Print platform events messages.") orelse
+        false;
 
     if (display_target) |t| {
         if (!isDisplayTargetValid(&target, t)) {
@@ -23,14 +25,18 @@ pub fn build(b: *std.Build) !void {
         display_target = detectDispalyTarget(&target, b.allocator);
     }
 
-    const widow = prepareWidowModule(b, display_target.?);
+    const options = b.addOptions();
+    options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
+    const config = options.createModule();
+
+    const widow = prepareWidowModule(b, display_target.?, config);
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
         // "simple_window",
-        // "playing_with_inputs",
+        "playing_with_inputs",
         // "cursor_and_icon",
-        "xorg_basic",
+        // "xorg_basic",
     };
     for (examples) |example_name| {
         const example = b.addExecutable(.{
@@ -39,6 +45,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
+        example.addOptions("widow_build_config", options);
         example.addModule("widow", widow);
         example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
@@ -81,9 +88,15 @@ fn detectDispalyTarget(os_target: *const std.zig.CrossTarget, allocator: std.mem
     };
 }
 
-fn prepareWidowModule(b: *std.Build, target: DisplayProtocol) *std.build.Module {
-    const common_module = b.createModule(.{ .source_file = .{ .path = "src/common/common.zig" } });
+fn prepareWidowModule(b: *std.Build, target: DisplayProtocol, config: *std.build.Module) *std.build.Module {
+    const common_module = b.createModule(.{
+        .source_file = .{ .path = "src/common/common.zig" },
+        .dependencies = &.{
+            std.build.ModuleDependency{ .name = "widow_build_config", .module = config },
+        },
+    });
     const common_dep = std.build.ModuleDependency{ .name = "common", .module = common_module };
+
     var platform_dep: *std.build.Module = switch (target) {
         .Win32 => win32: {
             var zigwin32 = b.createModule(.{
@@ -107,7 +120,7 @@ fn prepareWidowModule(b: *std.Build, target: DisplayProtocol) *std.build.Module 
         },
     };
 
-    const deps = [2]std.build.ModuleDependency{
+    const deps = [_]std.build.ModuleDependency{
         common_dep,
         std.build.ModuleDependency{ .name = "platform", .module = platform_dep },
     };

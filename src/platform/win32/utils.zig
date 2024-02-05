@@ -364,7 +364,7 @@ fn platformKeyToVirutal(keycode: u16) KeyCode {
         KeyCode.Unknown,
         KeyCode.Unknown,
         KeyCode.Unknown,
-        KeyCode.Equals, //0xBB
+        KeyCode.Equal, //0xBB
         KeyCode.Comma, //0xBC
         KeyCode.Hyphen, //0xBD
         KeyCode.Period, //0xBE
@@ -466,7 +466,7 @@ pub fn mapWindowsScancode(scancode: u32) ScanCode {
         ScanCode.Num9, //0x00A
         ScanCode.Num0, //0x00B
         ScanCode.Hyphen, //0x00C
-        ScanCode.Equals, //0x00D
+        ScanCode.Equal, //0x00D
         ScanCode.Backspace, //0x00E
         ScanCode.Tab, //0x00F
         ScanCode.Q, //0x010
@@ -542,7 +542,7 @@ pub fn mapWindowsScancode(scancode: u32) ScanCode {
         ScanCode.Key102nd, //0x056
         ScanCode.F11, //0x057
         ScanCode.F12, //0x058
-        ScanCode.NumpadEquals, //0x059
+        ScanCode.NumpadEqual, //0x059
         ScanCode.Unknown, //0x05A
         ScanCode.Unknown, //0x05B
         ScanCode.Unknown, //0x05C

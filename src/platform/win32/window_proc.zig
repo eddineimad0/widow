@@ -28,11 +28,13 @@ pub fn helperWindowProc(
                 // Monitor the win32_window_messaging.WM_DISPLAYCHANGE notification
                 // to detect when settings change or when a
                 // display is added or removed.
+                if (common.LOG_PLATFORM_EVENTS) {
+                    std.log.info("hidden window recieved a DISPLAYCHANGE event\n", .{});
+                }
                 if (devices.monitor_store_ptr) |store| {
                     if (!store.expected_video_change) {
-                        std.debug.print("[+] WM_DISPLAYCHANGE\n", .{});
                         store.refreshMonitorsMap() catch |err| {
-                            std.log.err("[Monitor]: Failed to refresh monitors,{}\n", .{err});
+                            std.log.err("[Monitor Store]: Failed to refresh monitors,{}\n", .{err});
                         };
                     }
                 }
@@ -40,15 +42,19 @@ pub fn helperWindowProc(
 
             win32_window_messaging.WM_DRAWCLIPBOARD => {
                 // Sent When The clipboard content gets updated.
+                if (common.LOG_PLATFORM_EVENTS) {
+                    std.log.info("hidden window recieved a DRAWCLIPBOARD event\n", .{});
+                }
                 devices.clipboard_change = true;
-                std.debug.print("[+] Clipboard Updated\n", .{});
                 if (devices.next_clipboard_viewer) |viewer| {
-                    std.debug.print("Forwarding msg to next viewer\n", .{});
                     _ = win32_window_messaging.SendMessage(viewer, msg, wparam, lparam);
                 }
             },
             win32_window_messaging.WM_CHANGECBCHAIN => {
                 // Sent When one of the clipboard viewers is getting removed.
+                if (common.LOG_PLATFORM_EVENTS) {
+                    std.log.info("hidden window recieved a CHANGECBCHAIN event\n", .{});
+                }
                 if (devices.next_clipboard_viewer) |viewer| {
                     if (wparam == @intFromPtr(viewer)) {
                         const ulparam: usize = @bitCast(lparam);
@@ -103,6 +109,9 @@ pub fn mainWindowProc(
     var window: *window_impl.WindowImpl = @ptrFromInt(window_user_data);
     switch (msg) {
         win32_window_messaging.WM_CLOSE => {
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a CLOSE event\n", .{window.data.id});
+            }
             // Received upon an attempt to close the window.
             message_handler.closeMSGHandler(window);
             return 0;
@@ -110,6 +119,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_SHOWWINDOW => {
             // Sent to a window when the window is about to be hidden or shown.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SHOWWINDOW event\n", .{window.data.id});
+            }
             const event = common.event.createVisibilityEvent(
                 window.data.id,
                 wparam == win32.TRUE,
@@ -120,6 +132,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_MOUSEACTIVATE => {
             // Sent when the cursor is in an inactive window and the user presses a mouse button.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOUSEACTIVATE event\n", .{window.data.id});
+            }
 
             // We only use this message to delay hiding the window cursor(when the in disabled mode)
             // while the user is interacting with the non client area (resizing with borders,grabbing the title bar...),
@@ -130,6 +145,9 @@ pub fn mainWindowProc(
         },
 
         win32_window_messaging.WM_PAINT => {
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a PAINT event\n", .{window.data.id});
+            }
             // var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
             // const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
             // const x = paint.rcPaint.left;
@@ -147,6 +165,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SYSKEYUP,
         win32_window_messaging.WM_SYSKEYDOWN,
         => {
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a KEY/SYSKEY event\n", .{window.data.id});
+            }
             // Received when a system or a non system key is pressed
             // while window has keyboard focus
             // Note: system key is (Alt+key).
@@ -160,6 +181,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_NCPAINT => {
             // An application can intercept the win32_window_messaging.WM_NCPAINT message
             // and paint its own custom window frame
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a NCPAINT event\n", .{window.data.id});
+            }
             if (!window.data.flags.is_decorated or window.data.flags.is_fullscreen) {
                 // no need to paint the frame for non decorated(Borderless)
                 // or fullscrenn windows;
@@ -170,6 +194,9 @@ pub fn mainWindowProc(
         win32.WM_MOUSELEAVE => {
             // Posted to a window when the cursor leaves the client area
             // of the window specified in a prior call to TrackMouseEvent.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOUSELEAVE event\n", .{window.data.id});
+            }
             window.data.flags.cursor_in_client = false;
             const event = common.event.createMouseLeftEvent(window.data.id);
             window.sendEvent(&event);
@@ -184,6 +211,9 @@ pub fn mainWindowProc(
         => {
             // Received a mouse button is released
             // while the cursor is in the client area of a window.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a BUTTONUP event\n", .{window.data.id});
+            }
             message_handler.mouseUpMSGHandler(window, msg, wparam);
             if (msg == win32_window_messaging.WM_XBUTTONUP) {
                 return win32.TRUE;
@@ -196,6 +226,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_RBUTTONDOWN,
         win32_window_messaging.WM_XBUTTONDOWN,
         => {
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a BUTTONDOWN event\n", .{window.data.id});
+            }
             // Received a mouse button is pressed
             // while the cursor is in the client area of a window.
             message_handler.mouseDownMSGHandler(window, msg, wparam);
@@ -210,6 +243,9 @@ pub fn mainWindowProc(
             // If the mouse is not captured,
             // the message is posted to the window that contains the cursor.
             // Otherwise, the message is posted to the window that has captured the mouse.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOUSEMOVE event\n", .{window.data.id});
+            }
             if (!window.data.flags.cursor_in_client) {
                 var tme = win32_keyboard_mouse.TRACKMOUSEEVENT{
                     .cbSize = @sizeOf(win32_keyboard_mouse.TRACKMOUSEEVENT),
@@ -239,6 +275,9 @@ pub fn mainWindowProc(
             // A positive value indicates that the wheel was rotated forward,
             // away from the user.
             // a negative value indicates that the wheel was rotated backward, toward the user.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOUSEWHEEL event\n", .{window.data.id});
+            }
             const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = scroll / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.VerticalWheel, wheel_delta);
@@ -249,6 +288,9 @@ pub fn mainWindowProc(
             // Sent to the active window when the mouse's horizontal scroll wheel is tilted or rotated.
             // A positive value indicates that the wheel was rotated left,
             // a negative value indicates that the wheel was rotated right.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOUSEHWHEEL event\n", .{window.data.id});
+            }
             const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = -(scroll) / win32.FWHEEL_DELTA;
             message_handler.mouseWheelMSGHandler(window, common.keyboard_and_mouse.MouseWheel.HorizontalWheel, wheel_delta);
@@ -260,6 +302,9 @@ pub fn mainWindowProc(
             // An application should return nonzero in response to win32_window_messaging.WM_ERASEBKGND
             // if it processes the message and erases the background.
             // returning true here prevents flickering and allow us to do our own drawing.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a ERASEBKGND event\n", .{window.data.id});
+            }
             return win32.TRUE;
         },
 
@@ -271,6 +316,9 @@ pub fn mainWindowProc(
             // [SDL]
             // Experimentation shows it's only sent during interactive dragging, not in response to
             // SetWindowPos.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a GETDPISCALEDSIZE event\n", .{window.data.id});
+            }
             const globl_cntxt = Win32Context.singleton();
             // there is no need to process this message for a dpi aware window
             // for a non dpi aware window processing this messsage is necessary
@@ -284,6 +332,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a DPICHANGED event\n", .{window.data.id});
+            }
             const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
             const new_dpi = utils.loWord(wparam);
             const scale = @as(f64, @floatFromInt(new_dpi)) / win32.USER_DEFAULT_SCREEN_DPI_F;
@@ -313,6 +364,9 @@ pub fn mainWindowProc(
             // Sent to a window when the size or position of the window is about to change.
             // An application can use this message to override the window's default
             // maximized size and position, or its default minimum or maximum tracking size.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a GETMINMAXINFO event\n", .{window.data.id});
+            }
             if (!window.data.flags.is_fullscreen) {
                 message_handler.minMaxInfoHandler(window, lparam);
             }
@@ -321,6 +375,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_SIZING => {
             // Sent to a window that the user is currently resizing.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SIZING event\n", .{window.data.id});
+            }
             if (window.data.aspect_ratio != null) {
                 const ulparam: usize = @bitCast(lparam);
                 const drag_rect_ptr: *win32.RECT = @ptrFromInt(ulparam);
@@ -332,7 +389,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SIZE => {
             // Sent to a window after its size has changed.
             // usually due to maximizing, minimizing, resizing...etc.
-
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SIZE event\n", .{window.data.id});
+            }
             const maximized = (wparam == win32_window_messaging.SIZE_MAXIMIZED);
             if (window.data.flags.is_maximized != maximized and maximized) {
                 const event = common.event.createMaximizeEvent(
@@ -392,7 +451,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_MOVE => blk: {
             // Sent after a window has been moved.
             // the lparam holds the new client top left coords.
-
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a MOVE event\n", .{window.data.id});
+            }
             // Our minimized flag is still not set so check using the winapi.
             if (win32_window_messaging.IsIconic(window.handle) != 0) {
                 // if the window was minimized don't update the top left position.
@@ -431,6 +492,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SETCURSOR => {
             // Sent to a window if the mouse causes the cursor
             // to move within a window and mouse input is not captured.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SETCURSOR event\n", .{window.data.id});
+            }
             if (utils.loWord(@bitCast(lparam)) == win32_window_messaging.HTCLIENT) {
                 // the mouse just moved into the client area
                 // update the cursor image acording to the current mode;
@@ -441,6 +505,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_SETFOCUS => {
             // Sent to a window after it has gained the keyboard focus.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SETFOCUS event\n", .{window.data.id});
+            }
             const event = common.event.createFocusEvent(window.data.id, true);
             window.sendEvent(&event);
             window.data.flags.is_focused = true;
@@ -458,6 +525,9 @@ pub fn mainWindowProc(
 
         win32_window_messaging.WM_KILLFOCUS => {
             // Sent to a window immediately before it loses the keyboard focus.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a KILLFOCUS event\n", .{window.data.id});
+            }
             if (window.win32.cursor.mode.is_captured()) {
                 window_impl.releaseCursor();
             } else if (window.win32.cursor.mode.is_disabled()) {
@@ -473,6 +543,9 @@ pub fn mainWindowProc(
         win32_window_messaging.WM_SYSCOMMAND => {
             // In win32_window_messaging.WM_SYSCOMMAND messages, the four low-order bits of the wParam
             // parameter are used internally by the system.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SYSCOMMAND event\n", .{window.data.id});
+            }
             switch (wparam & 0xFFF0) {
                 win32.SC_SCREENSAVE, win32.SC_MONITORPOWER => {
                     if (window.data.flags.is_fullscreen) {
@@ -492,6 +565,9 @@ pub fn mainWindowProc(
             // to post input to other windows.
             // (Tests whether a target app can process win32_window_messaging.WM_UNICHAR messages
             // by sending the message with wParam set to UNICODE_NOCHAR.)
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a UNICHAR event\n", .{window.data.id});
+            }
             if (wparam == win32_window_messaging.UNICODE_NOCHAR) {
                 // If wParam is UNICODE_NOCHAR and the application support this message,
                 return win32.TRUE;
@@ -509,6 +585,9 @@ pub fn mainWindowProc(
             // message is translated by the TranslateMessage function.
             // WM_CHAR | WM_SYSCHAR message uses UTF-16
             // code units in its wParam if the Unicode version of the RegisterClass function was used
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a SYSCHAR/CHAR event\n", .{window.data.id});
+            }
             message_handler.charEventHandler(window, wparam);
             if (msg != win32_window_messaging.WM_SYSCHAR) {
                 return 0;
@@ -520,7 +599,9 @@ pub fn mainWindowProc(
             // the moving or sizing loop,
             // The window enters the moving or sizing
             // loop when the user clicks the window's title bar or sizing border
-
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a ENTERSIZEMOVE event\n", .{window.data.id});
+            }
             window.win32.frame_action = true;
         },
 
@@ -529,6 +610,9 @@ pub fn mainWindowProc(
 
             // the frame action is done treat the cursor
             // acording to the mode.
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a EXITSIZEMOVE event\n", .{window.data.id});
+            }
             if (window.win32.cursor.mode.is_captured()) {
                 window_impl.captureCursor(window.handle);
             } else if (window.win32.cursor.mode.is_disabled()) {
@@ -550,6 +634,9 @@ pub fn mainWindowProc(
         },
 
         win32_window_messaging.WM_DROPFILES => {
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a DROPFILES event\n", .{window.data.id});
+            }
             message_handler.dropEventHandler(window, wparam);
             return 0;
         },
