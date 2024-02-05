@@ -9,7 +9,10 @@ pub fn main() !void {
     // first we need to preform some platform specific initialization.
     // an options tuple can be passed to customize the platform init
     // e.g on windows we can set the WNDClass name to a comptime string of our choice,
-    try widow.initWidowPlatform(.{});
+    try widow.initWidowPlatform(.{
+        .xres_name = "SIMPLE_WINDOW",
+        .xres_class = "SIMPLE_CLASS",
+    });
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
@@ -37,7 +40,6 @@ pub fn main() !void {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
-
     // No longer nedded.
     builder.deinit();
     // closes the window when done.
@@ -56,6 +58,16 @@ pub fn main() !void {
                     // ignore it if you want to continue execution as normal.
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
+                },
+                EventType.KeyBoard => |*key| {
+                    std.debug.print("Key Event:{}\n", .{key.*});
+                },
+                EventType.Character => |*char| {
+                    std.debug.print("target window #{},character:'{u}'\nmods:{}\n", .{
+                        char.window_id,
+                        char.codepoint,
+                        char.mods,
+                    });
                 },
                 EventType.MouseButton => |*mouse_event| {
                     // This event holds the mouse button (left,middle,right,...),

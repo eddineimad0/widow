@@ -60,10 +60,3 @@ pub fn poll(fd: c_int, flag: PollFlag, timeout: i64, ready_count: *u32) bool {
         }
     }
 }
-
-pub fn systemTimerValue() u64 {
-    var t: c.timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK_REALTIME, &t);
-    const result: u64 = @as(u64, @intCast(t.tv_sec)) * NS_PER_SEC + @as(u64, @intCast(t.tv_nsec));
-    return result;
-}

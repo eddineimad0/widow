@@ -27,9 +27,9 @@ pub fn build(b: *std.Build) !void {
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
-        "simple_window",
-        "playing_with_inputs",
-        "cursor_and_icon",
+        // "simple_window",
+        // "playing_with_inputs",
+        // "cursor_and_icon",
         "xorg_basic",
     };
     for (examples) |example_name| {
@@ -99,7 +99,7 @@ fn prepareWidowModule(b: *std.Build, target: DisplayProtocol) *std.build.Module 
         .Xorg => xorg: {
             var deps: [1]std.build.ModuleDependency = .{common_dep};
             break :xorg b.createModule(
-                .{ .source_file = .{ .path = "src/platform/unix/xorg/platform.zig" }, .dependencies = &deps },
+                .{ .source_file = .{ .path = "src/platform/linuxbsd/xorg/platform.zig" }, .dependencies = &deps },
             );
         },
         else => {

@@ -1,5 +1,5 @@
 const types = @import("types.zig");
-const DynApi = @import("dynamic.zig").DynApi;
+const dyn_api = @import("dynamic.zig").dyn_api;
 const assert = @import("std").debug.assert;
 
 pub inline fn ScreenOfDisplay(dpy: *types.Display, scr: c_int) *types.Screen {
@@ -37,5 +37,5 @@ pub inline fn DisplayHeight(dpy: *types.Display, scr: c_int) c_int {
     return ScreenOfDisplay(dpy, scr).height;
 }
 pub inline fn XUniqueContext() c_int {
-    return DynApi.XrmUniqueQuark();
+    return dyn_api.XrmUniqueQuark();
 }
