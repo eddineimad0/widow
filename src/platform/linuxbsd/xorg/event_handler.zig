@@ -8,8 +8,8 @@ const WindowImpl = @import("window_impl.zig").WindowImpl;
 
 fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
     // TODO: what about the button cache store.
-    if (comptime common.LOG_WINDOW_EVENTS) {
-        std.debug.print("window: {} recieved ButtonRelease\n", .{window.handle});
+    if (common.LOG_PLATFORM_EVENTS) {
+        std.log.info("window: #{} recieved ButtonRelease\n", .{window.data.id});
     }
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
@@ -46,8 +46,8 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void 
 }
 
 fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
-    if (comptime common.LOG_WINDOW_EVENTS) {
-        std.debug.print("window: {} recieved ButtonPress\n", .{window.handle});
+    if (common.LOG_PLATFORM_EVENTS) {
+        std.log.info("window: #{} recieved ButtonPress\n", .{window.data.id});
     }
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
@@ -106,15 +106,15 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
     const x11cntxt = X11Driver.singleton();
     if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
-            if (comptime common.LOG_WINDOW_EVENTS) {
-                std.debug.print("window: {} recieved ClientMessage:WM_DELETE_WINDOW\n", .{w.handle});
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved ClientMessage:WM_DELETE_WINDOW\n", .{w.handle});
             }
             const event = common.event.createCloseEvent(w.data.id);
             w.sendEvent(&event);
         }
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh._NET_WM_PING) {
-            if (comptime common.LOG_WINDOW_EVENTS) {
-                std.debug.print("window: {} recieved ClientMessage:_NET_WM_PING\n", .{w.handle});
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved ClientMessage:_NET_WM_PING\n", .{w.handle});
             }
             // ping from the wm to ensure application responsivity.
             // we just need to keep sending ping until the communication
@@ -130,8 +130,8 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
     const driver = X11Driver.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
-            if (comptime common.LOG_WINDOW_EVENTS) {
-                std.debug.print("window: {} recieved KeyPress:code {}\n", .{ window.handle, ev.keycode });
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved KeyPress:code {}\n", .{ window.data.id, ev.keycode });
             }
             const mods = utils.decodeKeyMods(ev.state);
             var event = common.event.createKeyboardEvent(
@@ -145,10 +145,10 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             var keysym: libx11.KeySym = 0;
             _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
             if (driver.lookupKeyCharacter(keysym)) |codepoint| {
-                if (comptime common.LOG_WINDOW_EVENTS) {
-                    std.debug.print(
-                        "window: {} recieved Character:codepoint {}\n",
-                        .{ window.handle, codepoint },
+                if (common.LOG_PLATFORM_EVENTS) {
+                    std.log.info(
+                        "window: #{} recieved Character:codepoint {}\n",
+                        .{ window.data.id, codepoint },
                     );
                 }
                 event = common.event.createCharEvent(window.data.id, codepoint, mods);
@@ -167,16 +167,16 @@ pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
         libx11.KeyPress, libx11.KeyRelease => handleKeyPress(&ev.xkey, window),
 
         libx11.EnterNotify => {
-            if (comptime common.LOG_WINDOW_EVENTS) {
-                std.debug.print("window: {} recieved EnterNotify\n", .{window.handle});
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved EnterNotify\n", .{window.data.id});
             }
             const event = common.event.createMouseEnterEvent(window.data.id);
             window.sendEvent(&event);
             window.data.flags.cursor_in_client = true;
         },
         libx11.LeaveNotify => {
-            if (comptime common.LOG_WINDOW_EVENTS) {
-                std.debug.print("window: {} recieved LeaveNotify\n", .{window.handle});
+            if (common.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved LeaveNotify\n", .{window.data.id});
             }
             window.data.flags.cursor_in_client = false;
             const event = common.event.createMouseLeftEvent(window.data.id);
