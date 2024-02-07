@@ -33,8 +33,8 @@ pub fn build(b: *std.Build) !void {
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
-        // "simple_window",
-        "playing_with_inputs",
+        "simple_window",
+        // "playing_with_inputs",
         // "cursor_and_icon",
         // "xorg_basic",
     };

@@ -107,13 +107,13 @@ pub fn main() !void {
                     // symbol the key represents with the current input language settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    // std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
-                    //     key.window_id,
-                    //     key.keycode,
-                    //     key.scancode,
-                    //     key.state,
-                    //     key.mods,
-                    // });
+                    std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                        key.window_id,
+                        key.keycode,
+                        key.scancode,
+                        key.state,
+                        key.mods,
+                    });
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on pressing Q key
