@@ -19,16 +19,17 @@ pub const Window = struct {
     /// `Allocator` : the allocator to be used with window related allocations(title,...).
     /// `title` : the window's title.
     /// `data` : a refrence to a WindowData structure.
-    /// `widow_props` : the widow properties to be passed along to the window.
+    /// `events_queue` : a pointer to the library's shared event queue.
+    /// `internals` : a pointer to an instance of the platform widow Internals.
     /// # Errors
-    /// 'OutOfMemory': failure due to memory allocation.
+    /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
     pub fn init(
         allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
-        monitor_store: *platform.MonitorStore,
+        internals: *platform.Internals,
     ) !Self {
         var self = Self{
             .allocator = allocator,
@@ -37,7 +38,7 @@ pub const Window = struct {
                 window_title,
                 data,
                 events_queue,
-                monitor_store,
+                internals,
             ),
         };
         return self;

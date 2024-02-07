@@ -1,10 +1,12 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
-const X11Driver = @import("driver.zig").X11Driver;
 const keyboard_and_mouse = common.keyboard_and_mouse;
+const X11Driver = @import("driver.zig").X11Driver;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
+const HelperData = @import("internals.zig").HelperData;
 
 fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
     // TODO: what about the button cache store.
@@ -127,7 +129,6 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
 }
 
 fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
-    const driver = X11Driver.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
             if (common.LOG_PLATFORM_EVENTS) {
@@ -136,7 +137,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             const mods = utils.decodeKeyMods(ev.state);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
-                driver.lookupKeyCode(@intCast(ev.keycode)),
+                window.widow.internals.lookupKeyCode(@intCast(ev.keycode)),
                 utils.keycodeToScancode(@intCast(ev.keycode)),
                 keyboard_and_mouse.KeyState.Pressed,
                 mods,
@@ -144,7 +145,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             window.sendEvent(&event);
             var keysym: libx11.KeySym = 0;
             _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
-            if (driver.lookupKeyCharacter(keysym)) |codepoint| {
+            if (window.widow.internals.lookupKeyCharacter(keysym)) |codepoint| {
                 if (common.LOG_PLATFORM_EVENTS) {
                     std.log.info(
                         "window: #{} recieved Character:codepoint {}\n",
@@ -160,7 +161,33 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
     }
 }
 
-pub fn handleXEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
+fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
+    _ = helper_data;
+    if (common.LOG_PLATFORM_EVENTS) {
+        std.log.info("window: #hidden recieved XkbEvent\n", .{});
+    }
+    switch (ev.any.xkb_type) {
+        x11ext.XkbStateNotify => {
+            std.debug.print("New group:{}\n", .{ev.state.group});
+        },
+        else => {},
+    }
+}
+
+pub fn handleHelperEvent(ev: *const libx11.XEvent, helper_window: libx11.Window) void {
+    const x11driver = X11Driver.singleton();
+    const context_ptr = x11driver.findInXContext(helper_window);
+    if (context_ptr == null) {
+        std.log.err("helper window has no corresponding data in Xcontext\n", .{});
+        @panic("Unexpected null pointer.");
+    }
+    const helper_data: *HelperData = @ptrCast(@alignCast(context_ptr.?));
+    if (ev.type == x11driver.extensions.xkb.event_code) {
+        handleXkbEvent(@ptrCast(ev), helper_data);
+    }
+}
+
+pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
     switch (ev.type) {
         libx11.ButtonPress => handleButtonPress(&ev.xbutton, window),
         libx11.ButtonRelease => handleButtonRelease(&ev.xbutton, window),

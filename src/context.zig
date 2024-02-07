@@ -30,6 +30,7 @@ pub const WidowContext = struct {
         var self: Self = undefined;
         self.platform_internals = try platform.Internals.create(allocator);
         errdefer self.platform_internals.destroy(allocator);
+        // TODO: remove this refrence.
         self.monitor_store = try self.platform_internals.initMonitorStoreImpl(allocator);
         self.events_queue = common.event.EventQueue.init(allocator);
         self.allocator = allocator;
@@ -165,7 +166,7 @@ pub const WindowBuilder = struct {
             self.title,
             &self.window_attributes,
             &self.context.events_queue,
-            self.context.monitor_store,
+            self.context.platform_internals,
         );
         return window;
     }

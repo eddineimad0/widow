@@ -15,12 +15,12 @@ pub inline fn strCpy(src: [*:0]const u8, dst: [*]u8, count: usize) void {
     }
 }
 
-pub inline fn strLen(src: [*:0]const u8) usize {
+pub inline fn strZLen(src: [*:0]const u8) usize {
     return std.mem.len(src);
 }
 
 /// returns true if both strings are equals.
-pub inline fn strEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
+pub inline fn strZEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 

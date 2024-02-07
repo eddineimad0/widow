@@ -2,12 +2,12 @@ const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
+const event_handler = @import("event_handler.zig");
 const posix = common.posix;
-const MonitorStore = @import("internals.zig").MonitorStore;
+const Internals = @import("internals.zig").Internals;
 const WindowData = common.window_data.WindowData;
 const X11Driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
-const handleXEvent = @import("event_handler.zig").handleXEvent;
 
 pub const WindowError = error{
     WindowCreationFailure,
@@ -17,7 +17,7 @@ pub const WindowError = error{
 /// Holds all the refrences we use to communitcate with the WidowContext.
 pub const WidowProps = struct {
     events_queue: *common.event.EventQueue,
-    monitors: *MonitorStore,
+    internals: *Internals,
 };
 
 pub const WindowImpl = struct {
@@ -35,13 +35,13 @@ pub const WindowImpl = struct {
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
-        monitor_store: *MonitorStore,
+        internals: *Internals,
     ) (Allocator.Error || WindowError)!*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.widow = WidowProps{
             .events_queue = events_queue,
-            .monitors = monitor_store,
+            .internals = internals,
         };
         self.data = data.*;
 
@@ -76,13 +76,17 @@ pub const WindowImpl = struct {
         allocator.destroy(self);
     }
 
-    pub fn processEvents(_: *const Self) void {
+    pub fn processEvents(self: *const Self) void {
         var e: libx11.XEvent = undefined;
         const x11cntxt = X11Driver.singleton();
         x11cntxt.flushXRequests();
         while (x11cntxt.nextXEvent(&e)) {
             const window = windowFromId(e.xany.window);
-            handleXEvent(&e, window);
+            if (window) |w| {
+                event_handler.handleWindowEvent(&e, w);
+            } else {
+                event_handler.handleHelperEvent(&e, self.widow.internals.helper_window);
+            }
         }
     }
 
@@ -821,7 +825,7 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
     var class_hints = libx11.XAllocClassHint() orelse return WindowError.WindowCreationFailure;
     defer _ = libx11.XFree(class_hints);
 
-    if (utils.strLen(x11cntxt.resource_name) != 0) {
+    if (utils.strZLen(x11cntxt.resource_name) != 0) {
         class_hints.res_name = x11cntxt.resource_name;
     }
 
@@ -830,13 +834,8 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
     _ = libx11.XSetClassHint(x11cntxt.handles.xdisplay, window, @ptrCast(class_hints));
 }
 
-fn windowFromId(window_id: libx11.Window) *WindowImpl {
+fn windowFromId(window_id: libx11.Window) ?*WindowImpl {
     const x11cntxt = X11Driver.singleton();
     const window = x11cntxt.findInXContext(window_id);
-    if (window == null) {
-        // Something isn't quit right with our program logic
-        std.log.err("Window:#{} has no corresponding data in Xcontext\n", .{window_id});
-        @panic("Logic Error.");
-    }
-    return @ptrCast(@alignCast(window.?));
+    return @ptrCast(@alignCast(window));
 }
