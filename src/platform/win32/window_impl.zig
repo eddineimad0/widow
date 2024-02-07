@@ -1063,7 +1063,7 @@ pub const WindowImpl = struct {
 
         // The video mode switch should always be done first
         const monitor_handle = self.occupiedMonitor();
-        try self.widow.monitors.setMonitorVideoMode(monitor_handle, video_mode);
+        try self.widow.internals.monitor_store.setMonitorVideoMode(monitor_handle, video_mode);
 
         if (self.data.flags.is_fullscreen != value) {
             if (value) {
@@ -1089,7 +1089,7 @@ pub const WindowImpl = struct {
     pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         var mon_area: common.geometry.WidowArea = undefined;
 
-        try self.widow.monitors.setMonitorWindow(
+        try self.widow.internals.monitor_store.setMonitorWindow(
             monitor_handle,
             self,
             &mon_area,
@@ -1117,7 +1117,7 @@ pub const WindowImpl = struct {
 
     /// Marks the monitor as not being occupied by any window.
     pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.monitors.releaseMonitor(monitor_handle);
+        try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
