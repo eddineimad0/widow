@@ -6,7 +6,7 @@ const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
-const internals = @import("internals.zig");
+const int = @import("internals.zig");
 const monitor_impl = @import("monitor_impl.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
@@ -15,7 +15,7 @@ const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 const WindowError = @import("errors.zig").WindowError;
 const Win32Context = @import("global.zig").Win32Context;
-const MonitorStore = internals.MonitorStore;
+const Internals = int.Internals;
 const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
@@ -280,7 +280,7 @@ fn createPlatformWindow(
 
 /// Holds all the refrences we use to communitcate with the WidowContext.
 pub const WidowProps = struct {
-    monitors: *MonitorStore,
+    internals: *Internals,
     events_queue: *common.event.EventQueue,
 };
 
@@ -311,13 +311,13 @@ pub const WindowImpl = struct {
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
-        monitor_store: *MonitorStore,
+        internals: *Internals,
     ) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.widow = WidowProps{
             .events_queue = events_queue,
-            .monitors = monitor_store,
+            .internals = internals,
         };
         self.data = data.*;
         const styles = .{ windowStyles(&data.flags), windowExStyles(&data.flags) };
@@ -1153,7 +1153,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-        const new_icon = try internals.createIcon(pixels, width, height);
+        const new_icon = try int.createIcon(pixels, width, height);
         const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
             .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
         else blk: {
@@ -1178,7 +1178,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        const new_cursor = try internals.createCursor(pixels, width, height, xhot, yhot);
+        const new_cursor = try int.createCursor(pixels, width, height, xhot, yhot);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1187,7 +1187,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-        const new_cursor = try internals.createStandardCursor(cursor_shape);
+        const new_cursor = try int.createStandardCursor(cursor_shape);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {

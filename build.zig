@@ -33,10 +33,10 @@ pub fn build(b: *std.Build) !void {
 
     const example_step = b.step("example", "Compile example");
     const examples = [_][]const u8{
-        "simple_window",
+        // "simple_window",
         // "playing_with_inputs",
         // "cursor_and_icon",
-        // "xorg_basic",
+        "xorg_basic",
     };
     for (examples) |example_name| {
         const example = b.addExecutable(.{
@@ -63,22 +63,23 @@ fn isDisplayTargetValid(os_target: *const std.zig.CrossTarget, protocol_choise: 
 }
 
 fn detectDispalyTarget(os_target: *const std.zig.CrossTarget, allocator: std.mem.Allocator) DisplayProtocol {
-    const TYPE_X11: [*:0]const u8 = "x11";
-    const TYPE_Wayland: [*:0]const u8 = "wayland";
+    const SESSION_X11: [*:0]const u8 = "x11";
+    const SESSION_WAYLAND: [*:0]const u8 = "wayland";
 
     return switch (os_target.getOs().tag) {
         .windows => .Win32,
         .linux, .freebsd, .netbsd => unix: {
             // need to determine what display server is being used
-            const display_server_type = std.process.getEnvVarOwned(allocator, "XDG_SESSION_TYPE") catch @panic("Couldn't determine display server type\n");
-            defer allocator.free(display_server_type);
-            if (display_server_type.len == 0) {
+            const display_session_type = std.process.getEnvVarOwned(allocator, "XDG_SESSION_TYPE") catch
+                @panic("Couldn't determine display server type\n");
+            defer allocator.free(display_session_type);
+            if (display_session_type.len == 0) {
                 @panic("XDG_SESSION_TYPE env variable not set");
             }
 
-            if (std.mem.eql(u8, display_server_type, std.mem.span(TYPE_X11))) {
+            if (std.mem.eql(u8, display_session_type, std.mem.span(SESSION_X11))) {
                 break :unix .Xorg;
-            } else if (std.mem.eql(u8, display_server_type, std.mem.span(TYPE_Wayland))) {
+            } else if (std.mem.eql(u8, display_session_type, std.mem.span(SESSION_WAYLAND))) {
                 break :unix .Wayland;
             } else {
                 @panic("Unsupported unix display server");

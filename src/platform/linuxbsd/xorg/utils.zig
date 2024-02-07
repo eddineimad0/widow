@@ -2,7 +2,6 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const keymaps = @import("keymaps.zig");
 const maxInt = std.math.maxInt;
 const ScanCode = common.keyboard_and_mouse.ScanCode;
 
@@ -15,12 +14,12 @@ pub inline fn strCpy(src: [*:0]const u8, dst: [*]u8, count: usize) void {
     }
 }
 
-pub inline fn strLen(src: [*:0]const u8) usize {
+pub inline fn strZLen(src: [*:0]const u8) usize {
     return std.mem.len(src);
 }
 
 /// returns true if both strings are equals.
-pub inline fn strEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
+pub inline fn strZEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
@@ -79,8 +78,4 @@ pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
         .caps_lock = (state & libx11.LockMask != 0),
     };
     return mods;
-}
-
-pub fn keycodeToScancode(code: u8) ScanCode {
-    return keymaps.SCANCODE_LOOKUP_TABLE[code];
 }

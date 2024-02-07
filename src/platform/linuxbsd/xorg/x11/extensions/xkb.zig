@@ -1,3 +1,4 @@
+// TODO: char types => i8
 const types = @import("../types.zig");
 
 // Constants
@@ -83,6 +84,32 @@ pub const XkbAllXIClasses = 0x0500;
 pub const XkbAllXIIds = 0x0600;
 pub const XkbXINone = 0xff00;
 
+pub const XkbControlsMask = @as(c_ulong, 1) << 0;
+pub const XkbServerMapMask = @as(c_ulong, 1) << 1;
+pub const XkbIClientMapMask = @as(c_ulong, 1) << 2;
+pub const XkbIndicatorMapMask = @as(c_ulong, 1) << 3;
+pub const XkbNamesMask = @as(c_ulong, 1) << 4;
+pub const XkbCompatMapMask = @as(c_ulong, 1) << 5;
+pub const XkbGeometryMask = @as(c_ulong, 1) << 6;
+pub const XkbAllComponentsMask = 0x7f;
+
+pub const XkbKeycodesNameMask = 1 << 0;
+pub const XkbGeometryNameMask = 1 << 1;
+pub const XkbSymbolsNameMask = 1 << 2;
+pub const XkbPhysSymbolsNameMask = 1 << 3;
+pub const XkbTypesNameMask = 1 << 4;
+pub const XkbCompatNameMask = 1 << 5;
+pub const XkbKeyTypeNamesMask = 1 << 6;
+pub const XkbKTLevelNamesMask = 1 << 7;
+pub const XkbIndicatorNamesMask = 1 << 8;
+pub const XkbKeyNamesMask = 1 << 9;
+pub const XkbKeyAliasesMask = 1 << 10;
+pub const XkbVirtualModNamesMask = 1 << 11;
+pub const XkbGroupNamesMask = 1 << 12;
+pub const XkbRGNamesMask = 1 << 13;
+pub const XkbComponentNamesMask = 0x3f;
+pub const XkbAllNamesMask = 0x3fff;
+
 // Types
 pub const XkbAnyEvent = extern struct {
     //       int                type;        /* Xkb extension base event code */
@@ -101,6 +128,232 @@ pub const XkbAnyEvent = extern struct {
     time: types.Time,
     xkb_type: c_int,
     device: c_uint,
+};
+
+pub const XkbNewKeyboardNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    old_device: c_int,
+    min_key_code: c_int,
+    max_key_code: c_int,
+    old_min_key_code: c_int,
+    old_max_key_code: c_int,
+    changed: c_uint,
+    req_major: i8,
+    req_minor: i8,
+};
+
+pub const XkbMapNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed: c_uint,
+    flags: c_uint,
+    first_type: c_int,
+    num_types: c_int,
+    min_key_code: types.KeyCode,
+    max_key_code: types.KeyCode,
+    first_key_sym: types.KeyCode,
+    first_key_act: types.KeyCode,
+    first_key_bahavior: types.KeyCode,
+    first_key_explicit: types.KeyCode,
+    first_modmap_key: types.KeyCode,
+    first_vmodmap_key: types.KeyCode,
+    num_key_syms: c_int,
+    num_key_acts: c_int,
+    num_key_behaviors: c_int,
+    num_key_explicit: c_int,
+    num_modmap_keys: c_int,
+    num_vmodmap_keys: c_int,
+    vmods: c_uint,
+};
+
+pub const XkbStateNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed: c_uint,
+    group: c_int,
+    base_group: c_int,
+    latched_group: c_int,
+    locked_group: c_int,
+    mods: c_uint,
+    base_mods: c_uint,
+    latched_mods: c_uint,
+    locked_mods: c_uint,
+    compat_state: c_int,
+    grab_mods: u8,
+    compat_grab_mods: u8,
+    lookup_mods: u8,
+    compat_lookup_mods: u8,
+    ptr_buttons: c_int,
+    keycode: types.KeyCode,
+    event_type: i8,
+    req_major: i8,
+    req_minor: i8,
+};
+
+pub const XkbControlsNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed_ctrls: c_uint,
+    enabled_ctrls: c_uint,
+    enabled_ctrl_changes: c_uint,
+    num_groups: c_int,
+    keycode: types.KeyCode,
+    event_type: i8,
+    req_major: i8,
+    req_minor: i8,
+};
+
+pub const XkbIndicatorNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed: c_uint,
+    state: c_uint,
+};
+
+pub const XkbNamesNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed: c_uint,
+    first_type: c_int,
+    num_types: c_int,
+    first_lvl: c_int,
+    num_lvls: c_int,
+    num_aliases: c_int,
+    num_radio_groups: c_int,
+    changed_vmods: c_uint,
+    changed_groups: c_uint,
+    changed_indicators: c_uint,
+    first_key: c_int,
+    num_keys: c_int,
+};
+
+pub const XkbCompatMapNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    changed_groups: c_uint,
+    first_si: c_int,
+    num_si: c_int,
+    num_total_si: c_int,
+};
+
+pub const XkbBellNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    percent: c_int,
+    pitch: c_int,
+    duration: c_int,
+    bell_class: c_int,
+    bell_id: c_int,
+    name: types.Atom,
+    window: types.Window,
+    event_only: types.Bool,
+};
+
+pub const XkbActionMessageEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    keycode: types.KeyCode,
+    press: types.Bool,
+    key_event_follows: types.Bool,
+    group: c_int,
+    mods: c_uint,
+    message: [XkbActionMessageLength + 1]i8,
+};
+
+pub const XkbAccessXNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    detail: c_int,
+    keycode: c_int,
+    sk_delay: c_int,
+    debounce_delay: c_int,
+};
+
+pub const XkbExtensionDeviceNotifyEvent = extern struct {
+    type: c_int,
+    serial: c_ulong,
+    send_event: types.Bool,
+    display: ?*types.Display,
+    time: types.Time,
+    xkb_type: c_int,
+    device: c_int,
+    reason: c_uint,
+    supported: c_uint,
+    unsupported: c_uint,
+    first_btn: c_int,
+    num_btns: c_int,
+    leds_defined: c_uint,
+    led_state: c_uint,
+    led_class: c_int,
+    led_id: c_int,
+};
+
+pub const XkbEvent = extern union {
+    type: c_int,
+    any: XkbAnyEvent,
+    state: XkbStateNotifyEvent,
+    map: XkbMapNotifyEvent,
+    ctrls: XkbControlsNotifyEvent,
+    indicators: XkbIndicatorNotifyEvent,
+    bell: XkbBellNotifyEvent,
+    accessx: XkbAccessXNotifyEvent,
+    names: XkbNamesNotifyEvent,
+    compat: XkbCompatMapNotifyEvent,
+    message: XkbActionMessageEvent,
+    device: XkbExtensionDeviceNotifyEvent,
+    new_kbd: XkbNewKeyboardNotifyEvent,
+    core: types.XEvent,
 };
 
 pub const XkbStateRec = extern struct {
@@ -545,8 +798,8 @@ pub const XkbNamesRec = extern struct {
     vmods: [XkbNumVirtualMods]types.Atom,
     indicators: [XkbNumIndicators]types.Atom,
     groups: [XkbNumKbdGroups]types.Atom,
-    keys: ?*XkbKeyNameRec,
-    key_aliases: ?*XkbKeyAliasRec,
+    keys: ?[*]XkbKeyNameRec,
+    key_aliases: ?[*]XkbKeyAliasRec,
     num_keys: u8,
     num_key_aliases: u8,
     num_rg: c_ushort,
@@ -975,22 +1228,32 @@ pub const XkbGetNamesProc = *const fn (
     which: c_uint,
     Xkb: ?*XkbDescRec,
 ) callconv(.C) types.Status;
+pub const XkbGetKeyboardProc = *const fn (
+    display: ?*types.Display,
+    which: c_uint,
+    device_spec: c_uint,
+) callconv(.C) ?*XkbDescRec;
+pub const XkbFreeKeyboardProc = *const fn (
+    xkb: ?*XkbDescRec,
+    which: c_uint,
+    free_all: types.Bool,
+) callconv(.C) void;
 pub const XkbGetMapProc = *const fn (
     display: ?*types.Display,
     which: c_uint,
     device_spec: c_uint,
 ) callconv(.C) ?*XkbDescRec;
+pub const XkbFreeClientMapProc = *const fn (
+    xkb: ?*XkbDescRec,
+    which: c_uint,
+    free_all: types.Bool,
+) callconv(.C) void;
 pub const XkbFreeNamesProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
     free_map: types.Bool,
 ) callconv(.C) void;
 pub const XkbAllocKeyboardProc = *const fn () callconv(.C) ?*XkbDescRec;
-pub const XkbFreeKeyboardProc = *const fn (
-    Xkb: ?*XkbDescRec,
-    which: c_uint,
-    free_all: types.Bool,
-) callconv(.C) void;
 pub const XkbKeycodeToKeysymProc = *const fn (
     display: ?*types.Display,
     kc: types.KeyCode,

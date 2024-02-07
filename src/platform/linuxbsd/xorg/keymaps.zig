@@ -1,11 +1,133 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
+const X11Driver = @import("driver.zig").X11Driver;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
 const ScanCode = common.keyboard_and_mouse.ScanCode;
 const KeyCode = common.keyboard_and_mouse.KeyCode;
 
-pub const SCANCODE_LOOKUP_TABLE = [256]ScanCode{
+pub const KEYCODE_MAP_SIZE = 256;
+
+const NameCodePair = std.meta.Tuple(&.{ KeyCode, [*:0]const u8 });
+
+const KEYNAME_TO_KEYCODE_MAP = [_]NameCodePair{
+    .{ KeyCode.Grave, "TLDE" },
+    .{ KeyCode.Num1, "AE01" },
+    .{ KeyCode.Num2, "AE02" },
+    .{ KeyCode.Num3, "AE03" },
+    .{ KeyCode.Num4, "AE04" },
+    .{ KeyCode.Num5, "AE05" },
+    .{ KeyCode.Num6, "AE06" },
+    .{ KeyCode.Num7, "AE07" },
+    .{ KeyCode.Num8, "AE08" },
+    .{ KeyCode.Num9, "AE09" },
+    .{ KeyCode.Num0, "AE10" },
+    .{ KeyCode.Hyphen, "AE11" },
+    .{ KeyCode.Equal, "AE12" },
+    .{ KeyCode.Q, "AD01" },
+    .{ KeyCode.W, "AD02" },
+    .{ KeyCode.E, "AD03" },
+    .{ KeyCode.R, "AD04" },
+    .{ KeyCode.T, "AD05" },
+    .{ KeyCode.Y, "AD06" },
+    .{ KeyCode.U, "AD07" },
+    .{ KeyCode.I, "AD08" },
+    .{ KeyCode.O, "AD09" },
+    .{ KeyCode.P, "AD10" },
+    .{ KeyCode.LBracket, "AD11" },
+    .{ KeyCode.RBracket, "AD12" },
+    .{ KeyCode.A, "AC01" },
+    .{ KeyCode.S, "AC02" },
+    .{ KeyCode.D, "AC03" },
+    .{ KeyCode.F, "AC04" },
+    .{ KeyCode.G, "AC05" },
+    .{ KeyCode.H, "AC06" },
+    .{ KeyCode.J, "AC07" },
+    .{ KeyCode.K, "AC08" },
+    .{ KeyCode.L, "AC09" },
+    .{ KeyCode.Semicolon, "AC10" },
+    .{ KeyCode.Quote, "AC11" },
+    .{ KeyCode.Z, "AB01" },
+    .{ KeyCode.X, "AB02" },
+    .{ KeyCode.C, "AB03" },
+    .{ KeyCode.V, "AB04" },
+    .{ KeyCode.B, "AB05" },
+    .{ KeyCode.N, "AB06" },
+    .{ KeyCode.M, "AB07" },
+    .{ KeyCode.Comma, "AB08" },
+    .{ KeyCode.Period, "AB09" },
+    .{ KeyCode.Slash, "AB10" },
+    .{ KeyCode.Backslash, "BKSL" },
+    .{ KeyCode.Space, "SPCE" },
+    .{ KeyCode.Escape, "ESC" },
+    .{ KeyCode.Return, "RTRN" },
+    .{ KeyCode.Tab, "TAB" },
+    .{ KeyCode.Backspace, "BKSP" },
+    .{ KeyCode.Insert, "INS" },
+    .{ KeyCode.Delete, "DELE" },
+    .{ KeyCode.Right, "RGHT" },
+    .{ KeyCode.Left, "LEFT" },
+    .{ KeyCode.Down, "DOWN" },
+    .{ KeyCode.Up, "UP" },
+    .{ KeyCode.PageUp, "PGUP" },
+    .{ KeyCode.PageDown, "PGDN" },
+    .{ KeyCode.Home, "HOME" },
+    .{ KeyCode.End, "END" },
+    .{ KeyCode.CapsLock, "CAPS" },
+    .{ KeyCode.ScrollLock, "SCLK" },
+    .{ KeyCode.NumLock, "NMLK" },
+    .{ KeyCode.PrintScreen, "PRSC" },
+    .{ KeyCode.Pause, "PAUS" },
+    .{ KeyCode.F1, "FK01" },
+    .{ KeyCode.F2, "FK02" },
+    .{ KeyCode.F3, "FK03" },
+    .{ KeyCode.F4, "FK04" },
+    .{ KeyCode.F5, "FK05" },
+    .{ KeyCode.F6, "FK06" },
+    .{ KeyCode.F7, "FK07" },
+    .{ KeyCode.F8, "FK08" },
+    .{ KeyCode.F9, "FK09" },
+    .{ KeyCode.F10, "FK10" },
+    .{ KeyCode.F11, "FK11" },
+    .{ KeyCode.F12, "FK12" },
+    .{ KeyCode.Numpad0, "KP0" },
+    .{ KeyCode.Numpad1, "KP1" },
+    .{ KeyCode.Numpad2, "KP2" },
+    .{ KeyCode.Numpad3, "KP3" },
+    .{ KeyCode.Numpad4, "KP4" },
+    .{ KeyCode.Numpad5, "KP5" },
+    .{ KeyCode.Numpad6, "KP6" },
+    .{ KeyCode.Numpad7, "KP7" },
+    .{ KeyCode.Numpad8, "KP8" },
+    .{ KeyCode.Numpad9, "KP9" },
+    .{ KeyCode.Period, "KPDL" },
+    .{ KeyCode.Divide, "KPDV" },
+    .{ KeyCode.Multiply, "KPMU" },
+    .{ KeyCode.Subtract, "KPSU" },
+    .{ KeyCode.Add, "KPAD" },
+    .{ KeyCode.Return, "KPEN" },
+    .{ KeyCode.Equal, "KPEQ" },
+    .{ KeyCode.Shift, "LFSH" },
+    .{ KeyCode.Control, "LCTL" },
+    .{ KeyCode.Alt, "LALT" },
+    .{ KeyCode.Meta, "LWIN" },
+    .{ KeyCode.Shift, "RTSH" },
+    .{ KeyCode.Control, "RCTL" },
+    .{ KeyCode.Alt, "LVL3" },
+    .{ KeyCode.Alt, "RALT" },
+    .{ KeyCode.Alt, "MDSW" },
+    .{ KeyCode.Meta, "RWIN" },
+    .{ KeyCode.Menu, "MENU" },
+    .{ KeyCode.VolumeUp, "VOL+" },
+    .{ KeyCode.VolumeDown, "VOL-" },
+    .{ KeyCode.VolumeMute, "MUTE" },
+    // .{ KeyCode.NextTrack, "" },
+    // .{ KeyCode.PrevTrack, "" },
+    // .{ KeyCode.PlayPause, "" },
+};
+
+const SCANCODE_LOOKUP_TABLE = [256]ScanCode{
     // the first 8 are never produced by the xserver.
     ScanCode.Unknown,
     ScanCode.Unknown,
@@ -265,7 +387,7 @@ pub const SCANCODE_LOOKUP_TABLE = [256]ScanCode{
     ScanCode.Unknown,
 };
 
-pub fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
+fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
     return switch (keysym) {
         libx11.XK_Escape => KeyCode.Escape,
         libx11.XK_Tab => KeyCode.Tab,
@@ -275,7 +397,6 @@ pub fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
         libx11.XK_Delete => KeyCode.Delete,
         libx11.XK_Clear => KeyCode.Delete,
         libx11.XK_Pause => KeyCode.Pause,
-        // libx11.XK_Print => KeyCode.PRINT,
         libx11.XK_Home => KeyCode.Home,
         libx11.XK_End => KeyCode.End,
         libx11.XK_Left => KeyCode.Left,
@@ -303,7 +424,6 @@ pub fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
         libx11.XK_KP_Space => KeyCode.Space,
         libx11.XK_KP_Tab => KeyCode.Tab,
         libx11.XK_KP_Enter => KeyCode.Return,
-        // libx11.XK_Begin => KeyCode.CLEAR,
         libx11.XK_KP_Equal => KeyCode.Equal,
         libx11.XK_KP_Separator => KeyCode.Comma,
         libx11.XK_KP_Decimal => KeyCode.Period,
@@ -344,30 +464,6 @@ pub fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
         libx11.XK_F10 => KeyCode.F10,
         libx11.XK_F11 => KeyCode.F11,
         libx11.XK_F12 => KeyCode.F12,
-        // libx11.XK_F13 => KeyCode.F13,
-        // libx11.XK_F14 => KeyCode.F14,
-        // libx11.XK_F15 => KeyCode.F15,
-        // libx11.XK_F16 => KeyCode.F16,
-        // libx11.XK_F17 => KeyCode.F17,
-        // libx11.XK_F18 => KeyCode.F18,
-        // libx11.XK_F19 => KeyCode.F19,
-        // libx11.XK_F20 => KeyCode.F20,
-        // libx11.XK_F21 => KeyCode.F21,
-        // libx11.XK_F22 => KeyCode.F22,
-        // libx11.XK_F23 => KeyCode.F23,
-        // libx11.XK_F24 => KeyCode.F24,
-        // libx11.XK_F25 => KeyCode.F25,
-        // libx11.XK_F26 => KeyCode.F26,
-        // libx11.XK_F27 => KeyCode.F27,
-        // libx11.XK_F28 => KeyCode.F28,
-        // libx11.XK_F29 => KeyCode.F29,
-        // libx11.XK_F30 => KeyCode.F30,
-        // libx11.XK_F31 => KeyCode.F31,
-        // libx11.XK_F32 => KeyCode.F32,
-        // libx11.XK_F33 => KeyCode.F33,
-        // libx11.XK_F34 => KeyCode.F34,
-        // libx11.XK_F35 => KeyCode.F35,
-        // libx11.XK_yen => KeyCode.YEN,
         libx11.XF86XK_AudioLowerVolume => KeyCode.VolumeDown,
         libx11.XF86XK_AudioMute => KeyCode.VolumeMute,
         libx11.XF86XK_AudioRaiseVolume => KeyCode.VolumeUp,
@@ -426,6 +522,15 @@ pub fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
         libx11.XK_grave => KeyCode.Grave,
         else => KeyCode.Unknown,
     };
+}
+
+fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
+    for (KEYNAME_TO_KEYCODE_MAP) |pair| {
+        if (std.mem.eql(u8, name, std.mem.span(pair[1]))) {
+            return pair[0];
+        }
+    }
+    return KeyCode.Unknown;
 }
 
 pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Allocator.Error!void {
@@ -1263,4 +1368,71 @@ pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Al
     // xkeysym_unicode_mapping[0xFFB8] = 0x0038 ;
     // xkeysym_unicode_mapping[0xFFB9] = 0x0039 ;
     // xkeysym_unicode_mapping[0xFFBD] = '=';
+}
+
+/// Initialize the keysym to keycode map used when translating
+/// key events to report keycodes.
+pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
+    // insight taken from glfw.
+    std.debug.assert(keycode_lookup_table.len >= KEYCODE_MAP_SIZE);
+
+    @memset(keycode_lookup_table, KeyCode.Unknown);
+    const x11driver = X11Driver.singleton();
+    var min_scancode: c_int = 0;
+    var max_scancode: c_int = 0;
+    if (x11driver.extensions.xkb.is_available) {
+        const kbd_desc = libx11.XkbGetMap(
+            x11driver.handles.xdisplay,
+            0,
+            x11ext.XkbUseCoreKbd,
+        );
+        if (kbd_desc) |desc| {
+            defer libx11.XkbFreeKeyboard(desc, 0, libx11.True);
+            _ = libx11.XkbGetNames(
+                x11driver.handles.xdisplay,
+                x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
+                desc,
+            );
+            min_scancode = desc.min_key_code;
+            max_scancode = desc.max_key_code;
+            defer libx11.XkbFreeNames(desc, x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask, libx11.True);
+            for (desc.min_key_code..(@as(u32, @intCast(desc.max_key_code)) + 1)) |i| {
+                keycode_lookup_table[i] = mapXKeyNameToKeyCode(&desc.names.?.keys.?[i].name);
+            }
+        }
+    } else {
+        _ = libx11.XDisplayKeycodes(x11driver.handles.xdisplay, &min_scancode, &max_scancode);
+    }
+    var keysym_size: c_int = 0;
+    const keysym_array = libx11.XGetKeyboardMapping(
+        x11driver.handles.xdisplay,
+        @intCast(min_scancode),
+        max_scancode - min_scancode + 1,
+        &keysym_size,
+    );
+    var min: u32 = @intCast(min_scancode);
+    var max: u32 = @intCast(max_scancode);
+    var size: u32 = @intCast(keysym_size);
+    if (keysym_array) |array| {
+        defer _ = libx11.XFree(array);
+        for (min..(max + 1)) |scancode| {
+            if (keycode_lookup_table[scancode] != KeyCode.Unknown) {
+                // don't modify what we already mapped.
+                continue;
+            }
+            const offset = (scancode - min) * size;
+            keycode_lookup_table[scancode] =
+                mapXKeySymToWidowKeyCode(array[offset]);
+
+            if (keycode_lookup_table[scancode] == KeyCode.Unknown and size > 1) {
+                // try again.
+                keycode_lookup_table[scancode] =
+                    mapXKeySymToWidowKeyCode(array[offset + 1]);
+            }
+        }
+    }
+}
+
+pub fn keycodeToScancode(code: u8) ScanCode {
+    return SCANCODE_LOOKUP_TABLE[code];
 }

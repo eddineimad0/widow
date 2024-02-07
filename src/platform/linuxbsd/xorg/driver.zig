@@ -3,10 +3,7 @@ const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
-const keymaps = @import("keymaps.zig");
 const posix = common.posix;
-const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const KeyCode = common.keyboard_and_mouse.KeyCode;
 
 pub const XConnectionError = error{
     ConnectionFailed,
@@ -23,7 +20,6 @@ const X11Handles = struct {
     xinerama: ?*anyopaque,
 };
 
-// XRandRInterf
 const XRRInterface = struct {
     is_v1point3: bool,
     XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
@@ -35,10 +31,13 @@ const XRRInterface = struct {
     XRRFreeOutputInfo: x11ext.XRRFreeOutputInfoProc,
     XRRGetOutputPrimary: x11ext.XRRGetOutputPrimaryProc,
     XRRQueryVersion: x11ext.XRRQueryVersionProc,
+    XRRQueryExtension: x11ext.XRRQueryExtensionProc,
     XRRSetCrtcConfig: x11ext.XRRSetCrtcConfigProc,
+    XRRSelectInput: x11ext.XRRSelectInputProc,
+    XRRUpdateConfiguration: x11ext.XRRUpdateConfigurationProc,
+    event_code: c_int,
 };
 
-// XineramaIntef
 const XrmInterface = struct {
     is_active: bool,
     IsActive: x11ext.XineramaIsActiveProc,
@@ -46,13 +45,9 @@ const XrmInterface = struct {
 };
 
 const XkbInterface = struct {
-    pub const KEYCODE_MAP_SIZE = 256;
-    pub const UNICODE_MAP_SIZE = 0x400;
     is_available: bool,
     is_auto_repeat_detectable: bool,
-    keycode_lookup_table: [KEYCODE_MAP_SIZE]KeyCode,
-    // xkeysym_unicode_mapping: [UNICODE_MAP_SIZE]u32,
-    xkeysym_unicode_mapping: HashMapU32,
+    event_code: c_int,
 };
 
 const X11Extensions = struct {
@@ -156,28 +151,35 @@ pub const X11Driver = struct {
             .xrandr = null,
             .xinerama = null,
         },
-        .extensions = X11Extensions{ .xrandr = XRRInterface{
-            .is_v1point3 = false,
-            .XRRGetCrtcInfo = undefined,
-            .XRRFreeCrtcInfo = undefined,
-            .XRRGetOutputInfo = undefined,
-            .XRRFreeOutputInfo = undefined,
-            .XRRGetOutputPrimary = undefined,
-            .XRRGetScreenResourcesCurrent = undefined,
-            .XRRGetScreenResources = undefined,
-            .XRRFreeScreenResources = undefined,
-            .XRRQueryVersion = undefined,
-            .XRRSetCrtcConfig = undefined,
-        }, .xinerama = XrmInterface{
-            .is_active = false,
-            .IsActive = undefined,
-            .QueryScreens = undefined,
-        }, .xkb = XkbInterface{
-            .is_available = false,
-            .is_auto_repeat_detectable = false,
-            .keycode_lookup_table = undefined,
-            .xkeysym_unicode_mapping = HashMapU32.init(std.heap.c_allocator),
-        } },
+        .extensions = X11Extensions{
+            .xrandr = XRRInterface{
+                .is_v1point3 = false,
+                .XRRGetCrtcInfo = undefined,
+                .XRRFreeCrtcInfo = undefined,
+                .XRRGetOutputInfo = undefined,
+                .XRRFreeOutputInfo = undefined,
+                .XRRGetOutputPrimary = undefined,
+                .XRRGetScreenResourcesCurrent = undefined,
+                .XRRGetScreenResources = undefined,
+                .XRRFreeScreenResources = undefined,
+                .XRRQueryVersion = undefined,
+                .XRRSetCrtcConfig = undefined,
+                .XRRUpdateConfiguration = undefined,
+                .XRRSelectInput = undefined,
+                .XRRQueryExtension = undefined,
+                .event_code = 0,
+            },
+            .xinerama = XrmInterface{
+                .is_active = false,
+                .IsActive = undefined,
+                .QueryScreens = undefined,
+            },
+            .xkb = XkbInterface{
+                .is_available = false,
+                .is_auto_repeat_detectable = false,
+                .event_code = 0,
+            },
+        },
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
@@ -191,7 +193,7 @@ pub const X11Driver = struct {
     pub fn initSingleton(
         res_name: [*:0]const u8,
         res_class: [*:0]const u8,
-    ) (XConnectionError || std.mem.Allocator.Error)!void {
+    ) XConnectionError!void {
         @setCold(true);
 
         Self.g_init_mutex.lock();
@@ -214,8 +216,6 @@ pub const X11Driver = struct {
 
             g_instance.ewmh = std.mem.zeroes(@TypeOf(g_instance.ewmh));
             g_instance.initEWMH();
-            g_instance.initKeyCodeTable();
-            try keymaps.initUnicodeKeysymMapping(&g_instance.extensions.xkb.xkeysym_unicode_mapping);
 
             g_instance.handles.xcontext = libx11.XUniqueContext();
             if (g_instance.handles.xcontext == 0) {
@@ -239,6 +239,8 @@ pub const X11Driver = struct {
     }
 
     fn loadXExtensions(self: *Self) XConnectionError!void {
+        var base_event_code: c_int = undefined;
+        var base_error_code: c_int = undefined;
         self.handles.xrandr = posix.loadPosixModule(libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_INDEX]);
         if (self.handles.xrandr) |handle| {
             self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
@@ -268,13 +270,34 @@ pub const X11Driver = struct {
             self.extensions.xrandr.XRRQueryVersion = @ptrCast(
                 posix.moduleSymbol(handle, "XRRQueryVersion"),
             );
+            self.extensions.xrandr.XRRQueryExtension = @ptrCast(
+                posix.moduleSymbol(handle, "XRRQueryExtension"),
+            );
             self.extensions.xrandr.XRRSetCrtcConfig = @ptrCast(
                 posix.moduleSymbol(handle, "XRRSetCrtcConfig"),
+            );
+            self.extensions.xrandr.XRRSelectInput = @ptrCast(
+                posix.moduleSymbol(handle, "XRRSelectInput"),
+            );
+            self.extensions.xrandr.XRRUpdateConfiguration = @ptrCast(
+                posix.moduleSymbol(handle, "XRRUpdateConfiguration"),
             );
             var minor: i32 = 0;
             var major: i32 = 0;
             _ = self.extensions.xrandr.XRRQueryVersion(self.handles.xdisplay, &major, &minor);
             self.extensions.xrandr.is_v1point3 = (major >= 1 and minor >= 3);
+            _ = self.extensions.xrandr.XRRQueryExtension(
+                self.handles.xdisplay,
+                &base_event_code,
+                &base_error_code,
+            );
+            self.extensions.xrandr.event_code = base_event_code;
+            // select events to receive.
+            self.extensions.xrandr.XRRSelectInput(
+                self.handles.xdisplay,
+                self.handles.root_window,
+                x11ext.RRScreenChangeNotifyMask,
+            );
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
             // Error out since a lot functionalties rely on xrandr.
@@ -297,8 +320,6 @@ pub const X11Driver = struct {
         var xkb_major: c_int = 1;
         var xkb_minor: c_int = 0;
         var opcode: c_int = undefined;
-        var base_event_code: c_int = undefined;
-        var base_error_code: c_int = undefined;
         self.extensions.xkb.is_available = libx11.XkbQueryExtension(
             self.handles.xdisplay,
             &opcode,
@@ -309,6 +330,7 @@ pub const X11Driver = struct {
         ) == libx11.True;
 
         if (self.extensions.xkb.is_available) {
+            self.extensions.xkb.event_code = base_event_code;
             // enable key auto repeat.
             var auto_repeat_support: libx11.Bool = libx11.False;
             _ = libx11.XkbGetDetectableAutoRepeat(self.handles.xdisplay, &auto_repeat_support);
@@ -316,8 +338,14 @@ pub const X11Driver = struct {
             if (self.extensions.xkb.is_auto_repeat_detectable) {
                 _ = libx11.XkbSetDetectableAutoRepeat(self.handles.xdisplay, libx11.True, null);
             }
-
-            //TODO: select events to receive.
+            // select events to receive.
+            _ = libx11.XkbSelectEventDetails(
+                self.handles.xdisplay,
+                x11ext.XkbUseCoreKbd,
+                x11ext.XkbStateNotify,
+                x11ext.XkbAllStateComponentsMask,
+                x11ext.XkbGroupStateMask,
+            );
         }
     }
 
@@ -351,7 +379,7 @@ pub const X11Driver = struct {
             var value: libx11.XrmValue = undefined;
             _ = libx11.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &value_type, &value);
             if (value_type) |t| {
-                if (utils.strEquals(t, "String")) {
+                if (utils.strZEquals(t, "String")) {
                     var src: []const u8 = undefined;
                     src.len = value.size;
                     src.ptr = value.addr.?;
@@ -376,38 +404,6 @@ pub const X11Driver = struct {
             Self.last_error_handler = libx11.XSetErrorHandler(h);
         } else {
             _ = libx11.XSetErrorHandler(Self.last_error_handler);
-        }
-    }
-
-    pub fn initKeyCodeTable(self: *Self) void {
-        @memset(&self.extensions.xkb.keycode_lookup_table, KeyCode.Unknown);
-        var min_scancode: c_int = 0;
-        var max_scancode: c_int = 0;
-        var keysym_size: c_int = 0;
-        _ = libx11.XDisplayKeycodes(self.handles.xdisplay, &min_scancode, &max_scancode);
-        const keysym_array = libx11.XGetKeyboardMapping(
-            self.handles.xdisplay,
-            @intCast(min_scancode),
-            max_scancode - min_scancode + 1,
-            &keysym_size,
-        );
-        var min: u32 = @intCast(min_scancode);
-        var max: u32 = @intCast(max_scancode);
-        var size: u32 = @intCast(keysym_size);
-        if (keysym_array) |array| {
-            defer _ = libx11.XFree(array);
-            for (min..(max + 1)) |scancode| {
-                const offset = (scancode - min) * size;
-                // TODO: alphabet isn't being maped.
-                self.extensions.xkb.keycode_lookup_table[scancode] =
-                    keymaps.mapXKeySymToWidowKeyCode(array[offset]);
-
-                if (self.extensions.xkb.keycode_lookup_table[scancode] == KeyCode.Unknown and size > 1) {
-                    // try again.
-                    self.extensions.xkb.keycode_lookup_table[scancode] =
-                        keymaps.mapXKeySymToWidowKeyCode(array[offset + 1]);
-                }
-            }
         }
     }
 
@@ -599,29 +595,6 @@ pub const X11Driver = struct {
             std.debug.assert(data_return == null);
         }
         return data_return;
-    }
-
-    pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
-        return self.extensions.xkb.keycode_lookup_table[xkeycode];
-    }
-
-    pub inline fn lookupKeyCharacter(self: *const Self, xkeysym: libx11.KeySym) ?u32 {
-        // Latin-1
-        if ((xkeysym <= 0xFF and xkeysym >= 0xA0) or (xkeysym >= 0x20 and xkeysym <= 0x7E)) {
-            return @truncate(xkeysym);
-        }
-
-        // Latin-1 from Keypad.
-        if (xkeysym == 0xFFBD or (xkeysym <= 0xFFB9 and xkeysym >= 0xFFAA)) {
-            return @truncate(xkeysym - 0xFF80);
-        }
-
-        // Unicode (may be present).
-        if ((xkeysym & 0xFF000000) == 0x01000000) {
-            return @truncate(xkeysym & 0x00FFFFFF);
-        }
-
-        return self.extensions.xkb.xkeysym_unicode_mapping.get(@truncate(xkeysym));
     }
 
     // Enfoce readonly.

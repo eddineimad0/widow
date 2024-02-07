@@ -278,10 +278,12 @@ pub const dyn_api = struct {
     pub var XkbFreeNames: xkb.XkbFreeNamesProc = undefined;
     pub var XkbGetState: xkb.XkbGetStateProc = undefined;
     pub var XkbGetMap: xkb.XkbGetMapProc = undefined;
+    pub var XkbFreeClientMap: xkb.XkbFreeClientMapProc = undefined;
     pub var XkbKeycodeToKeysym: xkb.XkbKeycodeToKeysymProc = undefined;
     pub var XkbAllocKeyboard: xkb.XkbAllocKeyboardProc = undefined;
     pub var XkbFreeKeyboard: xkb.XkbFreeKeyboardProc = undefined;
     pub var XkbSelectEventDetails: xkb.XkbSelectEventDetailsProc = undefined;
+    pub var XkbGetKeyboard: xkb.XkbGetKeyboardProc = undefined;
     // keyboard
     pub var XDisplayKeycodes: XDisplayKeycodesProc = undefined;
     pub var XGetKeyboardMapping: XGetKeyboardMappingProc = undefined;
