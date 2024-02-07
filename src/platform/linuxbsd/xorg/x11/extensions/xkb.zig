@@ -84,6 +84,32 @@ pub const XkbAllXIClasses = 0x0500;
 pub const XkbAllXIIds = 0x0600;
 pub const XkbXINone = 0xff00;
 
+pub const XkbControlsMask = @as(c_ulong, 1) << 0;
+pub const XkbServerMapMask = @as(c_ulong, 1) << 1;
+pub const XkbIClientMapMask = @as(c_ulong, 1) << 2;
+pub const XkbIndicatorMapMask = @as(c_ulong, 1) << 3;
+pub const XkbNamesMask = @as(c_ulong, 1) << 4;
+pub const XkbCompatMapMask = @as(c_ulong, 1) << 5;
+pub const XkbGeometryMask = @as(c_ulong, 1) << 6;
+pub const XkbAllComponentsMask = 0x7f;
+
+pub const XkbKeycodesNameMask = 1 << 0;
+pub const XkbGeometryNameMask = 1 << 1;
+pub const XkbSymbolsNameMask = 1 << 2;
+pub const XkbPhysSymbolsNameMask = 1 << 3;
+pub const XkbTypesNameMask = 1 << 4;
+pub const XkbCompatNameMask = 1 << 5;
+pub const XkbKeyTypeNamesMask = 1 << 6;
+pub const XkbKTLevelNamesMask = 1 << 7;
+pub const XkbIndicatorNamesMask = 1 << 8;
+pub const XkbKeyNamesMask = 1 << 9;
+pub const XkbKeyAliasesMask = 1 << 10;
+pub const XkbVirtualModNamesMask = 1 << 11;
+pub const XkbGroupNamesMask = 1 << 12;
+pub const XkbRGNamesMask = 1 << 13;
+pub const XkbComponentNamesMask = 0x3f;
+pub const XkbAllNamesMask = 0x3fff;
+
 // Types
 pub const XkbAnyEvent = extern struct {
     //       int                type;        /* Xkb extension base event code */
@@ -772,8 +798,8 @@ pub const XkbNamesRec = extern struct {
     vmods: [XkbNumVirtualMods]types.Atom,
     indicators: [XkbNumIndicators]types.Atom,
     groups: [XkbNumKbdGroups]types.Atom,
-    keys: ?*XkbKeyNameRec,
-    key_aliases: ?*XkbKeyAliasRec,
+    keys: ?[*]XkbKeyNameRec,
+    key_aliases: ?[*]XkbKeyAliasRec,
     num_keys: u8,
     num_key_aliases: u8,
     num_rg: c_ushort,
@@ -1202,22 +1228,32 @@ pub const XkbGetNamesProc = *const fn (
     which: c_uint,
     Xkb: ?*XkbDescRec,
 ) callconv(.C) types.Status;
+pub const XkbGetKeyboardProc = *const fn (
+    display: ?*types.Display,
+    which: c_uint,
+    device_spec: c_uint,
+) callconv(.C) ?*XkbDescRec;
+pub const XkbFreeKeyboardProc = *const fn (
+    xkb: ?*XkbDescRec,
+    which: c_uint,
+    free_all: types.Bool,
+) callconv(.C) void;
 pub const XkbGetMapProc = *const fn (
     display: ?*types.Display,
     which: c_uint,
     device_spec: c_uint,
 ) callconv(.C) ?*XkbDescRec;
+pub const XkbFreeClientMapProc = *const fn (
+    xkb: ?*XkbDescRec,
+    which: c_uint,
+    free_all: types.Bool,
+) callconv(.C) void;
 pub const XkbFreeNamesProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
     free_map: types.Bool,
 ) callconv(.C) void;
 pub const XkbAllocKeyboardProc = *const fn () callconv(.C) ?*XkbDescRec;
-pub const XkbFreeKeyboardProc = *const fn (
-    Xkb: ?*XkbDescRec,
-    which: c_uint,
-    free_all: types.Bool,
-) callconv(.C) void;
 pub const XkbKeycodeToKeysymProc = *const fn (
     display: ?*types.Display,
     kc: types.KeyCode,

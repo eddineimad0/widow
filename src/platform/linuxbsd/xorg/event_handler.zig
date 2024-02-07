@@ -3,6 +3,7 @@ const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
+const keymaps = @import("keymaps.zig");
 const keyboard_and_mouse = common.keyboard_and_mouse;
 const X11Driver = @import("driver.zig").X11Driver;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
@@ -138,7 +139,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             var event = common.event.createKeyboardEvent(
                 window.data.id,
                 window.widow.internals.lookupKeyCode(@intCast(ev.keycode)),
-                utils.keycodeToScancode(@intCast(ev.keycode)),
+                keymaps.keycodeToScancode(@intCast(ev.keycode)),
                 keyboard_and_mouse.KeyState.Pressed,
                 mods,
             );
@@ -169,20 +170,34 @@ fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
     switch (ev.any.xkb_type) {
         x11ext.XkbStateNotify => {
             std.debug.print("New group:{}\n", .{ev.state.group});
+            //TODO: keycode map update.
         },
         else => {},
     }
+}
+
+fn handleXrandrScreenChange(ev: *const libx11.XEvent, helper_data: *HelperData) void {
+    _ = helper_data;
+    if (common.LOG_PLATFORM_EVENTS) {
+        std.log.info("window: #hidden recieved RRScreenChangeNotify\n", .{});
+    }
+    const x11driver = X11Driver.singleton();
+    _ = x11driver.extensions.xrandr.XRRUpdateConfiguration(@constCast(ev));
+    // TODO: refresh the monitor store data.
+    // helper_data.monitor_store_ptr.?.
 }
 
 pub fn handleHelperEvent(ev: *const libx11.XEvent, helper_window: libx11.Window) void {
     const x11driver = X11Driver.singleton();
     const context_ptr = x11driver.findInXContext(helper_window);
     if (context_ptr == null) {
-        std.log.err("helper window has no corresponding data in Xcontext\n", .{});
+        std.log.err("helper window has no corresponding data in Xcontext, this shouldn't happen.\n", .{});
         @panic("Unexpected null pointer.");
     }
     const helper_data: *HelperData = @ptrCast(@alignCast(context_ptr.?));
-    if (ev.type == x11driver.extensions.xkb.event_code) {
+    if (ev.type == x11driver.extensions.xrandr.event_code + x11ext.RRScreenChangeNotify) {
+        handleXrandrScreenChange(ev, helper_data);
+    } else if (x11driver.extensions.xkb.is_available and ev.type == x11driver.extensions.xkb.event_code) {
         handleXkbEvent(@ptrCast(ev), helper_data);
     }
 }

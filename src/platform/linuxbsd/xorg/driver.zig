@@ -31,7 +31,11 @@ const XRRInterface = struct {
     XRRFreeOutputInfo: x11ext.XRRFreeOutputInfoProc,
     XRRGetOutputPrimary: x11ext.XRRGetOutputPrimaryProc,
     XRRQueryVersion: x11ext.XRRQueryVersionProc,
+    XRRQueryExtension: x11ext.XRRQueryExtensionProc,
     XRRSetCrtcConfig: x11ext.XRRSetCrtcConfigProc,
+    XRRSelectInput: x11ext.XRRSelectInputProc,
+    XRRUpdateConfiguration: x11ext.XRRUpdateConfigurationProc,
+    event_code: c_int,
 };
 
 const XrmInterface = struct {
@@ -147,27 +151,35 @@ pub const X11Driver = struct {
             .xrandr = null,
             .xinerama = null,
         },
-        .extensions = X11Extensions{ .xrandr = XRRInterface{
-            .is_v1point3 = false,
-            .XRRGetCrtcInfo = undefined,
-            .XRRFreeCrtcInfo = undefined,
-            .XRRGetOutputInfo = undefined,
-            .XRRFreeOutputInfo = undefined,
-            .XRRGetOutputPrimary = undefined,
-            .XRRGetScreenResourcesCurrent = undefined,
-            .XRRGetScreenResources = undefined,
-            .XRRFreeScreenResources = undefined,
-            .XRRQueryVersion = undefined,
-            .XRRSetCrtcConfig = undefined,
-        }, .xinerama = XrmInterface{
-            .is_active = false,
-            .IsActive = undefined,
-            .QueryScreens = undefined,
-        }, .xkb = XkbInterface{
-            .is_available = false,
-            .is_auto_repeat_detectable = false,
-            .event_code = undefined,
-        } },
+        .extensions = X11Extensions{
+            .xrandr = XRRInterface{
+                .is_v1point3 = false,
+                .XRRGetCrtcInfo = undefined,
+                .XRRFreeCrtcInfo = undefined,
+                .XRRGetOutputInfo = undefined,
+                .XRRFreeOutputInfo = undefined,
+                .XRRGetOutputPrimary = undefined,
+                .XRRGetScreenResourcesCurrent = undefined,
+                .XRRGetScreenResources = undefined,
+                .XRRFreeScreenResources = undefined,
+                .XRRQueryVersion = undefined,
+                .XRRSetCrtcConfig = undefined,
+                .XRRUpdateConfiguration = undefined,
+                .XRRSelectInput = undefined,
+                .XRRQueryExtension = undefined,
+                .event_code = 0,
+            },
+            .xinerama = XrmInterface{
+                .is_active = false,
+                .IsActive = undefined,
+                .QueryScreens = undefined,
+            },
+            .xkb = XkbInterface{
+                .is_available = false,
+                .is_auto_repeat_detectable = false,
+                .event_code = 0,
+            },
+        },
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
@@ -227,6 +239,8 @@ pub const X11Driver = struct {
     }
 
     fn loadXExtensions(self: *Self) XConnectionError!void {
+        var base_event_code: c_int = undefined;
+        var base_error_code: c_int = undefined;
         self.handles.xrandr = posix.loadPosixModule(libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_INDEX]);
         if (self.handles.xrandr) |handle| {
             self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
@@ -256,13 +270,34 @@ pub const X11Driver = struct {
             self.extensions.xrandr.XRRQueryVersion = @ptrCast(
                 posix.moduleSymbol(handle, "XRRQueryVersion"),
             );
+            self.extensions.xrandr.XRRQueryExtension = @ptrCast(
+                posix.moduleSymbol(handle, "XRRQueryExtension"),
+            );
             self.extensions.xrandr.XRRSetCrtcConfig = @ptrCast(
                 posix.moduleSymbol(handle, "XRRSetCrtcConfig"),
+            );
+            self.extensions.xrandr.XRRSelectInput = @ptrCast(
+                posix.moduleSymbol(handle, "XRRSelectInput"),
+            );
+            self.extensions.xrandr.XRRUpdateConfiguration = @ptrCast(
+                posix.moduleSymbol(handle, "XRRUpdateConfiguration"),
             );
             var minor: i32 = 0;
             var major: i32 = 0;
             _ = self.extensions.xrandr.XRRQueryVersion(self.handles.xdisplay, &major, &minor);
             self.extensions.xrandr.is_v1point3 = (major >= 1 and minor >= 3);
+            _ = self.extensions.xrandr.XRRQueryExtension(
+                self.handles.xdisplay,
+                &base_event_code,
+                &base_error_code,
+            );
+            self.extensions.xrandr.event_code = base_event_code;
+            // select events to receive.
+            self.extensions.xrandr.XRRSelectInput(
+                self.handles.xdisplay,
+                self.handles.root_window,
+                x11ext.RRScreenChangeNotifyMask,
+            );
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
             // Error out since a lot functionalties rely on xrandr.
@@ -285,8 +320,6 @@ pub const X11Driver = struct {
         var xkb_major: c_int = 1;
         var xkb_minor: c_int = 0;
         var opcode: c_int = undefined;
-        var base_event_code: c_int = undefined;
-        var base_error_code: c_int = undefined;
         self.extensions.xkb.is_available = libx11.XkbQueryExtension(
             self.handles.xdisplay,
             &opcode,

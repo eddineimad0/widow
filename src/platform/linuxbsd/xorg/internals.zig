@@ -2,20 +2,18 @@ const std = @import("std");
 const monitor_impl = @import("monitor_impl.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const libx11ext = @import("x11/extensions/extensions.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const keymaps = @import("keymaps.zig");
 const X11driver = @import("driver.zig").X11Driver;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
 const Allocator = std.mem.Allocator;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
 const KeyCode = common.keyboard_and_mouse.KeyCode;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
-    pub const KEYCODE_MAP_SIZE = 256;
     monitor_store_ptr: ?*MonitorStore,
     clipboard_text: ?[]u8,
-    keycode_lookup_table: [KEYCODE_MAP_SIZE]KeyCode,
+    keycode_lookup_table: [keymaps.KEYCODE_MAP_SIZE]KeyCode,
     xkeysym_unicode_mapping: HashMapU32,
 };
 
@@ -31,7 +29,7 @@ pub const Internals = struct {
         self.helper_data.monitor_store_ptr = null;
         self.helper_data.xkeysym_unicode_mapping = HashMapU32.init(allocator);
 
-        initKeyCodeTable(&self.helper_data.keycode_lookup_table);
+        keymaps.initKeyCodeTable(&self.helper_data.keycode_lookup_table);
         try keymaps.initUnicodeKeysymMapping(&self.helper_data.xkeysym_unicode_mapping);
         // last thing to do is create a helper window
         self.helper_window = try createHelperWindow(&self.helper_data);
@@ -123,38 +121,6 @@ fn createHelperWindow(helper_data: *HelperData) !libx11.Window {
     return handle;
 }
 
-fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
-    const x11driver = X11driver.singleton();
-    @memset(keycode_lookup_table, KeyCode.Unknown);
-    var min_scancode: c_int = 0;
-    var max_scancode: c_int = 0;
-    var keysym_size: c_int = 0;
-    _ = libx11.XDisplayKeycodes(x11driver.handles.xdisplay, &min_scancode, &max_scancode);
-    const keysym_array = libx11.XGetKeyboardMapping(
-        x11driver.handles.xdisplay,
-        @intCast(min_scancode),
-        max_scancode - min_scancode + 1,
-        &keysym_size,
-    );
-    var min: u32 = @intCast(min_scancode);
-    var max: u32 = @intCast(max_scancode);
-    var size: u32 = @intCast(keysym_size);
-    if (keysym_array) |array| {
-        defer _ = libx11.XFree(array);
-        for (min..(max + 1)) |scancode| {
-            const offset = (scancode - min) * size;
-            keycode_lookup_table[scancode] =
-                keymaps.mapXKeySymToWidowKeyCode(array[offset]);
-
-            if (keycode_lookup_table[scancode] == KeyCode.Unknown and size > 1) {
-                // try again.
-                keycode_lookup_table[scancode] =
-                    keymaps.mapXKeySymToWidowKeyCode(array[offset + 1]);
-            }
-        }
-    }
-}
-
 /// create a platform icon.
 pub fn createIcon(
     pixels: ?[]const u8,
@@ -229,7 +195,7 @@ pub const MonitorStore = struct {
     }
 
     /// Returns a refrence to the requested Monitor or an error if the monitor was not found.
-    pub fn findMonitor(self: *Self, monitor_handle: libx11ext.RRCrtc) ?*monitor_impl.MonitorImpl {
+    pub fn findMonitor(self: *Self, monitor_handle: x11ext.RRCrtc) ?*monitor_impl.MonitorImpl {
         // Find the monitor.
         var target: ?*monitor_impl.MonitorImpl = null;
         for (self.monitors.items) |*item| {

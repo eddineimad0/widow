@@ -2,7 +2,6 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const keymaps = @import("keymaps.zig");
 const maxInt = std.math.maxInt;
 const ScanCode = common.keyboard_and_mouse.ScanCode;
 
@@ -79,8 +78,4 @@ pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
         .caps_lock = (state & libx11.LockMask != 0),
     };
     return mods;
-}
-
-pub fn keycodeToScancode(code: u8) ScanCode {
-    return keymaps.SCANCODE_LOOKUP_TABLE[code];
 }
