@@ -23,6 +23,17 @@ pub inline fn strZEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
+/// Takes 2 many-items-pointers and compares the first `n` items
+/// the caller should make sure that n isn't outside the pointers bounds.
+pub inline fn bytesCmp(a: [*]const u8, b: [*]const u8, n: usize) bool {
+    for (0..n) |i| {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 pub const WindowPropError = error{
     BadPropType,
     PropNotFound,

@@ -296,7 +296,7 @@ pub const X11Driver = struct {
             self.extensions.xrandr.XRRSelectInput(
                 self.handles.xdisplay,
                 self.handles.root_window,
-                x11ext.RRScreenChangeNotifyMask,
+                x11ext.RROutputChangeNotifyMask,
             );
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
