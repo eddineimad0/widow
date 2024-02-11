@@ -297,8 +297,6 @@ pub const MonitorImpl = struct {
     /// # Note
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) MonitorError!void {
-        // TODO: the self.modes and self.modes_ids should be updated whenever
-        // a change to the hardware happens.
         if (video_mode) |mode| {
             var mode_index: usize = undefined;
             if (self.isModePossible(mode, &mode_index) == false) {

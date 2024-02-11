@@ -158,6 +158,10 @@ const XNextEventProc = *const fn (
     display: *types.Display,
     x_event: *types.XEvent,
 ) callconv(.C) c_int;
+const XPeekEventProc = *const fn (
+    display: *types.Display,
+    x_event: *types.XEvent,
+) callconv(.C) c_int;
 const XPendingProc = *const fn (display: *types.Display) callconv(.C) c_int;
 const XQLengthProc = *const fn (display: *types.Display) callconv(.C) c_int;
 const XSendEventProc = *const fn (
@@ -171,7 +175,8 @@ const XSyncProc = *const fn (
     display: *types.Display,
     discard: types.Bool,
 ) callconv(.C) void;
-const XFlushProc = *const fn (Display: *types.Display) callconv(.C) c_int;
+const XFlushProc = *const fn (display: *types.Display) callconv(.C) c_int;
+const XEventsQueuedProc = *const fn (display: ?*types.Display, mode: c_int) callconv(.C) c_int;
 
 // Errors
 const XSetErrorHandlerProc = *const fn (
@@ -249,11 +254,13 @@ pub const dyn_api = struct {
     pub var XDeleteContext: XDeleteContextProc = undefined;
     // Events
     pub var XNextEvent: XNextEventProc = undefined;
+    pub var XPeekEvent: XPeekEventProc = undefined;
     pub var XPending: XPendingProc = undefined;
     pub var XQLength: XQLengthProc = undefined;
     pub var XSendEvent: XSendEventProc = undefined;
     pub var XSync: XSyncProc = undefined;
     pub var XFlush: XFlushProc = undefined;
+    pub var XEventsQueued: XEventsQueuedProc = undefined;
     // Properties
     pub var XSetWMProtocols: XSetWMProtocolsProc = undefined;
     pub var XChangeProperty: XChangePropertyProc = undefined;
