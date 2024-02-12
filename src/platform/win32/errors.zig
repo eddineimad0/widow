@@ -30,4 +30,5 @@ pub const WindowError = error{
     FailedToCreate,
     FailedToCopyTitle,
     UsupportedDrawingContext,
+    DrawingContextReinit,
 };

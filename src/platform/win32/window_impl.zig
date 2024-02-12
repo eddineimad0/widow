@@ -467,6 +467,7 @@ pub const WindowImpl = struct {
         _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, 0);
         _ = win32_window_messaging.DestroyWindow(self.handle);
         self.freeDroppedFiles();
+        self.deinitDrawingContext();
         allocator.destroy(self);
     }
 
@@ -1243,10 +1244,28 @@ pub const WindowImpl = struct {
     }
 
     pub fn initDrawingContext(self: *Self, backend: common.gfx.DrawingBackend) WindowError!void {
+        // a window can only init it's drawing context once.
+        // it cannot change it during execution.
+        switch (self.draw_ctx) {
+            .None => {}, // continue
+            else => return WindowError.DrawingContextReinit,
+        }
+
         switch (backend) {
-            .OpenGL => self.draw_ctx = Win32DrawContext{ .OpenGL = WinGLContext.init(self.handle) catch return WindowError.UsupportedDrawingContext },
+            .OpenGL => self.draw_ctx = Win32DrawContext{ .OpenGL = WinGLContext.init(self.handle) catch
+                return WindowError.UsupportedDrawingContext },
             else => return WindowError.UsupportedDrawingContext,
         }
+    }
+
+    pub fn deinitDrawingContext(self: *Self) void {
+        switch (self.draw_ctx) {
+            .OpenGL => |*gl_cntxt| {
+                return gl_cntxt.deinit();
+            },
+            else => {},
+        }
+        self.draw_ctx = Win32DrawContext.None;
     }
 
     pub fn MakeDrawingContextCurrent(self: *const Self) bool {
