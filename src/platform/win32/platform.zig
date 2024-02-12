@@ -7,7 +7,7 @@ pub const Internals = internals.Internals;
 
 // Platform handles
 pub const MonitorHandle = win32.HMONITOR;
-pub const WindowHandle = win32.HWND;
+pub const WindowHandle = @import("std").os.windows.HWND;
 
 const WidowContext = @import("global.zig").Win32Context;
 

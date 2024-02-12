@@ -1195,6 +1195,10 @@ pub const WindowImpl = struct {
         }
     }
 
+    pub inline fn platformHandle(self: *const Self) std.os.windows.HWND {
+        return @ptrCast(self.handle);
+    }
+
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         if (dbg) {
             std.debug.print("0==========================0\n", .{});
