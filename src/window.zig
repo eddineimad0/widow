@@ -531,7 +531,7 @@ pub const Window = struct {
 
     /// Returns the descriptor or handle used by the platform to identify the window.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
-        return self.impl.handle;
+        return self.impl.platformHandle();
     }
 
     // Prints some debug information to stdout.
