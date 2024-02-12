@@ -29,4 +29,5 @@ pub const MonitorError = error{
 pub const WindowError = error{
     FailedToCreate,
     FailedToCopyTitle,
+    UsupportedDrawingContext,
 };

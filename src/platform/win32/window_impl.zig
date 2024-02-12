@@ -8,6 +8,7 @@ const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const int = @import("internals.zig");
 const monitor_impl = @import("monitor_impl.zig");
+const WinGLContext = @import("wgl.zig").WinGLContext;
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
@@ -295,10 +296,16 @@ pub const WindowWin32Data = struct {
     position_update: bool,
 };
 
+const Win32DrawContext = union(common.gfx.DrawingBackend) {
+    None: void,
+    OpenGL: WinGLContext,
+};
+
 pub const WindowImpl = struct {
     data: WindowData,
     widow: WidowProps,
     win32: WindowWin32Data,
+    draw_ctx: Win32DrawContext,
     handle: win32_foundation.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = win32_window_messaging.CW_USEDEFAULT,
@@ -319,6 +326,7 @@ pub const WindowImpl = struct {
             .events_queue = events_queue,
             .internals = internals,
         };
+        self.draw_ctx = Win32DrawContext.None;
         self.data = data.*;
         const styles = .{ windowStyles(&data.flags), windowExStyles(&data.flags) };
         self.handle = try createPlatformWindow(allocator, window_title, data, styles);
@@ -1231,6 +1239,31 @@ pub const WindowImpl = struct {
             if (flags) {
                 std.debug.print("Flags Mode: {}\n", .{self.data.flags});
             }
+        }
+    }
+
+    pub fn initDrawingContext(self: *Self, backend: common.gfx.DrawingBackend) WindowError!void {
+        switch (backend) {
+            .OpenGL => self.draw_ctx = Win32DrawContext{ .OpenGL = WinGLContext.init(self.handle) catch return WindowError.UsupportedDrawingContext },
+            else => return WindowError.UsupportedDrawingContext,
+        }
+    }
+
+    pub fn MakeDrawingContextCurrent(self: *const Self) bool {
+        switch (self.draw_ctx) {
+            .OpenGL => |*gl_cntxt| {
+                return gl_cntxt.makeCurrent();
+            },
+            else => return false,
+        }
+    }
+
+    pub fn swapBuffers(self: *const Self) bool {
+        switch (self.draw_ctx) {
+            .OpenGL => |*gl_cntxt| {
+                return gl_cntxt.swapBuffers();
+            },
+            else => return false,
         }
     }
 };

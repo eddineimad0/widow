@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) !void {
         "playing_with_inputs",
         "cursor_and_icon",
         "xorg_basic",
+        "gl_triangle",
     };
     for (examples) |example_name| {
         const example = b.addExecutable(.{

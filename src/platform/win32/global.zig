@@ -341,7 +341,7 @@ fn registerMainClass(
     window_class.style = @enumFromInt(
         @intFromEnum(win32_window_messaging.CS_HREDRAW) |
             @intFromEnum(win32_window_messaging.CS_VREDRAW) |
-            @intFromEnum(win32_window_messaging.CS_OWNDC),
+            @intFromEnum(win32_window_messaging.CS_OWNDC), //CS_OWNDC is required for the opengl context.
     );
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;

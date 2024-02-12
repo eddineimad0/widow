@@ -541,4 +541,16 @@ pub const Window = struct {
             self.impl.debugInfos(size, flags);
         }
     }
+
+    pub fn initDrawingContext(self: *Self, backend: common.gfx.DrawingBackend) !void {
+        try self.impl.initDrawingContext(backend);
+    }
+
+    pub fn MakeDrawingContextCurrent(self: *const Self) bool {
+        return self.impl.MakeDrawingContextCurrent();
+    }
+
+    pub fn swapBuffers(self: *const Self) bool {
+        return self.impl.swapBuffers();
+    }
 };
