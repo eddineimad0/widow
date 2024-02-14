@@ -48,6 +48,7 @@ pub const WidowContext = struct {
     /// undefined behaviour and crash you application.
     pub fn deinit(self: *Self) void {
         self.platform_internals.destroy(self.allocator);
+        self.events_queue.deinit();
     }
 
     /// Retrieves an event from the event queue,
