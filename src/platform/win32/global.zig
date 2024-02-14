@@ -338,6 +338,9 @@ fn registerMainClass(
 ) !u16 {
     var window_class: win32_window_messaging.WNDCLASSEXW = std.mem.zeroes(win32_window_messaging.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_window_messaging.WNDCLASSEXW);
+    // CS_HREDRAW,CS_VREDRAW indicate that we want to redraw the entire window
+    // if a movement or size adjustment.
+    // CS_OWNDC, is needed for opengl context creation.
     window_class.style = @enumFromInt(
         @intFromEnum(win32_window_messaging.CS_HREDRAW) |
             @intFromEnum(win32_window_messaging.CS_VREDRAW) |
