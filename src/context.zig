@@ -106,8 +106,8 @@ pub const WindowBuilder = struct {
     /// 'OutOfMemory': function could fail due to memory allocation Failure.
     pub fn init(
         title: []const u8,
-        width: i32,
-        height: i32,
+        width: u32,
+        height: u32,
         context: *WidowContext,
     ) !Self {
         std.debug.assert(width > 0 and height > 0);
@@ -193,7 +193,7 @@ pub const WindowBuilder = struct {
     /// If the window is DPI aware the final width and height
     /// might be diffrent in window mode but the video mode for
     /// exclusive fullscreen mode retain the given widht and height.
-    pub fn withSize(self: *Self, width: i32, height: i32) *Self {
+    pub fn withSize(self: *Self, width: u32, height: u32) *Self {
         std.debug.assert(width > 0 and height > 0);
         self.window_attributes.client_area.size.width = width;
         self.window_attributes.client_area.size.height = height;

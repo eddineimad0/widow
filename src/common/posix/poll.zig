@@ -12,7 +12,7 @@ pub const PollFlag = enum(u1) {
     IOWrite = 0x1,
 };
 
-// timeout variable should be in nanoseconds.
+/// Timeout variable should be in nanoseconds.
 pub fn poll(fd: c_int, flag: PollFlag, timeout: i64, ready_count: *u32) bool {
     var count: c_int = 0;
     const events = switch (flag) {

@@ -32,8 +32,8 @@ pub const EventType = enum(u8) {
 
 pub const ResizeEvent = struct {
     window_id: u32,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
 };
 
 pub const MoveEvent = struct {
@@ -124,7 +124,7 @@ pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
     } };
 }
 
-pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
+pub inline fn createResizeEvent(window_id: u32, width: u32, height: u32) Event {
     return Event{ .WindowResize = ResizeEvent{
         .window_id = window_id,
         .width = width,
@@ -224,7 +224,7 @@ pub const EventQueue = struct {
 
     pub fn queueEvent(self: *Self, event: *const Event) void {
         self.queue.append(event) catch |err| {
-            std.log.err("[Event]: Failed to Queue Event,{}\n", .{err});
+            std.log.err("queueEvent: Failed to Queue Event,{}\n", .{err});
             return;
         };
         self.events_count += 1;

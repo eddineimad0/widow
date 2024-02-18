@@ -146,8 +146,8 @@ fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void
 /// create a platform icon.
 pub fn createIcon(
     pixels: ?[]const u8,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
 ) !icon.Icon {
     if (pixels) |slice| {
         const sm_handle = try icon.createIcon(slice, width, height, null, null);
@@ -161,8 +161,8 @@ pub fn createIcon(
 /// Creates a platform cursor.
 pub fn createCursor(
     pixels: ?[]const u8,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     xhot: u32,
     yhot: u32,
 ) !icon.Cursor {
@@ -202,7 +202,7 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !icon.Curs
 
     if (handle == null) {
         // We failed.
-        std.debug.print("error {}\n", .{utils.getLastError()});
+        std.log.err("createStandardCursor: {}\n", .{utils.getLastError()});
         return error.FailedToLoadStdCursor;
     }
 
@@ -253,7 +253,7 @@ pub const MonitorStore = struct {
             }
         }
         const monitor = target orelse {
-            std.log.err("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
+            std.log.err("findMonitor: monitor not found, handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
 

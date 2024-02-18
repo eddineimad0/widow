@@ -141,8 +141,7 @@ pub const Window = struct {
     /// # Notes
     /// This automatically un-maximizes the window if it's maximized.
     /// For a full screen window this function does nothing.
-    pub inline fn setClientSize(self: *Self, width: i32, height: i32) void {
-        std.debug.assert(width > 0 and height > 0);
+    pub inline fn setClientSize(self: *Self, width: u32, height: u32) void {
         var new_size = common.geometry.WidowSize{ .width = width, .height = height };
         self.impl.setClientSize(&new_size);
     }
@@ -362,7 +361,7 @@ pub const Window = struct {
     /// `video_mode`:  a VideoMode to switch to or null to keep the user's video mode
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
         self.impl.setFullscreen(value, video_mode) catch |err| {
-            std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
+            std.log.err("setFullscreen: Failed to set Fullscreen mode, error:{}\n", .{err});
             return false;
         };
         return true;
@@ -488,9 +487,8 @@ pub const Window = struct {
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha last.
     /// If the pixels slice is null width and height can be set to whatever.
-    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: u32, height: u32) !void {
         if (pixels != null) {
-            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setIcon(pixels, width, height);
@@ -514,9 +512,8 @@ pub const Window = struct {
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha.
     /// If the pixels slice is null width,height,xhot and yhot can be set to whatever.
-    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: u32, height: u32, xhot: u32, yhot: u32) !void {
         if (pixels != null) {
-            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setCursor(pixels, width, height, xhot, yhot);
