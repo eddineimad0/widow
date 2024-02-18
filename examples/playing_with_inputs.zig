@@ -44,12 +44,6 @@ pub fn main() void {
     defer window.deinit();
 
     var event: widow.Event = undefined;
-    window.waitEvent();
-    std.debug.print("First event fired\n", .{});
-    const success = window.waitEventTimeout(3000);
-    if (success) {
-        std.debug.print("Second event fired\n", .{});
-    }
     event_loop: while (true) {
         window.waitEvent();
         while (context.pollEvents(&event)) {

@@ -292,8 +292,8 @@ pub const MonitorImpl = struct {
         area.* = WidowArea.init(
             mi.rcMonitor.left,
             mi.rcMonitor.top,
-            mi.rcMonitor.right - mi.rcMonitor.left,
-            mi.rcMonitor.bottom - mi.rcMonitor.top,
+            @intCast(mi.rcMonitor.right - mi.rcMonitor.left),
+            @intCast(mi.rcMonitor.bottom - mi.rcMonitor.top),
         );
     }
 

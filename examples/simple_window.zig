@@ -64,7 +64,7 @@ pub fn main() !void {
         // Process window events posted by the system.
         mywindow.waitEvent();
 
-        // All entities in the library(Window,joystick) send their
+        // All entities in the library send their
         // events to a central event queue in the WidowContext instance.
         // specified at their creation.
         while (widow_cntxt.pollEvents(&event)) {
@@ -89,6 +89,7 @@ pub fn main() !void {
                 // MouseLeave => The mouse exited the client area of the window.
                 // DPIChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
+                // RedrawRequest => Request from the system to redraw the window's client area.
 
                 EventType.WindowClose => |window_id| {
                     // The user has requested to close the window,
@@ -106,13 +107,13 @@ pub fn main() !void {
                     // symbol the key represents with the current input language settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    // std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
-                    //     key.window_id,
-                    //     key.keycode,
-                    //     key.scancode,
-                    //     key.state,
-                    //     key.mods,
-                    // });
+                    std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                        key.window_id,
+                        key.keycode,
+                        key.scancode,
+                        key.state,
+                        key.mods,
+                    });
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on pressing Q key

@@ -13,12 +13,10 @@ const win32_system_power = zigwin32.system.power;
 const win32_sys_service = zigwin32.system.system_services;
 const Win32Context = @import("global.zig").Win32Context;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
-const JoystickSubSystemImpl = @import("joystick_impl.zig").JoystickSubSystemImpl;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
     monitor_store_ptr: ?*MonitorStore,
-    joysubsys_ptr: ?*JoystickSubSystemImpl,
     clipboard_change: bool, // So we can cache the clipboard value until it changes.
     next_clipboard_viewer: ?win32.HWND, // we're using the old api to watch the clipboard.
     clipboard_text: ?[]u8,
@@ -26,7 +24,6 @@ pub const HelperData = struct {
 
 pub const Internals = struct {
     monitor_store: MonitorStore,
-    jss: ?*JoystickSubSystemImpl,
     dev_notif_handle: *anyopaque,
     helper_data: HelperData,
     helper_window: win32.HWND,
@@ -37,14 +34,12 @@ pub const Internals = struct {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         const win32_singelton = Win32Context.singleton();
-        self.jss = null;
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
         errdefer _ = win32_window_messaging.DestroyWindow(self.helper_window);
         self.helper_data.clipboard_change = false;
         self.helper_data.clipboard_text = null;
         self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
         self.helper_data.monitor_store_ptr = null;
-        self.helper_data.joysubsys_ptr = null;
         registerDevicesNotif(self.helper_window, &self.dev_notif_handle);
 
         _ = win32_window_messaging.SetWindowLongPtrW(
@@ -77,10 +72,6 @@ pub const Internals = struct {
             self.monitor_store.deinit();
         }
 
-        if (self.jss) |jss| {
-            jss.deinit();
-            allocator.destroy(jss);
-        }
         allocator.destroy(self);
     }
 
@@ -89,17 +80,6 @@ pub const Internals = struct {
         self.monitor_store = try MonitorStore.init(allocator);
         self.helper_data.monitor_store_ptr = &self.monitor_store;
         return &self.monitor_store;
-    }
-
-    /// Init the JoystickSubSystemImpl member, and update the helper data refrence.
-    pub fn initJoySubSysImpl(self: *Self, allocator: std.mem.Allocator, events_queue: *common.event.EventQueue) !*JoystickSubSystemImpl {
-        if (self.jss == null) {
-            self.jss = try allocator.create(JoystickSubSystemImpl);
-            errdefer allocator.destroy(self.jss.?);
-            try JoystickSubSystemImpl.setup(self.jss.?, allocator, events_queue);
-            self.helper_data.joysubsys_ptr = self.jss;
-        }
-        return self.jss.?;
     }
 
     pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
@@ -122,7 +102,7 @@ pub const Internals = struct {
 };
 
 /// Create an invisible helper window that lives as long as the internals struct.
-/// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
+/// the helper window is used for handeling monitor,clipboard messages related messages.
 fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
     var buffer: [(Internals.HELPER_TITLE.len) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
@@ -166,8 +146,8 @@ fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void
 /// create a platform icon.
 pub fn createIcon(
     pixels: ?[]const u8,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
 ) !icon.Icon {
     if (pixels) |slice| {
         const sm_handle = try icon.createIcon(slice, width, height, null, null);
@@ -181,8 +161,8 @@ pub fn createIcon(
 /// Creates a platform cursor.
 pub fn createCursor(
     pixels: ?[]const u8,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     xhot: u32,
     yhot: u32,
 ) !icon.Cursor {
@@ -222,7 +202,7 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !icon.Curs
 
     if (handle == null) {
         // We failed.
-        std.debug.print("error {}\n", .{utils.getLastError()});
+        std.log.err("createStandardCursor: {}\n", .{utils.getLastError()});
         return error.FailedToLoadStdCursor;
     }
 
@@ -273,7 +253,7 @@ pub const MonitorStore = struct {
             }
         }
         const monitor = target orelse {
-            std.log.err("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
+            std.log.err("findMonitor: monitor not found, handle={*}", .{monitor_handle});
             return error_defs.MonitorError.MonitorNotFound;
         };
 

@@ -2,55 +2,91 @@ const std = @import("std");
 const monitor_impl = @import("monitor_impl.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const libx11ext = @import("x11/extensions.zig");
-const X11Context = @import("global.zig").X11Context;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
+const x11ext = @import("x11/extensions/extensions.zig");
+const keymaps = @import("keymaps.zig");
+const X11driver = @import("driver.zig").X11Driver;
+const Allocator = std.mem.Allocator;
+const HashMapU32 = std.AutoArrayHashMap(u32, u32);
+const KeyCode = common.keyboard_and_mouse.KeyCode;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
     monitor_store_ptr: ?*MonitorStore,
     clipboard_text: ?[]u8,
+    keycode_lookup_table: [keymaps.KEYCODE_MAP_SIZE]KeyCode,
+    xkeysym_unicode_mapping: HashMapU32,
 };
 
 pub const Internals = struct {
     helper_data: HelperData,
     helper_window: libx11.Window,
     monitor_store: MonitorStore,
-    const HELPER_TITLE = "WIDOW_HELPER";
     const Self = @This();
 
-    pub fn create(allocator: std.mem.Allocator) !*Self {
+    pub fn create(allocator: Allocator) Allocator.Error!*Self {
         var self = try allocator.create(Self);
-        const x11cntxt = X11Context.singleton();
-        _ = x11cntxt;
-        self.helper_window = 0;
         self.helper_data.clipboard_text = null;
         self.helper_data.monitor_store_ptr = null;
+        self.helper_data.xkeysym_unicode_mapping = HashMapU32.init(allocator);
+
+        keymaps.initKeyCodeTable(&self.helper_data.keycode_lookup_table);
+        try keymaps.initUnicodeKeysymMapping(&self.helper_data.xkeysym_unicode_mapping);
+        // last thing to do is create a helper window
+        self.helper_window = try createHelperWindow(&self.helper_data);
         return self;
     }
 
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn destroy(self: *Self, allocator: Allocator) void {
+        const x11driver = X11driver.singleton();
+        _ = x11driver.removeFromXContext(self.helper_window);
+        _ = libx11.XDestroyWindow(x11driver.handles.xdisplay, self.helper_window);
+
+        self.helper_data.xkeysym_unicode_mapping.deinit();
         if (self.helper_data.clipboard_text) |text| {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
         }
+
         self.monitor_store.deinit();
         allocator.destroy(self);
     }
 
+    pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
+        return self.helper_data.keycode_lookup_table[xkeycode];
+    }
+
+    pub inline fn lookupKeyCharacter(self: *const Self, xkeysym: libx11.KeySym) ?u32 {
+        // Latin-1
+        if ((xkeysym <= 0xFF and xkeysym >= 0xA0) or (xkeysym >= 0x20 and xkeysym <= 0x7E)) {
+            return @truncate(xkeysym);
+        }
+
+        // Latin-1 from Keypad.
+        if (xkeysym == 0xFFBD or (xkeysym <= 0xFFB9 and xkeysym >= 0xFFAA)) {
+            return @truncate(xkeysym - 0xFF80);
+        }
+
+        // Unicode (may be present).
+        if ((xkeysym & 0xFF000000) == 0x01000000) {
+            return @truncate(xkeysym & 0x00FFFFFF);
+        }
+
+        return self.helper_data.xkeysym_unicode_mapping.get(@truncate(xkeysym));
+    }
+
     /// Init the Monitor store member, and update the helper data refrence.
-    pub fn initMonitorStoreImpl(self: *Self, allocator: std.mem.Allocator) !*MonitorStore {
+    pub fn initMonitorStoreImpl(self: *Self, allocator: Allocator) Allocator.Error!*MonitorStore {
         self.monitor_store = try MonitorStore.init(allocator);
         self.helper_data.monitor_store_ptr = &self.monitor_store;
         return &self.monitor_store;
     }
 
-    pub fn clipboardText(self: *Self, allocator: std.mem.Allocator) ![]u8 {
+    pub fn clipboardText(self: *Self, allocator: Allocator) Allocator.Error![]u8 {
         _ = allocator;
         _ = self;
     }
 
-    pub fn setClipboardText(self: *Self, allocator: std.mem.Allocator, text: []const u8) !void {
+    pub fn setClipboardText(self: *Self, allocator: Allocator, text: []const u8) Allocator.Error!void {
         _ = text;
         _ = allocator;
         _ = self;
@@ -58,8 +94,32 @@ pub const Internals = struct {
 };
 
 /// Create an invisible helper window that lives as long as the internals struct.
-/// the helper window is used for handeling monitor,clipboard,and joystick messages related messages.
-fn createHelperWindow() !libx11.Window {}
+/// the helper window is used for handeling monitor,clipboard related messages.
+fn createHelperWindow(helper_data: *HelperData) !libx11.Window {
+    const x11driver = X11driver.singleton();
+    var window_attributes: libx11.XSetWindowAttributes = undefined;
+    const handle = libx11.XCreateWindow(
+        x11driver.handles.xdisplay,
+        x11driver.handles.root_window,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0,
+        libx11.InputOnly,
+        libx11.DefaultVisual(x11driver.handles.xdisplay, x11driver.handles.default_screen),
+        0,
+        @ptrCast(&window_attributes),
+    );
+
+    if (!x11driver.addToXContext(
+        handle,
+        @ptrCast(helper_data),
+    )) {}
+
+    return handle;
+}
 
 /// create a platform icon.
 pub fn createIcon(
@@ -106,13 +166,14 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !void {
     // };
 }
 
+pub const MonitorStoreError = error{};
 pub const MonitorStore = struct {
     monitors: std.ArrayList(monitor_impl.MonitorImpl),
     used_monitors: u8,
     const Self = @This();
 
     /// Initialize the `MonitorStore` struct.
-    pub fn init(allocator: std.mem.Allocator) !Self {
+    pub fn init(allocator: Allocator) Allocator.Error!Self {
         var self = Self{
             .used_monitors = 0,
             .monitors = try monitor_impl.pollMonitors(allocator),
@@ -134,7 +195,7 @@ pub const MonitorStore = struct {
     }
 
     /// Returns a refrence to the requested Monitor or an error if the monitor was not found.
-    pub fn findMonitor(self: *Self, monitor_handle: libx11ext.RRCrtc) !*monitor_impl.MonitorImpl {
+    pub fn findMonitor(self: *Self, monitor_handle: x11ext.RRCrtc) ?*monitor_impl.MonitorImpl {
         // Find the monitor.
         var target: ?*monitor_impl.MonitorImpl = null;
         for (self.monitors.items) |*item| {
@@ -143,13 +204,8 @@ pub const MonitorStore = struct {
                 break;
             }
         }
-        const monitor = target orelse {
-            std.log.err("[MonitorStore]: monitor not found,handle={*}", .{monitor_handle});
-            //TODO: error defs.
-            return error.MonitorNotFound;
-        };
 
-        return monitor;
+        return target;
     }
 
     // /// Updates the monitors array by removing all disconnected monitors

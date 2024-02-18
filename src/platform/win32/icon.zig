@@ -10,17 +10,17 @@ const BOOL = @import("win32_defs.zig").BOOL;
 
 pub fn createIcon(
     pixels: []const u8,
-    width: i32,
-    height: i32,
+    width: u32,
+    height: u32,
     xhot: ?u32,
     yhot: ?u32,
 ) !win32_window_messaging.HICON {
     var bmp_header: win32_gdi.BITMAPV5HEADER = std.mem.zeroes(win32_gdi.BITMAPV5HEADER);
     bmp_header.bV5Size = @sizeOf(win32_gdi.BITMAPV5HEADER);
-    bmp_header.bV5Width = width;
+    bmp_header.bV5Width = @intCast(width);
     //  If bV5Height value is negative, the bitmap is a top-down DIB
     //  and its origin is the upper-left corner.
-    bmp_header.bV5Height = -height;
+    bmp_header.bV5Height = -@as(i32, @intCast(height));
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
     // No compression and we will provide the color masks.
@@ -46,13 +46,18 @@ pub fn createIcon(
     }
     defer _ = win32_gdi.DeleteObject(color_mask);
 
-    const monochrome_mask = win32_gdi.CreateBitmap(width, height, 1, 1, null);
+    const monochrome_mask = win32_gdi.CreateBitmap(
+        @intCast(width),
+        @intCast(height),
+        1,
+        1,
+        null,
+    );
     if (monochrome_mask == null) {
         return IconError.NullMonochromeMask;
     }
     defer _ = win32_gdi.DeleteObject(monochrome_mask);
 
-    // TODO: What about ARM?
     @memcpy(dib, pixels);
 
     var xspot: u32 = undefined;

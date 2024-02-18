@@ -6,7 +6,7 @@ const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
-const internals = @import("internals.zig");
+const int = @import("internals.zig");
 const monitor_impl = @import("monitor_impl.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
 const win32_foundation = zigwin32.foundation;
@@ -15,7 +15,7 @@ const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 const WindowError = @import("errors.zig").WindowError;
 const Win32Context = @import("global.zig").Win32Context;
-const MonitorStore = internals.MonitorStore;
+const Internals = int.Internals;
 const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
@@ -140,8 +140,8 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
     var rect: win32.RECT = undefined;
     _ = win32_window_messaging.GetWindowRect(window_handle, &rect);
     const size = common.geometry.WidowSize{
-        .width = rect.right - rect.left,
-        .height = rect.bottom - rect.top,
+        .width = @intCast(rect.right - rect.left),
+        .height = @intCast(rect.bottom - rect.top),
     };
     return size;
 }
@@ -202,6 +202,7 @@ fn setWindowPositionIntern(
         top,
         x,
         y,
+        // for some reason windows uses signed int for it's dimensions.
         width,
         height,
         @enumFromInt(flags),
@@ -217,8 +218,8 @@ fn createPlatformWindow(
     var window_rect = win32.RECT{
         .left = 0,
         .top = 0,
-        .right = data.client_area.size.width,
-        .bottom = data.client_area.size.height,
+        .right = @intCast(data.client_area.size.width),
+        .bottom = @intCast(data.client_area.size.height),
     };
 
     // Calculates the required size of the window rectangle,
@@ -280,7 +281,7 @@ fn createPlatformWindow(
 
 /// Holds all the refrences we use to communitcate with the WidowContext.
 pub const WidowProps = struct {
-    monitors: *MonitorStore,
+    internals: *Internals,
     events_queue: *common.event.EventQueue,
 };
 
@@ -311,13 +312,13 @@ pub const WindowImpl = struct {
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
-        monitor_store: *MonitorStore,
+        internals: *Internals,
     ) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
         self.widow = WidowProps{
             .events_queue = events_queue,
-            .monitors = monitor_store,
+            .internals = internals,
         };
         self.data = data.*;
         const styles = .{ windowStyles(&data.flags), windowExStyles(&data.flags) };
@@ -356,8 +357,8 @@ pub const WindowImpl = struct {
             var client_rect = win32.RECT{
                 .left = 0,
                 .top = 0,
-                .right = self.data.client_area.size.width,
-                .bottom = self.data.client_area.size.height,
+                .right = @intCast(self.data.client_area.size.width),
+                .bottom = @intCast(self.data.client_area.size.height),
             };
             var dpi_scale: f64 = undefined;
             const dpi = self.scalingDPI(&dpi_scale);
@@ -398,8 +399,8 @@ pub const WindowImpl = struct {
                 POSITION_FLAGS,
                 client_rect.left,
                 client_rect.top,
-                client_rect.right - client_rect.left,
-                client_rect.bottom - client_rect.top,
+                (client_rect.right - client_rect.left),
+                (client_rect.bottom - client_rect.top),
             );
         }
 
@@ -571,14 +572,14 @@ pub const WindowImpl = struct {
             // we're exiting fullscreen mode use the saved size.
             rect.left = frame.top_left.x;
             rect.top = frame.top_left.y;
-            rect.right = frame.size.width + frame.top_left.x;
-            rect.bottom = frame.size.height + frame.top_left.y;
+            rect.right = @as(i32, @intCast(frame.size.width)) + frame.top_left.x;
+            rect.bottom = @as(i32, @intCast(frame.size.height)) + frame.top_left.y;
         } else {
             // we're simply changing some styles.
             rect.left = self.data.client_area.top_left.x;
             rect.top = self.data.client_area.top_left.y;
-            rect.right = self.data.client_area.size.width + rect.left;
-            rect.bottom = self.data.client_area.size.height + rect.top;
+            rect.right = @as(i32, @intCast(self.data.client_area.size.width)) + rect.left;
+            rect.bottom = @as(i32, @intCast(self.data.client_area.size.height)) + rect.top;
         }
 
         var dpi: ?u32 = null;
@@ -673,8 +674,8 @@ pub const WindowImpl = struct {
         var rect: win32.RECT = win32.RECT{
             .left = 0,
             .top = 0,
-            .right = self.data.client_area.size.width,
-            .bottom = self.data.client_area.size.height,
+            .right = @intCast(self.data.client_area.size.width),
+            .bottom = @intCast(self.data.client_area.size.height),
         };
 
         var dpi: ?u32 = null;
@@ -744,8 +745,8 @@ pub const WindowImpl = struct {
             var new_client_rect = win32_foundation.RECT{
                 .left = 0,
                 .top = 0,
-                .right = size.width,
-                .bottom = size.height,
+                .right = @intCast(size.width),
+                .bottom = @intCast(size.height),
             };
 
             adjustWindowRect(
@@ -797,7 +798,7 @@ pub const WindowImpl = struct {
                 // the min size shouldn't be superior to the max size.
                 if (max_size.width < size.width or max_size.height < size.height) {
                     std.log.err(
-                        "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
+                        "setMinSize: Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
                         .{ size.width, size.height, max_size.width, max_size.height },
                     );
                     return;
@@ -834,8 +835,8 @@ pub const WindowImpl = struct {
             POSITION_FLAGS,
             0,
             0,
-            size.width,
-            size.height,
+            @intCast(size.width),
+            @intCast(size.height),
         );
     }
 
@@ -854,7 +855,7 @@ pub const WindowImpl = struct {
                 // the max size should be superior or equal to the min size.
                 if (size.width < min_size.width or size.height < min_size.height) {
                     std.log.err(
-                        "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
+                        "setMaxSize: Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
                         .{ size.width, size.height, min_size.width, min_size.height },
                     );
                     return;
@@ -889,8 +890,8 @@ pub const WindowImpl = struct {
             POSITION_FLAGS,
             0,
             0,
-            size.width,
-            size.height,
+            @intCast(size.width),
+            @intCast(size.height),
         );
     }
 
@@ -1063,7 +1064,7 @@ pub const WindowImpl = struct {
 
         // The video mode switch should always be done first
         const monitor_handle = self.occupiedMonitor();
-        try self.widow.monitors.setMonitorVideoMode(monitor_handle, video_mode);
+        try self.widow.internals.monitor_store.setMonitorVideoMode(monitor_handle, video_mode);
 
         if (self.data.flags.is_fullscreen != value) {
             if (value) {
@@ -1089,7 +1090,7 @@ pub const WindowImpl = struct {
     pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
         var mon_area: common.geometry.WidowArea = undefined;
 
-        try self.widow.monitors.setMonitorWindow(
+        try self.widow.internals.monitor_store.setMonitorWindow(
             monitor_handle,
             self,
             &mon_area,
@@ -1110,14 +1111,14 @@ pub const WindowImpl = struct {
             POSITION_FLAGS,
             mon_area.top_left.x,
             mon_area.top_left.y,
-            mon_area.size.width,
-            mon_area.size.height,
+            @intCast(mon_area.size.width),
+            @intCast(mon_area.size.height),
         );
     }
 
     /// Marks the monitor as not being occupied by any window.
     pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.monitors.releaseMonitor(monitor_handle);
+        try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
@@ -1152,8 +1153,8 @@ pub const WindowImpl = struct {
         self.win32.dropped_files.clearAndFree();
     }
 
-    pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-        const new_icon = try internals.createIcon(pixels, width, height);
+    pub fn setIcon(self: *Self, pixels: ?[]const u8, width: u32, height: u32) !void {
+        const new_icon = try int.createIcon(pixels, width, height);
         const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
             .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
         else blk: {
@@ -1177,8 +1178,8 @@ pub const WindowImpl = struct {
         self.win32.icon = new_icon;
     }
 
-    pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        const new_cursor = try internals.createCursor(pixels, width, height, xhot, yhot);
+    pub fn setCursor(self: *Self, pixels: ?[]const u8, width: u32, height: u32, xhot: u32, yhot: u32) !void {
+        const new_cursor = try int.createCursor(pixels, width, height, xhot, yhot);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1187,12 +1188,16 @@ pub const WindowImpl = struct {
     }
 
     pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-        const new_cursor = try internals.createStandardCursor(cursor_shape);
+        const new_cursor = try int.createStandardCursor(cursor_shape);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
             updateCursorImage(&self.win32.cursor);
         }
+    }
+
+    pub inline fn platformHandle(self: *const Self) std.os.windows.HWND {
+        return @ptrCast(self.handle);
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {

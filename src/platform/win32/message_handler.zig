@@ -181,13 +181,13 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
         // The minimum tracking size is the smallest window size that can be produced
         // by using the borders to size the window.
         if (window.data.min_size) |size| {
-            info.ptMinTrackSize.x = size.width + (rect.right - rect.left);
-            info.ptMinTrackSize.y = size.height + (rect.bottom - rect.top);
+            info.ptMinTrackSize.x = @as(i32, @intCast(size.width)) + (rect.right - rect.left);
+            info.ptMinTrackSize.y = @as(i32, @intCast(size.height)) + (rect.bottom - rect.top);
         }
 
         if (window.data.max_size) |size| {
-            info.ptMaxTrackSize.x = size.width + (rect.right - rect.left);
-            info.ptMaxTrackSize.y = size.height + (rect.bottom - rect.top);
+            info.ptMaxTrackSize.x = @as(i32, @intCast(size.width)) + (rect.right - rect.left);
+            info.ptMaxTrackSize.y = @as(i32, @intCast(size.height)) + (rect.bottom - rect.top);
         }
     }
 
@@ -288,7 +288,7 @@ pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
     if (count != 0) err_exit: {
         if (window.win32.dropped_files.capacity < count) {
             window.win32.dropped_files.ensureTotalCapacity(count) catch {
-                std.log.err("Failed to retrieve Dropped Files.\n", .{});
+                std.log.err("dropEventHandler: allocation failed.\n", .{});
                 break :err_exit;
             };
         }
@@ -301,22 +301,22 @@ pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
                 const buffer_lenz = buffer_len + 1;
                 if (wide_slice.len == 0) {
                     wide_slice = allocator.alloc(u16, buffer_lenz) catch {
-                        std.log.err("Failed to allocate space for dropped Files.\n", .{});
+                        std.log.err("dropEventHandler: allocation failed.\n", .{});
                         break :err_exit;
                     };
                 } else if (wide_slice.len < buffer_lenz) {
                     wide_slice = allocator.realloc(wide_slice, buffer_lenz) catch {
-                        std.log.err("Failed to reallocate space for dropped Files.\n", .{});
+                        std.log.err("dropEventHandler: allocation failed.\n", .{});
                         continue;
                     };
                 }
                 _ = win32_shell.DragQueryFileW(drop_handle, @truncate(index), @ptrCast(wide_slice.ptr), buffer_lenz);
                 const file_path = utils.wideToUtf8(allocator, wide_slice.ptr[0..buffer_len]) catch {
-                    std.log.err("Failed to retrieve dropped Files.\n", .{});
+                    std.log.err("dropEventHandler: Failed to retrieve dropped Files.\n", .{});
                     continue;
                 };
                 window.win32.dropped_files.append(file_path) catch {
-                    std.log.err("Failed to copy dropped Files.\n", .{});
+                    std.log.err("dropEventHandler: Failed to copy dropped Files.\n", .{});
                     allocator.free(file_path);
                     continue;
                 };

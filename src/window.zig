@@ -19,16 +19,17 @@ pub const Window = struct {
     /// `Allocator` : the allocator to be used with window related allocations(title,...).
     /// `title` : the window's title.
     /// `data` : a refrence to a WindowData structure.
-    /// `widow_props` : the widow properties to be passed along to the window.
+    /// `events_queue` : a pointer to the library's shared event queue.
+    /// `internals` : a pointer to an instance of the platform widow Internals.
     /// # Errors
-    /// 'OutOfMemory': failure due to memory allocation.
+    /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
     pub fn init(
         allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
         events_queue: *common.event.EventQueue,
-        monitor_store: *platform.MonitorStore,
+        internals: *platform.Internals,
     ) !Self {
         var self = Self{
             .allocator = allocator,
@@ -37,7 +38,7 @@ pub const Window = struct {
                 window_title,
                 data,
                 events_queue,
-                monitor_store,
+                internals,
             ),
         };
         return self;
@@ -140,8 +141,7 @@ pub const Window = struct {
     /// # Notes
     /// This automatically un-maximizes the window if it's maximized.
     /// For a full screen window this function does nothing.
-    pub inline fn setClientSize(self: *Self, width: i32, height: i32) void {
-        std.debug.assert(width > 0 and height > 0);
+    pub inline fn setClientSize(self: *Self, width: u32, height: u32) void {
         var new_size = common.geometry.WidowSize{ .width = width, .height = height };
         self.impl.setClientSize(&new_size);
     }
@@ -361,7 +361,7 @@ pub const Window = struct {
     /// `video_mode`:  a VideoMode to switch to or null to keep the user's video mode
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
         self.impl.setFullscreen(value, video_mode) catch |err| {
-            std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
+            std.log.err("setFullscreen: Failed to set Fullscreen mode, error:{}\n", .{err});
             return false;
         };
         return true;
@@ -487,9 +487,8 @@ pub const Window = struct {
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha last.
     /// If the pixels slice is null width and height can be set to whatever.
-    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+    pub inline fn setIcon(self: *Self, pixels: ?[]const u8, width: u32, height: u32) !void {
         if (pixels != null) {
-            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setIcon(pixels, width, height);
@@ -513,9 +512,8 @@ pub const Window = struct {
     /// represented using 8-bits, with the Red Channel being first followed by the blue,the green,
     /// and the alpha.
     /// If the pixels slice is null width,height,xhot and yhot can be set to whatever.
-    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+    pub inline fn setCursor(self: *Self, pixels: ?[]const u8, width: u32, height: u32, xhot: u32, yhot: u32) !void {
         if (pixels != null) {
-            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setCursor(pixels, width, height, xhot, yhot);
@@ -530,7 +528,7 @@ pub const Window = struct {
 
     /// Returns the descriptor or handle used by the platform to identify the window.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
-        return self.impl.handle;
+        return self.impl.platformHandle();
     }
 
     // Prints some debug information to stdout.

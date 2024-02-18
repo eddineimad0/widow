@@ -9,7 +9,10 @@ pub fn main() !void {
     // first we need to preform some platform specific initialization.
     // an options tuple can be passed to customize the platform init
     // e.g on windows we can set the WNDClass name to a comptime string of our choice,
-    try widow.initWidowPlatform(.{ .wnd_class = "Zig_is_awesome" });
+    try widow.initWidowPlatform(.{
+        .xres_name = "SIMPLE_WINDOW",
+        .xres_class = "SIMPLE_CLASS",
+    });
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
@@ -37,10 +40,74 @@ pub fn main() !void {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
-
     // No longer nedded.
     builder.deinit();
     // closes the window when done.
     defer mywindow.deinit();
-    std.time.sleep(5 * std.time.ns_per_s);
+
+    var event: widow.Event = undefined;
+    event_loop: while (true) {
+        mywindow.waitEvent();
+
+        while (widow_cntxt.pollEvents(&event)) {
+            switch (event) {
+                EventType.WindowClose => |window_id| {
+                    // The user has requested to close the window,
+                    // and the application should proceed to calling deinit on the window instance.
+                    // This is merely a notification nothing is done to window in the background,
+                    // ignore it if you want to continue execution as normal.
+                    std.debug.print("closing Window #{}\n", .{window_id});
+                    break :event_loop;
+                },
+                EventType.KeyBoard => |*key| {
+                    std.debug.print("Key Event:{}\n", .{key.*});
+                },
+                EventType.Character => |*char| {
+                    std.debug.print("target window #{},character:'{u}'\nmods:{}\n", .{
+                        char.window_id,
+                        char.codepoint,
+                        char.mods,
+                    });
+                },
+                EventType.MouseButton => |*mouse_event| {
+                    // This event holds the mouse button (left,middle,right,...),
+                    // the action that was done to the button (pressed or released),
+                    // and the keymodifiers state during the event pressed(true) or released(false).
+                    std.debug.print("Window #{}\nMouse Button:{}\nState:{}\nmods:{}\n", .{
+                        mouse_event.window_id,
+                        mouse_event.button,
+                        mouse_event.state,
+                        mouse_event.mods,
+                    });
+                },
+                EventType.MouseScroll => |*scroll| {
+                    // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
+                    std.debug.print("Window #{}\nwheel:{} Scrolled by :{d}\n", .{
+                        scroll.window_id,
+                        scroll.wheel,
+                        scroll.delta,
+                    });
+                },
+                EventType.MouseEnter => |window_id| {
+                    std.debug.print("Mouse Entered the client area of window #{}\n", .{window_id});
+                },
+                EventType.MouseLeave => |window_id| {
+                    std.debug.print("Mouse Left the client area window #{}\n", .{window_id});
+                },
+                EventType.WindowFocus => |*focus_event| {
+                    // This event holds a boolean flag on whether the window got or lost focus.
+                    std.debug.print("Focus ", .{});
+                    if (focus_event.has_focus) {
+                        std.debug.print("Gained", .{});
+                    } else {
+                        std.debug.print("Lost", .{});
+                    }
+                    std.debug.print("By window #{}\n", .{focus_event.window_id});
+                },
+                else => {
+                    continue;
+                },
+            }
+        }
+    }
 }
