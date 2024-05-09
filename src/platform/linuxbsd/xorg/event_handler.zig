@@ -4,14 +4,15 @@ const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 const keymaps = @import("keymaps.zig");
+const opts = @import("build-options");
 const keyboard_and_mouse = common.keyboard_and_mouse;
 const X11Driver = @import("driver.zig").X11Driver;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const HelperData = @import("internals.zig").HelperData;
 
 fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
-    // TODO: what about the button cache store.
-    if (common.LOG_PLATFORM_EVENTS) {
+    // TODO: what about the button state cache.
+    if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonRelease\n", .{window.data.id});
     }
     const button_event = switch (e.button) {
@@ -49,7 +50,7 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void 
 }
 
 fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
-    if (common.LOG_PLATFORM_EVENTS) {
+    if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonPress\n", .{window.data.id});
     }
     const button_event = switch (e.button) {
@@ -109,14 +110,14 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
     const x11cntxt = X11Driver.singleton();
     if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
-            if (common.LOG_PLATFORM_EVENTS) {
+            if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved ClientMessage:WM_DELETE_WINDOW\n", .{w.handle});
             }
             const event = common.event.createCloseEvent(w.data.id);
             w.sendEvent(&event);
         }
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh._NET_WM_PING) {
-            if (common.LOG_PLATFORM_EVENTS) {
+            if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved ClientMessage:_NET_WM_PING\n", .{w.handle});
             }
             // ping from the wm to ensure application responsivity.
@@ -132,14 +133,17 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *WindowImpl) voi
 fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
     switch (ev.type) {
         libx11.KeyPress => {
-            if (common.LOG_PLATFORM_EVENTS) {
+            if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved KeyPress:code {}\n", .{ window.data.id, ev.keycode });
             }
-            const mods = utils.decodeKeyMods(ev.state);
+            const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
+            const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
+            var mods = utils.decodeKeyMods(ev.state);
+            utils.fixKeyMods(&mods, keycode, keyboard_and_mouse.KeyState.Pressed);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
-                window.widow.internals.lookupKeyCode(@intCast(ev.keycode)),
-                keymaps.keycodeToScancode(@intCast(ev.keycode)),
+                keycode,
+                scancode,
                 keyboard_and_mouse.KeyState.Pressed,
                 mods,
             );
@@ -147,7 +151,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             var keysym: libx11.KeySym = 0;
             _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
             if (window.widow.internals.lookupKeyCharacter(keysym)) |codepoint| {
-                if (common.LOG_PLATFORM_EVENTS) {
+                if (opts.LOG_PLATFORM_EVENTS) {
                     std.log.info(
                         "window: #{} recieved Character:codepoint {}\n",
                         .{ window.data.id, codepoint },
@@ -157,14 +161,53 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
                 window.sendEvent(&event);
             }
         },
-        libx11.KeyRelease => std.debug.print("KeyRelease:code {}\n", .{ev.keycode}),
+        libx11.KeyRelease => {
+            // used when we can't set auto repeat through xkb.
+            const KEY_EVENT_REPEAT_THRESHOLD = 25;
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: #{} recieved KeyPress:code {}\n", .{ window.data.id, ev.keycode });
+            }
+            const x11driver = X11Driver.singleton();
+            if (!x11driver.extensions.xkb.is_auto_repeat_detectable) {
+                // INFO:
+                // hack from glfw
+                // if if we couldn't enable key autorepeat through Xkeyboard
+                // extension we can simulate it by reading ahead in the event queue
+                // and setting an autorepeat threshold for wich we can ignore key release
+                // events.
+                if (libx11.XEventsQueued(x11driver.handles.xdisplay, libx11.QueuedAfterReading) != 0) {
+                    var next_xevent: libx11.XEvent = undefined;
+                    _ = libx11.XPeekEvent(x11driver.handles.xdisplay, &next_xevent);
+                    if (next_xevent.type == libx11.KeyPress and
+                        next_xevent.xkey.window == ev.window and
+                        next_xevent.xkey.keycode == ev.keycode and
+                        (next_xevent.xkey.time - ev.time) < KEY_EVENT_REPEAT_THRESHOLD)
+                    {
+                        // ignore the current event
+                        return;
+                    }
+                }
+            }
+            const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
+            const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
+            var mods = utils.decodeKeyMods(ev.state);
+            utils.fixKeyMods(&mods, keycode, keyboard_and_mouse.KeyState.Released);
+            var event = common.event.createKeyboardEvent(
+                window.data.id,
+                keycode,
+                scancode,
+                keyboard_and_mouse.KeyState.Released,
+                mods,
+            );
+            window.sendEvent(&event);
+        },
         else => unreachable,
     }
 }
 
 fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
     _ = helper_data;
-    if (common.LOG_PLATFORM_EVENTS) {
+    if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #hidden recieved XkbEvent\n", .{});
     }
     switch (ev.any.xkb_type) {
@@ -178,7 +221,7 @@ fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
 
 fn handleXrandrScreenChange(ev: *const libx11.XEvent, helper_data: *HelperData) void {
     _ = helper_data;
-    if (common.LOG_PLATFORM_EVENTS) {
+    if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #hidden recieved RRScreenChangeNotify\n", .{});
     }
     const x11driver = X11Driver.singleton();
@@ -209,7 +252,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
         libx11.KeyPress, libx11.KeyRelease => handleKeyPress(&ev.xkey, window),
 
         libx11.EnterNotify => {
-            if (common.LOG_PLATFORM_EVENTS) {
+            if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved EnterNotify\n", .{window.data.id});
             }
             const event = common.event.createMouseEnterEvent(window.data.id);
@@ -217,7 +260,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
             window.data.flags.cursor_in_client = true;
         },
         libx11.LeaveNotify => {
-            if (common.LOG_PLATFORM_EVENTS) {
+            if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved LeaveNotify\n", .{window.data.id});
             }
             window.data.flags.cursor_in_client = false;

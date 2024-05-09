@@ -31,7 +31,7 @@ pub const Window = struct {
         events_queue: *common.event.EventQueue,
         internals: *platform.Internals,
     ) !Self {
-        var self = Self{
+        return .{
             .allocator = allocator,
             .impl = try WindowImpl.create(
                 allocator,
@@ -41,7 +41,6 @@ pub const Window = struct {
                 internals,
             ),
         };
-        return self;
     }
 
     /// Destroys the window and releases all allocated ressources.

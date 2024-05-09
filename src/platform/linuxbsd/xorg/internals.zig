@@ -174,11 +174,10 @@ pub const MonitorStore = struct {
 
     /// Initialize the `MonitorStore` struct.
     pub fn init(allocator: Allocator) Allocator.Error!Self {
-        var self = Self{
+        return .{
             .used_monitors = 0,
             .monitors = try monitor_impl.pollMonitors(allocator),
         };
-        return self;
     }
 
     /// Deinitialize the MonitorStore struct.

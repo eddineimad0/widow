@@ -180,7 +180,7 @@ pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl)
 
         // Copy the monitor name.
         const name_len = utils.strZLen(output_info.name);
-        var name = try allocator.alloc(u8, name_len);
+        const name = try allocator.alloc(u8, name_len);
         utils.strCpy(output_info.name, name.ptr, name_len);
 
         var monitor = MonitorImpl{
@@ -297,8 +297,6 @@ pub const MonitorImpl = struct {
     /// # Note
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) MonitorError!void {
-        // TODO: the self.modes and self.modes_ids should be updated whenever
-        // a change to the hardware happens.
         if (video_mode) |mode| {
             var mode_index: usize = undefined;
             if (self.isModePossible(mode, &mode_index) == false) {

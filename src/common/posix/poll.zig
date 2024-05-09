@@ -1,10 +1,5 @@
 const std = @import("std");
-const libc = std.c;
-const c = @cImport({
-    @cInclude("poll.h");
-    @cInclude("time.h");
-});
-
+const posix = std.posix;
 const NS_PER_SEC = std.time.ns_per_s;
 
 pub const PollFlag = enum(u1) {
@@ -12,17 +7,16 @@ pub const PollFlag = enum(u1) {
     IOWrite = 0x1,
 };
 
-// timeout variable should be in nanoseconds.
-pub fn poll(fd: c_int, flag: PollFlag, timeout: i64, ready_count: *u32) bool {
+pub fn poll(fd: c_int, flag: PollFlag, timeout_ns: i64, ready_count: *u32) bool {
     var count: c_int = 0;
-    const events = switch (flag) {
-        .IORead => c.POLLIN | c.POLLPRI,
-        .IOWrite => c.POLLOUT,
+    const events: i16 = switch (flag) {
+        .IORead => posix.POLL.IN | posix.POLL.PRI,
+        .IOWrite => posix.POLL.OUT,
     };
-    var pfd = libc.pollfd{ .fd = fd, .events = @intCast(events), .revents = 0 };
+    var pfd = posix.pollfd{ .fd = fd, .events = events, .revents = 0 };
     while (true) {
-        if (timeout < 0) {
-            count = libc.poll(@ptrCast(&pfd), 1, -1);
+        if (timeout_ns < 0) {
+            count = std.c.poll(@ptrCast(&pfd), 1, -1);
             if (count > 0) {
                 ready_count.* = @intCast(count);
                 return true;
@@ -32,28 +26,23 @@ pub fn poll(fd: c_int, flag: PollFlag, timeout: i64, ready_count: *u32) bool {
                 // than ENOMEM as Linux does.  POSIX permits this behavior.
                 // Portable programs may wish to check for EAGAIN and loop, just as
                 // with EINTR.
-                const e = libc.getErrno(count);
-                if (e != libc.E.INTR and e != libc.E.AGAIN) {
+                const e = posix.errno(count);
+                if (e != posix.E.INTR and e != posix.E.AGAIN) {
                     return false;
                 }
             }
         } else {
-            const seconds = @divTrunc(timeout, NS_PER_SEC);
-            const nanoseconds = timeout - (seconds * NS_PER_SEC);
-            const t = libc.timespec{ .tv_sec = seconds, .tv_nsec = nanoseconds };
-            count = libc.ppoll(@ptrCast(&pfd), 1, &t, null);
+            const seconds = @divTrunc(timeout_ns, NS_PER_SEC);
+            const nanoseconds = timeout_ns - (seconds * NS_PER_SEC);
+            const t = posix.timespec{ .tv_sec = seconds, .tv_nsec = nanoseconds };
+            count = std.c.ppoll(@ptrCast(&pfd), 1, &t, null);
 
             if (count > 0) {
                 ready_count.* = @intCast(count);
                 return true;
             } else if (count == -1) {
-                // On some other UNIX systems, poll() can fail with the error EAGAIN
-                // if the system fails to allocate kernel-internal resources, rather
-                // than ENOMEM as Linux does.  POSIX permits this behavior.
-                // Portable programs may wish to check for EAGAIN and loop, just as
-                // with EINTR.
-                const e = libc.getErrno(count);
-                if (e != libc.E.INTR and e != libc.E.AGAIN) {
+                const e = posix.errno(count);
+                if (e != posix.E.INTR and e != posix.E.AGAIN) {
                     return false;
                 }
             }

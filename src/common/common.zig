@@ -10,6 +10,3 @@ pub const gfx = @import("gfx.zig");
 const builtin = @import("builtin");
 pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix/posix.zig");
 pub const IS_DEBUG = builtin.mode == .Debug;
-
-const build_config = @import("widow_build_config");
-pub const LOG_PLATFORM_EVENTS = build_config.LOG_PLATFORM_EVENTS;

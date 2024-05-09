@@ -9,25 +9,25 @@ const Queue = @import("queue.zig").Queue;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
-    WindowResize, // The window client area size was changed.
-    WindowFocus, // True/False if the window got keyboard focus.
     WindowShown, // The window was shown to the user.
     WindowHidden, // The window was hidden from the user.
     WindowMaximize, // The window was minimized.
     WindowMinimize, // The window was maximized.
     WindowRestore, // The window was restored(from minimized or maximized state).
-    WindowMove, // The window has been moved, the Point2D struct specify the
-    // new coordinates for the top left corner of the window.
-    FileDrop, // Some file was released in the window area.
-    KeyBoard, // A certain Keyboard key action(press or release) was performed.
-    MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
-    MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
-    MouseMove, // The mouse position (relative to the client area's top left corner) changed.
     MouseEnter, // The mouse entered the client area of the window.
     MouseLeave, // The mouse exited the client area of the window.
+    FileDrop, // Some file was released in the window area.
+    RedrawRequest, // Request from the system to redraw the window's client area.
+    WindowFocus, // True/False if the window got keyboard focus.
+    WindowResize, // The window client area size was changed.
+    WindowMove, // The window has been moved, the Point2D struct specify the
+    // new coordinates for the top left corner of the window.
+    MouseMove, // The mouse position (relative to the client area's top left corner) changed.
+    MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
+    KeyBoard, // A certain Keyboard key action(press or release) was performed.
+    MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
-    RedrawRequest, // Request from the system to redraw the window's client area.
 };
 
 pub const ResizeEvent = struct {
@@ -69,6 +69,7 @@ pub const Event = union(EventType) {
     MouseEnter: u32,
     MouseLeave: u32,
     FileDrop: u32,
+    RedrawRequest: u32,
     WindowFocus: FocusEvent,
     WindowResize: ResizeEvent,
     WindowMove: MoveEvent,
@@ -78,7 +79,6 @@ pub const Event = union(EventType) {
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
-    RedrawRequest: u32,
 };
 
 pub inline fn createCloseEvent(window_id: u32) Event {

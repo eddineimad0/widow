@@ -1,5 +1,6 @@
 const std = @import("std");
 const common = @import("common");
+const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
@@ -69,7 +70,7 @@ const KEYNAME_TO_KEYCODE_MAP = [_]NameCodePair{
     .{ KeyCode.Right, "RGHT" },
     .{ KeyCode.Left, "LEFT" },
     .{ KeyCode.Down, "DOWN" },
-    .{ KeyCode.Up, "UP" },
+    .{ KeyCode.Up, @as([*:0]const u8, @ptrCast(&[4]u8{ 'U', 'P', 0x00, 0x00 })) },
     .{ KeyCode.PageUp, "PGUP" },
     .{ KeyCode.PageDown, "PGDN" },
     .{ KeyCode.Home, "HOME" },
@@ -110,13 +111,14 @@ const KEYNAME_TO_KEYCODE_MAP = [_]NameCodePair{
     .{ KeyCode.Equal, "KPEQ" },
     .{ KeyCode.Shift, "LFSH" },
     .{ KeyCode.Control, "LCTL" },
-    .{ KeyCode.Alt, "LALT" },
     .{ KeyCode.Meta, "LWIN" },
     .{ KeyCode.Shift, "RTSH" },
     .{ KeyCode.Control, "RCTL" },
     .{ KeyCode.Alt, "LVL3" },
     .{ KeyCode.Alt, "RALT" },
     .{ KeyCode.Alt, "MDSW" },
+    .{ KeyCode.Alt, "LALT" },
+    .{ KeyCode.Alt, "ALT" },
     .{ KeyCode.Meta, "RWIN" },
     .{ KeyCode.Menu, "MENU" },
     .{ KeyCode.VolumeUp, "VOL+" },
@@ -526,7 +528,7 @@ fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
 
 fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     for (KEYNAME_TO_KEYCODE_MAP) |pair| {
-        if (std.mem.eql(u8, name, std.mem.span(pair[1]))) {
+        if (utils.bytesCmp(name.ptr, pair[1], 4)) {
             return pair[0];
         }
     }
@@ -1410,9 +1412,9 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
         max_scancode - min_scancode + 1,
         &keysym_size,
     );
-    var min: u32 = @intCast(min_scancode);
-    var max: u32 = @intCast(max_scancode);
-    var size: u32 = @intCast(keysym_size);
+    const min: u32 = @intCast(min_scancode);
+    const max: u32 = @intCast(max_scancode);
+    const size: u32 = @intCast(keysym_size);
     if (keysym_array) |array| {
         defer _ = libx11.XFree(array);
         for (min..(max + 1)) |scancode| {
