@@ -1412,9 +1412,9 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
         max_scancode - min_scancode + 1,
         &keysym_size,
     );
-    var min: u32 = @intCast(min_scancode);
-    var max: u32 = @intCast(max_scancode);
-    var size: u32 = @intCast(keysym_size);
+    const min: u32 = @intCast(min_scancode);
+    const max: u32 = @intCast(max_scancode);
+    const size: u32 = @intCast(keysym_size);
     if (keysym_array) |array| {
         defer _ = libx11.XFree(array);
         for (min..(max + 1)) |scancode| {

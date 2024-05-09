@@ -79,7 +79,7 @@ pub fn x11WindowProperty(
 /// Returns the state of the Key Modifiers for the current event,
 /// by decoding the state field.
 pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
-    var mods = common.keyboard_and_mouse.KeyModifiers{
+    return .{
         .shift = ((state & libx11.ShiftMask != 0)),
         .ctrl = ((state & libx11.ControlMask != 0)),
         .alt = ((state & libx11.Mod1Mask != 0)),
@@ -87,7 +87,6 @@ pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
         .meta = ((state & libx11.Mod4Mask != 0)),
         .caps_lock = ((state & libx11.LockMask != 0)),
     };
-    return mods;
 }
 
 pub fn fixKeyMods(

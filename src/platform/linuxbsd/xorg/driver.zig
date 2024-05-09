@@ -585,7 +585,7 @@ pub const X11Driver = struct {
         window_id: libx11.Window,
     ) ?[*]u8 {
         var data_return: ?[*]u8 = null;
-        var result = libx11.XFindContext(
+        const result = libx11.XFindContext(
             self.handles.xdisplay,
             window_id,
             self.handles.xcontext,

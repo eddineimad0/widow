@@ -157,7 +157,7 @@ pub const WindowImpl = struct {
         if (self.data.flags.is_fullscreen) {
             return;
         }
-        var size_hints = libx11.XAllocSizeHints();
+        const size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
             const x11cntxt = X11Driver.singleton();
             var supplied: u32 = 0;
@@ -490,7 +490,7 @@ pub const WindowImpl = struct {
         };
 
         defer _ = libx11.XFree(data);
-        var window_title = try allocator.alloc(u8, data_len);
+        const window_title = try allocator.alloc(u8, data_len);
         @memcpy(window_title, data);
         return window_title;
     }
