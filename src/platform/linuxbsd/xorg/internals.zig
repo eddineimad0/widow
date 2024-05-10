@@ -7,7 +7,7 @@ const keymaps = @import("keymaps.zig");
 const X11driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const KeyCode = common.keyboard_and_mouse.KeyCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {

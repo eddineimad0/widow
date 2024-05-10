@@ -1,6 +1,11 @@
 const std = @import("std");
 const libc = std.c;
 
+pub const ModuleError = error{
+    NotFound,
+    UndefinedSymbol,
+};
+
 extern "c" fn dlerror() ?[*:0]const u8;
 
 pub inline fn loadPosixModule(module_path: [*:0]const u8) ?*anyopaque {
@@ -25,7 +30,7 @@ pub inline fn moduleSymbol(module_handle: *anyopaque, symbol_name: [*:0]const u8
 
 test "Loading and unloading shared objects" {
     const testing = std.testing;
-    const module = loadPosixModule("libz.so");
+    const module = loadPosixModule("libz.so.1");
     try testing.expect(@intFromPtr(module) != 0);
     const symbol = moduleSymbol(module.?, "compress");
     try testing.expect(@intFromPtr(symbol) != 0);

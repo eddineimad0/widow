@@ -5,8 +5,8 @@ const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const ScanCode = common.keyboard_and_mouse.ScanCode;
-const KeyCode = common.keyboard_and_mouse.KeyCode;
+const ScanCode = common.keyboard_mouse.ScanCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
 
 pub const KEYCODE_MAP_SIZE = 256;
 

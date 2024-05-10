@@ -1,10 +1,11 @@
 const std = @import("std");
 const geometry = @import("geometry.zig");
-const input = @import("keyboard_and_mouse.zig");
-const KeyEvent = input.KeyEvent;
-const KeyModifiers = input.KeyModifiers;
-const MouseButtonEvent = input.MouseButtonEvent;
-const WheelEvent = input.WheelEvent;
+const kbd_mouse = @import("keyboard_mouse.zig");
+
+const KeyEvent = kbd_mouse.KeyEvent;
+const KeyModifiers = kbd_mouse.KeyModifiers;
+const MouseButtonEvent = kbd_mouse.MouseButtonEvent;
+const WheelEvent = kbd_mouse.WheelEvent;
 const Queue = @import("queue.zig").Queue;
 
 pub const EventType = enum(u8) {
@@ -82,50 +83,54 @@ pub const Event = union(EventType) {
 };
 
 pub inline fn createCloseEvent(window_id: u32) Event {
-    return Event{ .WindowClose = window_id };
+    return .{ .WindowClose = window_id };
 }
 
 pub inline fn createVisibilityEvent(window_id: u32, shown: bool) Event {
     if (shown) {
-        return Event{ .WindowShown = window_id };
+        return .{ .WindowShown = window_id };
     } else {
-        return Event{ .WindowHidden = window_id };
+        return .{ .WindowHidden = window_id };
     }
 }
 
 pub inline fn createMaximizeEvent(window_id: u32) Event {
-    return Event{ .WindowMaximize = window_id };
+    return .{ .WindowMaximize = window_id };
 }
 
 pub inline fn createMinimizeEvent(window_id: u32) Event {
-    return Event{ .WindowMinimize = window_id };
+    return .{ .WindowMinimize = window_id };
 }
 
 pub inline fn createRestoreEvent(window_id: u32) Event {
-    return Event{ .WindowRestore = window_id };
+    return .{ .WindowRestore = window_id };
 }
 
 pub inline fn createMouseEnterEvent(window_id: u32) Event {
-    return Event{ .MouseEnter = window_id };
+    return .{ .MouseEnter = window_id };
 }
 
 pub inline fn createMouseLeftEvent(window_id: u32) Event {
-    return Event{ .MouseLeave = window_id };
+    return .{ .MouseLeave = window_id };
 }
 
 pub inline fn createDropFileEvent(window_id: u32) Event {
-    return Event{ .FileDrop = window_id };
+    return .{ .FileDrop = window_id };
+}
+
+pub inline fn createRedrawEvent(window_id: u32) Event {
+    return .{ .RedrawRequest = window_id };
 }
 
 pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
-    return Event{ .WindowFocus = FocusEvent{
+    return .{ .WindowFocus = FocusEvent{
         .window_id = window_id,
         .has_focus = focus,
     } };
 }
 
 pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
-    return Event{ .WindowResize = ResizeEvent{
+    return .{ .WindowResize = ResizeEvent{
         .window_id = window_id,
         .width = width,
         .height = height,
@@ -134,13 +139,13 @@ pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
 
 pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Event {
     return if (!is_mouse)
-        Event{ .WindowMove = MoveEvent{
+        .{ .WindowMove = MoveEvent{
             .window_id = window_id,
             .x = x,
             .y = y,
         } }
     else
-        Event{ .MouseMove = MoveEvent{
+        .{ .MouseMove = MoveEvent{
             .window_id = window_id,
             .x = x,
             .y = y,
@@ -149,11 +154,11 @@ pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Ev
 
 pub inline fn createMouseButtonEvent(
     window_id: u32,
-    button: input.MouseButton,
-    state: input.MouseButtonState,
-    mods: input.KeyModifiers,
+    button: kbd_mouse.MouseButton,
+    state: kbd_mouse.MouseButtonState,
+    mods: kbd_mouse.KeyModifiers,
 ) Event {
-    return Event{ .MouseButton = MouseButtonEvent{
+    return .{ .MouseButton = MouseButtonEvent{
         .window_id = window_id,
         .button = button,
         .state = state,
@@ -163,12 +168,12 @@ pub inline fn createMouseButtonEvent(
 
 pub inline fn createKeyboardEvent(
     window_id: u32,
-    keycode: input.KeyCode,
-    scancode: input.ScanCode,
-    state: input.KeyState,
-    mods: input.KeyModifiers,
+    keycode: kbd_mouse.KeyCode,
+    scancode: kbd_mouse.ScanCode,
+    state: kbd_mouse.KeyState,
+    mods: kbd_mouse.KeyModifiers,
 ) Event {
-    return Event{ .KeyBoard = KeyEvent{
+    return .{ .KeyBoard = KeyEvent{
         .window_id = window_id,
         .keycode = keycode,
         .scancode = scancode,
@@ -177,8 +182,12 @@ pub inline fn createKeyboardEvent(
     } };
 }
 
-pub inline fn createScrollEvent(window_id: u32, wheel: input.MouseWheel, delta: f64) Event {
-    return Event{ .MouseScroll = WheelEvent{
+pub inline fn createScrollEvent(
+    window_id: u32,
+    wheel: kbd_mouse.MouseWheel,
+    delta: f64,
+) Event {
+    return .{ .MouseScroll = WheelEvent{
         .window_id = window_id,
         .wheel = wheel,
         .delta = delta,
@@ -186,54 +195,53 @@ pub inline fn createScrollEvent(window_id: u32, wheel: input.MouseWheel, delta: 
 }
 
 pub inline fn createDPIEvent(window_id: u32, new_dpi: u32, new_scale: f64) Event {
-    return Event{ .DPIChange = DPIChangeEvent{
+    return .{ .DPIChange = DPIChangeEvent{
         .window_id = window_id,
         .dpi = new_dpi,
         .scaler = new_scale,
     } };
 }
 
-pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyModifiers) Event {
-    return Event{ .Character = CharacterEvent{
+pub inline fn createCharEvent(
+    window_id: u32,
+    codepoint: u32,
+    mods: kbd_mouse.KeyModifiers,
+) Event {
+    return .{ .Character = CharacterEvent{
         .window_id = window_id,
         .codepoint = @truncate(codepoint),
         .mods = mods,
     } };
 }
 
-pub inline fn createRedrawEvent(window_id: u32) Event {
-    return Event{ .RedrawRequest = window_id };
-}
-
 pub const EventQueue = struct {
     queue: Queue(Event),
-    events_count: usize,
+    // events_count: usize,
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{
+        return .{
             .queue = Queue(Event).init(allocator),
-            .events_count = 0,
+            // .events_count = 0,
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.queue.deinit();
-        self.events_count = 0;
+        // self.events_count = 0;
     }
 
     pub fn queueEvent(self: *Self, event: *const Event) void {
         self.queue.append(event) catch |err| {
             std.log.err("[Event]: Failed to Queue Event,{}\n", .{err});
-            return;
         };
-        self.events_count += 1;
+        // self.events_count += 1;
     }
 
     pub fn popEvent(self: *Self, event: *Event) bool {
         const first = self.queue.get() orelse return false;
         event.* = first.*;
-        self.events_count -= 1;
+        // self.events_count -= 1;
         return self.queue.removeFront();
     }
 };

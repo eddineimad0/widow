@@ -2,7 +2,7 @@ const std = @import("std");
 const math = std.math;
 const MAX_U32 = math.maxInt(u32);
 
-/// Holds the Display's current video mode
+/// Describes a video mode
 pub const VideoMode = struct {
     width: i32,
     height: i32,
@@ -12,7 +12,7 @@ pub const VideoMode = struct {
     const Self = @This();
 
     pub fn init(width: i32, height: i32, frequency: u16, color_depth: u8) Self {
-        return Self{
+        return .{
             .width = width,
             .height = height,
             .frequency = frequency,
@@ -20,6 +20,7 @@ pub const VideoMode = struct {
         };
     }
 
+    /// Checks for equality between 2 VideoModes
     pub fn equals(self: *const Self, other: *const Self) bool {
         return (self.width == other.width and
             self.height == other.height and
@@ -27,13 +28,16 @@ pub const VideoMode = struct {
             self.frequency == other.frequency);
     }
 
-    /// This function returns the index of the closest possible video mode to the `desired_mode`
-    /// from a slice of supported modes.
-    pub fn selectBestMatch(desired_mode: *const VideoMode, modes: []const VideoMode) usize {
-        // avoids garbage result.
+    /// This function returns the index of the closest possible video mode
+    /// to the `desired_mode` from a slice of supported modes.
+    /// if the `modes` slice is empty it returns 0.
+    pub fn selectBestMatch(
+        desired_mode: *const VideoMode,
+        modes: []const VideoMode,
+    ) usize {
         std.debug.assert(modes.len != 0);
         var best_index: usize = 0;
-        // var result = desired_mode;
+
         var size_diff: i32 = undefined;
         var width_diff: i32 = undefined;
         var height_diff: i32 = undefined;
@@ -57,15 +61,14 @@ pub const VideoMode = struct {
             width_diff *|= width_diff;
             height_diff = mode.height - desired_mode.height;
             height_diff *|= height_diff;
-            size_diff = width_diff +| height_diff;
+            size_diff = width_diff + height_diff;
 
-            const distance_square: u32 = @intCast(color_diff +| rate_diff +| size_diff);
+            const distance_square: u32 = @intCast(color_diff + rate_diff + size_diff);
             current_distance = math.sqrt(distance_square);
 
             if (current_distance < least_distance) {
-                // result = mode;
-                best_index = @intCast(i);
-                least_distance = @intCast(current_distance);
+                best_index = i;
+                least_distance = current_distance;
             }
         }
         return best_index;

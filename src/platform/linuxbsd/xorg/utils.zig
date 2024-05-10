@@ -3,7 +3,7 @@ const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const maxInt = std.math.maxInt;
-const ScanCode = common.keyboard_and_mouse.ScanCode;
+const ScanCode = common.keyboard_mouse.ScanCode;
 
 pub const DEFAULT_SCREEN_DPI: f32 = @as(f32, 96);
 
@@ -78,7 +78,7 @@ pub fn x11WindowProperty(
 
 /// Returns the state of the Key Modifiers for the current event,
 /// by decoding the state field.
-pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
+pub fn decodeKeyMods(state: c_uint) common.keyboard_mouse.KeyModifiers {
     return .{
         .shift = ((state & libx11.ShiftMask != 0)),
         .ctrl = ((state & libx11.ControlMask != 0)),
@@ -90,9 +90,9 @@ pub fn decodeKeyMods(state: c_uint) common.keyboard_and_mouse.KeyModifiers {
 }
 
 pub fn fixKeyMods(
-    mods: *common.keyboard_and_mouse.KeyModifiers,
-    keycode: common.keyboard_and_mouse.KeyCode,
-    key_state: common.keyboard_and_mouse.KeyState,
+    mods: *common.keyboard_mouse.KeyModifiers,
+    keycode: common.keyboard_mouse.KeyCode,
+    key_state: common.keyboard_mouse.KeyState,
 ) void {
     //INFO:
     // whenever a modifier key is pressed it's bit in the modifiers state won't be set
