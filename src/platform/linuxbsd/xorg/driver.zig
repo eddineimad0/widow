@@ -22,6 +22,7 @@ const X11Handles = struct {
 
 const XRRInterface = struct {
     is_v1point3: bool,
+    // TODO: should the functions pointers be optional ?
     XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
     XRRGetScreenResources: x11ext.XRRGetScreenResourcesProc,
     XRRFreeScreenResources: x11ext.XRRFreeScreenResourcesProc,
@@ -669,7 +670,7 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
             {
                 return 0;
             } else {
-                // TODO:
+                // TODO: what to do here.
                 return -1;
                 // return X11Driver.last_error_handler.?(display, err);
             }
