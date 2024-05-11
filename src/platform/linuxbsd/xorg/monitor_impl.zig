@@ -181,7 +181,7 @@ pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl)
         // Copy the monitor name.
         const name_len = utils.strZLen(output_info.name);
         const name = try allocator.alloc(u8, name_len);
-        utils.strCpy(output_info.name, name.ptr, name_len);
+        utils.strNCpy(output_info.name, name.ptr, name_len);
 
         var monitor = MonitorImpl{
             .adapter = output_info.crtc,

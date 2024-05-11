@@ -7,5 +7,5 @@ pub const keyboard_mouse = @import("keyboard_mouse.zig");
 pub const cursor = @import("cursor.zig");
 
 const builtin = @import("builtin");
-pub const posix = if (builtin.target.os.tag == .windows) {} else @import("posix/posix.zig");
-pub const IS_DEBUG = builtin.mode == .Debug;
+pub const unix = if (builtin.target.os.tag == .windows) {} else @import("unix/unix.zig");
+pub const IS_DEBUG_BUILD = builtin.mode == .Debug;

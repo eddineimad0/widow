@@ -3,7 +3,7 @@
 //! To allow cross compilation from windows targeting linux we need to stop linking against
 //! X11 system library and instead load it at runtime.
 const std = @import("std");
-const posix = @import("common").posix;
+const unix = @import("common").unix;
 const types = @import("types.zig");
 const defs = @import("constants.zig");
 const xkb = @import("extensions/xkb.zig");
@@ -299,7 +299,7 @@ pub const dyn_api = struct {
 
 var __libx11_module: ?*anyopaque = null;
 
-pub fn initDynamicApi() posix.ModuleError!void {
+pub fn initDynamicApi() unix.ModuleError!void {
     // Easy shortcut but require the field.name to be 0 terminated
     // since it will be passed to a c function.
     const MAX_NAME_LENGTH = 256;
@@ -310,18 +310,23 @@ pub fn initDynamicApi() posix.ModuleError!void {
         return;
     }
 
-    __libx11_module = posix.loadPosixModule(defs.XORG_LIBS_NAME[defs.LIB_X11_INDEX]);
+    __libx11_module = unix.loadPosixModule(
+        defs.XORG_LIBS_NAME[defs.LIB_X11_NAME_INDEX],
+    );
     if (__libx11_module) |m| {
         inline for (info.Struct.decls) |*d| {
             if (comptime d.name.len > MAX_NAME_LENGTH - 1) {
-                @compileError("Libx11 function name is greater than the maximum buffer length");
+                @compileError(
+                    "Libx11 function name is greater than the maximum buffer length",
+                );
             }
             std.mem.copyForwards(u8, &field_name, d.name);
             field_name[d.name.len] = 0;
-            const symbol = posix.moduleSymbol(m, @ptrCast(&field_name)) orelse return posix.ModuleError.UndefinedSymbol;
+            const symbol = unix.moduleSymbol(m, @ptrCast(&field_name)) orelse
+                return unix.ModuleError.UndefinedSymbol;
             @field(dyn_api, d.name) = @ptrCast(symbol);
         }
     } else {
-        return posix.ModuleError.NotFound;
+        return unix.ModuleError.NotFound;
     }
 }

@@ -690,6 +690,6 @@ pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     else => @compileError("Unsupported Unix Platform"),
 };
 
-pub const LIB_X11_INDEX = 0;
-pub const LIB_XRANDR_INDEX = 1;
-pub const LIB_XINERAMA_INDEX = 2;
+pub const LIB_X11_NAME_INDEX = 0;
+pub const LIB_XRANDR_NAME_INDEX = 1;
+pub const LIB_XINERAMA_NAME_INDEX = 2;
