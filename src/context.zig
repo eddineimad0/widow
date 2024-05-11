@@ -129,7 +129,7 @@ pub const WindowBuilder = struct {
                 .min_size = null,
                 .max_size = null,
                 .aspect_ratio = null,
-                .flags = common.window_data.WindowFlags{
+                .flags = .{
                     .is_visible = true,
                     .is_maximized = false,
                     .is_minimized = false,
@@ -141,7 +141,7 @@ pub const WindowBuilder = struct {
                     .cursor_in_client = false,
                     .is_dpi_aware = false,
                 },
-                .input = common.keyboard_and_mouse.InputState.init(),
+                .input = common.keyboard_mouse.InputState.init(),
             },
         };
     }

@@ -4,11 +4,11 @@ pub const KeyState = enum(u8) {
 
     const Self = @This();
     pub inline fn isPressed(self: *const Self) bool {
-        return self.* == Self.Pressed;
+        return self.* == .Pressed;
     }
 
     pub inline fn isReleased(self: *const Self) bool {
-        return self.* == Self.Released;
+        return self.* == .Released;
     }
 };
 
@@ -240,7 +240,8 @@ pub const ScanCode = enum(i32) {
     PrevTrack, // The |<< key
     PlayPause, // The play/pause key
     // END
-    const COUNT = @as(u32, @intCast(@intFromEnum(ScanCode.PlayPause) - @intFromEnum(ScanCode.Unknown)));
+    const COUNT: u32 = @intCast(@intFromEnum(ScanCode.PlayPause) -
+        @intFromEnum(ScanCode.Unknown));
 };
 
 pub const KeyModifiers = packed struct {
@@ -258,8 +259,8 @@ pub const MouseButton = enum(u8) {
     Middle, // Middle Mouse Button.
     ExtraButton1, // Additional Mouse Button 1 (backward navigation).
     ExtraButton2, // Additional Mouse Button 2 (forward navigation).
-    const Self = @This();
-    const COUNT = @intFromEnum(Self.ExtraButton2) - @intFromEnum(Self.Left);
+    const COUNT = @intFromEnum(MouseButton.ExtraButton2) -
+        @intFromEnum(MouseButton.Left);
 };
 
 pub const MouseWheel = enum(u8) {
@@ -267,17 +268,16 @@ pub const MouseWheel = enum(u8) {
     HorizontalWheel,
     const Self = @This();
     pub inline fn isVertical(self: *const Self) bool {
-        return self.* == MouseWheel.VerticalWheel;
+        return self.* == .VerticalWheel;
     }
 
     pub inline fn isHorizontal(self: *const Self) bool {
-        return self.* == MouseWheel.HorizontalWheel;
+        return self.* == .HorizontalWheel;
     }
 };
 
 /// Holds the keyboard and mouse input state for each window.
-/// # Notes
-/// ## Win32
+/// # Win32
 /// on Windows keeping track of the keyboard state allow
 /// us to emit release events for keys that are not emitted by
 /// the OS.

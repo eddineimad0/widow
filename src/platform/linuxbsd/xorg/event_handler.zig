@@ -5,7 +5,7 @@ const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 const keymaps = @import("keymaps.zig");
 const opts = @import("build-options");
-const keyboard_and_mouse = common.keyboard_and_mouse;
+const kbd_mouse = common.keyboard_mouse;
 const X11Driver = @import("driver.zig").X11Driver;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const HelperData = @import("internals.zig").HelperData;
@@ -18,20 +18,20 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *WindowImpl) void 
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Left,
-            keyboard_and_mouse.MouseButtonState.Released,
+            kbd_mouse.MouseButton.Left,
+            kbd_mouse.MouseButtonState.Released,
             utils.decodeKeyMods(e.state),
         ),
         libx11.Button2 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Middle,
-            keyboard_and_mouse.MouseButtonState.Released,
+            kbd_mouse.MouseButton.Middle,
+            kbd_mouse.MouseButtonState.Released,
             utils.decodeKeyMods(e.state),
         ),
         libx11.Button3 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Right,
-            keyboard_and_mouse.MouseButtonState.Released,
+            kbd_mouse.MouseButton.Right,
+            kbd_mouse.MouseButtonState.Released,
             utils.decodeKeyMods(e.state),
         ),
         libx11.Button4,
@@ -56,20 +56,20 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
     const button_event = switch (e.button) {
         libx11.Button1 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Left,
-            keyboard_and_mouse.MouseButtonState.Pressed,
+            kbd_mouse.MouseButton.Left,
+            kbd_mouse.MouseButtonState.Pressed,
             utils.decodeKeyMods(e.state),
         ),
         libx11.Button2 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Middle,
-            keyboard_and_mouse.MouseButtonState.Pressed,
+            kbd_mouse.MouseButton.Middle,
+            kbd_mouse.MouseButtonState.Pressed,
             utils.decodeKeyMods(e.state),
         ),
         libx11.Button3 => common.event.createMouseButtonEvent(
             window.data.id,
-            keyboard_and_mouse.MouseButton.Right,
-            keyboard_and_mouse.MouseButtonState.Pressed,
+            kbd_mouse.MouseButton.Right,
+            kbd_mouse.MouseButtonState.Pressed,
             utils.decodeKeyMods(e.state),
         ),
         // INFO:
@@ -79,22 +79,22 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *WindowImpl) void {
         // 4 (up) and 5 (down) and a horizontal wheel is 6 (left) and 7 (right).
         libx11.Button4 => common.event.createScrollEvent(
             window.data.id,
-            keyboard_and_mouse.MouseWheel.VerticalWheel,
+            kbd_mouse.MouseWheel.VerticalWheel,
             1.0,
         ),
         libx11.Button5 => common.event.createScrollEvent(
             window.data.id,
-            keyboard_and_mouse.MouseWheel.VerticalWheel,
+            kbd_mouse.MouseWheel.VerticalWheel,
             -1.0,
         ),
         libx11.Button6 => common.event.createScrollEvent(
             window.data.id,
-            keyboard_and_mouse.MouseWheel.HorizontalWheel,
+            kbd_mouse.MouseWheel.HorizontalWheel,
             1.0,
         ),
         libx11.Button7 => common.event.createScrollEvent(
             window.data.id,
-            keyboard_and_mouse.MouseWheel.HorizontalWheel,
+            kbd_mouse.MouseWheel.HorizontalWheel,
             -1.0,
         ),
         else => {
@@ -139,12 +139,12 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
             const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
             var mods = utils.decodeKeyMods(ev.state);
-            utils.fixKeyMods(&mods, keycode, keyboard_and_mouse.KeyState.Pressed);
+            utils.fixKeyMods(&mods, keycode, kbd_mouse.KeyState.Pressed);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
                 keycode,
                 scancode,
-                keyboard_and_mouse.KeyState.Pressed,
+                kbd_mouse.KeyState.Pressed,
                 mods,
             );
             window.sendEvent(&event);
@@ -191,12 +191,12 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *WindowImpl) void {
             const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
             const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
             var mods = utils.decodeKeyMods(ev.state);
-            utils.fixKeyMods(&mods, keycode, keyboard_and_mouse.KeyState.Released);
+            utils.fixKeyMods(&mods, keycode, kbd_mouse.KeyState.Released);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
                 keycode,
                 scancode,
-                keyboard_and_mouse.KeyState.Released,
+                kbd_mouse.KeyState.Released,
                 mods,
             );
             window.sendEvent(&event);

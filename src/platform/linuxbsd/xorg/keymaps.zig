@@ -5,8 +5,8 @@ const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const ScanCode = common.keyboard_and_mouse.ScanCode;
-const KeyCode = common.keyboard_and_mouse.KeyCode;
+const ScanCode = common.keyboard_mouse.ScanCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
 
 pub const KEYCODE_MAP_SIZE = 256;
 
@@ -538,10 +538,9 @@ fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
 pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Allocator.Error!void {
     const UNICODE_MAP_SIZE = 0x400;
     try xkeysym_unicode_mapping.ensureTotalCapacity(UNICODE_MAP_SIZE);
-    // # Taken from godot game enginge, thanks.
+    // "Taken from godot game enginge, thanks."
     // # Keysym to Unicode map, tables taken from FOX toolkit.
-    // Add a few extra mapping at the end.
-    // no need to worry about allocation errors capacity has already been reserved.
+    // no need to worry about allocation errors, capacity has already been reserved.
     xkeysym_unicode_mapping.put(0x01A1, 0x0104) catch unreachable;
     xkeysym_unicode_mapping.put(0x01A2, 0x02D8) catch unreachable;
     xkeysym_unicode_mapping.put(0x01A3, 0x0141) catch unreachable;
@@ -1397,13 +1396,23 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
             );
             min_scancode = desc.min_key_code;
             max_scancode = desc.max_key_code;
-            defer libx11.XkbFreeNames(desc, x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask, libx11.True);
+            defer libx11.XkbFreeNames(
+                desc,
+                x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
+                libx11.True,
+            );
             for (desc.min_key_code..(@as(u32, @intCast(desc.max_key_code)) + 1)) |i| {
-                keycode_lookup_table[i] = mapXKeyNameToKeyCode(&desc.names.?.keys.?[i].name);
+                keycode_lookup_table[i] = mapXKeyNameToKeyCode(
+                    &desc.names.?.keys.?[i].name,
+                );
             }
         }
     } else {
-        _ = libx11.XDisplayKeycodes(x11driver.handles.xdisplay, &min_scancode, &max_scancode);
+        _ = libx11.XDisplayKeycodes(
+            x11driver.handles.xdisplay,
+            &min_scancode,
+            &max_scancode,
+        );
     }
     var keysym_size: c_int = 0;
     const keysym_array = libx11.XGetKeyboardMapping(
@@ -1435,6 +1444,6 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
     }
 }
 
-pub fn keycodeToScancode(code: u8) ScanCode {
+pub inline fn keycodeToScancode(code: u8) ScanCode {
     return SCANCODE_LOOKUP_TABLE[code];
 }
