@@ -1,4 +1,5 @@
 const std = @import("std");
+const mem = std.mem;
 const common = @import("common");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
@@ -33,13 +34,13 @@ pub inline fn strCmp(str_a: []const u8, str_b: []const u8) bool {
 /// for use with windows `W(ide)` api functions.
 /// # Note
 /// The returned slice should be freed by the caller.
-pub inline fn utf8ToWideZ(allocator: std.mem.Allocator, utf8_str: []const u8) ![:0]u16 {
-    return std.unicode.utf8ToUtf16LeWithNull(allocator, utf8_str);
+pub inline fn utf8ToWideZ(allocator: mem.Allocator, utf8_str: []const u8) ![:0]u16 {
+    return std.unicode.utf8ToUtf16LeAllocZ(allocator, utf8_str);
 }
 
 /// Returns a slice to a well formed utf8 string.
-pub inline fn wideToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
-    return std.unicode.utf16leToUtf8Alloc(allocator, wide_str);
+pub inline fn wideToUtf8(allocator: mem.Allocator, wide_str: []const u16) ![]u8 {
+    return std.unicode.utf16LeToUtf8Alloc(allocator, wide_str);
 }
 
 /// Returns a slice to a well formed utf8 string.
