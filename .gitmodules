@@ -1,0 +1,4 @@
+[submodule "libs/zigwin32"]
+	path = libs/zigwin32
+	url = https://github.com/marlersoft/zigwin32.git
+	branch = main
