@@ -21,7 +21,7 @@ fn EnumMonitorProc(
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL {
     const ulparam: usize = @intCast(lparam);
-    var data: *LparamTuple = @ptrFromInt(ulparam);
+    const data: *LparamTuple = @ptrFromInt(ulparam);
     // the EnumDisplayMonitor function will return the handles of all monitors
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
     // we'll need to compare the names to figure out the right handle.
@@ -109,17 +109,17 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
             }
 
             // Get the handle for the monitor.
-            var handle = querySystemHandle(&display_adapter.DeviceName) orelse {
+            const handle = querySystemHandle(&display_adapter.DeviceName) orelse {
                 return MonitorError.MonitorHandleNotFound;
             };
 
             // We'll need it when enumerating video modes.
-            var is_pruned = (display_adapter.StateFlags & win32_gdi.DISPLAY_DEVICE_MODESPRUNED) != 0;
+            const is_pruned = (display_adapter.StateFlags & win32_gdi.DISPLAY_DEVICE_MODESPRUNED) != 0;
             // Enumerate all "possible" video modes.
             var modes = try pollVideoModes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
 
-            var display_name = try utils.wideZToUtf8(allocator, &display_device.DeviceName);
+            const display_name = try utils.wideZToUtf8(allocator, &display_device.DeviceName);
             errdefer allocator.free(display_name);
             try monitors.append(MonitorImpl.init(
                 handle,

@@ -34,7 +34,7 @@ pub fn clipboardText(allocator: std.mem.Allocator, window_handle: HWND) ![]u8 {
                     buffer_size += 2;
                 }
                 // no null terminator;
-                var utf16_buffer = try allocator.alloc(u16, (buffer_size >> 1) - 1);
+                const utf16_buffer = try allocator.alloc(u16, (buffer_size >> 1) - 1);
                 defer allocator.free(utf16_buffer);
                 var dest_buffer: [*]u8 = @ptrCast(utf16_buffer.ptr);
                 for (0..buffer_size - 2) |i| {
@@ -70,14 +70,14 @@ pub fn setClipboardText(allocator: std.mem.Allocator, window_handle: HWND, text:
         return ClipboardError.FailedToUpdate;
     }
 
-    var buffer = win32_system_memory.GlobalLock(alloc_mem);
+    const buffer = win32_system_memory.GlobalLock(alloc_mem);
     if (buffer == null) {
         return ClipboardError.FailedToUpdate;
     }
 
     // Hack to deal with alignement BS.
     var wide_dest_ptr: [*]u8 = @ptrCast(buffer);
-    var wide_src_ptr: [*]u8 = @ptrCast(wide_text.ptr);
+    const wide_src_ptr: [*]u8 = @ptrCast(wide_text.ptr);
     for (0..bytes_len) |i| {
         wide_dest_ptr[i] = wide_src_ptr[i];
     }

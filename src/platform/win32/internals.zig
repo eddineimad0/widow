@@ -218,14 +218,12 @@ pub const MonitorStore = struct {
 
     /// Initialize the `MonitorStore` struct.
     pub fn init(allocator: std.mem.Allocator) !Self {
-        var self = Self{
+        return .{
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
             .monitors = try monitor_impl.pollMonitors(allocator),
         };
-
-        return self;
     }
 
     /// Deinitialize the MonitorStore struct.

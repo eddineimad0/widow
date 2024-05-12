@@ -137,7 +137,7 @@ pub const Win32Context = struct {
                 _ = g_instance.functions.SetProcessDPIAware.?();
             }
 
-            @atomicStore(bool, &Self.g_init, true, .Release);
+            Self.g_init = true;
         }
     }
 

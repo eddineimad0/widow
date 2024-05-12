@@ -296,16 +296,10 @@ pub const WindowWin32Data = struct {
     position_update: bool,
 };
 
-const Win32DrawContext = union(common.gfx.DrawingBackend) {
-    None: void,
-    OpenGL: WinGLContext,
-};
-
 pub const WindowImpl = struct {
     data: WindowData,
     widow: WidowProps,
     win32: WindowWin32Data,
-    draw_ctx: Win32DrawContext,
     handle: win32_foundation.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = win32_window_messaging.CW_USEDEFAULT,
@@ -326,7 +320,6 @@ pub const WindowImpl = struct {
             .events_queue = events_queue,
             .internals = internals,
         };
-        self.draw_ctx = Win32DrawContext.None;
         self.data = data.*;
         const styles = .{ windowStyles(&data.flags), windowExStyles(&data.flags) };
         self.handle = try createPlatformWindow(allocator, window_title, data, styles);
@@ -949,7 +942,7 @@ pub const WindowImpl = struct {
         const wide_title_len = win32_window_messaging.GetWindowTextLengthW(self.handle);
         if (wide_title_len > 0) {
             const uwide_title_len: usize = @intCast(wide_title_len);
-            var wide_slice = try allocator.allocSentinel(u16, uwide_title_len + 1, 0);
+            const wide_slice = try allocator.allocSentinel(u16, uwide_title_len + 1, 0);
             defer allocator.free(wide_slice);
             // to get the full title we must specify the full buffer length or we will be 1 character short.
             _ = win32_window_messaging.GetWindowTextW(self.handle, wide_slice.ptr, wide_title_len + 1);
@@ -1240,49 +1233,6 @@ pub const WindowImpl = struct {
             if (flags) {
                 std.debug.print("Flags Mode: {}\n", .{self.data.flags});
             }
-        }
-    }
-
-    pub fn initDrawingContext(self: *Self, backend: common.gfx.DrawingBackend) WindowError!void {
-        // a window can only init it's drawing context once.
-        // it cannot change it during execution.
-        switch (self.draw_ctx) {
-            .None => {}, // continue
-            else => return WindowError.DrawingContextReinit,
-        }
-
-        switch (backend) {
-            .OpenGL => self.draw_ctx = Win32DrawContext{ .OpenGL = WinGLContext.init(self.handle) catch
-                return WindowError.UsupportedDrawingContext },
-            else => return WindowError.UsupportedDrawingContext,
-        }
-    }
-
-    pub fn deinitDrawingContext(self: *Self) void {
-        switch (self.draw_ctx) {
-            .OpenGL => |*gl_cntxt| {
-                return gl_cntxt.deinit();
-            },
-            else => {},
-        }
-        self.draw_ctx = Win32DrawContext.None;
-    }
-
-    pub fn MakeDrawingContextCurrent(self: *const Self) bool {
-        switch (self.draw_ctx) {
-            .OpenGL => |*gl_cntxt| {
-                return gl_cntxt.makeCurrent();
-            },
-            else => return false,
-        }
-    }
-
-    pub fn swapBuffers(self: *const Self) bool {
-        switch (self.draw_ctx) {
-            .OpenGL => |*gl_cntxt| {
-                return gl_cntxt.swapBuffers();
-            },
-            else => return false,
         }
     }
 };

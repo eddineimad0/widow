@@ -38,7 +38,7 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
     const mods = utils.getKeyModifiers();
 
     // Determine the action.
-    var action = if (utils.hiWord(@bitCast(lparam)) & win32_window_messaging.KF_UP == 0)
+    const action = if (utils.hiWord(@bitCast(lparam)) & win32_window_messaging.KF_UP == 0)
         common.keyboard_and_mouse.KeyState.Pressed
     else
         common.keyboard_and_mouse.KeyState.Released;
