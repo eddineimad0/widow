@@ -24,28 +24,45 @@ const WindowFlags = common.window_data.WindowFlags;
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @bitCast(window_msg.WS_CLIPCHILDREN) |
-    @intFromEnum(window_msg.WS_CLIPSIBLINGS);
+const STYLE_BASIC: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .CLIPCHILDREN = 1,
+    .CLIPSIBLINGS = 1,
+});
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @intFromEnum(window_msg.WS_POPUP) |
-    @intFromEnum(window_msg.WS_MINIMIZEBOX);
+const STYLE_FULLSCREEN: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .POPUP = 1,
+    .MINIMIZE = 1,
+});
 // Captionless: without a caption(title bar)
-const STYLE_BORDERLESS: u32 = @intFromEnum(window_msg.WS_POPUP) |
-    @intFromEnum(window_msg.WS_MINIMIZEBOX);
+const STYLE_BORDERLESS: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .POPUP = 1,
+    .MINIMIZE = 1,
+});
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @intFromEnum(window_msg.WS_THICKFRAME) |
-    @intFromEnum(window_msg.WS_MAXIMIZEBOX);
+const STYLE_RESIZABLE: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .THICKFRAME = 1,
+    .MAXIMIZE = 1,
+});
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @intFromEnum(window_msg.WS_OVERLAPPED) |
-    @intFromEnum(window_msg.WS_MINIMIZEBOX) |
-    @intFromEnum(window_msg.WS_SYSMENU) |
-    @intFromEnum(window_msg.WS_CAPTION);
+const STYLE_NORMAL: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .MINIMIZE = 1,
+    .SYSMENU = 1,
+    .DLGFRAME = 1,
+    .BORDER = 1,
+});
 
-const STYLES_MASK: u32 = @intFromEnum(window_msg.WS_OVERLAPPEDWINDOW) |
-    @intFromEnum(window_msg.WS_POPUP) |
-    @intFromEnum(window_msg.WS_MAXIMIZE) |
-    @intFromEnum(window_msg.WS_CLIPCHILDREN) |
-    @intFromEnum(window_msg.WS_CLIPSIBLINGS);
+const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
+    .TABSTOP = 1,
+    .GROUP = 1,
+    .THICKFRAME = 1,
+    .SYSMENU = 1,
+    .DLGFRAME = 1,
+    .BORDER = 1,
+    .POPUP = 1,
+    .MAXIMIZE = 1,
+    .CLIPSIBLINGS = 1,
+    .CLIPCHILDREN = 1,
+});
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -64,11 +81,11 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
         }
 
         if (flags.is_maximized) {
-            styles |= @intFromEnum(window_msg.WS_MAXIMIZE);
+            styles |= @bitCast(window_msg.WINDOW_STYLE{ .MAXIMIZE = 1 });
         }
 
         if (flags.is_minimized) {
-            styles |= @intFromEnum(window_msg.WS_MINIMIZE);
+            styles |= @bitCast(window_msg.WINDOW_STYLE{ .MINIMIZE = 1 });
         }
     }
 
@@ -79,7 +96,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
     var ex_styles: u32 = 0;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @intFromEnum(window_msg.WS_EX_TOPMOST);
+        ex_styles |= @bitCast(window_msg.WS_EX_TOPMOST);
     }
     return ex_styles;
 }
@@ -107,9 +124,9 @@ pub fn adjustWindowRect(
     } else {
         _ = window_msg.AdjustWindowRectEx(
             rect,
-            @enumFromInt(styles),
+            @bitCast(styles),
             0,
-            @enumFromInt(ex_styles),
+            @bitCast(ex_styles),
         );
     }
 }
