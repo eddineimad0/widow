@@ -1,14 +1,18 @@
 const std = @import("std");
+const mem = std.mem;
 const platform = @import("platform");
 const Window = @import("window.zig").Window;
 const common = @import("common");
 const geometry = common.geometry;
 
+/// A widow context represent an interface to the platform
+/// and is required by other entities in the library
+/// to communicate with platform
 pub const WidowContext = struct {
     platform_internals: *platform.Internals,
     monitor_store: *platform.MonitorStore,
     events_queue: common.event.EventQueue,
-    allocator: std.mem.Allocator,
+    allocator: mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
 
     const Self = @This();
@@ -75,7 +79,7 @@ pub const WidowContext = struct {
     }
 
     /// Returns the next available window ID.
-    fn nextWindowId(self: *Self) u32 {
+    inline fn nextWindowId(self: *Self) u32 {
         self.next_window_id += 1;
         return self.next_window_id;
     }

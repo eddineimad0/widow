@@ -7,6 +7,20 @@ const sys_data_exchg = zigwin32.system.data_exchange;
 const sys_mem = zigwin32.system.memory;
 const HWND = win32.HWND;
 
+pub const Clipboard = struct {
+    updated: bool, // So we can cache the clipboard value until it changes.
+    next_viewer: ?win32.HWND, // we're using the old api to watch the clipboard.
+    value_cache: ?[]u8,
+    const Self = @This();
+    pub fn init() Self {
+        return .{
+            .updated = false,
+            .next_viewer = null,
+            .value_cache = null,
+        };
+    }
+};
+
 pub const ClipboardError = error{
     AccessDenied, // Couldn't gain access to the clipboard data.
     BadDataFormat, // Clipboard data doesn't meet ther required format.

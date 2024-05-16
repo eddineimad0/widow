@@ -6,17 +6,17 @@ const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
-const int = @import("internals.zig");
+const intern = @import("internals.zig");
 const monitor_impl = @import("monitor_impl.zig");
 const WinGLContext = @import("wgl.zig").WinGLContext;
-const win32_window_messaging = zigwin32.ui.windows_and_messaging;
-const win32_foundation = zigwin32.foundation;
-const win32_gdi = zigwin32.graphics.gdi;
+const window_msg = zigwin32.ui.windows_and_messaging;
+const foundation = zigwin32.foundation;
+const gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 const WindowError = @import("errors.zig").WindowError;
 const Win32Context = @import("global.zig").Win32Context;
-const Internals = int.Internals;
+const Internals = intern.Internals;
 const Cursor = icon.Cursor;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
@@ -24,28 +24,28 @@ const WindowFlags = common.window_data.WindowFlags;
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @intFromEnum(win32_window_messaging.WS_CLIPCHILDREN) |
-    @intFromEnum(win32_window_messaging.WS_CLIPSIBLINGS);
+const STYLE_BASIC: u32 = @bitCast(window_msg.WS_CLIPCHILDREN) |
+    @intFromEnum(window_msg.WS_CLIPSIBLINGS);
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @intFromEnum(win32_window_messaging.WS_POPUP) |
-    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX);
+const STYLE_FULLSCREEN: u32 = @intFromEnum(window_msg.WS_POPUP) |
+    @intFromEnum(window_msg.WS_MINIMIZEBOX);
 // Captionless: without a caption(title bar)
-const STYLE_BORDERLESS: u32 = @intFromEnum(win32_window_messaging.WS_POPUP) |
-    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX);
+const STYLE_BORDERLESS: u32 = @intFromEnum(window_msg.WS_POPUP) |
+    @intFromEnum(window_msg.WS_MINIMIZEBOX);
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @intFromEnum(win32_window_messaging.WS_THICKFRAME) |
-    @intFromEnum(win32_window_messaging.WS_MAXIMIZEBOX);
+const STYLE_RESIZABLE: u32 = @intFromEnum(window_msg.WS_THICKFRAME) |
+    @intFromEnum(window_msg.WS_MAXIMIZEBOX);
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @intFromEnum(win32_window_messaging.WS_OVERLAPPED) |
-    @intFromEnum(win32_window_messaging.WS_MINIMIZEBOX) |
-    @intFromEnum(win32_window_messaging.WS_SYSMENU) |
-    @intFromEnum(win32_window_messaging.WS_CAPTION);
+const STYLE_NORMAL: u32 = @intFromEnum(window_msg.WS_OVERLAPPED) |
+    @intFromEnum(window_msg.WS_MINIMIZEBOX) |
+    @intFromEnum(window_msg.WS_SYSMENU) |
+    @intFromEnum(window_msg.WS_CAPTION);
 
-const STYLES_MASK: u32 = @intFromEnum(win32_window_messaging.WS_OVERLAPPEDWINDOW) |
-    @intFromEnum(win32_window_messaging.WS_POPUP) |
-    @intFromEnum(win32_window_messaging.WS_MAXIMIZE) |
-    @intFromEnum(win32_window_messaging.WS_CLIPCHILDREN) |
-    @intFromEnum(win32_window_messaging.WS_CLIPSIBLINGS);
+const STYLES_MASK: u32 = @intFromEnum(window_msg.WS_OVERLAPPEDWINDOW) |
+    @intFromEnum(window_msg.WS_POPUP) |
+    @intFromEnum(window_msg.WS_MAXIMIZE) |
+    @intFromEnum(window_msg.WS_CLIPCHILDREN) |
+    @intFromEnum(window_msg.WS_CLIPSIBLINGS);
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -64,11 +64,11 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
         }
 
         if (flags.is_maximized) {
-            styles |= @intFromEnum(win32_window_messaging.WS_MAXIMIZE);
+            styles |= @intFromEnum(window_msg.WS_MAXIMIZE);
         }
 
         if (flags.is_minimized) {
-            styles |= @intFromEnum(win32_window_messaging.WS_MINIMIZE);
+            styles |= @intFromEnum(window_msg.WS_MINIMIZE);
         }
     }
 
@@ -79,7 +79,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
     var ex_styles: u32 = 0;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @intFromEnum(win32_window_messaging.WS_EX_TOPMOST);
+        ex_styles |= @intFromEnum(window_msg.WS_EX_TOPMOST);
     }
     return ex_styles;
 }
@@ -105,7 +105,7 @@ pub fn adjustWindowRect(
             dpi.?,
         );
     } else {
-        _ = win32_window_messaging.AdjustWindowRectEx(
+        _ = window_msg.AdjustWindowRectEx(
             rect,
             @enumFromInt(styles),
             0,
@@ -116,17 +116,17 @@ pub fn adjustWindowRect(
 
 /// Converts client coordinate of a RECT structure to screen coordinate.
 fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
-    var upper_left = win32_foundation.POINT{
+    var upper_left = foundation.POINT{
         .x = rect.left,
         .y = rect.top,
     };
-    var lower_right = win32_foundation.POINT{
+    var lower_right = foundation.POINT{
         .x = rect.right,
         .y = rect.bottom,
     };
 
-    _ = win32_gdi.ClientToScreen(window_handle, &upper_left);
-    _ = win32_gdi.ClientToScreen(window_handle, &lower_right);
+    _ = gdi.ClientToScreen(window_handle, &upper_left);
+    _ = gdi.ClientToScreen(window_handle, &lower_right);
 
     rect.* = win32.RECT{
         .left = upper_left.x,
@@ -139,7 +139,7 @@ fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
 /// Returns the (width,height) of the entire window frame.
 pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
     var rect: win32.RECT = undefined;
-    _ = win32_window_messaging.GetWindowRect(window_handle, &rect);
+    _ = window_msg.GetWindowRect(window_handle, &rect);
     const size = common.geometry.WidowSize{
         .width = rect.right - rect.left,
         .height = rect.bottom - rect.top,
@@ -154,10 +154,10 @@ pub fn updateCursorImage(cursor: *const icon.Cursor) void {
     }
 
     if (cursor.handle) |value| {
-        _ = win32_window_messaging.SetCursor(value);
+        _ = window_msg.SetCursor(value);
     } else {
-        _ = win32_window_messaging.SetCursor(
-            win32_window_messaging.LoadCursorW(null, win32_window_messaging.IDC_ARROW),
+        _ = window_msg.SetCursor(
+            window_msg.LoadCursorW(null, window_msg.IDC_ARROW),
         );
     }
 }
@@ -165,21 +165,21 @@ pub fn updateCursorImage(cursor: *const icon.Cursor) void {
 /// Limits the cursor motion to the client rectangle.
 pub inline fn captureCursor(window_handle: win32.HWND) void {
     var clip_rect: win32.RECT = undefined;
-    _ = win32_window_messaging.GetClientRect(window_handle, &clip_rect);
+    _ = window_msg.GetClientRect(window_handle, &clip_rect);
     // ClipCursor expects screen coordinates.
     clientToScreen(window_handle, &clip_rect);
-    _ = win32_window_messaging.ClipCursor(&clip_rect);
+    _ = window_msg.ClipCursor(&clip_rect);
 }
 
 /// Removes cursor motion limitation.
 pub inline fn releaseCursor() void {
-    _ = win32_window_messaging.ClipCursor(null);
+    _ = window_msg.ClipCursor(null);
 }
 
 /// Captures and hide the cursor from the user.
 pub fn disableCursor(window_handle: win32.HWND) void {
     captureCursor(window_handle);
-    _ = win32_window_messaging.SetCursor(null);
+    _ = window_msg.SetCursor(null);
 }
 
 /// Shows and release the cursor.
@@ -198,7 +198,7 @@ fn setWindowPositionIntern(
     width: i32,
     height: i32,
 ) void {
-    _ = win32_window_messaging.SetWindowPos(
+    _ = window_msg.SetWindowPos(
         window_handle,
         top,
         x,
@@ -233,14 +233,14 @@ fn createPlatformWindow(
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
-    if (data.client_area.top_left.x != win32_window_messaging.CW_USEDEFAULT and
-        data.client_area.top_left.y != win32_window_messaging.CW_USEDEFAULT)
+    if (data.client_area.top_left.x != window_msg.CW_USEDEFAULT and
+        data.client_area.top_left.y != window_msg.CW_USEDEFAULT)
     {
         frame_x = data.client_area.top_left.x + window_rect.left;
         frame_y = data.client_area.top_left.y + window_rect.top;
     } else {
-        frame_x = win32_window_messaging.CW_USEDEFAULT;
-        frame_y = win32_window_messaging.CW_USEDEFAULT;
+        frame_x = window_msg.CW_USEDEFAULT;
+        frame_y = window_msg.CW_USEDEFAULT;
     }
 
     // Final window frame.
@@ -300,10 +300,10 @@ pub const WindowImpl = struct {
     data: WindowData,
     widow: WidowProps,
     win32: WindowWin32Data,
-    handle: win32_foundation.HWND,
+    handle: foundation.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
-        .x = win32_window_messaging.CW_USEDEFAULT,
-        .y = win32_window_messaging.CW_USEDEFAULT,
+        .x = window_msg.CW_USEDEFAULT,
+        .y = window_msg.CW_USEDEFAULT,
     };
     const Self = @This();
 
@@ -346,9 +346,9 @@ pub const WindowImpl = struct {
         // these events aren't reported.
         self.processEvents();
 
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWLP_USERDATA,
+            window_msg.GWLP_USERDATA,
             @intCast(@intFromPtr(self)),
         );
 
@@ -378,21 +378,21 @@ pub const WindowImpl = struct {
             var window_rect: win32.RECT = undefined;
             // [MSDN]:If the window has not been shown before,
             // GetWindowRect will not include the area of the drop shadow.
-            _ = win32_window_messaging.GetWindowRect(self.handle, &window_rect);
+            _ = window_msg.GetWindowRect(self.handle, &window_rect);
             // Offset and readjust the created window's frame.
-            _ = win32_gdi.OffsetRect(
+            _ = gdi.OffsetRect(
                 &client_rect,
                 window_rect.left - client_rect.left,
                 window_rect.top - client_rect.top,
             );
 
             const top = if (self.data.flags.is_topmost)
-                win32_window_messaging.HWND_TOPMOST
+                window_msg.HWND_TOPMOST
             else
-                win32_window_messaging.HWND_NOTOPMOST;
-            const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-                @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-                @intFromEnum(win32_window_messaging.SWP_NOOWNERZORDER);
+                window_msg.HWND_NOTOPMOST;
+            const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOZORDER) |
+                @intFromEnum(window_msg.SWP_NOACTIVATE) |
+                @intFromEnum(window_msg.SWP_NOOWNERZORDER);
             setWindowPositionIntern(
                 self.handle,
                 top,
@@ -407,22 +407,22 @@ pub const WindowImpl = struct {
         // Allow Drag & Drop messages.
         if (Win32Context.singleton().flags.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
-            _ = win32_window_messaging.ChangeWindowMessageFilterEx(
+            _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
-                win32_window_messaging.WM_DROPFILES,
-                win32_window_messaging.MSGFLT_ALLOW,
+                window_msg.WM_DROPFILES,
+                window_msg.MSGFLT_ALLOW,
                 null,
             );
-            _ = win32_window_messaging.ChangeWindowMessageFilterEx(
+            _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
-                win32_window_messaging.WM_COPYDATA,
-                win32_window_messaging.MSGFLT_ALLOW,
+                window_msg.WM_COPYDATA,
+                window_msg.MSGFLT_ALLOW,
                 null,
             );
-            _ = win32_window_messaging.ChangeWindowMessageFilterEx(
+            _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
                 win32.WM_COPYGLOBALDATA,
-                win32_window_messaging.MSGFLT_ALLOW,
+                window_msg.MSGFLT_ALLOW,
                 null,
             );
         }
@@ -457,8 +457,8 @@ pub const WindowImpl = struct {
         if (self.win32.cursor.mode.is_disabled()) {
             enableCursor(&self.win32.cursor);
         }
-        _ = win32_window_messaging.SetWindowLongPtrW(self.handle, win32_window_messaging.GWLP_USERDATA, 0);
-        _ = win32_window_messaging.DestroyWindow(self.handle);
+        _ = window_msg.SetWindowLongPtrW(self.handle, window_msg.GWLP_USERDATA, 0);
+        _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
         self.deinitDrawingContext();
         allocator.destroy(self);
@@ -467,13 +467,13 @@ pub const WindowImpl = struct {
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         // Show without activating.
-        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_SHOWNA);
+        _ = window_msg.ShowWindow(self.handle, window_msg.SW_SHOWNA);
         self.data.flags.is_visible = true;
     }
 
     pub fn focus(self: *Self) void {
-        _ = win32_window_messaging.BringWindowToTop(self.handle);
-        _ = win32_window_messaging.SetForegroundWindow(self.handle);
+        _ = window_msg.BringWindowToTop(self.handle);
+        _ = window_msg.SetForegroundWindow(self.handle);
         _ = SetFocus(self.handle);
     }
 
@@ -485,7 +485,7 @@ pub const WindowImpl = struct {
                 dpi = proc(self.handle);
             } else {
                 // let's query the monitor's dpi.
-                const monitor_handle = win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST) orelse break :err_exit;
+                const monitor_handle = gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST) orelse break :err_exit;
                 dpi = monitor_impl.monitorDPI(monitor_handle);
             }
         }
@@ -498,10 +498,10 @@ pub const WindowImpl = struct {
 
     /// the window should belong to the thread calling this function.
     pub fn processEvents(self: *Self) void {
-        var msg: win32_window_messaging.MSG = undefined;
-        while (win32_window_messaging.PeekMessageW(&msg, self.handle, 0, 0, win32_window_messaging.PM_REMOVE) != 0) {
-            _ = win32_window_messaging.TranslateMessage(&msg);
-            _ = win32_window_messaging.DispatchMessageW(&msg);
+        var msg: window_msg.MSG = undefined;
+        while (window_msg.PeekMessageW(&msg, self.handle, 0, 0, window_msg.PM_REMOVE) != 0) {
+            _ = window_msg.TranslateMessage(&msg);
+            _ = window_msg.DispatchMessageW(&msg);
         }
         // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
@@ -514,19 +514,19 @@ pub const WindowImpl = struct {
 
     /// the window should belong to the thread calling this function.
     pub fn waitEvent(self: *Self) void {
-        _ = win32_window_messaging.WaitMessage();
+        _ = window_msg.WaitMessage();
         self.processEvents();
     }
 
     /// the window should belong to the thread calling this function.
     /// Waits for an input event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
-        if (win32_window_messaging.MsgWaitForMultipleObjects(
+        if (window_msg.MsgWaitForMultipleObjects(
             0,
             null,
             0,
             timeout,
-            win32_window_messaging.QS_ALLINPUT,
+            window_msg.QS_ALLINPUT,
         ) == win32.WAIT_TIMEOUT) {
             // Timeout period elapsed.
             return false;
@@ -537,33 +537,33 @@ pub const WindowImpl = struct {
 
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(self: *Self) void {
-        const EX_STYLES_MASK: u32 = @intFromEnum(win32_window_messaging.WS_EX_TOPMOST);
-        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_FRAMECHANGED) |
-            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-            @intFromEnum(win32_window_messaging.SWP_NOZORDER);
+        const EX_STYLES_MASK: u32 = @intFromEnum(window_msg.WS_EX_TOPMOST);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_FRAMECHANGED) |
+            @intFromEnum(window_msg.SWP_NOACTIVATE) |
+            @intFromEnum(window_msg.SWP_NOZORDER);
 
-        var reg_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
+        var reg_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_STYLE,
+            window_msg.GWL_STYLE,
         ));
-        var reg_ex_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
+        var reg_ex_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_EXSTYLE,
+            window_msg.GWL_EXSTYLE,
         ));
         reg_styles &= ~STYLES_MASK;
         reg_ex_styles &= ~EX_STYLES_MASK;
         reg_styles |= windowStyles(&self.data.flags);
         reg_ex_styles |= windowExStyles(&self.data.flags);
 
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_STYLE,
+            window_msg.GWL_STYLE,
             @bitCast(reg_styles),
         );
 
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_EXSTYLE,
+            window_msg.GWL_EXSTYLE,
             @bitCast(reg_ex_styles),
         );
 
@@ -597,9 +597,9 @@ pub const WindowImpl = struct {
         );
 
         const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
+            window_msg.HWND_TOPMOST
         else
-            win32_window_messaging.HWND_NOTOPMOST;
+            window_msg.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -613,20 +613,20 @@ pub const WindowImpl = struct {
     }
 
     pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
-        var cursor_pos: win32_foundation.POINT = undefined;
-        _ = win32_window_messaging.GetCursorPos(&cursor_pos);
-        _ = win32_gdi.ScreenToClient(self.handle, &cursor_pos);
+        var cursor_pos: foundation.POINT = undefined;
+        _ = window_msg.GetCursorPos(&cursor_pos);
+        _ = gdi.ScreenToClient(self.handle, &cursor_pos);
         // the cursor_pos is relative to the upper left corner of the window.
         return common.geometry.WidowPoint2D{ .x = cursor_pos.x, .y = cursor_pos.y };
     }
 
     pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
-        var point = win32_foundation.POINT{
+        var point = foundation.POINT{
             .x = x,
             .y = y,
         };
-        _ = win32_gdi.ClientToScreen(self.handle, &point);
-        _ = win32_window_messaging.SetCursorPos(point.x, point.y);
+        _ = gdi.ClientToScreen(self.handle, &point);
+        _ = window_msg.SetCursorPos(point.x, point.y);
     }
 
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
@@ -644,14 +644,14 @@ pub const WindowImpl = struct {
 
     /// Notify and flash the taskbar.
     pub fn flash(self: *const Self) void {
-        var flash_info = win32_window_messaging.FLASHWINFO{
-            .cbSize = @sizeOf(win32_window_messaging.FLASHWINFO),
+        var flash_info = window_msg.FLASHWINFO{
+            .cbSize = @sizeOf(window_msg.FLASHWINFO),
             .hwnd = self.handle,
-            .dwFlags = win32_window_messaging.FLASHW_ALL,
+            .dwFlags = window_msg.FLASHW_ALL,
             .uCount = 3,
             .dwTimeout = 0,
         };
-        _ = win32_window_messaging.FlashWindowEx(&flash_info);
+        _ = window_msg.FlashWindowEx(&flash_info);
     }
 
     /// Returns the position of the top left corner of the client area.
@@ -663,9 +663,9 @@ pub const WindowImpl = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         // Don't use SWP_NOSIZE to allow dpi change.
-        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOZORDER) |
+            @intFromEnum(window_msg.SWP_NOACTIVATE) |
+            @intFromEnum(window_msg.SWP_NOREPOSITION);
 
         if (self.data.flags.is_maximized) {
             // Moving a maximized window should restore it to it's orignal size
@@ -696,9 +696,9 @@ pub const WindowImpl = struct {
         rect.top += y;
 
         const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
+            window_msg.HWND_TOPMOST
         else
-            win32_window_messaging.HWND_NOTOPMOST;
+            window_msg.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -743,7 +743,7 @@ pub const WindowImpl = struct {
                 size.scaleBy(scaler);
             }
 
-            var new_client_rect = win32_foundation.RECT{
+            var new_client_rect = foundation.RECT{
                 .left = 0,
                 .top = 0,
                 .right = size.width,
@@ -761,15 +761,15 @@ pub const WindowImpl = struct {
                 self.restore();
             }
 
-            const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-                @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-                @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-                @intFromEnum(win32_window_messaging.SWP_NOMOVE);
+            const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOACTIVATE) |
+                @intFromEnum(window_msg.SWP_NOREPOSITION) |
+                @intFromEnum(window_msg.SWP_NOZORDER) |
+                @intFromEnum(window_msg.SWP_NOMOVE);
 
             const top = if (self.data.flags.is_topmost)
-                win32_window_messaging.HWND_TOPMOST
+                window_msg.HWND_TOPMOST
             else
-                win32_window_messaging.HWND_NOTOPMOST;
+                window_msg.HWND_NOTOPMOST;
 
             setWindowPositionIntern(
                 self.handle,
@@ -817,17 +817,17 @@ pub const WindowImpl = struct {
             self.data.min_size = null;
         }
 
-        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-            @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-            @intFromEnum(win32_window_messaging.SWP_NOMOVE);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOACTIVATE) |
+            @intFromEnum(window_msg.SWP_NOREPOSITION) |
+            @intFromEnum(window_msg.SWP_NOZORDER) |
+            @intFromEnum(window_msg.SWP_NOMOVE);
 
         const size = windowSize(self.handle);
 
         const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
+            window_msg.HWND_TOPMOST
         else
-            win32_window_messaging.HWND_NOTOPMOST;
+            window_msg.HWND_NOTOPMOST;
         // We need the system to post a WM_MINMAXINFO.
         // in order for the new size limits to be applied,
         setWindowPositionIntern(
@@ -872,17 +872,17 @@ pub const WindowImpl = struct {
             self.data.max_size = null;
         }
 
-        const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-            @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-            @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-            @intFromEnum(win32_window_messaging.SWP_NOMOVE);
+        const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOACTIVATE) |
+            @intFromEnum(window_msg.SWP_NOREPOSITION) |
+            @intFromEnum(window_msg.SWP_NOZORDER) |
+            @intFromEnum(window_msg.SWP_NOMOVE);
 
         const size = windowSize(self.handle);
 
         const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
+            window_msg.HWND_TOPMOST
         else
-            win32_window_messaging.HWND_NOTOPMOST;
+            window_msg.HWND_NOTOPMOST;
         // We need the system to post a WM_MINMAXINFO.
         // in order for the new size limits to be applied,
         setWindowPositionIntern(
@@ -898,7 +898,7 @@ pub const WindowImpl = struct {
 
     /// Hides the window, this is different from minimizing it.
     pub fn hide(self: *Self) void {
-        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_HIDE);
+        _ = window_msg.ShowWindow(self.handle, window_msg.SW_HIDE);
         self.data.flags.is_visible = false;
     }
 
@@ -916,36 +916,36 @@ pub const WindowImpl = struct {
 
     /// Maximize the window.
     pub fn maximize(self: *const Self) void {
-        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MAXIMIZE);
+        _ = window_msg.ShowWindow(self.handle, window_msg.SW_MAXIMIZE);
     }
 
     /// Minimizes the window.
     pub fn minimize(self: *const Self) void {
-        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MINIMIZE);
+        _ = window_msg.ShowWindow(self.handle, window_msg.SW_MINIMIZE);
     }
 
     /// Restores the minimized or maximized window to a normal window.
     pub fn restore(self: *const Self) void {
-        _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_RESTORE);
+        _ = window_msg.ShowWindow(self.handle, window_msg.SW_RESTORE);
     }
 
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, allocator: std.mem.Allocator, new_title: []const u8) !void {
         const wide_title = try utils.utf8ToWideZ(allocator, new_title);
         defer allocator.free(wide_title);
-        _ = win32_window_messaging.SetWindowTextW(self.handle, wide_title);
+        _ = window_msg.SetWindowTextW(self.handle, wide_title);
     }
 
     /// Returns the title of the window.
     pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
         // This length doesn't take into account the null character so add it when allocating.
-        const wide_title_len = win32_window_messaging.GetWindowTextLengthW(self.handle);
+        const wide_title_len = window_msg.GetWindowTextLengthW(self.handle);
         if (wide_title_len > 0) {
             const uwide_title_len: usize = @intCast(wide_title_len);
             const wide_slice = try allocator.allocSentinel(u16, uwide_title_len + 1, 0);
             defer allocator.free(wide_slice);
             // to get the full title we must specify the full buffer length or we will be 1 character short.
-            _ = win32_window_messaging.GetWindowTextW(self.handle, wide_slice.ptr, wide_title_len + 1);
+            _ = window_msg.GetWindowTextW(self.handle, wide_slice.ptr, wide_title_len + 1);
             const slice = try utils.wideZToUtf8(allocator, wide_slice);
             return slice;
         }
@@ -957,12 +957,12 @@ pub const WindowImpl = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn opacity(self: *const Self) f32 {
-        const ex_styles = win32_window_messaging.GetWindowLongPtrW(self.handle, win32_window_messaging.GWL_EXSTYLE);
-        if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) != 0) {
+        const ex_styles = window_msg.GetWindowLongPtrW(self.handle, window_msg.GWL_EXSTYLE);
+        if ((ex_styles & @intFromEnum(window_msg.WS_EX_LAYERED)) != 0) {
             var alpha: u8 = undefined;
-            var flags: win32_window_messaging.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
-            _ = win32_window_messaging.GetLayeredWindowAttributes(self.handle, null, &alpha, &flags);
-            if ((@intFromEnum(flags) & @intFromEnum(win32_window_messaging.LWA_ALPHA)) != 0) {
+            var flags: window_msg.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
+            _ = window_msg.GetLayeredWindowAttributes(self.handle, null, &alpha, &flags);
+            if ((@intFromEnum(flags) & @intFromEnum(window_msg.LWA_ALPHA)) != 0) {
                 const falpha: f32 = @floatFromInt(alpha);
                 return (falpha / 255.0);
             }
@@ -975,30 +975,30 @@ pub const WindowImpl = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f32) void {
-        var ex_styles: usize = @bitCast(win32_window_messaging.GetWindowLongPtrW(
+        var ex_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_EXSTYLE,
+            window_msg.GWL_EXSTYLE,
         ));
 
         if (value == @as(f32, 1.0)) {
-            ex_styles &= ~@intFromEnum(win32_window_messaging.WS_EX_LAYERED);
+            ex_styles &= ~@intFromEnum(window_msg.WS_EX_LAYERED);
         } else {
             const alpha: u32 = @intFromFloat(value * 255.0);
 
-            if ((ex_styles & @intFromEnum(win32_window_messaging.WS_EX_LAYERED)) == 0) {
-                ex_styles |= @intFromEnum(win32_window_messaging.WS_EX_LAYERED);
+            if ((ex_styles & @intFromEnum(window_msg.WS_EX_LAYERED)) == 0) {
+                ex_styles |= @intFromEnum(window_msg.WS_EX_LAYERED);
             }
 
-            _ = win32_window_messaging.SetLayeredWindowAttributes(
+            _ = window_msg.SetLayeredWindowAttributes(
                 self.handle,
                 0,
                 @truncate(alpha),
-                win32_window_messaging.LWA_ALPHA,
+                window_msg.LWA_ALPHA,
             );
         }
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.handle,
-            win32_window_messaging.GWL_EXSTYLE,
+            window_msg.GWL_EXSTYLE,
             @bitCast(ex_styles),
         );
     }
@@ -1008,9 +1008,9 @@ pub const WindowImpl = struct {
         self.data.aspect_ratio = ratio;
         if (ratio != null) {
             var rect: win32.RECT = undefined;
-            _ = win32_window_messaging.GetWindowRect(self.handle, &rect);
-            self.applyAspectRatio(&rect, win32_window_messaging.WMSZ_BOTTOMLEFT);
-            _ = win32_window_messaging.MoveWindow(
+            _ = window_msg.GetWindowRect(self.handle, &rect);
+            self.applyAspectRatio(&rect, window_msg.WMSZ_BOTTOMLEFT);
+            _ = window_msg.MoveWindow(
                 self.handle,
                 rect.left,
                 rect.top,
@@ -1021,12 +1021,12 @@ pub const WindowImpl = struct {
         }
     }
 
-    pub fn applyAspectRatio(self: *const Self, client: *win32_foundation.RECT, edge: u32) void {
+    pub fn applyAspectRatio(self: *const Self, client: *foundation.RECT, edge: u32) void {
         const faspect_x: f64 = @floatFromInt(self.data.aspect_ratio.?.x);
         const faspect_y: f64 = @floatFromInt(self.data.aspect_ratio.?.y);
         const ratio: f64 = faspect_x / faspect_y;
 
-        var rect = win32_foundation.RECT{
+        var rect = foundation.RECT{
             .left = 0,
             .top = 0,
             .right = 0,
@@ -1041,17 +1041,17 @@ pub const WindowImpl = struct {
         );
 
         switch (edge) {
-            win32_window_messaging.WMSZ_LEFT, win32_window_messaging.WMSZ_RIGHT, win32_window_messaging.WMSZ_BOTTOMLEFT, win32_window_messaging.WMSZ_BOTTOMRIGHT => {
+            window_msg.WMSZ_LEFT, window_msg.WMSZ_RIGHT, window_msg.WMSZ_BOTTOMLEFT, window_msg.WMSZ_BOTTOMRIGHT => {
                 client.bottom = client.top + (rect.bottom - rect.top);
                 const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
                 client.bottom += @intFromFloat(fborder_width / ratio);
             },
-            win32_window_messaging.WMSZ_TOPLEFT, win32_window_messaging.WMSZ_TOPRIGHT => {
+            window_msg.WMSZ_TOPLEFT, window_msg.WMSZ_TOPRIGHT => {
                 client.top = client.bottom - (rect.bottom - rect.top);
                 const fborder_width: f64 = @floatFromInt((client.right - client.left) - (rect.right - rect.left));
                 client.top -= @intFromFloat(fborder_width / ratio);
             },
-            win32_window_messaging.WMSZ_TOP, win32_window_messaging.WMSZ_BOTTOM => {
+            window_msg.WMSZ_TOP, window_msg.WMSZ_BOTTOM => {
                 client.right = client.left + (rect.right - rect.left);
                 const fborder_height: f64 = @floatFromInt((client.bottom - client.top) - (rect.bottom - rect.top));
                 client.bottom += @intFromFloat(fborder_height * ratio);
@@ -1097,14 +1097,14 @@ pub const WindowImpl = struct {
             &mon_area,
         );
 
-        const POSITION_FLAGS: u32 = @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-            @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-            @intFromEnum(win32_window_messaging.SWP_NOCOPYBITS);
+        const POSITION_FLAGS: u32 = @intFromEnum(window_msg.SWP_NOZORDER) |
+            @intFromEnum(window_msg.SWP_NOACTIVATE) |
+            @intFromEnum(window_msg.SWP_NOCOPYBITS);
 
         const top = if (self.data.flags.is_topmost)
-            win32_window_messaging.HWND_TOPMOST
+            window_msg.HWND_TOPMOST
         else
-            win32_window_messaging.HWND_NOTOPMOST;
+            window_msg.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -1123,7 +1123,7 @@ pub const WindowImpl = struct {
     }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
-        return win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST).?;
+        return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST).?;
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
@@ -1155,24 +1155,24 @@ pub const WindowImpl = struct {
     }
 
     pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-        const new_icon = try int.createIcon(pixels, width, height);
+        const new_icon = try intern.createIcon(pixels, width, height);
         const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
             .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
         else blk: {
-            const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
-            const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
+            const bg_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICON);
+            const sm_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICONSM);
             break :blk .{ bg_icon, sm_icon };
         };
-        _ = win32_window_messaging.SendMessageW(
+        _ = window_msg.SendMessageW(
             self.handle,
-            win32_window_messaging.WM_SETICON,
-            win32_window_messaging.ICON_BIG,
+            window_msg.WM_SETICON,
+            window_msg.ICON_BIG,
             @bitCast(handles[0]),
         );
-        _ = win32_window_messaging.SendMessageW(
+        _ = window_msg.SendMessageW(
             self.handle,
-            win32_window_messaging.WM_SETICON,
-            win32_window_messaging.ICON_SMALL,
+            window_msg.WM_SETICON,
+            window_msg.ICON_SMALL,
             @bitCast(handles[1]),
         );
         icon.destroyIcon(&self.win32.icon);
@@ -1180,7 +1180,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        const new_cursor = try int.createCursor(pixels, width, height, xhot, yhot);
+        const new_cursor = try intern.createCursor(pixels, width, height, xhot, yhot);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1189,7 +1189,7 @@ pub const WindowImpl = struct {
     }
 
     pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-        const new_cursor = try int.createStandardCursor(cursor_shape);
+        const new_cursor = try intern.createStandardCursor(cursor_shape);
         icon.destroyCursor(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
