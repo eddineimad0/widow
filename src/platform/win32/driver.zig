@@ -12,6 +12,7 @@ const DriverError = error{
     NtdllNotFound,
     WNDClassExist,
     HELPClassExist,
+    NoProcesHandle,
 };
 
 const OsVersionHints = struct {
@@ -95,7 +96,11 @@ pub const Win32Driver = struct {
         defer Self.sing_guard.unlock();
 
         if (!Self.g_init) {
-            globl_instance.handles.hinstance = try mod.getProcessHandle();
+            if (mod.getProcessHandle()) |hinstance| {
+                globl_instance.handles.hinstance = hinstance;
+            } else {
+                return DriverError.NoProcesHandle;
+            }
 
             globl_instance.handles.wnd_class = try registerMainClass(
                 wnd_class_name,
