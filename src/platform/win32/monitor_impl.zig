@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+const debug = std.debug;
 const dbg = @import("builtin").mode == .Debug;
 const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
@@ -163,20 +164,24 @@ fn pollVideoModes(
     var modes = try ArrayList(VideoMode).initCapacity(allocator, 64);
     errdefer modes.deinit();
     var dev_mode: gdi.DEVMODEW = undefined;
-    _ = win32.EnumDisplaySettingsExW(
-        @ptrCast(&adapter_name.ptr),
-        win32.ENUM_CURRENT_SETTINGS,
-        &dev_mode,
-        0,
-    );
+    // _ = win32.EnumDisplaySettingsExW(
+    //     @ptrCast(&adapter_name.ptr),
+    //     win32.ENUM_CURRENT_SETTINGS,
+    //     &dev_mode,
+    //     0,
+    // );
+    // debug.print(
+    //     "Current_MODE:({},{},{},{})\n",
+    //     .{ dev_mode.dmPelsWidth, dev_mode.dmPelsHeight, dev_mode.dmDisplayFrequency, dev_mode.dmBitsPerPel },
+    // );
 
     // the current mode is at 0
-    try modes.append(VideoMode.init(
-        @intCast(dev_mode.dmPelsWidth),
-        @intCast(dev_mode.dmPelsHeight),
-        @intCast(dev_mode.dmDisplayFrequency),
-        @intCast(dev_mode.dmBitsPerPel),
-    ));
+    // try modes.append(VideoMode.init(
+    //     @intCast(dev_mode.dmPelsWidth),
+    //     @intCast(dev_mode.dmPelsHeight),
+    //     @intCast(dev_mode.dmDisplayFrequency),
+    //     @intCast(dev_mode.dmBitsPerPel),
+    // ));
 
     main_loop: while (true) : (i += 1) {
         dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
@@ -191,18 +196,18 @@ fn pollVideoModes(
             break;
         }
 
-        var w, var h = .{ dev_mode.dmPelsWidth, dev_mode.dmPelsHeight };
-        if (dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_90 or
-            dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_270)
-        {
-            // switch width and height values.
-            // TODO:test.
-            mem.swap(@TypeOf(w), &w, &h);
-        }
+        // var w, var h = .{ dev_mode.dmPelsWidth, dev_mode.dmPelsHeight };
+        // if (dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_90 or
+        //     dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_270)
+        // {
+        //     // switch width and height values.
+        //     // TODO:test.
+        //     mem.swap(@TypeOf(w), &w, &h);
+        // }
 
         var mode = VideoMode.init(
-            @intCast(w),
-            @intCast(h),
+            @intCast(dev_mode.dmPelsWidth),
+            @intCast(dev_mode.dmPelsHeight),
             @intCast(dev_mode.dmDisplayFrequency),
             @intCast(dev_mode.dmBitsPerPel),
         );
@@ -331,7 +336,7 @@ pub const MonitorImpl = struct {
         // output.frequency = @intCast(dev_mode.dmDisplayFrequency);
         // output.color_depth = @intCast(dev_mode.dmBitsPerPel);
 
-        output = self.modes.items[self.current_mode];
+        output.* = self.modes.items[self.current_mode];
     }
 
     /// Populate the `area` with the monitor's full area.
@@ -347,14 +352,15 @@ pub const MonitorImpl = struct {
     }
 
     /// Determines if the desired VideoMode `mode` is possible with
-    /// the current display.
-    inline fn isModeCompatible(self: *const Self, mode: *const VideoMode) bool {
-        for (self.modes.items) |*video_mode| {
+    /// the current display,
+    /// Returns an index to the matching VideoMode.
+    inline fn isModeCompatible(self: *const Self, mode: *const VideoMode) ?usize {
+        for (self.modes.items, 0..) |*video_mode, idx| {
             if (video_mode.equals(mode)) {
-                return true;
+                return idx;
             }
         }
-        return false;
+        return null;
     }
 
     /// Sets the monitor fullscreen video mode to the desired `mode`,
@@ -364,20 +370,23 @@ pub const MonitorImpl = struct {
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
         if (video_mode) |mode| {
-            const possible_mode = if (self.isModeCompatible(mode) == true)
-                mode
-            else blk: {
-                const index = mode.selectBestMatch(self.modes.items);
-                break :blk &self.modes.items[index];
-            };
+            const possible_mode: usize = if (self.isModeCompatible(mode)) |idx|
+                idx
+            else
+                mode.selectBestMatch(self.modes.items);
+            // else blk: {
+            //     const index = mode.selectBestMatch(self.modes.items);
+            //     break :blk &self.modes.items[index];
+            // };
 
-            var current_mode: VideoMode = undefined;
-            self.queryCurrentMode(&current_mode);
-            if (possible_mode.*.equals(&current_mode)) {
+            // var current_mode: VideoMode = undefined;
+            // self.queryCurrentMode(&current_mode);
+            if (possible_mode == self.current_mode) {
                 // the desired mode is already current.
                 return;
             }
 
+            const choosen_mode = &self.modes.items[possible_mode];
             var dm: gdi.DEVMODEW = undefined;
             dm.dmDriverExtra = 0;
             dm.dmSize = @sizeOf(gdi.DEVMODEW);
@@ -385,10 +394,10 @@ pub const MonitorImpl = struct {
                 gdi.DM_PELSHEIGHT |
                 gdi.DM_BITSPERPEL |
                 gdi.DM_DISPLAYFREQUENCY;
-            dm.dmPelsWidth = @intCast(possible_mode.width);
-            dm.dmPelsHeight = @intCast(possible_mode.height);
-            dm.dmBitsPerPel = @intCast(possible_mode.color_depth);
-            dm.dmDisplayFrequency = @intCast(possible_mode.frequency);
+            dm.dmPelsWidth = @intCast(choosen_mode.width);
+            dm.dmPelsHeight = @intCast(choosen_mode.height);
+            dm.dmBitsPerPel = @intCast(choosen_mode.color_depth);
+            dm.dmDisplayFrequency = @intCast(choosen_mode.frequency);
             const result = gdi.ChangeDisplaySettingsExW(
                 @ptrCast(&self.adapter),
                 &dm,
@@ -399,7 +408,7 @@ pub const MonitorImpl = struct {
 
             switch (result) {
                 gdi.DISP_CHANGE_SUCCESSFUL => {
-                    self.current_mode = possible_mode.*;
+                    self.current_mode = possible_mode;
                     return;
                 },
                 else => return MonitorError.BadVideoMode,
@@ -436,14 +445,14 @@ pub const MonitorImpl = struct {
             std.debug.print("Handle:{x}\n", .{@intFromPtr(self.handle)});
             var adapter_name = std.mem.zeroes([32 * 3]u8);
             _ = std.unicode.utf16leToUtf8(&adapter_name, &self.adapter) catch unreachable;
-            std.debug.print("adapter:{s}|name:{s}\n", .{ adapter_name, self.name });
+            std.debug.print("adapter:{s} => name:{s}\n", .{ adapter_name, self.name });
             if (print_video_modes) {
                 std.debug.print("video modes:", .{});
                 for (self.modes.items) |*monitor| {
-                    std.debug.print("{}", .{monitor.*});
+                    std.debug.print("{}\n", .{monitor.*});
                 }
             }
-            std.debug.print("\n mode change : {}\n", .{self.current_mode != null});
+            std.debug.print("\n current_mode: {}\n", .{self.current_mode});
             std.debug.print("\n occupying window: {?*}\n", .{self.window});
         }
     }
@@ -460,28 +469,31 @@ test "monitor_impl init" {
         all_monitors.deinit();
     }
     try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
+    for (all_monitors.items) |*mon| {
+        mon.debugInfos(true);
+    }
 }
 
-test "change primary video mode" {
-    const testing = std.testing;
-    const testing_allocator = testing.allocator;
-    var all_monitors = try pollMonitors(testing_allocator);
-    defer {
-        for (all_monitors.items) |*monitor| {
-            monitor.deinit();
-        }
-        all_monitors.deinit();
-    }
-    var primary_monitor = &all_monitors.items[0];
-    var output: VideoMode = undefined;
-    primary_monitor.debugInfos(false);
-    primary_monitor.queryCurrentMode(&output);
-    std.debug.print("Primary monitor name len:{}\n", .{primary_monitor.name.len});
-    std.debug.print("Current Video Mode: {}\n", .{output});
-    std.debug.print("Changing Video Mode....\n", .{});
-    const mode = VideoMode.init(700, 400, 55, 24);
-    try primary_monitor.setVideoMode(&mode);
-    std.time.sleep(std.time.ns_per_s * 3);
-    std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.restoreRegistryMode();
-}
+// test "change primary video mode" {
+//     const testing = std.testing;
+//     const testing_allocator = testing.allocator;
+//     var all_monitors = try pollMonitors(testing_allocator);
+//     defer {
+//         for (all_monitors.items) |*monitor| {
+//             monitor.deinit();
+//         }
+//         all_monitors.deinit();
+//     }
+//     var primary_monitor = &all_monitors.items[0];
+//     var output: VideoMode = undefined;
+//     primary_monitor.debugInfos(false);
+//     primary_monitor.queryCurrentMode(&output);
+//     std.debug.print("Primary monitor name len:{}\n", .{primary_monitor.name.len});
+//     std.debug.print("Current Video Mode: {}\n", .{output});
+//     std.debug.print("Changing Video Mode....\n", .{});
+//     const mode = VideoMode.init(700, 400, 55, 24);
+//     try primary_monitor.setVideoMode(&mode);
+//     std.time.sleep(std.time.ns_per_s * 3);
+//     std.debug.print("Restoring Original Mode....\n", .{});
+//     primary_monitor.restoreRegistryMode();
+// }

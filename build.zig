@@ -60,6 +60,23 @@ pub fn build(b: *std.Build) !void {
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
+
+    const testing_step = b.step("test", "Temp test step");
+    const test_step = b.addTest(.{
+        .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    const zigwin32 = b.createModule(.{
+        .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
+    });
+    const common = b.createModule(.{
+        .root_source_file = .{ .path = "src/common/common.zig" },
+    });
+    test_step.root_module.addImport("zigwin32", zigwin32);
+    test_step.root_module.addImport("common", common);
+    const test_run = b.addRunArtifact(test_step);
+    testing_step.dependOn(&test_run.step);
 }
 
 fn isDisplayTargetValid(

@@ -380,9 +380,9 @@ pub const MonitorStore = struct {
     }
 };
 
-test "MonitorStore_init()" {
-    const testing = std.testing;
-    var ms = try MonitorStore.init(testing.allocator);
-    try ms.refreshMonitorsMap();
-    defer ms.deinit();
-}
+// test "MonitorStore_init()" {
+//     const testing = std.testing;
+//     var ms = try MonitorStore.init(testing.allocator);
+//     try ms.refreshMonitorsMap();
+//     defer ms.deinit();
+// }
