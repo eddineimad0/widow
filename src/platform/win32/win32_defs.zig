@@ -127,13 +127,30 @@ pub extern "user32" fn CreateWindowExW(
     lpParam: ?*anyopaque,
 ) callconv(WINAPI) ?HWND;
 
+pub extern "user32" fn LoadImageW(
+    hInst: ?HINSTANCE,
+    name: ?LPCWSTR,
+    type: u32,
+    cx: i32,
+    cy: i32,
+    fuLoad: u32,
+) callconv(WINAPI) ?windows.HANDLE;
+
 pub const SetProcessDPIAwareProc = *const fn () callconv(WINAPI) BOOL;
 
-pub const RtlVerifyVersionInfoProc = *const fn (*OSVERSIONINFOEXW, u32, u64) callconv(WINAPI) NTSTATUS;
+pub const RtlVerifyVersionInfoProc = *const fn (
+    *OSVERSIONINFOEXW,
+    u32,
+    u64,
+) callconv(WINAPI) NTSTATUS;
 
-pub const SetProcessDpiAwarenessProc = *const fn (PROCESS_DPI_AWARENESS) callconv(WINAPI) HRESULT;
+pub const SetProcessDpiAwarenessProc = *const fn (
+    PROCESS_DPI_AWARENESS,
+) callconv(WINAPI) HRESULT;
 
-pub const SetProcessDpiAwarenessContextProc = *const fn (DPI_AWARENESS_CONTEXT) callconv(WINAPI) HRESULT;
+pub const SetProcessDpiAwarenessContextProc = *const fn (
+    DPI_AWARENESS_CONTEXT,
+) callconv(WINAPI) HRESULT;
 
 pub const EnableNonClientDpiScalingProc = *const fn (HWND) callconv(WINAPI) BOOL;
 

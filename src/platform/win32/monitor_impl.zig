@@ -31,7 +31,7 @@ fn EnumMonitorProc(
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
     // we'll need to compare the names to figure out the right handle.
     var mi: gdi.MONITORINFOEXW = undefined;
-    mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(gdi.MONITORINFOEXW);
+    mi.monitorInfo.cbSize = @sizeOf(gdi.MONITORINFOEXW);
     if (gdi.GetMonitorInfoW(handle, @ptrCast(&mi)) == 1) {
         if (utils.wideStrZCmp(@ptrCast(&mi.szDevice), @ptrCast(data.*[1].ptr))) {
             data.*[0] = handle;
@@ -107,7 +107,7 @@ pub fn pollMonitors(
             continue;
         }
 
-        var j = 0;
+        var j: u32 = 0;
         while (true) : (j += 1) {
             if (gdi.EnumDisplayDevicesW(
                 @ptrCast(&display_adapter.DeviceName),
@@ -163,6 +163,21 @@ fn pollVideoModes(
     var modes = try ArrayList(VideoMode).initCapacity(allocator, 64);
     errdefer modes.deinit();
     var dev_mode: gdi.DEVMODEW = undefined;
+    _ = win32.EnumDisplaySettingsExW(
+        @ptrCast(&adapter_name.ptr),
+        win32.ENUM_CURRENT_SETTINGS,
+        &dev_mode,
+        0,
+    );
+
+    // the current mode is at 0
+    try modes.append(VideoMode.init(
+        @intCast(dev_mode.dmPelsWidth),
+        @intCast(dev_mode.dmPelsHeight),
+        @intCast(dev_mode.dmDisplayFrequency),
+        @intCast(dev_mode.dmBitsPerPel),
+    ));
+
     main_loop: while (true) : (i += 1) {
         dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
         dev_mode.dmDriverExtra = 0;
@@ -176,9 +191,18 @@ fn pollVideoModes(
             break;
         }
 
+        var w, var h = .{ dev_mode.dmPelsWidth, dev_mode.dmPelsHeight };
+        if (dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_90 or
+            dev_mode.Anonymous1.Anonymous2.dmDisplayOrientation == gdi.DMDO_270)
+        {
+            // switch width and height values.
+            // TODO:test.
+            mem.swap(@TypeOf(w), &w, &h);
+        }
+
         var mode = VideoMode.init(
-            @intCast(dev_mode.dmPelsWidth),
-            @intCast(dev_mode.dmPelsHeight),
+            @intCast(w),
+            @intCast(h),
             @intCast(dev_mode.dmDisplayFrequency),
             @intCast(dev_mode.dmBitsPerPel),
         );
@@ -250,8 +274,7 @@ pub const MonitorImpl = struct {
     name: []u8, // Name assigned to the monitor
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the monitor.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
-    // TODO: an index or a pointer would be better.
-    current_mode: ?VideoMode, // Keeps track of any mode changes we made.
+    current_mode: usize, // Keeps track of any mode changes we made.
     window: ?*WindowImpl, // A pointer to the window occupying(fullscreen) the monitor.
 
     const Self = @This();
@@ -262,20 +285,20 @@ pub const MonitorImpl = struct {
         name: []u8,
         modes: ArrayList(VideoMode),
     ) Self {
-        return Self{
+        return .{
             .handle = handle,
             .adapter = adapter,
             .name = name,
             .modes = modes,
             .window = null,
-            .current_mode = null,
+            .current_mode = 0,
         };
     }
 
     pub fn deinit(self: *Self) void {
         // Hack since both self.name and self.modes
         // use the same allocator.
-        self.restoreOrignalVideo();
+        self.restoreRegistryMode();
         self.modes.allocator.free(self.name);
         self.modes.deinit();
     }
@@ -288,27 +311,27 @@ pub const MonitorImpl = struct {
     }
 
     /// Populate the output with the current VideoMode of the monitor.
-    pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
-        // TODO: and index would be better.
-        if (self.current_mode) |*mode| {
-            output.* = mode.*;
-            return;
-        }
+    pub inline fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
+        // if (self.current_mode) |*mode| {
+        //     output.* = mode.*;
+        //     return;
+        // }
+        //
+        // var dev_mode: gdi.DEVMODEW = undefined;
+        // dev_mode.dmDriverExtra = 0;
+        // dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
+        // _ = win32.EnumDisplaySettingsExW(
+        //     @ptrCast(&self.adapter),
+        //     win32.ENUM_CURRENT_SETTINGS,
+        //     &dev_mode,
+        //     0,
+        // );
+        // output.width = @intCast(dev_mode.dmPelsWidth);
+        // output.height = @intCast(dev_mode.dmPelsHeight);
+        // output.frequency = @intCast(dev_mode.dmDisplayFrequency);
+        // output.color_depth = @intCast(dev_mode.dmBitsPerPel);
 
-        var dev_mode: gdi.DEVMODEW = undefined;
-        dev_mode.dmDriverExtra = 0;
-        dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
-        _ = win32.EnumDisplaySettingsExW(
-            @ptrCast(&self.adapter),
-            win32.ENUM_CURRENT_SETTINGS,
-            &dev_mode,
-            0,
-        );
-
-        output.width = @intCast(dev_mode.dmPelsWidth);
-        output.height = @intCast(dev_mode.dmPelsHeight);
-        output.frequency = @intCast(dev_mode.dmDisplayFrequency);
-        output.color_depth = @intCast(dev_mode.dmBitsPerPel);
+        output = self.modes.items[self.current_mode];
     }
 
     /// Populate the `area` with the monitor's full area.
@@ -340,7 +363,6 @@ pub const MonitorImpl = struct {
     /// # Note
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
-        // TODO: what if the monitor is rotated.
         if (video_mode) |mode| {
             const possible_mode = if (self.isModeCompatible(mode) == true)
                 mode
@@ -383,25 +405,25 @@ pub const MonitorImpl = struct {
                 else => return MonitorError.BadVideoMode,
             }
         } else {
-            self.restoreOrignalVideo();
+            self.restoreRegistryMode();
         }
     }
 
     /// Restores the original video mode stored in the registry.
-    fn restoreOrignalVideo(self: *Self) void {
-        // Passing NULL for the lpDevMode parameter and 0 for the dwFlags parameter
-        // is the easiest way to return to the default mode after a dynamic mode change.
-        // TODO: just directly call ChangeDisplaySettingsExW
-        if (self.current_mode != null) {
-            _ = gdi.ChangeDisplaySettingsExW(
-                @ptrCast(&self.adapter),
-                null,
-                null,
-                gdi.CDS_FULLSCREEN,
-                null,
-            );
-            self.current_mode = null;
-        }
+    fn restoreRegistryMode(self: *Self) void {
+        // Passing NULL for the lpDevMode parameter
+        // and 0 for the dwFlags parameter
+        // is the easiest way to return to the
+        // default mode after a dynamic mode change.
+        _ = gdi.ChangeDisplaySettingsExW(
+            @ptrCast(&self.adapter),
+            null,
+            null,
+            gdi.CDS_FULLSCREEN,
+            null,
+        );
+        // TODO:
+        // self.current_mode = null;
     }
 
     /// Set the window Handle field
@@ -461,5 +483,5 @@ test "change primary video mode" {
     try primary_monitor.setVideoMode(&mode);
     std.time.sleep(std.time.ns_per_s * 3);
     std.debug.print("Restoring Original Mode....\n", .{});
-    primary_monitor.restoreOrignalVideo();
+    primary_monitor.restoreRegistryMode();
 }

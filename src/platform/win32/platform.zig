@@ -9,7 +9,7 @@ pub const Internals = internals.Internals;
 pub const MonitorHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
-const WidowContext = @import("global.zig").Win32Context;
+const WidowContext = @import("driver.zig").Win32Driver;
 
 pub fn initPlatform(options: anytype) !void {
     const window_class = if (@hasField(@TypeOf(options), "wnd_class"))

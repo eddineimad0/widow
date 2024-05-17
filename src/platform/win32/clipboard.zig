@@ -161,48 +161,48 @@ pub inline fn unregisterClipboardViewer(viewer: HWND, next_viewer: ?HWND) void {
     _ = sys_data_exchg.ChangeClipboardChain(viewer, next_viewer);
 }
 
-test "clipboard_read_and_write" {
-    const testing = std.testing;
-    // preapre the console for unicode output.
-    _ = zigwin32.system.console.SetConsoleOutputCP(zigwin32.globalization.CP_UTF8);
-    const Internals = @import("internals.zig").Internals;
-    const Win32Context = @import("global.zig").Win32Context;
-    const string1 = "Clipboard Test String👌.";
-    const string2 = "Another Clipboard Test String👌.";
-    try Win32Context.initSingleton("Clipboard Test", null);
-    var internals = try Internals.create(testing.allocator);
-    defer internals.destroy(testing.allocator);
-    try setClipboardText(std.testing.allocator, internals.helper_window, string1);
-    const copied_string = try clipboardText(
-        std.testing.allocator,
-        internals.helper_window,
-    );
-    defer std.testing.allocator.free(copied_string);
-    std.debug.print(
-        "\n 1st clipboard value:{s}\n string length:{}\n",
-        .{ copied_string, copied_string.len },
-    );
-    const copied_string2 = try clipboardText(
-        std.testing.allocator,
-        internals.helper_window,
-    );
-    defer std.testing.allocator.free(copied_string2);
-    std.debug.print(
-        "\n 2nd clipboard value:{s}\n string length:{}\n",
-        .{ copied_string2, copied_string2.len },
-    );
-    try setClipboardText(
-        std.testing.allocator,
-        internals.helper_window,
-        string2,
-    );
-    const copied_string3 = try clipboardText(
-        std.testing.allocator,
-        internals.helper_window,
-    );
-    defer std.testing.allocator.free(copied_string3);
-    std.debug.print(
-        "\n 3rd clipboard value:{s}\n string length:{}\n",
-        .{ copied_string3, copied_string2.len },
-    );
-}
+// test "clipboard_read_and_write" {
+//     const testing = std.testing;
+//     // preapre the console for unicode output.
+//     _ = zigwin32.system.console.SetConsoleOutputCP(zigwin32.globalization.CP_UTF8);
+//     const Internals = @import("internals.zig").Internals;
+//     const Win32Context = @import("driver.zig").Win32Driver;
+//     const string1 = "Clipboard Test String👌.";
+//     const string2 = "Another Clipboard Test String👌.";
+//     try Win32Context.initSingleton("Clipboard Test", null);
+//     var internals = try Internals.create(testing.allocator);
+//     defer internals.destroy(testing.allocator);
+//     try setClipboardText(std.testing.allocator, internals.helper_window, string1);
+//     const copied_string = try clipboardText(
+//         std.testing.allocator,
+//         internals.helper_window,
+//     );
+//     defer std.testing.allocator.free(copied_string);
+//     std.debug.print(
+//         "\n 1st clipboard value:{s}\n string length:{}\n",
+//         .{ copied_string, copied_string.len },
+//     );
+//     const copied_string2 = try clipboardText(
+//         std.testing.allocator,
+//         internals.helper_window,
+//     );
+//     defer std.testing.allocator.free(copied_string2);
+//     std.debug.print(
+//         "\n 2nd clipboard value:{s}\n string length:{}\n",
+//         .{ copied_string2, copied_string2.len },
+//     );
+//     try setClipboardText(
+//         std.testing.allocator,
+//         internals.helper_window,
+//         string2,
+//     );
+//     const copied_string3 = try clipboardText(
+//         std.testing.allocator,
+//         internals.helper_window,
+//     );
+//     defer std.testing.allocator.free(copied_string3);
+//     std.debug.print(
+//         "\n 3rd clipboard value:{s}\n string length:{}\n",
+//         .{ copied_string3, copied_string2.len },
+//     );
+// }

@@ -271,11 +271,12 @@ fn isWin32VersionMinimum(proc: win32.RtlVerifyVersionInfoProc, major: u32, minor
     vi.dwOSVersionInfoSize = @sizeOf(sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = major;
     vi.dwMinorVersion = minor;
-    const mask =
-        @intFromEnum(sysinfo.VER_MAJORVERSION) |
-        @intFromEnum(sysinfo.VER_MINORVERSION) |
-        @intFromEnum(sysinfo.VER_SERVICEPACKMAJOR) |
-        @intFromEnum(sysinfo.VER_SERVICEPACKMINOR);
+    const mask = sysinfo.VER_FLAGS{
+        .MINORVERSION = 1,
+        .MAJORVERSION = 1,
+        .SERVICEPACKMINOR = 1,
+        .SERVICEPACKMAJOR = 1,
+    };
     var cond_mask: u64 = 0;
     cond_mask = sysinfo.VerSetConditionMask(
         cond_mask,
@@ -299,7 +300,7 @@ fn isWin32VersionMinimum(proc: win32.RtlVerifyVersionInfoProc, major: u32, minor
         sysinfo.VER_SERVICEPACKMINOR,
         win32.VER_GREATER_EQUAL,
     );
-    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
+    return proc(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
 fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
@@ -309,9 +310,9 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = build;
     const mask = sysinfo.VER_FLAGS{
-        .VER_MINORVERSION = 1,
+        .MINORVERSION = 1,
         .MAJORVERSION = 1,
-        .VER_BUILDNUMBER = 1,
+        .BUILDNUMBER = 1,
     };
     var cond_mask: u64 = 0;
     cond_mask = sysinfo.VerSetConditionMask(
@@ -329,7 +330,7 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
         sysinfo.VER_BUILDNUMBER,
         win32.VER_GREATER_EQUAL,
     );
-    return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
+    return proc(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
 fn registerHelperClass(
@@ -397,13 +398,13 @@ fn registerMainClass(
     }
     if (window_class.hIcon == null) {
         // No Icon was provided or we failed.
-        window_class.hIcon = @ptrCast(window_msg.LoadImageW(
+        window_class.hIcon = @ptrCast(win32.LoadImageW(
             null,
             window_msg.IDI_APPLICATION,
-            window_msg.IMAGE_ICON,
+            @intFromEnum(window_msg.IMAGE_ICON),
             0,
             0,
-            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+            @bitCast(window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
     const class = window_msg.RegisterClassExW(&window_class);

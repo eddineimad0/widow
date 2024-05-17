@@ -1,4 +1,4 @@
 zig-*
 *.txt
-scripts/
+ignore/
 
