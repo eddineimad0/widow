@@ -102,7 +102,11 @@ pub extern "user32" fn EnumDisplaySettingsExW(
     dwFlags: u32,
 ) callconv(WINAPI) BOOL;
 
-pub const LPCWSTR = if (builtin.cpu.arch == .x86_64 or builtin.cpu.arch == .i386) [*:0]align(1) const u16 else [*:0]const u16;
+pub const LPCWSTR = if (builtin.cpu.arch == .x86_64 or builtin.cpu.arch == .i386)
+    [*:0]align(1) const u16
+else
+    [*:0]const u16;
+
 pub extern "user32" fn UnregisterClassW(
     lpClassName: ?LPCWSTR,
     hInstance: ?HINSTANCE,

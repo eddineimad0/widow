@@ -10,9 +10,9 @@ const window_msg = zigwin32.ui.windows_and_messaging;
 
 const DriverError = error{
     NtdllNotFound,
-    WNDClassExist,
-    HELPClassExist,
-    NoProcesHandle,
+    DupWNDClass,
+    DupHELPClass,
+    NoProcessHandle,
 };
 
 const OsVersionHints = struct {
@@ -99,7 +99,7 @@ pub const Win32Driver = struct {
             if (mod.getProcessHandle()) |hinstance| {
                 globl_instance.handles.hinstance = hinstance;
             } else {
-                return DriverError.NoProcesHandle;
+                return DriverError.NoProcessHandle;
             }
 
             globl_instance.handles.wnd_class = try registerMainClass(
@@ -308,9 +308,11 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
     vi.dwMajorVersion = 10;
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = build;
-    const mask = @intFromEnum(sysinfo.VER_MAJORVERSION) |
-        @intFromEnum(sysinfo.VER_MINORVERSION) |
-        @intFromEnum(sysinfo.VER_BUILDNUMBER);
+    const mask = sysinfo.VER_FLAGS{
+        .VER_MINORVERSION = 1,
+        .MAJORVERSION = 1,
+        .VER_BUILDNUMBER = 1,
+    };
     var cond_mask: u64 = 0;
     cond_mask = sysinfo.VerSetConditionMask(
         cond_mask,
@@ -330,7 +332,10 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
     return proc(&vi, mask, cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
-fn registerHelperClass(comptime helper_class_name: []const u8, hinstance: win32.HINSTANCE) !u16 {
+fn registerHelperClass(
+    comptime helper_class_name: []const u8,
+    hinstance: win32.HINSTANCE,
+) !u16 {
     var helper_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
     helper_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
     helper_class.style = window_msg.CS_OWNDC;
@@ -339,11 +344,14 @@ fn registerHelperClass(comptime helper_class_name: []const u8, hinstance: win32.
     var buffer: [helper_class_name.len * 4]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), helper_class_name) catch unreachable;
+    const wide_class_name = utils.utf8ToWideZ(
+        fba.allocator(),
+        helper_class_name,
+    ) catch unreachable;
     helper_class.lpszClassName = wide_class_name;
     const class = window_msg.RegisterClassExW(&helper_class);
     if (class == 0) {
-        return DriverError.HELPClassExist;
+        return DriverError.DupHELPClass;
     }
     return class;
 }
@@ -355,29 +363,36 @@ fn registerMainClass(
 ) DriverError!u16 {
     var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
-    window_class.style = @enumFromInt(
-        @intFromEnum(window_msg.CS_HREDRAW) |
-            @intFromEnum(window_msg.CS_VREDRAW) |
-            @intFromEnum(window_msg.CS_OWNDC), //CS_OWNDC is required for the opengl context.
-    );
+    window_class.style = window_msg.WNDCLASS_STYLES{
+        .HREDRAW = 1,
+        .VREDRAW = 1,
+        .OWNDC = 1, //CS_OWNDC is required for the opengl context.
+    };
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
-    const icon_name_len = comptime if (res_icon_name != null) res_icon_name.?.len else 0;
+    const icon_name_len = comptime if (res_icon_name) |name| name.len else 0;
     var buffer: [(wnd_class_name.len + icon_name_len + 1) * 5]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = utils.utf8ToWideZ(fba.allocator(), wnd_class_name) catch unreachable;
+    const wide_class_name = utils.utf8ToWideZ(
+        fba.allocator(),
+        wnd_class_name,
+    ) catch unreachable;
     window_class.lpszClassName = wide_class_name;
     if (res_icon_name) |icon_name| {
-        const wide_icon_name = utils.utf8ToWideZ(fba.allocator(), icon_name) catch unreachable;
+        //TODO: both this and classname shoud be
+        // converted at comptime.
+        const wide_icon_name = utils.utf8ToWideZ(
+            fba.allocator(),
+            icon_name,
+        ) catch unreachable;
         window_class.hIcon = @ptrCast(window_msg.LoadImageW(
             hinstance,
             wide_icon_name,
             window_msg.IMAGE_ICON,
             0,
             0,
-            @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
-                @intFromEnum(window_msg.LR_SHARED)),
+            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
         ));
     }
     if (window_class.hIcon == null) {
@@ -388,14 +403,12 @@ fn registerMainClass(
             window_msg.IMAGE_ICON,
             0,
             0,
-            @enumFromInt(
-                @intFromEnum(window_msg.LR_SHARED) | @intFromEnum(window_msg.LR_DEFAULTSIZE),
-            ),
+            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
         ));
     }
     const class = window_msg.RegisterClassExW(&window_class);
     if (class == 0) {
-        return DriverError.WNDClassExist;
+        return DriverError.DupWNDClass;
     }
     return class;
 }

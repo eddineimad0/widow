@@ -1,22 +1,27 @@
 const std = @import("std");
+const mem = std.mem;
 const dbg = @import("builtin").mode == .Debug;
 const win32 = @import("win32_defs.zig");
 const utils = @import("./utils.zig");
-const win32_gdi = @import("zigwin32").graphics.gdi;
-const MonitorError = @import("errors.zig").MonitorError;
+const gdi = @import("zigwin32").graphics.gdi;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 const VideoMode = @import("common").video_mode.VideoMode;
 const WidowArea = @import("common").geometry.WidowArea;
-const Win32Context = @import("global.zig").Win32Context;
+const Win32Driver = @import("driver.zig").Win32Driver;
 const ArrayList = std.ArrayList;
-const Allocator = std.mem.Allocator;
+
+pub const MonitorError = error{
+    MissingHandle,
+    BadVideoMode,
+    NotFound,
+};
 
 /// We'll use this type to pass data to the `enumMonitorProc` function.
-const LparamTuple = std.meta.Tuple(&.{ ?win32_gdi.HMONITOR, []const u16 });
+const LparamTuple = std.meta.Tuple(&.{ ?gdi.HMONITOR, []const u16 });
 
 fn EnumMonitorProc(
-    handle: ?win32_gdi.HMONITOR,
-    _: ?win32_gdi.HDC,
+    handle: ?gdi.HMONITOR,
+    _: ?gdi.HDC,
     _: ?*win32.RECT,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL {
@@ -25,9 +30,9 @@ fn EnumMonitorProc(
     // the EnumDisplayMonitor function will return the handles of all monitors
     // that intersect the given rectangle even pseudo-monitors used for mirroring,
     // we'll need to compare the names to figure out the right handle.
-    var mi: win32_gdi.MONITORINFOEXW = undefined;
-    mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(win32_gdi.MONITORINFOEXW);
-    if (win32_gdi.GetMonitorInfoW(handle, @ptrCast(&mi)) == 1) {
+    var mi: gdi.MONITORINFOEXW = undefined;
+    mi.__AnonymousBase_winuser_L13571_C43.cbSize = @sizeOf(gdi.MONITORINFOEXW);
+    if (gdi.GetMonitorInfoW(handle, @ptrCast(&mi)) == 1) {
         if (utils.wideStrZCmp(@ptrCast(&mi.szDevice), @ptrCast(data.*[1].ptr))) {
             data.*[0] = handle;
         }
@@ -37,11 +42,11 @@ fn EnumMonitorProc(
 
 /// Returns the handle used by the system to identify the monitor.
 fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
-    var dm: win32_gdi.DEVMODEW = undefined;
-    dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
+    var dm: gdi.DEVMODEW = undefined;
+    dm.dmSize = @sizeOf(gdi.DEVMODEW);
     dm.dmDriverExtra = 0;
-    // We need to figure out the rectangle that the monitor occupies on the virtual
-    // desktop.
+    // We need to figure out the rectangle that the monitor occupies
+    // on the virtual desktop.
     if (win32.EnumDisplaySettingsExW(
         @ptrCast(display_adapter.ptr),
         win32.ENUM_CURRENT_SETTINGS,
@@ -62,64 +67,77 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
 
     const data: LparamTuple = .{ null, display_adapter };
 
-    // Enumerate the displays that intersect the rectangle to figure out the monitor's handle.
-    _ = win32_gdi.EnumDisplayMonitors(null, &clip_rect, EnumMonitorProc, @intCast(@intFromPtr(&data)));
+    // Enumerate the displays that intersect the rectangle to figure
+    // out the monitor's handle.
+    _ = gdi.EnumDisplayMonitors(
+        null,
+        &clip_rect,
+        EnumMonitorProc,
+        @intCast(@intFromPtr(&data)),
+    );
+
     return data[0];
 }
 
 /// Construct a Vector with all currently connected monitors.
-pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
-    // Anticipate at least 2 monitors.
-    var monitors = try ArrayList(MonitorImpl).initCapacity(allocator, 2);
+pub fn pollMonitors(
+    allocator: mem.Allocator,
+) (mem.Allocator.Error || MonitorError)!ArrayList(MonitorImpl) {
+    // Anticipate at least 4 monitors.
+    var monitors = try ArrayList(MonitorImpl).initCapacity(allocator, 4);
     errdefer {
         for (monitors.items) |*monitor| {
             monitor.deinit();
         }
         monitors.deinit();
     }
-    var display_device: win32_gdi.DISPLAY_DEVICEW = undefined;
-    display_device.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
-    var display_adapter: win32_gdi.DISPLAY_DEVICEW = undefined;
-    display_adapter.cb = @sizeOf(win32_gdi.DISPLAY_DEVICEW);
-    var j: u32 = undefined;
+    var display_device: gdi.DISPLAY_DEVICEW = undefined;
+    display_device.cb = @sizeOf(gdi.DISPLAY_DEVICEW);
+    var display_adapter: gdi.DISPLAY_DEVICEW = undefined;
+    display_adapter.cb = @sizeOf(gdi.DISPLAY_DEVICEW);
     var i: u32 = 0;
-    while (true) {
-        if (win32_gdi.EnumDisplayDevicesW(null, i, &display_adapter, 0) == 0) {
+    while (true) : (i += 1) {
+        if (gdi.EnumDisplayDevicesW(null, i, &display_adapter, 0) == 0) {
             // End of enumeration.
             break;
         }
 
-        i += 1;
-        if (display_adapter.StateFlags & win32_gdi.DISPLAY_DEVICE_ACTIVE == 0) {
+        if (display_adapter.StateFlags & gdi.DISPLAY_DEVICE_ACTIVE == 0) {
             // Skip non active adapters.
             continue;
         }
 
-        j = 0;
-        while (true) {
-            if (win32_gdi.EnumDisplayDevicesW(@ptrCast(&display_adapter.DeviceName), j, &display_device, 0) == 0) {
+        var j = 0;
+        while (true) : (j += 1) {
+            if (gdi.EnumDisplayDevicesW(
+                @ptrCast(&display_adapter.DeviceName),
+                j,
+                &display_device,
+                0,
+            ) == 0) {
                 // End of enumeration.
                 break;
             }
 
-            j += 1;
-            if (display_device.StateFlags & win32_gdi.DISPLAY_DEVICE_ACTIVE == 0) {
+            if (display_device.StateFlags & gdi.DISPLAY_DEVICE_ACTIVE == 0) {
                 // Skip non active displays.
                 continue;
             }
 
             // Get the handle for the monitor.
             const handle = querySystemHandle(&display_adapter.DeviceName) orelse {
-                return MonitorError.MonitorHandleNotFound;
+                return MonitorError.MissingHandle;
             };
 
             // We'll need it when enumerating video modes.
-            const is_pruned = (display_adapter.StateFlags & win32_gdi.DISPLAY_DEVICE_MODESPRUNED) != 0;
+            const is_pruned = (display_adapter.StateFlags & gdi.DISPLAY_DEVICE_MODESPRUNED) != 0;
             // Enumerate all "possible" video modes.
             var modes = try pollVideoModes(allocator, &display_adapter.DeviceName, is_pruned);
             errdefer modes.deinit();
 
-            const display_name = try utils.wideZToUtf8(allocator, &display_device.DeviceName);
+            const display_name = utils.wideZToUtf8(allocator, &display_device.DeviceName) catch {
+                return mem.Allocator.Error.OutOfMemory;
+            };
             errdefer allocator.free(display_name);
             try monitors.append(MonitorImpl.init(
                 handle,
@@ -136,19 +154,27 @@ pub fn pollMonitors(allocator: Allocator) !ArrayList(MonitorImpl) {
 
 /// Returns a Vector containing all the possible video modes
 /// for the given display adapter.
-fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bool) !ArrayList(VideoMode) {
+fn pollVideoModes(
+    allocator: mem.Allocator,
+    adapter_name: []const u16,
+    is_pruned: bool,
+) mem.Allocator.Error!ArrayList(VideoMode) {
     var i: u32 = 0;
     var modes = try ArrayList(VideoMode).initCapacity(allocator, 64);
     errdefer modes.deinit();
-    var dev_mode: win32_gdi.DEVMODEW = undefined;
-    main_loop: while (true) {
-        dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
+    var dev_mode: gdi.DEVMODEW = undefined;
+    main_loop: while (true) : (i += 1) {
+        dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
         dev_mode.dmDriverExtra = 0;
-        if (win32.EnumDisplaySettingsExW(@ptrCast(adapter_name.ptr), i, &dev_mode, 0) == 0) {
+        if (win32.EnumDisplaySettingsExW(
+            @ptrCast(adapter_name.ptr),
+            i,
+            &dev_mode,
+            0,
+        ) == 0) {
             // No more modes to enumerate.
             break;
         }
-        i += 1;
 
         var mode = VideoMode.init(
             @intCast(dev_mode.dmPelsWidth),
@@ -158,20 +184,20 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
         );
 
         // Skip duplicate modes.
-        for (modes.items) |video_mode| {
-            if (mode.equals(&video_mode)) {
+        for (modes.items) |*video_mode| {
+            if (mode.equals(video_mode)) {
                 continue :main_loop;
             }
         }
 
         // If `is_pruned` we need to skip modes unsupported by the display.
-        if (is_pruned and win32_gdi.ChangeDisplaySettingsExW(
+        if (is_pruned and gdi.ChangeDisplaySettingsExW(
             @ptrCast(adapter_name),
             &dev_mode,
             null,
-            win32_gdi.CDS_TEST,
+            gdi.CDS_TEST,
             null,
-        ) == win32_gdi.DISP_CHANGE_SUCCESSFUL) {
+        ) == gdi.DISP_CHANGE_SUCCESSFUL) {
             continue;
         }
         try modes.append(mode);
@@ -182,9 +208,9 @@ fn pollVideoModes(allocator: Allocator, adapter_name: []const u16, is_pruned: bo
 }
 
 /// Populate the given MonitorInfo struct with the corresponding monitor informations.
-pub inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *win32_gdi.MONITORINFO) void {
-    mi.cbSize = @sizeOf(win32_gdi.MONITORINFO);
-    _ = win32_gdi.GetMonitorInfoW(
+pub inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
+    mi.cbSize = @sizeOf(gdi.MONITORINFO);
+    _ = gdi.GetMonitorInfoW(
         handle,
         mi,
     );
@@ -198,18 +224,18 @@ pub fn monitorDPI(
 ) u32 {
     var dpi_x: u32 = undefined;
     var dpi_y: u32 = undefined;
-    const singleton = Win32Context.singleton();
-    if (singleton.functions.GetDpiForMonitor) |proc| {
+    const drv = Win32Driver.singleton();
+    if (drv.opt_func.GetDpiForMonitor) |func| {
         // [win32api docs]
-        // This API is not DPI aware and should not be used if the calling thread is per-monitor DPI aware.
-        // For the DPI-aware version of this API, see GetDpiForWindow.
-        if (proc(monitor_handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
+        // This API is not DPI aware and should not be used if
+        // the calling thread is per-monitor DPI aware.
+        if (func(monitor_handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
             return win32.USER_DEFAULT_SCREEN_DPI;
         }
     } else {
-        const device_cntxt = win32_gdi.GetDC(null);
-        dpi_x = @intCast(win32_gdi.GetDeviceCaps(device_cntxt, win32_gdi.LOGPIXELSX));
-        _ = win32_gdi.ReleaseDC(null, device_cntxt);
+        const device_cntxt = gdi.GetDC(null);
+        dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
+        _ = gdi.ReleaseDC(null, device_cntxt);
     }
     // [Winapi docs]
     // The values of *dpiX and *dpiY are identical.
@@ -220,17 +246,18 @@ pub fn monitorDPI(
 
 /// Encapsulate the necessary infos for a monitor.
 pub const MonitorImpl = struct {
-    handle: win32_gdi.HMONITOR, // System handle to the monitor.
+    handle: gdi.HMONITOR, // System handle to the monitor.
     name: []u8, // Name assigned to the monitor
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the monitor.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
+    // TODO: an index or a pointer would be better.
     current_mode: ?VideoMode, // Keeps track of any mode changes we made.
     window: ?*WindowImpl, // A pointer to the window occupying(fullscreen) the monitor.
 
     const Self = @This();
 
     pub fn init(
-        handle: win32_gdi.HMONITOR,
+        handle: gdi.HMONITOR,
         adapter: [32]u16,
         name: []u8,
         modes: ArrayList(VideoMode),
@@ -248,30 +275,29 @@ pub const MonitorImpl = struct {
     pub fn deinit(self: *Self) void {
         // Hack since both self.name and self.modes
         // use the same allocator.
-        self.modes.allocator.free(self.name);
         self.restoreOrignalVideo();
+        self.modes.allocator.free(self.name);
         self.modes.deinit();
     }
 
-    /// Compares 2 monitors.
-    /// # Note
-    /// We will need this when checking which monitor was disconnected.
+    /// checks if 2 monitors represent the same device.
     pub inline fn equals(self: *const Self, other: *const Self) bool {
         // Windows might change the monitor handle when a new one is plugged or unplugged
         // so make sure to compare the name.
-        return (utils.strCmp(self.name, other.name));
+        return (mem.eql(u8, self.name, other.name));
     }
 
     /// Populate the output with the current VideoMode of the monitor.
     pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
+        // TODO: and index would be better.
         if (self.current_mode) |*mode| {
             output.* = mode.*;
             return;
         }
 
-        var dev_mode: win32_gdi.DEVMODEW = undefined;
+        var dev_mode: gdi.DEVMODEW = undefined;
         dev_mode.dmDriverExtra = 0;
-        dev_mode.dmSize = @sizeOf(win32_gdi.DEVMODEW);
+        dev_mode.dmSize = @sizeOf(gdi.DEVMODEW);
         _ = win32.EnumDisplaySettingsExW(
             @ptrCast(&self.adapter),
             win32.ENUM_CURRENT_SETTINGS,
@@ -287,7 +313,7 @@ pub const MonitorImpl = struct {
 
     /// Populate the `area` with the monitor's full area.
     pub inline fn monitorFullArea(self: *const Self, area: *WidowArea) void {
-        var mi: win32_gdi.MONITORINFO = undefined;
+        var mi: gdi.MONITORINFO = undefined;
         queryMonitorInfo(self.handle, &mi);
         area.* = WidowArea.init(
             mi.rcMonitor.left,
@@ -299,7 +325,7 @@ pub const MonitorImpl = struct {
 
     /// Determines if the desired VideoMode `mode` is possible with
     /// the current display.
-    inline fn isModePossible(self: *const Self, mode: *const VideoMode) bool {
+    inline fn isModeCompatible(self: *const Self, mode: *const VideoMode) bool {
         for (self.modes.items) |*video_mode| {
             if (video_mode.equals(mode)) {
                 return true;
@@ -316,7 +342,7 @@ pub const MonitorImpl = struct {
     pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) !void {
         // TODO: what if the monitor is rotated.
         if (video_mode) |mode| {
-            const possible_mode = if (self.isModePossible(mode) == true)
+            const possible_mode = if (self.isModeCompatible(mode) == true)
                 mode
             else blk: {
                 const index = mode.selectBestMatch(self.modes.items);
@@ -330,27 +356,27 @@ pub const MonitorImpl = struct {
                 return;
             }
 
-            var dm: win32_gdi.DEVMODEW = undefined;
+            var dm: gdi.DEVMODEW = undefined;
             dm.dmDriverExtra = 0;
-            dm.dmSize = @sizeOf(win32_gdi.DEVMODEW);
-            dm.dmFields = win32_gdi.DM_PELSWIDTH |
-                win32_gdi.DM_PELSHEIGHT |
-                win32_gdi.DM_BITSPERPEL |
-                win32_gdi.DM_DISPLAYFREQUENCY;
+            dm.dmSize = @sizeOf(gdi.DEVMODEW);
+            dm.dmFields = gdi.DM_PELSWIDTH |
+                gdi.DM_PELSHEIGHT |
+                gdi.DM_BITSPERPEL |
+                gdi.DM_DISPLAYFREQUENCY;
             dm.dmPelsWidth = @intCast(possible_mode.width);
             dm.dmPelsHeight = @intCast(possible_mode.height);
             dm.dmBitsPerPel = @intCast(possible_mode.color_depth);
             dm.dmDisplayFrequency = @intCast(possible_mode.frequency);
-            const result = win32_gdi.ChangeDisplaySettingsExW(
+            const result = gdi.ChangeDisplaySettingsExW(
                 @ptrCast(&self.adapter),
                 &dm,
                 null,
-                win32_gdi.CDS_FULLSCREEN,
+                gdi.CDS_FULLSCREEN,
                 null,
             );
 
             switch (result) {
-                win32_gdi.DISP_CHANGE_SUCCESSFUL => {
+                gdi.DISP_CHANGE_SUCCESSFUL => {
                     self.current_mode = possible_mode.*;
                     return;
                 },
@@ -365,12 +391,13 @@ pub const MonitorImpl = struct {
     fn restoreOrignalVideo(self: *Self) void {
         // Passing NULL for the lpDevMode parameter and 0 for the dwFlags parameter
         // is the easiest way to return to the default mode after a dynamic mode change.
+        // TODO: just directly call ChangeDisplaySettingsExW
         if (self.current_mode != null) {
-            _ = win32_gdi.ChangeDisplaySettingsExW(
+            _ = gdi.ChangeDisplaySettingsExW(
                 @ptrCast(&self.adapter),
                 null,
                 null,
-                win32_gdi.CDS_FULLSCREEN,
+                gdi.CDS_FULLSCREEN,
                 null,
             );
             self.current_mode = null;

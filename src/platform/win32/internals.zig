@@ -8,10 +8,10 @@ const icon = @import("icon.zig");
 const clipboard = @import("clipboard.zig");
 const common = @import("common");
 const error_defs = @import("errors.zig");
-const win32_window_messaging = zigwin32.ui.windows_and_messaging;
-const win32_system_power = zigwin32.system.power;
-const win32_sys_service = zigwin32.system.system_services;
-const Win32Context = @import("global.zig").Win32Context;
+const window_msg = zigwin32.ui.windows_and_messaging;
+const sys_power = zigwin32.system.power;
+const sys_service = zigwin32.system.system_services;
+const Win32Driver = @import("driver.zig").Win32Driver;
 const WindowImpl = @import("window_impl.zig").WindowImpl;
 
 /// Data our hidden helper window will modify during execution.
@@ -33,18 +33,18 @@ pub const Internals = struct {
     pub fn create(allocator: std.mem.Allocator) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
-        const win32_singelton = Win32Context.singleton();
+        const win32_singelton = Win32Driver.singleton();
         self.helper_window = try createHelperWindow(win32_singelton.handles.hinstance);
-        errdefer _ = win32_window_messaging.DestroyWindow(self.helper_window);
+        errdefer _ = window_msg.DestroyWindow(self.helper_window);
         self.helper_data.clipboard_change = false;
         self.helper_data.clipboard_text = null;
         self.helper_data.next_clipboard_viewer = try clipboard.registerClipboardViewer(self.helper_window);
         self.helper_data.monitor_store_ptr = null;
         registerDevicesNotif(self.helper_window, &self.dev_notif_handle);
 
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.helper_window,
-            win32_window_messaging.GWLP_USERDATA,
+            window_msg.GWLP_USERDATA,
             @intCast(@intFromPtr(&self.helper_data)),
         );
 
@@ -53,15 +53,15 @@ pub const Internals = struct {
 
     pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
         clipboard.unregisterClipboardViewer(self.helper_window, self.helper_data.next_clipboard_viewer);
-        _ = win32_sys_service.UnregisterDeviceNotification(self.dev_notif_handle);
+        _ = sys_service.UnregisterDeviceNotification(self.dev_notif_handle);
 
-        _ = win32_window_messaging.SetWindowLongPtrW(
+        _ = window_msg.SetWindowLongPtrW(
             self.helper_window,
-            win32_window_messaging.GWLP_USERDATA,
+            window_msg.GWLP_USERDATA,
             0,
         );
 
-        _ = win32_window_messaging.DestroyWindow(self.helper_window);
+        _ = window_msg.DestroyWindow(self.helper_window);
         if (self.helper_data.clipboard_text) |text| {
             allocator.free(text);
             self.helper_data.clipboard_text = null;
@@ -111,7 +111,7 @@ fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
 
     const helper_window = win32.CreateWindowExW(
         0,
-        utils.MAKEINTATOM(Win32Context.singleton().handles.helper_class),
+        utils.MAKEINTATOM(Win32Driver.singleton().handles.helper_class),
         helper_title,
         0,
         win32.CW_USEDEFAULT,
@@ -126,17 +126,17 @@ fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
         return error_defs.WindowError.FailedToCreate;
     };
 
-    _ = win32_window_messaging.ShowWindow(helper_window, win32_window_messaging.SW_HIDE);
+    _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
     return helper_window;
 }
 
 /// Register window to recieve HID notification
 fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void {
-    var dbi: win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A = undefined;
-    dbi.dbcc_size = @sizeOf(win32_sys_service.DEV_BROADCAST_DEVICEINTERFACE_A);
-    dbi.dbcc_devicetype = @intFromEnum(win32_sys_service.DBT_DEVTYP_DEVICEINTERFACE);
+    var dbi: sys_service.DEV_BROADCAST_DEVICEINTERFACE_A = undefined;
+    dbi.dbcc_size = @sizeOf(sys_service.DEV_BROADCAST_DEVICEINTERFACE_A);
+    dbi.dbcc_devicetype = @intFromEnum(sys_service.DBT_DEVTYP_DEVICEINTERFACE);
     dbi.dbcc_classguid = win32.GUID_DEVINTERFACE_HID;
-    dbi_handle.* = win32_window_messaging.RegisterDeviceNotificationW(
+    dbi_handle.* = window_msg.RegisterDeviceNotificationW(
         helper_window,
         @ptrCast(&dbi),
         win32.DEVICE_NOTIFY_WINDOW_HANDLE,
@@ -190,14 +190,14 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !icon.Curs
         CursorShape.Default => win32.IDC_ARROW,
     };
 
-    const handle = win32_window_messaging.LoadImageA(
+    const handle = window_msg.LoadImageA(
         null,
         cursor_id,
-        win32_window_messaging.GDI_IMAGE_TYPE.CURSOR,
+        window_msg.GDI_IMAGE_TYPE.CURSOR,
         0,
         0,
-        @enumFromInt(@intFromEnum(win32_window_messaging.LR_DEFAULTSIZE) |
-            @intFromEnum(win32_window_messaging.LR_SHARED)),
+        @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
+            @intFromEnum(window_msg.LR_SHARED)),
     );
 
     if (handle == null) {
@@ -213,7 +213,7 @@ pub const MonitorStore = struct {
     monitors: std.ArrayList(monitor_impl.MonitorImpl),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
-    prev_exec_state: win32_system_power.EXECUTION_STATE,
+    prev_exec_state: sys_power.EXECUTION_STATE,
     const Self = @This();
 
     /// Initialize the `MonitorStore` struct.
@@ -221,7 +221,7 @@ pub const MonitorStore = struct {
         return .{
             .used_monitors = 0,
             .expected_video_change = false,
-            .prev_exec_state = win32_system_power.ES_SYSTEM_REQUIRED,
+            .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .monitors = try monitor_impl.pollMonitors(allocator),
         };
     }
@@ -316,11 +316,11 @@ pub const MonitorStore = struct {
         const monitor = try self.findMonitor(monitor_handle);
 
         if (self.used_monitors == 0) {
-            const thread_exec_state = comptime @intFromEnum(win32_system_power.ES_CONTINUOUS) |
-                @intFromEnum(win32_system_power.ES_DISPLAY_REQUIRED);
+            const thread_exec_state = comptime @intFromEnum(sys_power.ES_CONTINUOUS) |
+                @intFromEnum(sys_power.ES_DISPLAY_REQUIRED);
             // first time acquiring a monitor
             // prevent the system from entering sleep or turning off.
-            self.prev_exec_state = win32_system_power.SetThreadExecutionState(
+            self.prev_exec_state = sys_power.SetThreadExecutionState(
                 @enumFromInt(thread_exec_state),
             );
         } else {
@@ -344,7 +344,7 @@ pub const MonitorStore = struct {
 
         self.used_monitors -= 1;
         if (self.used_monitors == 0) {
-            _ = win32_system_power.SetThreadExecutionState(self.prev_exec_state);
+            _ = sys_power.SetThreadExecutionState(self.prev_exec_state);
         }
     }
 
