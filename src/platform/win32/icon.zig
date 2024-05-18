@@ -1,10 +1,10 @@
 const std = @import("std");
-const mem = std.mem;
 const zigwin32 = @import("zigwin32");
-const window_msg = zigwin32.ui.windows_and_messaging;
-const gdi = zigwin32.graphics.gdi;
 const common = @import("common");
 const win32 = @import("win32_defs.zig");
+const mem = std.mem;
+const window_msg = zigwin32.ui.windows_and_messaging;
+const gdi = zigwin32.graphics.gdi;
 
 pub const IconError = error{
     NoCreate, // Couldn't create the icon.
@@ -75,16 +75,16 @@ pub fn createIcon(
     return icon_handle orelse return IconError.FailedToCreate;
 }
 
-pub const Cursor = struct {
-    handle: ?window_msg.HCURSOR,
-    shared: bool, // As to avoid deleting system owned cursors.
+pub const CursorHints = struct {
+    image: ?window_msg.HCURSOR,
+    img_shared: bool, // As to avoid deleting system owned cursor images.
     mode: common.cursor.CursorMode,
 };
 
-pub fn destroyCursor(cursor: *Cursor) void {
-    if (!cursor.shared and cursor.handle != null) {
-        _ = window_msg.DestroyCursor(cursor.handle);
-        cursor.handle = null;
+pub fn releaseCursorImage(cursor: *CursorHints) void {
+    if (!cursor.img_shared and cursor.image != null) {
+        _ = window_msg.DestroyCursor(cursor.image);
+        cursor.image = null;
     }
 }
 

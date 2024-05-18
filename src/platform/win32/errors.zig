@@ -5,10 +5,3 @@ pub const WidowWin32Error = error{
     ProcessHandleNotFound, // Couldn't retrieve the hinstance value.
     FailedToInitPlatform, // Platform initialization failed.
 };
-
-pub const WindowError = error{
-    FailedToCreate,
-    FailedToCopyTitle,
-    UsupportedDrawingContext,
-    DrawingContextReinit,
-};

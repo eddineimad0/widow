@@ -52,4 +52,5 @@ pub fn deinitPlatform() void {
 
 test "Platform" {
     @import("std").testing.refAllDecls(@import("display.zig"));
+    @import("std").testing.refAllDecls(@import("module.zig"));
 }

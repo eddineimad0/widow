@@ -1,5 +1,4 @@
 const std = @import("std");
-const dbg = @import("builtin").mode == .Debug;
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
@@ -8,11 +7,11 @@ const icon = @import("icon.zig");
 const clipboard = @import("clipboard.zig");
 const common = @import("common");
 const error_defs = @import("errors.zig");
+const Win32Driver = @import("driver.zig").Win32Driver;
+const WindowImpl = @import("window_impl.zig").WindowImpl;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const sys_power = zigwin32.system.power;
 const sys_service = zigwin32.system.system_services;
-const Win32Driver = @import("driver.zig").Win32Driver;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
@@ -372,7 +371,7 @@ pub const MonitorStore = struct {
     }
 
     pub fn debugInfos(self: *const Self) void {
-        if (dbg) {
+        if (common.IS_DEBUG_BUILD) {
             for (self.monitors.items) |*monitor| {
                 monitor.debugInfos(false);
             }

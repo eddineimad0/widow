@@ -89,7 +89,10 @@ pub const Win32Driver = struct {
 
     const Self = @This();
 
-    pub fn initSingleton(comptime wnd_class_name: []const u8, comptime res_icon_name: ?[]const u8) !void {
+    pub fn initSingleton(
+        comptime wnd_class_name: []const u8,
+        comptime res_icon_name: ?[]const u8,
+    ) !void {
         @setCold(true);
 
         Self.sing_guard.lock();
@@ -261,7 +264,11 @@ pub const Win32Driver = struct {
     }
 };
 
-fn isWin32VersionMinimum(proc: win32.RtlVerifyVersionInfoProc, major: u32, minor: u32) bool {
+fn isWin32VersionMinimum(
+    proc: win32.RtlVerifyVersionInfoProc,
+    major: u32,
+    minor: u32,
+) bool {
     // [MSDN]
     // If you must require a particular operating system,
     // be sure to use it as a minimum supported version,
@@ -414,4 +421,7 @@ fn registerMainClass(
     return class;
 }
 
-test "Win32Driver init" {}
+test "Win32Driver init" {
+    try Win32Driver.initSingleton("Test class", null);
+    defer Win32Driver.deinitSingleton();
+}
