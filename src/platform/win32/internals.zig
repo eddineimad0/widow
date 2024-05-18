@@ -3,7 +3,7 @@ const dbg = @import("builtin").mode == .Debug;
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
-const monitor_impl = @import("monitor_impl.zig");
+const display = @import("display.zig");
 const icon = @import("icon.zig");
 const clipboard = @import("clipboard.zig");
 const common = @import("common");
@@ -210,7 +210,7 @@ pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !icon.Curs
 }
 
 pub const MonitorStore = struct {
-    monitors: std.ArrayList(monitor_impl.MonitorImpl),
+    monitors: std.ArrayList(display.Display),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
     prev_exec_state: sys_power.EXECUTION_STATE,
@@ -222,7 +222,7 @@ pub const MonitorStore = struct {
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
-            .monitors = try monitor_impl.pollMonitors(allocator),
+            .monitors = try display.pollMonitors(allocator),
         };
     }
 
@@ -241,9 +241,9 @@ pub const MonitorStore = struct {
     }
 
     /// Returns a refrence to the requested Monitor.
-    pub fn findMonitor(self: *Self, monitor_handle: win32.HMONITOR) !*monitor_impl.MonitorImpl {
+    pub fn findMonitor(self: *Self, monitor_handle: win32.HMONITOR) !*display.Display {
         // Find the monitor.
-        var target: ?*monitor_impl.MonitorImpl = null;
+        var target: ?*display.Display = null;
         for (self.monitors.items) |*item| {
             if (item.handle == monitor_handle) {
                 target = item;
@@ -264,7 +264,7 @@ pub const MonitorStore = struct {
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
-        const new_monitors = try monitor_impl.pollMonitors(self.monitors.allocator);
+        const new_monitors = try display.pollMonitors(self.monitors.allocator);
 
         for (self.monitors.items) |*monitor| {
             var disconnected = true;

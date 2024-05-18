@@ -1,6 +1,6 @@
 const std = @import("std");
 const internals = @import("internals.zig");
-const monitor_impl = @import("monitor_impl.zig");
+const monitor_impl = @import("display.zig");
 const dyn_x11 = @import("x11/dynamic.zig");
 const unix = @import("common").unix;
 const X11Driver = @import("driver.zig").X11Driver;

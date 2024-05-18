@@ -1,5 +1,5 @@
 const std = @import("std");
-const monitor_impl = @import("monitor_impl.zig");
+const monitor_impl = @import("display.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
