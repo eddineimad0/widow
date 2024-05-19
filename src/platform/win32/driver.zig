@@ -52,10 +52,6 @@ pub const Win32Driver = struct {
     hints: OsVersionHints,
     handles: Win32Handles,
     opt_func: OptionalApi,
-    // TODO: should we use the build script options for the names
-    // var WINDOW_CLASS_NAME: []const u8 = opts.WIN32_WNDCLASS_NAME;
-    // var HELPER_CLASS_NAME: []const u8 = opts.WIN32_WNDCLASS_NAME ++ "_HELPER";
-    // var RESOURCE_ICON_NAME: []const u8 = "";
     var sing_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
 
@@ -340,14 +336,9 @@ fn registerHelperClass(
     helper_class.style = window_msg.CS_OWNDC;
     helper_class.lpfnWndProc = helperWindowProc;
     helper_class.hInstance = hinstance;
-    // var buffer: [helper_class_name.len * 4]u8 = undefined;
-    // var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    // Shoudln't fail since the buffer is big enough.
-    // const wide_class_name = utils.utf8ToWideZ(
-    //     fba.allocator(),
-    //     helper_class_name,
-    // ) catch unreachable;
-    helper_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(opts.WIN32_WNDCLASS_NAME ++ "_HELPER");
+    helper_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
+        opts.WIN32_WNDCLASS_NAME ++ "_HELPER",
+    );
     const class = window_msg.RegisterClassExW(&helper_class);
     if (class == 0) {
         return DriverError.DupHELPClass;
@@ -368,21 +359,11 @@ fn registerMainClass(
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
-    // const icon_name_len = comptime if (res_icon_name) |name| name.len else 0;
-    // var buffer: [(wnd_class_name.len + icon_name_len + 1) * 5]u8 = undefined;
-    // var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    // const wide_class_name = utils.utf8ToWideZ(
-    //     fba.allocator(),
-    //     wnd_class_name,
-    // ) catch unreachable;
-    window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(opts.WIN32_WNDCLASS_NAME);
+    window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
+        opts.WIN32_WNDCLASS_NAME,
+    );
+    // TODO:
     // if (res_icon_name) |icon_name| {
-    //     //TODO: both this and classname shoud be
-    //     // converted at comptime.
-    //     const wide_icon_name = utils.utf8ToWideZ(
-    //         fba.allocator(),
-    //         icon_name,
-    //     ) catch unreachable;
     //     window_class.hIcon = @ptrCast(window_msg.LoadImageW(
     //         hinstance,
     //         wide_icon_name,

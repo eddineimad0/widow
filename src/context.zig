@@ -5,13 +5,13 @@ const Window = @import("window.zig").Window;
 const common = @import("common");
 const geometry = common.geometry;
 
+/// TODO: redoc
 /// A widow context represent an interface to the platform
 /// and is required by other entities in the library
 /// to communicate with platform
 pub const WidowContext = struct {
     platform_internals: *platform.Internals,
     monitor_store: *platform.MonitorStore,
-    events_queue: common.event.EventQueue,
     allocator: mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
 
@@ -36,7 +36,6 @@ pub const WidowContext = struct {
         errdefer self.platform_internals.destroy(allocator);
         // TODO: remove this refrence.
         self.monitor_store = try self.platform_internals.initMonitorStoreImpl(allocator);
-        self.events_queue = common.event.EventQueue.init(allocator);
         self.allocator = allocator;
         self.next_window_id = 0;
         return self;
@@ -54,13 +53,13 @@ pub const WidowContext = struct {
         self.platform_internals.destroy(self.allocator);
     }
 
-    /// Retrieves an event from the event queue,
-    /// returns false if the queue is empty, true if the `event` parameter was populated.
-    /// # Parameters
-    /// `event`: pointer to an event variable to be populated.
-    pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
-        return self.events_queue.popEvent(event);
-    }
+    // /// Retrieves an event from the event queue,
+    // /// returns false if the queue is empty, true if the `event` parameter was populated.
+    // /// # Parameters
+    // /// `event`: pointer to an event variable to be populated.
+    // pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
+    //     return self.events_queue.popEvent(event);
+    // }
 
     /// Returns the current text content of the system clipboard.
     /// # Notes
