@@ -4,7 +4,6 @@ const win32 = @import("win32_defs.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
-const intern = @import("internals.zig");
 const display = @import("display.zig");
 const WinGLContext = @import("wgl.zig").WinGLContext;
 const Win32Driver = @import("driver.zig").Win32Driver;
@@ -15,7 +14,6 @@ const foundation = zigwin32.foundation;
 const gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
-const Internals = intern.Internals;
 const CursorHints = icon.CursorHints;
 const Icon = icon.Icon;
 const WindowData = common.window_data.WindowData;
@@ -307,11 +305,6 @@ fn createPlatformWindow(
     return window_handle;
 }
 
-/// Holds all the refrences we use to communitcate with the WidowContext.
-pub const WidowProps = struct {
-    internals: *Internals,
-};
-
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: Icon,
@@ -339,16 +332,10 @@ pub const Window = struct {
         allocator: mem.Allocator,
         window_title: []const u8,
         data: *WindowData,
-        // events_queue: *common.event.EventQueue,
-        // internals: *Internals,
     ) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
-        // self.widow = WidowProps{
-        //     .events_queue = events_queue,
-        //     .internals = internals,
-        // };
         self.ev_queue = null;
         self.data = data.*;
 
@@ -549,6 +536,21 @@ pub const Window = struct {
         }
         // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
+    }
+
+    pub inline fn getEventQueue(self: *Self) ?*common.event.EventQueue {
+        return self.ev_queue;
+    }
+
+    pub inline fn setEventQueue(
+        self: *Self,
+        q: ?*common.event.EventQueue,
+    ) ?*common.event.EventQueue {
+        const ret = self.ev_queue;
+        // Flush any remaining events before replacing the queue;
+        self.processEvents();
+        self.ev_queue = q;
+        return ret;
     }
 
     /// Add an event to the events queue.
@@ -1178,39 +1180,39 @@ pub const Window = struct {
         self.win32.restore_frame = null;
     }
 
-    pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
-        var mon_area: common.geometry.WidowArea = undefined;
+    // pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
+    //     var mon_area: common.geometry.WidowArea = undefined;
+    //
+    //     try self.widow.internals.monitor_store.setMonitorWindow(
+    //         monitor_handle,
+    //         self,
+    //         &mon_area,
+    //     );
+    //
+    //     const POSITION_FLAGS: u32 = @intFromEnum(window_msg.SWP_NOZORDER) |
+    //         @intFromEnum(window_msg.SWP_NOACTIVATE) |
+    //         @intFromEnum(window_msg.SWP_NOCOPYBITS);
+    //
+    //     const top = if (self.data.flags.is_topmost)
+    //         window_msg.HWND_TOPMOST
+    //     else
+    //         window_msg.HWND_NOTOPMOST;
+    //
+    //     setWindowPositionIntern(
+    //         self.handle,
+    //         top,
+    //         POSITION_FLAGS,
+    //         mon_area.top_left.x,
+    //         mon_area.top_left.y,
+    //         mon_area.size.width,
+    //         mon_area.size.height,
+    //     );
+    // }
 
-        try self.widow.internals.monitor_store.setMonitorWindow(
-            monitor_handle,
-            self,
-            &mon_area,
-        );
-
-        const POSITION_FLAGS: u32 = @intFromEnum(window_msg.SWP_NOZORDER) |
-            @intFromEnum(window_msg.SWP_NOACTIVATE) |
-            @intFromEnum(window_msg.SWP_NOCOPYBITS);
-
-        const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
-        else
-            window_msg.HWND_NOTOPMOST;
-
-        setWindowPositionIntern(
-            self.handle,
-            top,
-            POSITION_FLAGS,
-            mon_area.top_left.x,
-            mon_area.top_left.y,
-            mon_area.size.width,
-            mon_area.size.height,
-        );
-    }
-
-    /// Marks the monitor as not being occupied by any window.
-    pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-        try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
-    }
+    // /// Marks the monitor as not being occupied by any window.
+    // pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
+    //     try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
+    // }
 
     pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
         return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST).?;
@@ -1244,48 +1246,48 @@ pub const Window = struct {
         self.win32.dropped_files.clearAndFree();
     }
 
-    pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-        const new_icon = try intern.createIcon(pixels, width, height);
-        const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
-            .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
-        else blk: {
-            const bg_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICON);
-            const sm_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICONSM);
-            break :blk .{ bg_icon, sm_icon };
-        };
-        _ = window_msg.SendMessageW(
-            self.handle,
-            window_msg.WM_SETICON,
-            window_msg.ICON_BIG,
-            @bitCast(handles[0]),
-        );
-        _ = window_msg.SendMessageW(
-            self.handle,
-            window_msg.WM_SETICON,
-            window_msg.ICON_SMALL,
-            @bitCast(handles[1]),
-        );
-        icon.destroyIcon(&self.win32.icon);
-        self.win32.icon = new_icon;
-    }
+    // pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
+    //     const new_icon = try intern.createIcon(pixels, width, height);
+    //     const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
+    //         .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
+    //     else blk: {
+    //         const bg_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICON);
+    //         const sm_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICONSM);
+    //         break :blk .{ bg_icon, sm_icon };
+    //     };
+    //     _ = window_msg.SendMessageW(
+    //         self.handle,
+    //         window_msg.WM_SETICON,
+    //         window_msg.ICON_BIG,
+    //         @bitCast(handles[0]),
+    //     );
+    //     _ = window_msg.SendMessageW(
+    //         self.handle,
+    //         window_msg.WM_SETICON,
+    //         window_msg.ICON_SMALL,
+    //         @bitCast(handles[1]),
+    //     );
+    //     icon.destroyIcon(&self.win32.icon);
+    //     self.win32.icon = new_icon;
+    // }
 
-    pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-        const new_cursor = try intern.createCursor(pixels, width, height, xhot, yhot);
-        icon.destroyCursor(&self.win32.cursor);
-        self.win32.cursor = new_cursor;
-        if (self.data.flags.cursor_in_client) {
-            updateCursorImage(&self.win32.cursor);
-        }
-    }
-
-    pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-        const new_cursor = try intern.createStandardCursor(cursor_shape);
-        icon.destroyCursor(&self.win32.cursor);
-        self.win32.cursor = new_cursor;
-        if (self.data.flags.cursor_in_client) {
-            updateCursorImage(&self.win32.cursor);
-        }
-    }
+    // pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
+    //     const new_cursor = try intern.createCursor(pixels, width, height, xhot, yhot);
+    //     icon.destroyCursor(&self.win32.cursor);
+    //     self.win32.cursor = new_cursor;
+    //     if (self.data.flags.cursor_in_client) {
+    //         updateCursorImage(&self.win32.cursor);
+    //     }
+    // }
+    //
+    // pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
+    //     const new_cursor = try intern.createStandardCursor(cursor_shape);
+    //     icon.destroyCursor(&self.win32.cursor);
+    //     self.win32.cursor = new_cursor;
+    //     if (self.data.flags.cursor_in_client) {
+    //         updateCursorImage(&self.win32.cursor);
+    //     }
+    // }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG_BUILD) {

@@ -1,12 +1,193 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const dbg = builtin.mode == .Debug;
 const common = @import("common");
 const platform = @import("platform");
-const WindowImpl = platform.window.Window;
-const WidowProps = platform.window.WidowProps;
+const WindowImpl = platform.Window;
+const WidowProps = platform.WidowProps;
 const WindowData = common.window_data.WindowData;
 const Allocator = std.mem.Allocator;
+const WidowContext = @import("context.zig").WidowContext;
+const EventQueue = common.event.EventQueue;
+
+pub const WindowBuilder = struct {
+    allocator: std.mem.Allocator,
+    context: *WidowContext,
+    attribs: common.window_data.WindowData,
+    title: []const u8,
+    const Self = @This();
+
+    /// Creates a window builder instance.
+    /// The window builder wraps the creation attributes of the window,
+    /// and the functions necessary to changes those attributes.
+    /// # Parameters
+    /// `context`: a pointer to the WidowContext instance.
+    /// # Notes
+    /// The context parameter should point to an initialzed WidowContext instance that lives
+    /// as long as the window, i.e destroying the WidowContext instance before the window is destroyed
+    /// causes undefined behaviour.
+    pub fn init(
+        context: *WidowContext,
+    ) Self {
+        return Self{
+            .allocator = context.allocator,
+            .context = context,
+            .title = "",
+            // Defalut attributes
+            .attribs = common.window_data.WindowData{
+                .id = 0,
+                .client_area = common.geometry.WidowArea.init(
+                    platform.Window.WINDOW_DEFAULT_POSITION.x,
+                    platform.Window.WINDOW_DEFAULT_POSITION.y,
+                    640,
+                    480,
+                ),
+                .min_size = null,
+                .max_size = null,
+                .aspect_ratio = null,
+                .flags = .{
+                    .is_visible = true,
+                    .is_maximized = false,
+                    .is_minimized = false,
+                    .is_resizable = false,
+                    .is_decorated = true,
+                    .is_topmost = false,
+                    .is_focused = false,
+                    .is_fullscreen = false,
+                    .cursor_in_client = false,
+                    .is_dpi_aware = false,
+                },
+                .input = common.keyboard_mouse.InputState.init(),
+            },
+        };
+    }
+
+    /// Creates and returns the built window instance.
+    /// # Notes
+    /// The user should deinitialize the Window instance when done.
+    /// # Errors
+    /// 'OutOfMemory': function could fail due to memory allocation.
+    pub fn build(self: *Self) !Window {
+        // First window has id of 1,
+        self.attribs.id = self.context.nextWindowId();
+        // The Window should copy the title if needed.
+        const window = Window.init(
+            self.allocator,
+            self.title,
+            &self.attribs,
+            // &self.context.events_queue,
+            // self.context.platform_internals,
+        );
+        return window;
+    }
+
+    /// Set the window title.
+    /// # Parameters
+    /// `title`: the new title to replace the current one.
+    /// # Notes
+    /// The title slice should remain valid until the window is created.
+    pub fn withTitle(self: *Self, title: []const u8) *Self {
+        self.title = title;
+        return self;
+    }
+
+    /// Set the window width and height.
+    /// # Parameters
+    /// `width`: the new width to replace the current one.
+    /// `height`: the new height to replace the current one.
+    /// # Notes
+    /// If the window is DPI aware the final width and height
+    /// might be diffrent
+    pub fn withSize(self: *Self, width: i32, height: i32) *Self {
+        std.debug.assert(width > 0 and height > 0);
+        self.attribs.client_area.size.width = width;
+        self.attribs.client_area.size.height = height;
+        return self;
+    }
+
+    /// Whether the window is visible(true) or hidden(false).
+    /// if not set the default is visible.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withVisibility(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_visible = value;
+        return self;
+    }
+
+    /// Choose the position of the client(content area)'s top left corner.
+    /// If not set the default is decided by the system.
+    /// # Parameters
+    /// `x`: the y coordinates of the client's top left corner.
+    /// `y`: the y coordinates of the client's top left corner.
+    pub fn withPosition(self: *Self, x: i32, y: i32) *Self {
+        self.attribs.client_area.top_left.x = x;
+        self.attribs.client_area.top_left.y = y;
+        return self;
+    }
+
+    /// Make the window resizable.
+    /// The window is not resizable by default.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withResize(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_resizable = value;
+        return self;
+    }
+
+    /// Whether the window has a frame or not.
+    /// The default is true.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withDecoration(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_decorated = value;
+        return self;
+    }
+
+    /// Whether the window should stay on top even if it lose focus.
+    /// The default is false.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withTopMost(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_topmost = value;
+        return self;
+    }
+
+    /// Specify a minimum and maximum window size for resizable windows.
+    /// No size limitation is applied by default.
+    /// # Paramters
+    /// `width`: the minimum possible width for the window.
+    /// `height`: the minimum possible height fo the window.
+    pub fn withMinSizeLimit(
+        self: *Self,
+        width: i32,
+        height: i32,
+    ) *Self {
+        self.attribs.min_size = .{ .width = width, .height = height };
+        return self;
+    }
+
+    /// Specify a maximum window size for resizable windows.
+    /// No size limitation is applied by default.
+    /// # Paramters
+    /// `width`: the maximum possible width for the window.
+    /// `height`: the maximum possible height fo the window.
+    pub fn withMaxSizeLimit(
+        self: *Self,
+        width: i32,
+        height: i32,
+    ) *Self {
+        self.attribs.max_size = .{ .width = width, .height = height };
+        return self;
+    }
+
+    /// Specify whether the window size should be scaled by the Display's Dpi.
+    /// scaling is not applied by default.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withDPIAware(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_dpi_aware = value;
+        return self;
+    }
+};
 
 pub const Window = struct {
     impl: *WindowImpl,
@@ -47,6 +228,23 @@ pub const Window = struct {
     pub fn deinit(self: *Self) void {
         self.impl.deinit(self.allocator);
         self.impl = undefined;
+    }
+
+    /// Returns a pointer to the current queue the window is using
+    /// for sending events
+    pub inline fn getEventQueue(self: *const Self) ?*EventQueue {
+        return self.impl.getEventQueue();
+    }
+
+    /// Sets a pointer the queue where the window events will be sent,
+    /// and returns the previous queue pointer.
+    /// By default there is no registered queue and the windo simply discards
+    /// all events.
+    /// caller must guarantee the queue outlives the window.
+    /// # Paramters
+    /// `queue` a optional pointer to the queue that will be used.
+    pub inline fn setEventQueue(self: *Self, queue: ?*EventQueue) ?*EventQueue {
+        return self.impl.setEventQueue(queue);
     }
 
     /// Process pending events and posts them to
@@ -539,20 +737,8 @@ pub const Window = struct {
     // Prints some debug information to stdout.
     // if compiled in non Debug mode it does nothing.
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
-        if (dbg) {
+        if (common.IS_DEBUG_BUILD) {
             self.impl.debugInfos(size, flags);
         }
-    }
-
-    pub fn initDrawingContext(self: *Self, backend: common.gfx.DrawingBackend) !void {
-        try self.impl.initDrawingContext(backend);
-    }
-
-    pub fn MakeDrawingContextCurrent(self: *const Self) bool {
-        return self.impl.MakeDrawingContextCurrent();
-    }
-
-    pub fn swapBuffers(self: *const Self) bool {
-        return self.impl.swapBuffers();
     }
 };

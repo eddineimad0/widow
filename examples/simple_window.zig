@@ -1,12 +1,14 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
+const EventQueue = widow.EventQueue;
 const KeyCode = widow.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
+
     // first we need to preform some platform specific initialization.
     try widow.initWidowPlatform();
     // clean up code to be called, when done using the library.
@@ -23,49 +25,35 @@ pub fn main() !void {
     defer widow_cntxt.deinit();
 
     // create a WindowBuilder.
-    // this action might fail if we fail to allocate space for the title.
-    var builder = widow.WindowBuilder.init(
-        "Simple window",
-        800,
-        600,
-        &widow_cntxt,
-    ) catch |err| {
-        std.debug.print("Failed to create a window builder {}\n", .{err});
-        return;
-    };
-
-    // customize the window to your liking.
-    _ = builder.withResize(true)
+    var builder = widow.WindowBuilder.init(&widow_cntxt);
+    // customize the window.
+    var mywindow = builder.withTitle("Simple Window")
+        .withSize(1024, 800)
+        .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
         .withSize(800, 600)
-        .withDecoration(true);
-
-    _ = builder.withTitle("Re:Simple Window") catch |err| {
-        std.debug.print("Failed to change window title,{}\n", .{err});
-        return;
-    };
-
-    // create the window,
-    var mywindow = builder.build() catch |err| {
+        .withDecoration(true)
+        .build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
-    // No longer nedded.
-    builder.deinit();
     // closes the window when done.
     defer mywindow.deinit();
 
-    var event: widow.Event = undefined;
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
+
+    _ = mywindow.setEventQueue(&ev_queue);
+
     event_loop: while (true) {
         // Process window events posted by the system.
         mywindow.waitEvent();
 
-        // All entities in the library send their
-        // events to a central event queue in the WidowContext instance.
-        // specified at their creation.
-        while (widow_cntxt.pollEvents(&event)) {
+        var event: widow.Event = undefined;
+
+        while (ev_queue.popEvent(&event)) {
             switch (event) {
                 // Possible Events
                 // WindowClose => The X icon on the window frame was pressed.

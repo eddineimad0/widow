@@ -1,5 +1,6 @@
 const common = @import("common");
 const cntxt = @import("context.zig");
+const window = @import("window.zig");
 const platform = @import("platform");
 // Exports
 pub const geometry = common.geometry;
@@ -20,8 +21,9 @@ pub const mouse = struct {
 
 pub const Event = common.event.Event;
 pub const EventType = common.event.EventType;
+pub const EventQueue = common.event.EventQueue;
 pub const VideoMode = common.video_mode.VideoMode;
 pub const WidowContext = cntxt.WidowContext;
-pub const WindowBuilder = cntxt.WindowBuilder;
+pub const WindowBuilder = window.WindowBuilder;
 pub const initWidowPlatform = platform.initPlatform;
 pub const deinitWidowPlatform = platform.deinitPlatform;
