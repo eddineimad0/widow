@@ -173,14 +173,14 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
 
 // TODO: cursor logic should be reviewed.
 /// Updates the cursor image.
-pub fn updateCursorImage(cursor: *const icon.Cursor) void {
+pub fn updateCursorImage(cursor: *const CursorHints) void {
     switch (cursor.mode) {
-        .Hidden => window_msg.SetCursor(null),
+        .Hidden => _ = window_msg.SetCursor(null),
         else => {
-            const cursor_handle = if (cursor.custom_handle) |h|
+            const cursor_handle = if (cursor.image) |h|
                 h
             else
-                window_msg.LoadCursor(null, window_msg.IDC_ARROW);
+                window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
 
             _ = window_msg.SetCursor(cursor_handle);
         },
@@ -202,14 +202,14 @@ pub inline fn unCaptureCursor() void {
 }
 
 /// Captures and hide the cursor from the user.
-pub fn disableCursor(cursor: *icon.Cursor, window_handle: win32.HWND) void {
+pub fn disableCursor(cursor: *CursorHints, window_handle: win32.HWND) void {
     captureCursor(window_handle);
     cursor.mode = .Hidden;
     updateCursorImage(cursor);
 }
 
 /// Shows and release the cursor.
-pub fn enableCursor(cursor: *icon.Cursor) void {
+pub fn enableCursor(cursor: *CursorHints) void {
     unCaptureCursor();
     cursor.mode = .Normal;
     updateCursorImage(cursor);
@@ -341,7 +341,7 @@ pub const Window = struct {
         data: *WindowData,
         // events_queue: *common.event.EventQueue,
         // internals: *Internals,
-    ) mem.Allocator!*Self {
+    ) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
@@ -430,9 +430,11 @@ pub const Window = struct {
                 window_msg.HWND_TOPMOST
             else
                 window_msg.HWND_NOTOPMOST;
-            const POSITION_FLAGS: u32 = comptime @intFromEnum(window_msg.SWP_NOZORDER) |
-                @intFromEnum(window_msg.SWP_NOACTIVATE) |
-                @intFromEnum(window_msg.SWP_NOOWNERZORDER);
+            const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+                .NOZORDER = 1,
+                .NOACTIVATE = 1,
+                .NOOWNERZORDER = 1,
+            };
             setWindowPositionIntern(
                 self.handle,
                 top,
@@ -445,7 +447,7 @@ pub const Window = struct {
         }
 
         // Allow Drag & Drop messages.
-        if (Win32Driver.singleton().flags.is_win7_or_above) {
+        if (Win32Driver.singleton().hints.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
@@ -479,7 +481,7 @@ pub const Window = struct {
             self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            try self.setFullscreen(true, null);
+            // try self.setFullscreen(true, null);
         }
 
         return self;
@@ -489,12 +491,12 @@ pub const Window = struct {
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
-            self.setFullscreen(false, null) catch unreachable;
+            // self.setFullscreen(false, null) catch unreachable;
         }
-        if (self.win32.cursor.mode.is_captured()) {
+        if (self.win32.cursor.mode == .Captured) {
             unCaptureCursor();
         }
-        if (self.win32.cursor.mode.is_disabled()) {
+        if (self.win32.cursor.mode == .Hidden) {
             enableCursor(&self.win32.cursor);
         }
         _ = window_msg.SetWindowLongPtrW(self.handle, window_msg.GWLP_USERDATA, 0);
@@ -583,7 +585,7 @@ pub const Window = struct {
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(self: *Self) void {
         const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
-        const POSITION_FLAGS: u32 = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .DRAWFRAME = 1,
             .NOACTIVATE = 1,
             .NOZORDER = 1,
@@ -706,7 +708,7 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         // Don't use SWP_NOSIZE to allow dpi change.
-        const POSITION_FLAGS: u32 = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .NOZORDER = 1,
             .NOACTIVATE = 1,
             .NOOWNERZORDER = 1,
@@ -803,7 +805,7 @@ pub const Window = struct {
                 self.restore();
             }
 
-            const POSITION_FLAGS: u32 = window_msg.SET_WINDOW_POS_FLAGS{
+            const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
                 .NOOWNERZORDER = 1,
@@ -861,7 +863,7 @@ pub const Window = struct {
             self.data.min_size = null;
         }
 
-        const POSITION_FLAGS: u32 = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .NOACTIVATE = 1,
             .NOZORDER = 1,
             .NOOWNERZORDER = 1,
@@ -1144,31 +1146,31 @@ pub const Window = struct {
     }
 
     /// Switch the window to fullscreen mode and back;
-    pub fn setFullscreen(
-        self: *Self,
-        value: bool,
-        video_mode: ?*common.video_mode.VideoMode,
-    ) !void {
-        // TODO: rework
-
-        // The video mode switch should always be done first
-        const monitor_handle = self.occupiedMonitor();
-        try self.widow.internals.monitor_store.setMonitorVideoMode(monitor_handle, video_mode);
-
-        if (self.data.flags.is_fullscreen != value) {
-            if (value) {
-                // save for when we exit the fullscreen mode
-                self.win32.restore_frame = self.data.client_area;
-
-                self.data.flags.is_fullscreen = true;
-                self.updateStyles();
-                try self.acquireMonitor(monitor_handle);
-            } else {
-                try self.releaseMonitor(monitor_handle);
-                self.requestRestore();
-            }
-        }
-    }
+    // pub fn setFullscreen(
+    //     self: *Self,
+    //     value: bool,
+    //     video_mode: ?*common.video_mode.VideoMode,
+    // ) !void {
+    //     // TODO: rework
+    //
+    //     // The video mode switch should always be done first
+    //     const monitor_handle = self.occupiedMonitor();
+    //     try self.widow.internals.monitor_store.setMonitorVideoMode(monitor_handle, video_mode);
+    //
+    //     if (self.data.flags.is_fullscreen != value) {
+    //         if (value) {
+    //             // save for when we exit the fullscreen mode
+    //             self.win32.restore_frame = self.data.client_area;
+    //
+    //             self.data.flags.is_fullscreen = true;
+    //             self.updateStyles();
+    //             try self.acquireMonitor(monitor_handle);
+    //         } else {
+    //             try self.releaseMonitor(monitor_handle);
+    //             self.requestRestore();
+    //         }
+    //     }
+    // }
 
     pub fn requestRestore(self: *Self) void {
         self.data.flags.is_fullscreen = false;

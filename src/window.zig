@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 const dbg = builtin.mode == .Debug;
 const common = @import("common");
 const platform = @import("platform");
-const WindowImpl = platform.window_impl.WindowImpl;
-const WidowProps = platform.window_impl.WidowProps;
+const WindowImpl = platform.window.Window;
+const WidowProps = platform.window.WidowProps;
 const WindowData = common.window_data.WindowData;
 const Allocator = std.mem.Allocator;
 
@@ -28,24 +28,24 @@ pub const Window = struct {
         allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
-        events_queue: *common.event.EventQueue,
-        internals: *platform.Internals,
+        // events_queue: *common.event.EventQueue,
+        // internals: *platform.Internals,
     ) !Self {
         return .{
             .allocator = allocator,
-            .impl = try WindowImpl.create(
+            .impl = try WindowImpl.init(
                 allocator,
                 window_title,
                 data,
-                events_queue,
-                internals,
+                // events_queue,
+                // internals,
             ),
         };
     }
 
     /// Destroys the window and releases all allocated ressources.
     pub fn deinit(self: *Self) void {
-        self.impl.destroy(self.allocator);
+        self.impl.deinit(self.allocator);
         self.impl = undefined;
     }
 
@@ -360,10 +360,13 @@ pub const Window = struct {
     /// `value`: whether to set or exit fullscreen mode.
     /// `video_mode`:  a VideoMode to switch to or null to keep the user's video mode
     pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) bool {
-        self.impl.setFullscreen(value, video_mode) catch |err| {
-            std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
-            return false;
-        };
+        _ = self;
+        _ = value;
+        _ = video_mode;
+        // self.impl.setFullscreen(value, video_mode) catch |err| {
+        //     std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
+        //     return false;
+        // };
         return true;
     }
 

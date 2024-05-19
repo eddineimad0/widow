@@ -2,7 +2,7 @@ const geometry = @import("./geometry.zig");
 
 const InputState = @import("./keyboard_mouse.zig").InputState;
 
-const WindowFlags = packed struct {
+pub const WindowFlags = packed struct {
     is_visible: bool, // Does the window appear on screen or is it hidden from the user.
     is_maximized: bool, // Is the window maximized.
     is_minimized: bool, // Is the window minimized.

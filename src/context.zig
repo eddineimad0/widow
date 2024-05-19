@@ -125,8 +125,8 @@ pub const WindowBuilder = struct {
             .window_attributes = common.window_data.WindowData{
                 .id = 0,
                 .client_area = common.geometry.WidowArea.init(
-                    platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION.x,
-                    platform.window_impl.WindowImpl.WINDOW_DEFAULT_POSITION.y,
+                    platform.window.Window.WINDOW_DEFAULT_POSITION.x,
+                    platform.window.Window.WINDOW_DEFAULT_POSITION.y,
                     width,
                     height,
                 ),
@@ -169,8 +169,8 @@ pub const WindowBuilder = struct {
             self.allocator,
             self.title,
             &self.window_attributes,
-            &self.context.events_queue,
-            self.context.platform_internals,
+            // &self.context.events_queue,
+            // self.context.platform_internals,
         );
         return window;
     }

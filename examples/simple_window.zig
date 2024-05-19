@@ -1,7 +1,7 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
-const KeyCode = widow.keyboard_and_mouse.KeyCode;
+const KeyCode = widow.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {

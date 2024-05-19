@@ -3,12 +3,12 @@ const mem = std.mem;
 const common = @import("common");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
-const window_impl = @import("window_impl.zig");
+const wndw = @import("window.zig");
 const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const win32_foundation = zigwin32.foundation;
-const ScanCode = common.keyboard_and_mouse.ScanCode;
-const KeyCode = common.keyboard_and_mouse.KeyCode;
-const KeyState = common.keyboard_and_mouse.KeyState;
+const ScanCode = common.keyboard_mouse.ScanCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
+const KeyState = common.keyboard_mouse.KeyState;
 
 /// For comparing wide c strings.
 pub fn wideStrZCmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
@@ -106,8 +106,8 @@ pub inline fn clearThreadError() void {
     win32_foundation.SetLastError(win32.WIN32_ERROR.NO_ERROR); // 0
 }
 
-pub fn getKeyModifiers() common.keyboard_and_mouse.KeyModifiers {
-    var mods = common.keyboard_and_mouse.KeyModifiers{
+pub fn getKeyModifiers() common.keyboard_mouse.KeyModifiers {
+    var mods = common.keyboard_mouse.KeyModifiers{
         .shift = false,
         .ctrl = false,
         .alt = false,
@@ -988,7 +988,7 @@ fn keyTextToVirtual(keycode: u16) KeyCode {
 
 /// Clean the Key_state array of the window and emit the corresponding events.
 /// insight taken from glfw library.
-pub fn clearStickyKeys(window: *window_impl.WindowImpl) void {
+pub fn clearStickyKeys(window: *wndw.Window) void {
     // Windows doesn't emit a keyup event for the modifiers and this causes
     // confusion and misinput for the user.
     // Solution clean the key_state and queue the necessary events at every event poll.

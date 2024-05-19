@@ -47,7 +47,7 @@ const OptionalApi = struct {
 };
 
 pub const Win32Driver = struct {
-    flags: OsVersionHints,
+    hints: OsVersionHints,
     handles: Win32Handles,
     opt_func: OptionalApi,
     // TODO: should we use the build script options for the names
@@ -60,7 +60,7 @@ pub const Win32Driver = struct {
     // A global readonly singelton
     // used to access loaded function, os hints and global handles.
     var globl_instance: Win32Driver = Win32Driver{
-        .flags = OsVersionHints{
+        .hints = OsVersionHints{
             .is_win_vista_or_above = false,
             .is_win7_or_above = false,
             .is_win8point1_or_above = false,
@@ -123,21 +123,21 @@ pub const Win32Driver = struct {
             try globl_instance.loadLibraries();
             errdefer globl_instance.freeLibraries();
 
-            // Setup windows version flags.
+            // Setup windows version hints.
             if (isWin32VersionMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 6, 0)) {
-                globl_instance.flags.is_win_vista_or_above = true;
+                globl_instance.hints.is_win_vista_or_above = true;
 
                 if (isWin32VersionMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 6, 1)) {
-                    globl_instance.flags.is_win7_or_above = true;
+                    globl_instance.hints.is_win7_or_above = true;
 
                     if (isWin32VersionMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 6, 3)) {
-                        globl_instance.flags.is_win8point1_or_above = true;
+                        globl_instance.hints.is_win8point1_or_above = true;
 
                         if (isWin10BuildMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 1607)) {
-                            globl_instance.flags.is_win10b1607_or_above = true;
+                            globl_instance.hints.is_win10b1607_or_above = true;
 
                             if (isWin10BuildMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 1703)) {
-                                globl_instance.flags.is_win10b1703_or_above = true;
+                                globl_instance.hints.is_win10b1703_or_above = true;
                             }
                         }
                     }
@@ -145,15 +145,15 @@ pub const Win32Driver = struct {
             }
 
             // Declare Process DPI Awareness.
-            if (globl_instance.flags.is_win10b1703_or_above) {
+            if (globl_instance.hints.is_win10b1703_or_above) {
                 _ = globl_instance.opt_func.SetProcessDpiAwarenessContext.?(
                     win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
                 );
-            } else if (globl_instance.flags.is_win8point1_or_above) {
+            } else if (globl_instance.hints.is_win8point1_or_above) {
                 _ = globl_instance.opt_func.SetProcessDpiAwareness.?(
                     win32.PROCESS_PER_MONITOR_DPI_AWARE,
                 );
-            } else if (globl_instance.flags.is_win_vista_or_above) {
+            } else if (globl_instance.hints.is_win_vista_or_above) {
                 _ = globl_instance.opt_func.SetProcessDPIAware.?();
             }
 

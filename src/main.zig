@@ -6,16 +6,16 @@ pub const geometry = common.geometry;
 pub const cursor = common.cursor;
 
 pub const keyboard = struct {
-    const KeyCode = common.keyboard_mouse.KeyCode;
-    const ScanCode = common.keyboard_mouse.ScanCode;
-    const KeyState = common.keyboard_mouse.KeyState;
-    const KeyModifiers = common.keyboard_mouse.KeyModifiers;
+    pub const KeyCode = common.keyboard_mouse.KeyCode;
+    pub const ScanCode = common.keyboard_mouse.ScanCode;
+    pub const KeyState = common.keyboard_mouse.KeyState;
+    pub const KeyModifiers = common.keyboard_mouse.KeyModifiers;
 };
 
 pub const mouse = struct {
-    const MouseButton = common.keyboard_mouse.MouseButton;
-    const MouseWheel = common.keyboard_mouse.MouseWheel;
-    const MouseButtonState = common.keyboard_mouse.MouseButtonState;
+    pub const MouseButton = common.keyboard_mouse.MouseButton;
+    pub const MouseWheel = common.keyboard_mouse.MouseWheel;
+    pub const MouseButtonState = common.keyboard_mouse.MouseButtonState;
 };
 
 pub const Event = common.event.Event;

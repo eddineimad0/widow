@@ -8,7 +8,7 @@ const clipboard = @import("clipboard.zig");
 const common = @import("common");
 const error_defs = @import("errors.zig");
 const Win32Driver = @import("driver.zig").Win32Driver;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
+const Window = @import("window.zig").Window;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const sys_power = zigwin32.system.power;
 const sys_service = zigwin32.system.system_services;
@@ -122,7 +122,7 @@ fn createHelperWindow(hinstance: win32.HINSTANCE) !win32.HWND {
         hinstance,
         null,
     ) orelse {
-        return error_defs.WindowError.FailedToCreate;
+        return error_defs.WidowWin32Error.NtdllNotFound;
     };
 
     _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
@@ -221,7 +221,7 @@ pub const MonitorStore = struct {
             .used_monitors = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
-            .monitors = try display.pollMonitors(allocator),
+            .monitors = try display.pollDisplays(allocator),
         };
     }
 
@@ -263,7 +263,7 @@ pub const MonitorStore = struct {
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
-        const new_monitors = try display.pollMonitors(self.monitors.allocator);
+        const new_monitors = try display.pollDisplays(self.monitors.allocator);
 
         for (self.monitors.items) |*monitor| {
             var disconnected = true;
@@ -271,10 +271,11 @@ pub const MonitorStore = struct {
                 if (monitor.equals(new_monitor)) {
                     // pass along the address of the occupying window.
                     new_monitor.setWindow(monitor.window);
-                    if (monitor.current_mode) |*mode| {
-                        // copy the current video mode
-                        new_monitor.setVideoMode(mode) catch {};
-                    }
+                    // TODO:
+                    // if (monitor.curr_video) |*mode| {
+                    //     // copy the current video mode
+                    //     new_monitor.setVideoMode(mode) catch {};
+                    // }
                     disconnected = false;
                     break;
                 }
@@ -296,7 +297,7 @@ pub const MonitorStore = struct {
 
             // avoids changing the video mode when deinit is called.
             // as it's a useless call to the OS.
-            monitor.current_mode = null;
+            monitor.curr_video = 0;
             monitor.deinit();
         }
 
@@ -309,7 +310,7 @@ pub const MonitorStore = struct {
     pub fn setMonitorWindow(
         self: *Self,
         monitor_handle: win32.HMONITOR,
-        window: *WindowImpl,
+        window: *Window,
         monitor_area: *common.geometry.WidowArea,
     ) !void {
         const monitor = try self.findMonitor(monitor_handle);

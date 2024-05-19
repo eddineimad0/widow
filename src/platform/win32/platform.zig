@@ -1,7 +1,7 @@
 const internals = @import("internals.zig");
 const win32 = @import("win32_defs.zig");
 
-pub const window_impl = @import("window_impl.zig");
+pub const window = @import("window.zig");
 pub const MonitorStore = internals.MonitorStore;
 pub const Internals = internals.Internals;
 

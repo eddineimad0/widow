@@ -1,7 +1,7 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
-const window_impl = @import("window_impl.zig");
+const wndw = @import("window.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
 const win32_window_messaging = zigwin32.ui.windows_and_messaging;
@@ -10,12 +10,12 @@ const win32_foundation = zigwin32.foundation;
 const win32_gdi = zigwin32.graphics.gdi;
 const win32_shell = zigwin32.ui.shell;
 
-pub inline fn closeMSGHandler(window: *window_impl.WindowImpl) void {
+pub inline fn closeMSGHandler(window: *wndw.Window) void {
     const event = common.event.createCloseEvent(window.data.id);
     window.sendEvent(&event);
 }
 
-pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
+pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
     // TODO: test more keyboards.
 
     // The right ALT key is handled as a CTRL+ALT key.
@@ -39,18 +39,18 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
 
     // Determine the action.
     const action = if (utils.hiWord(@bitCast(lparam)) & win32_window_messaging.KF_UP == 0)
-        common.keyboard_and_mouse.KeyState.Pressed
+        common.keyboard_mouse.KeyState.Pressed
     else
-        common.keyboard_and_mouse.KeyState.Released;
+        common.keyboard_mouse.KeyState.Released;
 
-    if (keys[1] != common.keyboard_and_mouse.ScanCode.Unknown) {
+    if (keys[1] != common.keyboard_mouse.ScanCode.Unknown) {
         // Update the key state array.
         window.data.input.keys[@intCast(@intFromEnum(keys[1]))] = action;
     }
 
     // Printscreen key only reports a release action.
     if (wparam == @intFromEnum(win32_keyboard_mouse.VK_SNAPSHOT)) {
-        const fake_event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], common.keyboard_and_mouse.KeyState.Pressed, mods);
+        const fake_event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], common.keyboard_mouse.KeyState.Pressed, mods);
         window.sendEvent(&fake_event);
     }
 
@@ -58,34 +58,34 @@ pub inline fn keyMSGHandler(window: *window_impl.WindowImpl, wparam: win32.WPARA
     window.sendEvent(&event);
 }
 
-pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
+pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: win32.WPARAM) void {
     // Determine the button.
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONUP => common.keyboard_and_mouse.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONUP => common.keyboard_and_mouse.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONUP => common.keyboard_and_mouse.MouseButton.Middle,
+        win32_window_messaging.WM_LBUTTONUP => common.keyboard_mouse.MouseButton.Left,
+        win32_window_messaging.WM_RBUTTONUP => common.keyboard_mouse.MouseButton.Right,
+        win32_window_messaging.WM_MBUTTONUP => common.keyboard_mouse.MouseButton.Middle,
         else => if (utils.hiWord(wparam) & @intFromEnum(win32_keyboard_mouse.VK_XBUTTON1) == 0)
-            common.keyboard_and_mouse.MouseButton.ExtraButton2
+            common.keyboard_mouse.MouseButton.ExtraButton2
         else
-            common.keyboard_and_mouse.MouseButton.ExtraButton1,
+            common.keyboard_mouse.MouseButton.ExtraButton1,
     };
 
     const event = common.event.createMouseButtonEvent(
         window.data.id,
         button,
-        common.keyboard_and_mouse.KeyState.Released,
+        common.keyboard_mouse.KeyState.Released,
         utils.getKeyModifiers(),
     );
 
     window.sendEvent(&event);
 
     // Update window's input state.
-    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_and_mouse.KeyState.Released;
+    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_mouse.KeyState.Released;
 
     // Release Capture if all keys are released.
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.keyboard_and_mouse.KeyState.Pressed) {
+        if (action.* == common.keyboard_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
         }
@@ -95,10 +95,10 @@ pub inline fn mouseUpMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWOR
     }
 }
 
-pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DWORD, wparam: win32.WPARAM) void {
+pub inline fn mouseDownMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: win32.WPARAM) void {
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
-        if (action.* == common.keyboard_and_mouse.KeyState.Pressed) {
+        if (action.* == common.keyboard_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
         }
@@ -116,38 +116,38 @@ pub inline fn mouseDownMSGHandler(window: *window_impl.WindowImpl, msg: win32.DW
 
     // Determine the button.
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONDOWN => common.keyboard_and_mouse.MouseButton.Middle,
+        win32_window_messaging.WM_LBUTTONDOWN => common.keyboard_mouse.MouseButton.Left,
+        win32_window_messaging.WM_RBUTTONDOWN => common.keyboard_mouse.MouseButton.Right,
+        win32_window_messaging.WM_MBUTTONDOWN => common.keyboard_mouse.MouseButton.Middle,
         else => if (utils.hiWord(wparam) & @intFromEnum(win32_keyboard_mouse.VK_XBUTTON1) == 0)
-            common.keyboard_and_mouse.MouseButton.ExtraButton2
+            common.keyboard_mouse.MouseButton.ExtraButton2
         else
-            common.keyboard_and_mouse.MouseButton.ExtraButton1,
+            common.keyboard_mouse.MouseButton.ExtraButton1,
     };
 
     const event = common.event.createMouseButtonEvent(
         window.data.id,
         button,
-        common.keyboard_and_mouse.KeyState.Pressed,
+        common.keyboard_mouse.KeyState.Pressed,
         utils.getKeyModifiers(),
     );
 
     window.sendEvent(&event);
-    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_and_mouse.KeyState.Pressed;
+    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_mouse.KeyState.Pressed;
 }
 
 pub inline fn mouseWheelMSGHandler(
-    window: *window_impl.WindowImpl,
-    wheel: common.keyboard_and_mouse.MouseWheel,
+    window: *wndw.Window,
+    wheel: common.keyboard_mouse.MouseWheel,
     wheel_delta: f64,
 ) void {
     const event = common.event.createScrollEvent(window.data.id, wheel, wheel_delta);
     window.sendEvent(&event);
 }
 
-pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.LPARAM) void {
-    const styles = window_impl.windowStyles(&window.data.flags);
-    const ex_styles = window_impl.windowExStyles(&window.data.flags);
+pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void {
+    const styles = wndw.windowStyles(&window.data.flags);
+    const ex_styles = wndw.windowExStyles(&window.data.flags);
     const ulparam: usize = @bitCast(lparam);
     const info: *win32_window_messaging.MINMAXINFO = @ptrFromInt(ulparam);
 
@@ -168,7 +168,7 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
             dpi = window.scalingDPI(null);
         }
 
-        window_impl.adjustWindowRect(
+        wndw.adjustWindowRect(
             &rect,
             styles,
             ex_styles,
@@ -205,12 +205,12 @@ pub inline fn minMaxInfoHandler(window: *window_impl.WindowImpl, lparam: win32.L
 }
 
 pub inline fn dpiScaledSizeHandler(
-    window: *window_impl.WindowImpl,
+    window: *wndw.Window,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) void {
-    const styles = window_impl.windowStyles(&window.data.flags);
-    const ex_styles = window_impl.windowExStyles(&window.data.flags);
+    const styles = wndw.windowStyles(&window.data.flags);
+    const ex_styles = wndw.windowExStyles(&window.data.flags);
     const new_dpi = utils.loWord(wparam);
     const ulparam: usize = @bitCast(lparam);
     const size: *win32_foundation.SIZE = @ptrFromInt(ulparam);
@@ -230,14 +230,14 @@ pub inline fn dpiScaledSizeHandler(
         .bottom = 0,
     };
 
-    window_impl.adjustWindowRect(
+    wndw.adjustWindowRect(
         &old_nc_size,
         styles,
         ex_styles,
         old_dpi,
     );
 
-    window_impl.adjustWindowRect(
+    wndw.adjustWindowRect(
         &new_nc_size,
         styles,
         ex_styles,
@@ -248,7 +248,7 @@ pub inline fn dpiScaledSizeHandler(
     size.cy += (new_nc_size.bottom - new_nc_size.top) - (old_nc_size.bottom - old_nc_size.top);
 }
 
-pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
+pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
     const surrogate: u16 = @truncate(wparam);
     if (utils.isHighSurrogate(surrogate)) {
         window.win32.high_surrogate = surrogate;
@@ -272,7 +272,7 @@ pub inline fn charEventHandler(window: *window_impl.WindowImpl, wparam: win32.WP
     }
 }
 
-pub inline fn dropEventHandler(window: *window_impl.WindowImpl, wparam: win32.WPARAM) void {
+pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
     // TODO: can we use a different allocator for better performance?
     // free old files
     const allocator = window.win32.dropped_files.allocator;

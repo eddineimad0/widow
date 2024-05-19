@@ -1,5 +1,5 @@
 const zigwin32 = @import("zigwin32");
-const WindowImpl = @import("window_impl.zig").WindowImpl;
+const Window = @import("window.zig").Window;
 const win32 = @import("win32_defs.zig");
 const win_opengl = zigwin32.graphics.open_gl;
 const gdi = zigwin32.graphics.gdi;

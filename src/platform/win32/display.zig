@@ -6,7 +6,7 @@ const utils = @import("utils.zig");
 const gdi = @import("zigwin32").graphics.gdi;
 const common = @import("common");
 const Win32Driver = @import("driver.zig").Win32Driver;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
+const Window = @import("window.zig").Window;
 const VideoMode = common.video_mode.VideoMode;
 const WidowArea = common.geometry.WidowArea;
 const ArrayList = std.ArrayList;
@@ -259,7 +259,7 @@ pub const Display = struct {
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
     curr_video: usize, // the index of the currently active videomode.
-    window: ?*WindowImpl, // A pointer to the window occupying(fullscreen) the display.
+    window: ?*Window, // A pointer to the window occupying(fullscreen) the display.
 
     // the original(registry setting of the dispaly video mode)
     // is always saved at index 0 of the `modes` ArrayList.
@@ -393,7 +393,7 @@ pub const Display = struct {
     }
 
     /// Set the window Handle field
-    pub inline fn setWindow(self: *Self, window: ?*WindowImpl) void {
+    pub inline fn setWindow(self: *Self, window: ?*Window) void {
         self.window = window;
     }
 
