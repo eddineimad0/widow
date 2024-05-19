@@ -8,9 +8,7 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
     // first we need to preform some platform specific initialization.
-    // an options tuple can be passed to customize the platform init
-    // e.g on windows we can set the WNDClass name to a comptime string of our choice,
-    try widow.initWidowPlatform(.{ .wnd_class = "Zig_is_awesome" });
+    try widow.initWidowPlatform();
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 

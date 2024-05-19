@@ -24,8 +24,15 @@ pub fn build(b: *std.Build) !void {
     ) orelse
         false;
 
+    const win32_wndclass_name = b.option(
+        []const u8,
+        "widow_win32_wndclass_name",
+        "Specify a name for the win32 WNDClass",
+    ) orelse "WIDOW_CLASS";
+
     const options = b.addOptions();
     options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
+    options.addOption([]const u8, "WIN32_WNDCLASS_NAME", win32_wndclass_name);
 
     if (display_target) |t| {
         if (!isDisplayTargetValid(&target, t)) {

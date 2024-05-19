@@ -11,18 +11,8 @@ pub const WindowHandle = win32.HWND;
 
 const WidowContext = @import("driver.zig").Win32Driver;
 
-pub fn initPlatform(options: anytype) !void {
-    const window_class = if (@hasField(@TypeOf(options), "wnd_class"))
-        @field(options, "wnd_class")
-    else
-        "WIDOW_CLASS";
-
-    const res_icon = if (@hasField(@TypeOf(options), "res_icon"))
-        @field(options, "res_icon")
-    else
-        null;
-
-    try WidowContext.initSingleton(window_class, res_icon);
+pub fn initPlatform() !void {
+    try WidowContext.initSingleton();
 }
 
 pub fn deinitPlatform() void {

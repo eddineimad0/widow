@@ -3,8 +3,10 @@ const win32 = @import("win32_defs.zig");
 const zigwin32 = @import("zigwin32");
 const mod = @import("module.zig");
 const utils = @import("utils.zig");
+const opts = @import("build-options");
 const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const mainWindowProc = @import("window_proc.zig").mainWindowProc;
+const unicode = std.unicode;
 const sysinfo = zigwin32.system.system_information;
 const window_msg = zigwin32.ui.windows_and_messaging;
 
@@ -51,9 +53,9 @@ pub const Win32Driver = struct {
     handles: Win32Handles,
     opt_func: OptionalApi,
     // TODO: should we use the build script options for the names
-    var WINDOW_CLASS_NAME: []const u8 = "";
-    var HELPER_CLASS_NAME: []const u8 = "";
-    var RESOURCE_ICON_NAME: []const u8 = "";
+    // var WINDOW_CLASS_NAME: []const u8 = opts.WIN32_WNDCLASS_NAME;
+    // var HELPER_CLASS_NAME: []const u8 = opts.WIN32_WNDCLASS_NAME ++ "_HELPER";
+    // var RESOURCE_ICON_NAME: []const u8 = "";
     var sing_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
 
@@ -89,10 +91,7 @@ pub const Win32Driver = struct {
 
     const Self = @This();
 
-    pub fn initSingleton(
-        comptime wnd_class_name: []const u8,
-        comptime res_icon_name: ?[]const u8,
-    ) !void {
+    pub fn initSingleton() !void {
         @setCold(true);
 
         Self.sing_guard.lock();
@@ -106,18 +105,11 @@ pub const Win32Driver = struct {
             }
 
             globl_instance.handles.wnd_class = try registerMainClass(
-                wnd_class_name,
-                res_icon_name,
                 globl_instance.handles.hinstance,
             );
             globl_instance.handles.helper_class = try registerHelperClass(
-                wnd_class_name ++ "_HELPER",
                 globl_instance.handles.hinstance,
             );
-
-            Self.WINDOW_CLASS_NAME = wnd_class_name;
-            Self.HELPER_CLASS_NAME = wnd_class_name ++ "_HELPER";
-            Self.RESOURCE_ICON_NAME = res_icon_name orelse "";
 
             // Load the required libraries.
             try globl_instance.loadLibraries();
@@ -341,7 +333,6 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
 }
 
 fn registerHelperClass(
-    comptime helper_class_name: []const u8,
     hinstance: win32.HINSTANCE,
 ) !u16 {
     var helper_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
@@ -349,14 +340,14 @@ fn registerHelperClass(
     helper_class.style = window_msg.CS_OWNDC;
     helper_class.lpfnWndProc = helperWindowProc;
     helper_class.hInstance = hinstance;
-    var buffer: [helper_class_name.len * 4]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    // var buffer: [helper_class_name.len * 4]u8 = undefined;
+    // var fba = std.heap.FixedBufferAllocator.init(&buffer);
     // Shoudln't fail since the buffer is big enough.
-    const wide_class_name = utils.utf8ToWideZ(
-        fba.allocator(),
-        helper_class_name,
-    ) catch unreachable;
-    helper_class.lpszClassName = wide_class_name;
+    // const wide_class_name = utils.utf8ToWideZ(
+    //     fba.allocator(),
+    //     helper_class_name,
+    // ) catch unreachable;
+    helper_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(opts.WIN32_WNDCLASS_NAME ++ "_HELPER");
     const class = window_msg.RegisterClassExW(&helper_class);
     if (class == 0) {
         return DriverError.DupHELPClass;
@@ -365,8 +356,6 @@ fn registerHelperClass(
 }
 
 fn registerMainClass(
-    comptime wnd_class_name: []const u8,
-    comptime res_icon_name: ?[]const u8,
     hinstance: win32.HINSTANCE,
 ) DriverError!u16 {
     var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
@@ -379,30 +368,30 @@ fn registerMainClass(
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
     window_class.hCursor = window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
-    const icon_name_len = comptime if (res_icon_name) |name| name.len else 0;
-    var buffer: [(wnd_class_name.len + icon_name_len + 1) * 5]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const wide_class_name = utils.utf8ToWideZ(
-        fba.allocator(),
-        wnd_class_name,
-    ) catch unreachable;
-    window_class.lpszClassName = wide_class_name;
-    if (res_icon_name) |icon_name| {
-        //TODO: both this and classname shoud be
-        // converted at comptime.
-        const wide_icon_name = utils.utf8ToWideZ(
-            fba.allocator(),
-            icon_name,
-        ) catch unreachable;
-        window_class.hIcon = @ptrCast(window_msg.LoadImageW(
-            hinstance,
-            wide_icon_name,
-            window_msg.IMAGE_ICON,
-            0,
-            0,
-            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
-        ));
-    }
+    // const icon_name_len = comptime if (res_icon_name) |name| name.len else 0;
+    // var buffer: [(wnd_class_name.len + icon_name_len + 1) * 5]u8 = undefined;
+    // var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    // const wide_class_name = utils.utf8ToWideZ(
+    //     fba.allocator(),
+    //     wnd_class_name,
+    // ) catch unreachable;
+    window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(opts.WIN32_WNDCLASS_NAME);
+    // if (res_icon_name) |icon_name| {
+    //     //TODO: both this and classname shoud be
+    //     // converted at comptime.
+    //     const wide_icon_name = utils.utf8ToWideZ(
+    //         fba.allocator(),
+    //         icon_name,
+    //     ) catch unreachable;
+    //     window_class.hIcon = @ptrCast(window_msg.LoadImageW(
+    //         hinstance,
+    //         wide_icon_name,
+    //         window_msg.IMAGE_ICON,
+    //         0,
+    //         0,
+    //         window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+    //     ));
+    // }
     if (window_class.hIcon == null) {
         // No Icon was provided or we failed.
         window_class.hIcon = @ptrCast(win32.LoadImageW(
