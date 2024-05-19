@@ -35,21 +35,19 @@ const STYLE_BASIC: u32 = @bitCast(window_msg.WINDOW_STYLE{
 // Fullscreen : just a popup window with monitor width and height.
 const STYLE_FULLSCREEN: u32 = @bitCast(window_msg.WINDOW_STYLE{
     .POPUP = 1,
-    .MINIMIZE = 1,
+    .GROUP = 1,
 });
 // Captionless: without a caption(title bar)
-const STYLE_BORDERLESS: u32 = @bitCast(window_msg.WINDOW_STYLE{
-    .POPUP = 1,
-    .MINIMIZE = 1,
-});
+const STYLE_BORDERLESS = STYLE_FULLSCREEN;
+
 // Resizable : can be resized using the widow border can also be maximazed.
 const STYLE_RESIZABLE: u32 = @bitCast(window_msg.WINDOW_STYLE{
     .THICKFRAME = 1,
-    .MAXIMIZE = 1,
+    .TABSTOP = 1,
 });
 // Normal: both a title bar and minimize button.
 const STYLE_NORMAL: u32 = @bitCast(window_msg.WINDOW_STYLE{
-    .MINIMIZE = 1,
+    .GROUP = 1,
     .SYSMENU = 1,
     .DLGFRAME = 1,
     .BORDER = 1,
@@ -1294,14 +1292,15 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const cs = self.clientSize();
+                const ls = self.clientSize();
+                const ps = self.clientPixelSize();
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
                     .{
-                        self.data.client_area.size.width,
-                        self.data.client_area.size.height,
-                        cs.width,
-                        cs.height,
+                        ps.width,
+                        ps.height,
+                        ls.width,
+                        ls.height,
                     },
                 );
                 const ws = windowSize(self.handle);
