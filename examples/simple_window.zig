@@ -42,6 +42,8 @@ pub fn main() !void {
     // closes the window when done.
     defer mywindow.deinit();
 
+    // the window will require an event queue to
+    // send events.
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();
 
@@ -49,7 +51,7 @@ pub fn main() !void {
 
     event_loop: while (true) {
         // Process window events posted by the system.
-        mywindow.waitEvent();
+        try mywindow.waitEvent();
 
         var event: widow.Event = undefined;
 

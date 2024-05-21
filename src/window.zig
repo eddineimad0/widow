@@ -249,14 +249,14 @@ pub const Window = struct {
 
     /// Process pending events and posts them to
     /// the main event queue.
-    pub inline fn processEvents(self: *Self) void {
-        self.impl.processEvents();
+    pub inline fn processEvents(self: *Self) platform.WindowError!void {
+        return self.impl.processEvents();
     }
 
     /// This function puts the calling thread to sleep
     /// until an event msg is posted by the system.
-    pub inline fn waitEvent(self: *Self) void {
-        self.impl.waitEvent();
+    pub inline fn waitEvent(self: *Self) platform.WindowError!void {
+        return self.impl.waitEvent();
     }
 
     /// This function puts the calling thread to sleep
@@ -266,8 +266,8 @@ pub const Window = struct {
     /// `duration_ms`: the timeout period in milliseconds.
     /// # Notes
     /// If the timeout is 0 the function will return immediately.
-    pub inline fn waitEventTimeout(self: *Self, duration_ms: u32) bool {
-        std.debug.assert(duration_ms > 0);
+    pub inline fn waitEventTimeout(self: *Self, duration_ms: u32) platform.WindowError!bool {
+        std.debug.assert(duration_ms != 0);
         return self.impl.waitEventTimeout(duration_ms);
     }
 

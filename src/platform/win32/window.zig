@@ -24,6 +24,7 @@ pub const WindowError = error{
     NoTitle,
     UsupportedDrawingContext,
     DrawingContextReinit,
+    OutOfMemory,
 };
 
 // Window Styles as defined by the SDL library.
@@ -65,6 +66,9 @@ const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
     .CLIPSIBLINGS = 1,
     .CLIPCHILDREN = 1,
 });
+
+// Define our own message to report Window Procedure errors back
+pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -369,7 +373,7 @@ pub const Window = struct {
 
         // Process inital events.
         // these events aren't reported.
-        self.processEvents();
+        self.processEvents() catch unreachable;
 
         _ = window_msg.SetWindowLongPtrW(
             self.handle,
@@ -526,9 +530,19 @@ pub const Window = struct {
     }
 
     /// the window should belong to the thread calling this function.
-    pub fn processEvents(self: *Self) void {
+    pub fn processEvents(self: *Self) WindowError!void {
         var msg: window_msg.MSG = undefined;
         while (window_msg.PeekMessageW(&msg, self.handle, 0, 0, window_msg.PM_REMOVE) != 0) {
+            if (msg.message == WM_ERROR_REPORT) {
+                // our custom error message
+                return @as(
+                    WindowError,
+                    @errorCast(@errorFromInt(@as(
+                        std.meta.Int(.unsigned, @bitSizeOf(anyerror)),
+                        @truncate(msg.wParam),
+                    ))),
+                );
+            }
             _ = window_msg.TranslateMessage(&msg);
             _ = window_msg.DispatchMessageW(&msg);
         }
@@ -545,8 +559,6 @@ pub const Window = struct {
         q: ?*common.event.EventQueue,
     ) ?*common.event.EventQueue {
         const ret = self.ev_queue;
-        // Flush any remaining events before replacing the queue;
-        self.processEvents();
         self.ev_queue = q;
         return ret;
     }
@@ -554,20 +566,22 @@ pub const Window = struct {
     /// Add an event to the events queue.
     pub fn sendEvent(self: *Self, event: *const common.event.Event) void {
         if (self.ev_queue) |q| {
-            q.queueEvent(event);
+            q.queueEvent(event) catch |err| {
+                utils.postWindowErrorMsg(err, self.handle);
+            };
         }
     }
 
-    pub fn waitEvent(self: *Self) void {
+    pub fn waitEvent(self: *Self) WindowError!void {
         _ = window_msg.WaitMessage();
-        self.processEvents();
+        try self.processEvents();
     }
 
     /// the window should belong to the thread calling this function.
     /// Waits for an input event or the timeout interval elapses.
     /// if an event is received before timout it returns true,
     /// false otherwise.
-    pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
+    pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
         if (window_msg.MsgWaitForMultipleObjects(
             0,
             null,
@@ -578,7 +592,7 @@ pub const Window = struct {
             // Timeout period elapsed.
             return false;
         }
-        self.processEvents();
+        try self.processEvents();
         return true;
     }
 

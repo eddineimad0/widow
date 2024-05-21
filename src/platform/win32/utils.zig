@@ -1036,3 +1036,21 @@ pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.WidowPoint2
     const ypos = getYLparam(@bitCast(lparam));
     return common.geometry.WidowPoint2D{ .x = xpos, .y = ypos };
 }
+
+/// Posts a zig error code to the window's thread queue.
+pub inline fn postWindowErrorMsg(e: wndw.WindowError, window: win32.HWND) void {
+    const ret = zigwin32.ui.windows_and_messaging.PostMessageW(
+        window,
+        wndw.WM_ERROR_REPORT,
+        @intFromError(e),
+        0,
+    );
+
+    if (ret == win32.FALSE) {
+        // This should only happen if we flood system thread queue
+        // with messages which is highly unlikley since the default
+        // size allows for 10_000, if that happens our app should
+        // just panic.
+        @panic("Fatal error, exhausted system ressources");
+    }
+}

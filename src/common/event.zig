@@ -1,4 +1,5 @@
 const std = @import("std");
+const mem = std.mem;
 const geometry = @import("geometry.zig");
 const kbd_mouse = @import("keyboard_mouse.zig");
 
@@ -216,32 +217,30 @@ pub inline fn createCharEvent(
 
 pub const EventQueue = struct {
     queue: Queue(Event),
-    // events_count: usize,
     const Self = @This();
 
+    /// initializes an event Queue For the window.
+    /// call deinit when done
+    /// # parameters
+    /// 'allocator': used for the queue's heap allocations.
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
             .queue = Queue(Event).init(allocator),
-            // .events_count = 0,
         };
     }
 
+    /// frees all queued events.
     pub fn deinit(self: *Self) void {
         self.queue.deinit();
-        // self.events_count = 0;
     }
 
-    pub fn queueEvent(self: *Self, event: *const Event) void {
-        self.queue.append(event) catch |err| {
-            std.log.err("[Event]: Failed to Queue Event,{}\n", .{err});
-        };
-        // self.events_count += 1;
+    pub fn queueEvent(self: *Self, event: *const Event) mem.Allocator.Error!void {
+        return self.queue.append(event);
     }
 
     pub fn popEvent(self: *Self, event: *Event) bool {
         const first = self.queue.get() orelse return false;
         event.* = first.*;
-        // self.events_count -= 1;
         return self.queue.removeFront();
     }
 };

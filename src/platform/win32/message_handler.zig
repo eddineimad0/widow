@@ -95,7 +95,11 @@ pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: 
     }
 }
 
-pub inline fn mouseDownMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: win32.WPARAM) void {
+pub inline fn mouseDownMSGHandler(
+    window: *wndw.Window,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+) void {
     var any_button_pressed = false;
     for (&window.data.input.mouse_buttons) |*action| {
         if (action.* == common.keyboard_mouse.KeyState.Pressed) {
@@ -176,10 +180,10 @@ pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void
         );
 
         // [Win32api docs]
-        // The maximum tracking size is the largest window size that can be produced
-        // by using the borders to size the window.
-        // The minimum tracking size is the smallest window size that can be produced
-        // by using the borders to size the window.
+        // The maximum tracking size is the largest window size
+        // that can be produced by using the borders to size the window.
+        // The minimum tracking size is the smallest window size
+        // that can be produced by using the borders to size the window.
         if (window.data.min_size) |size| {
             info.ptMinTrackSize.x = size.width + (rect.right - rect.left);
             info.ptMinTrackSize.y = size.height + (rect.bottom - rect.top);
@@ -273,6 +277,7 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
 }
 
 pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
+    // TODO: fix event handler.
     // TODO: can we use a different allocator for better performance?
     // free old files
     const allocator = window.win32.dropped_files.allocator;

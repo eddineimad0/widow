@@ -2,7 +2,7 @@ const internals = @import("internals.zig");
 const win32 = @import("win32_defs.zig");
 
 pub const Window = @import("window.zig").Window;
-pub const WindowProps = @import("window.zig").WindowProps;
+pub const WindowError = @import("window.zig").WindowError;
 pub const MonitorStore = internals.MonitorStore;
 pub const Internals = internals.Internals;
 
@@ -10,14 +10,14 @@ pub const Internals = internals.Internals;
 pub const MonitorHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
-const WidowContext = @import("driver.zig").Win32Driver;
+const PlatformDriver = @import("driver.zig").Win32Driver;
 
 pub fn initPlatform() !void {
-    try WidowContext.initSingleton();
+    try PlatformDriver.initSingleton();
 }
 
 pub fn deinitPlatform() void {
-    WidowContext.deinitSingleton();
+    PlatformDriver.deinitSingleton();
 }
 
 // test "Win32Context_Thread_safety" {
