@@ -71,7 +71,7 @@ const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
 pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 
 // Define window property name
-pub const WINDOW_REF_PROP_W = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
+pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -174,24 +174,36 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
     return size;
 }
 
-// TODO: cursor logic should be reviewed.
-/// Updates the cursor image.
-pub fn updateCursorImage(cursor: *const CursorHints) void {
-    switch (cursor.mode) {
-        .Hidden => _ = window_msg.SetCursor(null),
-        else => {
-            const cursor_handle = if (cursor.image) |h|
+pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
+    switch (hints.mode) {
+        .Normal => unCaptureCursor(),
+        else => captureCursor(window),
+    }
+
+    const cursor_image = switch (hints.mode) {
+        .Hidden => null,
+        else => img: {
+            break :img if (hints.image) |h|
                 h
             else
                 window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
-
-            _ = window_msg.SetCursor(cursor_handle);
         },
+    };
+
+    hints.prev_image = window_msg.SetCursor(cursor_image);
+}
+
+pub fn restoreCursor(hints: *CursorHints) void {
+    switch (hints.mode) {
+        .Captured, .Hidden => unCaptureCursor(),
+        else => {},
     }
+    _ = window_msg.SetCursor(hints.prev_image);
+    hints.prev_image = null;
 }
 
 /// Limits the cursor motion to the client rectangle.
-pub inline fn captureCursor(window_handle: win32.HWND) void {
+inline fn captureCursor(window_handle: win32.HWND) void {
     var clip_rect: win32.RECT = undefined;
     _ = window_msg.GetClientRect(window_handle, &clip_rect);
     // ClipCursor expects screen coordinates.
@@ -200,22 +212,8 @@ pub inline fn captureCursor(window_handle: win32.HWND) void {
 }
 
 /// Removes cursor motion limitation.
-pub inline fn unCaptureCursor() void {
+inline fn unCaptureCursor() void {
     _ = window_msg.ClipCursor(null);
-}
-
-/// Captures and hide the cursor from the user.
-pub fn disableCursor(cursor: *CursorHints, window_handle: win32.HWND) void {
-    captureCursor(window_handle);
-    cursor.mode = .Hidden;
-    updateCursorImage(cursor);
-}
-
-/// Shows and release the cursor.
-pub fn enableCursor(cursor: *CursorHints) void {
-    unCaptureCursor();
-    cursor.mode = .Normal;
-    updateCursorImage(cursor);
 }
 
 /// helper function for changing the window position,size and styles.
@@ -380,14 +378,9 @@ pub const Window = struct {
 
         _ = window_msg.SetPropW(
             self.handle,
-            WINDOW_REF_PROP_W,
+            WINDOW_REF_PROP,
             @ptrCast(self),
         );
-        // _ = window_msg.SetWindowLongPtrW(
-        //     self.handle,
-        //     window_msg.GWLP_USERDATA,
-        //     @intCast(@intFromPtr(self)),
-        // );
 
         // handle DPI adjustments.
         if (self.data.flags.is_dpi_aware) {
@@ -432,6 +425,7 @@ pub const Window = struct {
                 .NOACTIVATE = 1,
                 .NOOWNERZORDER = 1,
             };
+
             setWindowPositionIntern(
                 self.handle,
                 top,
@@ -490,14 +484,16 @@ pub const Window = struct {
             // release the currently occupied monitor
             // self.setFullscreen(false, null) catch unreachable;
         }
-        if (self.win32.cursor.mode == .Captured) {
-            unCaptureCursor();
-        }
-        if (self.win32.cursor.mode == .Hidden) {
-            enableCursor(&self.win32.cursor);
-        }
-        window_msg.SetPropW(self.handle, WINDOW_REF_PROP_W, null);
-        // _ = window_msg.SetWindowLongPtrW(self.handle, window_msg.GWLP_USERDATA, 0);
+        self.win32.cursor.mode = .Normal;
+        applyCursorHints(&self.win32.cursor, self.handle);
+        // if (self.win32.cursor.mode == .Captured) {
+        //     unCaptureCursor();
+        // }
+        // if (self.win32.cursor.mode == .Hidden) {
+        //     enableCursor(&self.win32.cursor);
+        // }
+
+        _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
         allocator.destroy(self);
@@ -697,18 +693,15 @@ pub const Window = struct {
         _ = window_msg.SetCursorPos(point.x, point.y);
     }
 
-    // pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
-    //     if (self.win32.cursor.mode == mode) {
-    //         return;
-    //     }
-    //     self.win32.cursor.mode = mode;
-    //     enableCursor(&self.win32.cursor);
-    //     switch (mode) {
-    //         common.cursor.CursorMode.Captured => captureCursor(self.handle),
-    //         common.cursor.CursorMode.Hidden => disableCursor(self.handle),
-    //         else => {},
-    //     }
+    // pub inline fn setCursorHints(self: *Self, h: *const CursorHints) void {
+    //     self.win32.cursor = h.*;
+    //     applyCursorHints(h, self.handle);
     // }
+
+    pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
+        self.win32.cursor.mode = mode;
+        applyCursorHints(&self.win32.cursor, self.handle);
+    }
 
     /// Notify and flash the taskbar.
     pub fn flash(self: *const Self) void {
@@ -1235,9 +1228,9 @@ pub const Window = struct {
     //     try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
     // }
 
-    pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
-        return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST).?;
-    }
+    // pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
+    //     return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST).?;
+    // }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
     pub fn droppedFiles(self: *const Self) [][]const u8 {

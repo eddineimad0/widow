@@ -4,18 +4,18 @@ const win32 = @import("win32_defs.zig");
 const wndw = @import("window.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
+const keymap = @import("keymap.zig");
 const window_msg = zigwin32.ui.windows_and_messaging;
 const kbd_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const foundation = zigwin32.foundation;
 const gdi = zigwin32.graphics.gdi;
 const shell = zigwin32.ui.shell;
 
-pub inline fn closeMSGHandler(window: *wndw.Window) void {
-    const event = common.event.createCloseEvent(window.data.id);
-    window.sendEvent(&event);
-}
-
-pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: win32.LPARAM) void {
+pub inline fn keyMSGHandler(
+    window: *wndw.Window,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) void {
     // TODO: test more keyboards.
 
     // The right ALT key is handled as a CTRL+ALT key.
@@ -41,7 +41,10 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
         }
     }
 
-    const keys = utils.getKeyCodes(@truncate(wparam), lparam);
+    const keycode, const scancode = keymap.translateVirtualKey(
+        @truncate(wparam),
+        lparam,
+    );
     const mods = utils.getKeyModifiers();
 
     // Determine the action.
@@ -50,28 +53,38 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
     else
         common.keyboard_mouse.KeyState.Released;
 
-    if (keys[1] != common.keyboard_mouse.ScanCode.Unknown) {
+    if (scancode != common.keyboard_mouse.ScanCode.Unknown) {
         // Update the key state array.
-        window.data.input.keys[@intCast(@intFromEnum(keys[1]))] = action;
+        window.data.input.keys[@intCast(@intFromEnum(scancode))] = action;
     }
 
     // Printscreen key only reports a release action.
     if (wparam == @intFromEnum(kbd_mouse.VK_SNAPSHOT)) {
         const fake_event = common.event.createKeyboardEvent(
             window.data.id,
-            keys[0],
-            keys[1],
+            keycode,
+            scancode,
             .Pressed,
             mods,
         );
         window.sendEvent(&fake_event);
     }
 
-    const event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], action, mods);
+    const event = common.event.createKeyboardEvent(
+        window.data.id,
+        keycode,
+        scancode,
+        action,
+        mods,
+    );
     window.sendEvent(&event);
 }
 
-pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: win32.WPARAM) void {
+pub inline fn mouseUpMSGHandler(
+    window: *wndw.Window,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+) void {
     // Determine the button.
     const button = switch (msg) {
         window_msg.WM_LBUTTONUP => common.keyboard_mouse.MouseButton.Left,
@@ -268,8 +281,10 @@ pub inline fn dpiScaledSizeHandler(
         new_dpi,
     );
 
-    size.cx += (new_nc_size.right - new_nc_size.left) - (old_nc_size.right - old_nc_size.left);
-    size.cy += (new_nc_size.bottom - new_nc_size.top) - (old_nc_size.bottom - old_nc_size.top);
+    size.cx += (new_nc_size.right - new_nc_size.left) -
+        (old_nc_size.right - old_nc_size.left);
+    size.cy += (new_nc_size.bottom - new_nc_size.top) -
+        (old_nc_size.bottom - old_nc_size.top);
 }
 
 pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {

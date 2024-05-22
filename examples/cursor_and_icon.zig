@@ -1,21 +1,24 @@
 const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.EventType;
-const ScanCode = widow.keyboard_and_mouse.ScanCode;
+const ScanCode = widow.keyboard.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
-const CursorShape = widow.cursor.CursorShape;
+const CursorShape = widow.cursor.StandardCursorShape;
+const EventQueue = widow.EventQueue;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn main() void {
+pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
+
     // first we need to preform some platform specific initialization.
-    widow.initWidowPlatform(.{}) catch {
-        std.debug.print("Failed to start Widow library\n", .{});
-    };
+    try widow.initWidowPlatform();
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
+    // Start by creating a WidowContext instance.
+    // the context is at the heart of the library and keeps track of monitors,clipboard,events...
+    // only one instance is needed but you can create as many as you need.
     var widow_cntxt = widow.WidowContext.init(allocator) catch {
         std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
         return;
@@ -23,38 +26,41 @@ pub fn main() void {
     // destroy it when done.
     defer widow_cntxt.deinit();
 
-    // Grab the library's WindowBuilder instance.
-    // this action might fail if we fail to allocate space for the title.
-    var builder = widow.WindowBuilder.init(
-        "cursor and icon",
-        1024,
-        640,
-        &widow_cntxt,
-    ) catch |err| {
-        std.debug.print("Failed to create a window builder {}\n", .{err});
-        return;
-    };
-
-    // create our window,
-    var window = builder.withDPIAware(true).withResize(true).build() catch |err| {
+    // create a WindowBuilder.
+    var builder = widow.WindowBuilder.init(&widow_cntxt);
+    // customize the window.
+    var mywindow = builder.withTitle("Cursor & icon")
+        .withSize(1024, 800)
+        .withResize(true)
+        .withDPIAware(true)
+        .withPosition(200, 200)
+        .withSize(800, 600)
+        .withDecoration(true)
+        .build() catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
-    // No longer nedded.
-    builder.deinit();
-    // deinitialize when done.
-    defer window.deinit();
+    // closes the window when done.
+    defer mywindow.deinit();
 
-    const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
-    window.setIcon(&icon_pixels, 32, 32) catch {
-        std.debug.print("Failed to set Window icon.\n", .{});
-    };
+    // the window will require an event queue to
+    // send events.
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
+
+    _ = mywindow.setEventQueue(&ev_queue);
+
+    // const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
+    // mywindow.setIcon(&icon_pixels, 32, 32) catch {
+    //     std.debug.print("Failed to set Window icon.\n", .{});
+    // };
+
     var event: widow.Event = undefined;
     event_loop: while (true) {
-        window.waitEvent();
+        try mywindow.waitEvent();
 
-        while (widow_cntxt.pollEvents(&event)) {
+        while (ev_queue.popEvent(&event)) {
             switch (event) {
                 EventType.WindowClose => {
                     break :event_loop;
@@ -64,29 +70,29 @@ pub fn main() void {
                         switch (key.scancode) {
                             ScanCode.Q => {
                                 // let's request closing the window on pressing Q key
-                                window.queueCloseEvent();
+                                mywindow.queueCloseEvent();
                             },
                             ScanCode.C => {
-                                window.setCursorMode(CursorMode.Captured);
+                                mywindow.setCursorMode(CursorMode.Captured);
                             },
-                            ScanCode.D => {
-                                window.setCursorMode(CursorMode.Disabled);
+                            ScanCode.H => {
+                                mywindow.setCursorMode(CursorMode.Hidden);
                             },
-                            ScanCode.S => {
-                                window.setCursorMode(CursorMode.Normal);
+                            ScanCode.N => {
+                                mywindow.setCursorMode(CursorMode.Normal);
                             },
                             ScanCode.I => {
-                                window.setCursor(&icon_pixels, 32, 32, 0, 0) catch {
-                                    std.debug.print("Failed to set window's cursor.\n", .{});
-                                };
+                                // mywindow.setCursor(&icon_pixels, 32, 32, 0, 0) catch {
+                                //     std.debug.print("Failed to set window's cursor.\n", .{});
+                                // };
                             },
                             ScanCode.U => {
-                                window.setStandardCursor(widow.cursor.StandardCursorShape.Help) catch {
-                                    std.debug.print("Failed to set standard cursor\n", .{});
-                                };
+                                // mywindow.setStandardCursor(widow.cursor.StandardCursorShape.Help) catch {
+                                //     std.debug.print("Failed to set standard cursor\n", .{});
+                                // };
                             },
                             else => {
-                                std.debug.print("Cursor Position:{}\n", .{window.cursorPosition()});
+                                std.debug.print("Cursor Position:{}\n", .{mywindow.cursorPosition()});
                             },
                         }
                     }

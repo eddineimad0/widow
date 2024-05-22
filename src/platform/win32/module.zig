@@ -14,7 +14,10 @@ pub inline fn freeWin32Module(module_handle: win32.HINSTANCE) void {
     _ = FreeLibrary(module_handle);
 }
 
-pub inline fn getModuleSymbol(module_handle: win32.HINSTANCE, symbol_name: [:0]const u8) ?win32.FARPROC {
+pub inline fn getModuleSymbol(
+    module_handle: win32.HINSTANCE,
+    symbol_name: [:0]const u8,
+) ?win32.FARPROC {
     return GetProcAddress(module_handle, symbol_name.ptr);
 }
 

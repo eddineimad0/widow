@@ -167,7 +167,8 @@ const WIN32_VK_TO_SCANCODE = [512]ScanCode{
     ScanCode.Unknown, //0x09E
     ScanCode.Unknown, //0x09F
     ScanCode.Unknown, //0x0A0
-    ScanCode.Unknown, //0x0A1 ScanCode.Unknown, //0x0A2
+    ScanCode.Unknown, //0x0A1
+    ScanCode.Unknown, //0x0A2
     ScanCode.Unknown, //0x0A3
     ScanCode.Unknown, //0x0A4
     ScanCode.Unknown, //0x0A5
@@ -850,7 +851,7 @@ pub fn translateVirtualKey(vk: u16, lparam: win32.LPARAM) struct { KeyCode, Scan
 
     const virt_keycode = vkToKeycode(vk);
 
-    const scancode = WIN32_VK_TO_SCANCODE[vk];
+    const scancode = WIN32_VK_TO_SCANCODE[code];
 
     return .{ virt_keycode, scancode };
 }

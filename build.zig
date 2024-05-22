@@ -48,9 +48,8 @@ pub fn build(b: *std.Build) !void {
     const examples = [_][]const u8{
         "simple_window",
         // "playing_with_inputs",
-        // "cursor_and_icon",
+        "cursor_and_icon",
         // "xorg_basic",
-        // "gl_triangle",
     };
 
     for (examples) |example_name| {
