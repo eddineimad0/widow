@@ -70,6 +70,9 @@ const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
 // Define our own message to report Window Procedure errors back
 pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 
+// Define window property name
+pub const WINDOW_REF_PROP_W = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
+
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
 
@@ -375,11 +378,16 @@ pub const Window = struct {
         // these events aren't reported.
         self.processEvents() catch unreachable;
 
-        _ = window_msg.SetWindowLongPtrW(
+        _ = window_msg.SetPropW(
             self.handle,
-            window_msg.GWLP_USERDATA,
-            @intCast(@intFromPtr(self)),
+            WINDOW_REF_PROP_W,
+            @ptrCast(self),
         );
+        // _ = window_msg.SetWindowLongPtrW(
+        //     self.handle,
+        //     window_msg.GWLP_USERDATA,
+        //     @intCast(@intFromPtr(self)),
+        // );
 
         // handle DPI adjustments.
         if (self.data.flags.is_dpi_aware) {
@@ -488,7 +496,8 @@ pub const Window = struct {
         if (self.win32.cursor.mode == .Hidden) {
             enableCursor(&self.win32.cursor);
         }
-        _ = window_msg.SetWindowLongPtrW(self.handle, window_msg.GWLP_USERDATA, 0);
+        window_msg.SetPropW(self.handle, WINDOW_REF_PROP_W, null);
+        // _ = window_msg.SetWindowLongPtrW(self.handle, window_msg.GWLP_USERDATA, 0);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
         allocator.destroy(self);

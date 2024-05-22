@@ -83,12 +83,13 @@ pub fn mainWindowProc(
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
     // Get a mutable refrence to the corresponding WindowImpl Structure.
-    const window_user_data: usize = @bitCast(window_msg.GetWindowLongPtrW(
-        hwnd,
-        window_msg.GWLP_USERDATA,
-    ));
+    // const window_user_data: usize = @bitCast(window_msg.GetWindowLongPtrW(
+    //     hwnd,
+    //     window_msg.GWLP_USERDATA,
+    // ));
+    const window_ref_prop = window_msg.GetPropW(hwnd, wndw.WINDOW_REF_PROP_W);
 
-    if (window_user_data == 0) {
+    if (window_ref_prop == null) {
         if (msg == window_msg.WM_NCCREATE) {
             // [Win32api Docs]
             // On Windows 10 1607 or above, PMv1 applications may also call
@@ -108,7 +109,7 @@ pub fn mainWindowProc(
         // Skip until the window pointer is registered.
         return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
     }
-    var window: *wndw.Window = @ptrFromInt(window_user_data);
+    var window: *wndw.Window = @ptrCast(window_ref_prop.?);
     switch (msg) {
         window_msg.WM_CLOSE => {
             if (opt.LOG_PLATFORM_EVENTS) {

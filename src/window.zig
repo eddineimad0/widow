@@ -74,8 +74,6 @@ pub const WindowBuilder = struct {
             self.allocator,
             self.title,
             &self.attribs,
-            // &self.context.events_queue,
-            // self.context.platform_internals,
         );
         return window;
     }
@@ -200,8 +198,6 @@ pub const Window = struct {
     /// `Allocator` : the allocator to be used with window related allocations(title,...).
     /// `title` : the window's title.
     /// `data` : a refrence to a WindowData structure.
-    /// `events_queue` : a pointer to the library's shared event queue.
-    /// `internals` : a pointer to an instance of the platform widow Internals.
     /// # Errors
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due to a platform error.
@@ -209,8 +205,6 @@ pub const Window = struct {
         allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
-        // events_queue: *common.event.EventQueue,
-        // internals: *platform.Internals,
     ) !Self {
         return .{
             .allocator = allocator,
@@ -218,8 +212,6 @@ pub const Window = struct {
                 allocator,
                 window_title,
                 data,
-                // events_queue,
-                // internals,
             ),
         };
     }
