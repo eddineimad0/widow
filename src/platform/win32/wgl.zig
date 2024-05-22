@@ -1,7 +1,7 @@
 const zigwin32 = @import("zigwin32");
 const Window = @import("window.zig").Window;
 const win32 = @import("win32_defs.zig");
-const win_opengl = zigwin32.graphics.open_gl;
+const opengl = zigwin32.graphics.open_gl;
 const gdi = zigwin32.graphics.gdi;
 
 const WGLCError = error{
@@ -10,14 +10,14 @@ const WGLCError = error{
 };
 
 pub const WinGLContext = struct {
-    glc_handle: win_opengl.HGLRC,
+    glc_handle: opengl.HGLRC,
     owner: win32.HWND,
 
     const Self = @This();
 
     pub fn init(hwnd: win32.HWND) !Self {
-        var pfd = win_opengl.PIXELFORMATDESCRIPTOR{
-            .nSize = @sizeOf(win_opengl.PIXELFORMATDESCRIPTOR),
+        var pfd = opengl.PIXELFORMATDESCRIPTOR{
+            .nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR),
             .nVersion = 1,
             .dwFlags = gdi.PFD_DRAW_TO_WINDOW |
                 gdi.PFD_SUPPORT_OPENGL |
@@ -49,16 +49,16 @@ pub const WinGLContext = struct {
 
         const wdc = gdi.GetDC(hwnd);
 
-        const pfi = win_opengl.ChoosePixelFormat(wdc, &pfd);
+        const pfi = opengl.ChoosePixelFormat(wdc, &pfd);
         if (pfi == 0) {
             return WGLCError.PFDNoMatch;
         }
 
-        if (win_opengl.SetPixelFormat(wdc, pfi, &pfd) == win32.FALSE) {
+        if (opengl.SetPixelFormat(wdc, pfi, &pfd) == win32.FALSE) {
             return WGLCError.PFDNoMatch;
         }
 
-        const glc = win_opengl.wglCreateContext(wdc);
+        const glc = opengl.wglCreateContext(wdc);
         if (glc == null) {
             return WGLCError.GLCNoHandle;
         }
@@ -72,20 +72,20 @@ pub const WinGLContext = struct {
     }
 
     pub fn deinit(self: *const Self) void {
-        _ = win_opengl.wglMakeCurrent(null, null);
-        _ = win_opengl.wglDeleteContext(self.glc_handle);
+        _ = opengl.wglMakeCurrent(null, null);
+        _ = opengl.wglDeleteContext(self.glc_handle);
     }
 
     pub fn makeCurrent(self: *const Self) bool {
         const wdc = gdi.GetDC(self.owner);
-        const success = win_opengl.wglMakeCurrent(wdc, self.glc_handle) == win32.TRUE;
+        const success = opengl.wglMakeCurrent(wdc, self.glc_handle) == win32.TRUE;
         _ = gdi.ReleaseDC(self.owner, wdc);
         return success;
     }
 
     pub fn swapBuffers(self: *const Self) bool {
         const wdc = gdi.GetDC(self.owner);
-        const success = win_opengl.SwapBuffers(wdc) == win32.TRUE;
+        const success = opengl.SwapBuffers(wdc) == win32.TRUE;
         _ = gdi.ReleaseDC(self.owner, wdc);
         return success;
     }

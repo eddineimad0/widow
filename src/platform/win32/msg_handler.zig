@@ -4,11 +4,11 @@ const win32 = @import("win32_defs.zig");
 const wndw = @import("window.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
-const win32_window_messaging = zigwin32.ui.windows_and_messaging;
-const win32_keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
-const win32_foundation = zigwin32.foundation;
-const win32_gdi = zigwin32.graphics.gdi;
-const win32_shell = zigwin32.ui.shell;
+const window_msg = zigwin32.ui.windows_and_messaging;
+const kbd_mouse = zigwin32.ui.input.keyboard_and_mouse;
+const foundation = zigwin32.foundation;
+const gdi = zigwin32.graphics.gdi;
+const shell = zigwin32.ui.shell;
 
 pub inline fn closeMSGHandler(window: *wndw.Window) void {
     const event = common.event.createCloseEvent(window.data.id);
@@ -21,12 +21,19 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
     // The right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
-    if (wparam == @intFromEnum(win32_keyboard_mouse.VK_CONTROL)) {
-        var next_msg: win32_window_messaging.MSG = undefined;
-        const last_msg_time = win32_window_messaging.GetMessageTime();
-        if (win32_window_messaging.PeekMessageW(&next_msg, window.handle, 0, 0, win32_window_messaging.PM_NOREMOVE) == 1) {
-            if (next_msg.message == win32_window_messaging.WM_KEYDOWN or next_msg.message == win32_window_messaging.WM_KEYUP or next_msg.message == win32_window_messaging.WM_SYSKEYDOWN or next_msg.message == win32_window_messaging.WM_SYSKEYUP) {
-                if (next_msg.wParam == @intFromEnum(win32_keyboard_mouse.VK_MENU) and utils.isBitSet(next_msg.lParam, 24) and next_msg.time == last_msg_time) {
+    if (wparam == @intFromEnum(kbd_mouse.VK_CONTROL)) {
+        var next_msg: window_msg.MSG = undefined;
+        const last_msg_time = window_msg.GetMessageTime();
+        if (window_msg.PeekMessageW(&next_msg, window.handle, 0, 0, window_msg.PM_NOREMOVE) == 1) {
+            if (next_msg.message == window_msg.WM_KEYDOWN or
+                next_msg.message == window_msg.WM_KEYUP or
+                next_msg.message == window_msg.WM_SYSKEYDOWN or
+                next_msg.message == window_msg.WM_SYSKEYUP)
+            {
+                if (next_msg.wParam == @intFromEnum(kbd_mouse.VK_MENU) and
+                    utils.isBitSet(next_msg.lParam, 24) and
+                    next_msg.time == last_msg_time)
+                {
                     // skip this one
                     return;
                 }
@@ -38,7 +45,7 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
     const mods = utils.getKeyModifiers();
 
     // Determine the action.
-    const action = if (utils.hiWord(@bitCast(lparam)) & win32_window_messaging.KF_UP == 0)
+    const action = if (utils.hiWord(@bitCast(lparam)) & window_msg.KF_UP == 0)
         common.keyboard_mouse.KeyState.Pressed
     else
         common.keyboard_mouse.KeyState.Released;
@@ -49,8 +56,14 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
     }
 
     // Printscreen key only reports a release action.
-    if (wparam == @intFromEnum(win32_keyboard_mouse.VK_SNAPSHOT)) {
-        const fake_event = common.event.createKeyboardEvent(window.data.id, keys[0], keys[1], common.keyboard_mouse.KeyState.Pressed, mods);
+    if (wparam == @intFromEnum(kbd_mouse.VK_SNAPSHOT)) {
+        const fake_event = common.event.createKeyboardEvent(
+            window.data.id,
+            keys[0],
+            keys[1],
+            .Pressed,
+            mods,
+        );
         window.sendEvent(&fake_event);
     }
 
@@ -61,10 +74,10 @@ pub inline fn keyMSGHandler(window: *wndw.Window, wparam: win32.WPARAM, lparam: 
 pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: win32.WPARAM) void {
     // Determine the button.
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONUP => common.keyboard_mouse.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONUP => common.keyboard_mouse.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONUP => common.keyboard_mouse.MouseButton.Middle,
-        else => if (utils.hiWord(wparam) & @intFromEnum(win32_keyboard_mouse.VK_XBUTTON1) == 0)
+        window_msg.WM_LBUTTONUP => common.keyboard_mouse.MouseButton.Left,
+        window_msg.WM_RBUTTONUP => common.keyboard_mouse.MouseButton.Right,
+        window_msg.WM_MBUTTONUP => common.keyboard_mouse.MouseButton.Middle,
+        else => if (utils.hiWord(wparam) & @intFromEnum(kbd_mouse.VK_XBUTTON1) == 0)
             common.keyboard_mouse.MouseButton.ExtraButton2
         else
             common.keyboard_mouse.MouseButton.ExtraButton1,
@@ -80,7 +93,7 @@ pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: 
     window.sendEvent(&event);
 
     // Update window's input state.
-    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_mouse.KeyState.Released;
+    window.data.input.mouse_buttons[@intFromEnum(button)] = .Released;
 
     // Release Capture if all keys are released.
     var any_button_pressed = false;
@@ -91,7 +104,7 @@ pub inline fn mouseUpMSGHandler(window: *wndw.Window, msg: win32.DWORD, wparam: 
         }
     }
     if (!any_button_pressed) {
-        _ = win32_keyboard_mouse.ReleaseCapture();
+        _ = kbd_mouse.ReleaseCapture();
     }
 }
 
@@ -115,15 +128,15 @@ pub inline fn mouseDownMSGHandler(
         // one mouse button down, even if the mouse quits
         // the window area.
         // we stop the capture once all buttons are released.
-        _ = win32_keyboard_mouse.SetCapture(window.handle);
+        _ = kbd_mouse.SetCapture(window.handle);
     }
 
     // Determine the button.
     const button = switch (msg) {
-        win32_window_messaging.WM_LBUTTONDOWN => common.keyboard_mouse.MouseButton.Left,
-        win32_window_messaging.WM_RBUTTONDOWN => common.keyboard_mouse.MouseButton.Right,
-        win32_window_messaging.WM_MBUTTONDOWN => common.keyboard_mouse.MouseButton.Middle,
-        else => if (utils.hiWord(wparam) & @intFromEnum(win32_keyboard_mouse.VK_XBUTTON1) == 0)
+        window_msg.WM_LBUTTONDOWN => common.keyboard_mouse.MouseButton.Left,
+        window_msg.WM_RBUTTONDOWN => common.keyboard_mouse.MouseButton.Right,
+        window_msg.WM_MBUTTONDOWN => common.keyboard_mouse.MouseButton.Middle,
+        else => if (utils.hiWord(wparam) & @intFromEnum(kbd_mouse.VK_XBUTTON1) == 0)
             common.keyboard_mouse.MouseButton.ExtraButton2
         else
             common.keyboard_mouse.MouseButton.ExtraButton1,
@@ -137,7 +150,7 @@ pub inline fn mouseDownMSGHandler(
     );
 
     window.sendEvent(&event);
-    window.data.input.mouse_buttons[@intFromEnum(button)] = common.keyboard_mouse.KeyState.Pressed;
+    window.data.input.mouse_buttons[@intFromEnum(button)] = .Pressed;
 }
 
 pub inline fn mouseWheelMSGHandler(
@@ -145,7 +158,11 @@ pub inline fn mouseWheelMSGHandler(
     wheel: common.keyboard_mouse.MouseWheel,
     wheel_delta: f64,
 ) void {
-    const event = common.event.createScrollEvent(window.data.id, wheel, wheel_delta);
+    const event = common.event.createScrollEvent(
+        window.data.id,
+        wheel,
+        wheel_delta,
+    );
     window.sendEvent(&event);
 }
 
@@ -153,13 +170,13 @@ pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void
     const styles = wndw.windowStyles(&window.data.flags);
     const ex_styles = wndw.windowExStyles(&window.data.flags);
     const ulparam: usize = @bitCast(lparam);
-    const info: *win32_window_messaging.MINMAXINFO = @ptrFromInt(ulparam);
+    const info: *window_msg.MINMAXINFO = @ptrFromInt(ulparam);
 
     // If the size limitation is set.
     if (window.data.min_size != null or window.data.max_size != null) {
 
-        // Depending on the styles we might need the window's border width and height
-        // let's grab them here.
+        // Depending on the styles we might need the window's
+        // border width and height let's grab them here.
         var rect = win32.RECT{
             .left = 0,
             .top = 0,
@@ -198,9 +215,12 @@ pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void
     if (!window.data.flags.is_decorated) {
         // If the window isn't decorated we need to adjust
         // the size and postion for when it's maximized.
-        var mi: win32_gdi.MONITORINFO = undefined;
-        const monitor_handle = win32_gdi.MonitorFromWindow(window.handle, win32_gdi.MONITOR_DEFAULTTONEAREST);
-        _ = win32_gdi.GetMonitorInfoW(monitor_handle, &mi);
+        var mi: gdi.MONITORINFO = undefined;
+        const monitor_handle = gdi.MonitorFromWindow(
+            window.handle,
+            gdi.MONITOR_DEFAULTTONEAREST,
+        );
+        _ = gdi.GetMonitorInfoW(monitor_handle, &mi);
         info.ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
         info.ptMaxPosition.y = mi.rcWork.top - mi.rcMonitor.top;
         info.ptMaxSize.x = mi.rcWork.right - mi.rcWork.left;
@@ -217,7 +237,7 @@ pub inline fn dpiScaledSizeHandler(
     const ex_styles = wndw.windowExStyles(&window.data.flags);
     const new_dpi = utils.loWord(wparam);
     const ulparam: usize = @bitCast(lparam);
-    const size: *win32_foundation.SIZE = @ptrFromInt(ulparam);
+    const size: *foundation.SIZE = @ptrFromInt(ulparam);
     const old_dpi = window.scalingDPI(null);
 
     var old_nc_size = win32.RECT{
@@ -270,7 +290,11 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
         }
 
         if (codepoint > 0x1F and (codepoint < 0x7F or codepoint > 0x9F)) {
-            const event = common.event.createCharEvent(window.data.id, codepoint, utils.getKeyModifiers());
+            const event = common.event.createCharEvent(
+                window.data.id,
+                codepoint,
+                utils.getKeyModifiers(),
+            );
             window.sendEvent(&event);
         }
     }
@@ -288,8 +312,8 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
     var wide_slice: []u16 = undefined;
     wide_slice.len = 0;
     window.win32.dropped_files.clearRetainingCapacity();
-    const drop_handle: win32_shell.HDROP = @ptrFromInt(wparam);
-    const count = win32_shell.DragQueryFileW(drop_handle, 0xFFFFFFFF, null, 0);
+    const drop_handle: shell.HDROP = @ptrFromInt(wparam);
+    const count = shell.DragQueryFileW(drop_handle, 0xFFFFFFFF, null, 0);
     if (count != 0) err_exit: {
         if (window.win32.dropped_files.capacity < count) {
             window.win32.dropped_files.ensureTotalCapacity(count) catch {
@@ -298,7 +322,7 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
             };
         }
         for (0..count) |index| {
-            const buffer_len = win32_shell.DragQueryFileW(drop_handle, @truncate(index), null, 0);
+            const buffer_len = shell.DragQueryFileW(drop_handle, @truncate(index), null, 0);
             if (buffer_len != 0) {
                 // The returned length doesn't account for the null terminator,
                 // however DragQueryFile will always write the null terminator even
@@ -315,7 +339,7 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
                         continue;
                     };
                 }
-                _ = win32_shell.DragQueryFileW(drop_handle, @truncate(index), @ptrCast(wide_slice.ptr), buffer_lenz);
+                _ = shell.DragQueryFileW(drop_handle, @truncate(index), @ptrCast(wide_slice.ptr), buffer_lenz);
                 const file_path = utils.wideToUtf8(allocator, wide_slice.ptr[0..buffer_len]) catch {
                     std.log.err("Failed to retrieve dropped Files.\n", .{});
                     continue;
@@ -333,5 +357,5 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
         window.sendEvent(&event);
         allocator.free(wide_slice);
     }
-    win32_shell.DragFinish(drop_handle);
+    shell.DragFinish(drop_handle);
 }

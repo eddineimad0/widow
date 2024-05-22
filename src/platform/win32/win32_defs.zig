@@ -70,7 +70,7 @@ pub const GUID_DEVINTERFACE_HID = GUID.initString("4D1E55B2-F16F-11CF-88CB-00111
 pub const ENUM_CURRENT_SETTINGS = @as(u32, 0xFFFFFFFF);
 pub const ENUM_REGISTRY_SETTINGS = @as(u32, 0xFFFFFFFE);
 
-///! IDC_Standard Cursors.
+// IDC_Standard Cursors.
 pub const IDC_ARROW = utils.MAKEINTRESOURCESA(32512); // Normal select.
 pub const IDC_IBEAM = utils.MAKEINTRESOURCESA(32513); // Text select.
 pub const IDC_WAIT = utils.MAKEINTRESOURCESA(32514); // Busy.
@@ -81,7 +81,7 @@ pub const IDC_HAND = utils.MAKEINTRESOURCESA(32649); // Link select.
 pub const IDC_APPSTARTING = utils.MAKEINTRESOURCESA(32650); // Working in background.
 pub const IDC_HELP = utils.MAKEINTRESOURCESA(32651); // Help select.
 
-///! OCR_Standard Cursors.
+// OCR_Standard Cursors.
 pub const OCR_NORMAL = @as(u16, 32512);
 pub const OCR_IBEAM = @as(u16, 32513);
 pub const OCR_WAIT = @as(u16, 32514);
@@ -94,7 +94,7 @@ pub const OCR_SIZENS = @as(u16, 32645);
 pub const OCR_SIZEALL = @as(u16, 32646);
 pub const OCR_NO = @as(u16, 32648);
 
-///! Functions
+// Functions
 pub extern "user32" fn EnumDisplaySettingsExW(
     lpszDeviceName: ?[*:0]const u16,
     iModeNum: u32,

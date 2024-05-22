@@ -4,6 +4,7 @@ const zigwin32 = @import("zigwin32");
 const utils = @import("utils.zig");
 const opt = @import("build-options");
 const common = @import("common");
+const msg_handler = @import("msg_handler.zig");
 const HelperData = @import("internals.zig").HelperData;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const wndw = @import("window.zig");
@@ -73,8 +74,6 @@ pub fn helperWindowProc(
     return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-const message_handler = @import("message_handler.zig");
-
 /// The Window Procedure function.
 pub fn mainWindowProc(
     hwnd: win32.HWND,
@@ -116,7 +115,7 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a CLOSE event\n", .{window.data.id});
             }
             // Received upon an attempt to close the window.
-            message_handler.closeMSGHandler(window);
+            msg_handler.closeMSGHandler(window);
             return 0;
         },
 
@@ -174,7 +173,7 @@ pub fn mainWindowProc(
             // Received when a system or a non system key is pressed
             // while window has keyboard focus
             // Note: system key is (Alt+key).
-            message_handler.keyMSGHandler(window, wparam, lparam);
+            msg_handler.keyMSGHandler(window, wparam, lparam);
             // [Win32api Docs]
             // If your window procedure must process a system keystroke message,
             // make sure that after processing the message the procedure passes
@@ -217,7 +216,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a BUTTONUP event\n", .{window.data.id});
             }
-            message_handler.mouseUpMSGHandler(window, msg, wparam);
+            msg_handler.mouseUpMSGHandler(window, msg, wparam);
             if (msg == window_msg.WM_XBUTTONUP) {
                 return win32.TRUE;
             }
@@ -234,7 +233,7 @@ pub fn mainWindowProc(
             }
             // Received a mouse button is pressed
             // while the cursor is in the client area of a window.
-            message_handler.mouseDownMSGHandler(window, msg, wparam);
+            msg_handler.mouseDownMSGHandler(window, msg, wparam);
             if (msg == window_msg.WM_XBUTTONDOWN) {
                 return win32.TRUE;
             }
@@ -283,7 +282,7 @@ pub fn mainWindowProc(
             }
             const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = scroll / win32.FWHEEL_DELTA;
-            message_handler.mouseWheelMSGHandler(window, common.keyboard_mouse.MouseWheel.VerticalWheel, wheel_delta);
+            msg_handler.mouseWheelMSGHandler(window, common.keyboard_mouse.MouseWheel.VerticalWheel, wheel_delta);
             return 0;
         },
 
@@ -296,7 +295,7 @@ pub fn mainWindowProc(
             }
             const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
             const wheel_delta = -(scroll) / win32.FWHEEL_DELTA;
-            message_handler.mouseWheelMSGHandler(window, common.keyboard_mouse.MouseWheel.HorizontalWheel, wheel_delta);
+            msg_handler.mouseWheelMSGHandler(window, common.keyboard_mouse.MouseWheel.HorizontalWheel, wheel_delta);
             return 0;
         },
 
@@ -327,7 +326,7 @@ pub fn mainWindowProc(
             // for a non dpi aware window processing this messsage is necessary
             // to adjust it's decorations(titlebar,edges...).
             if (!window.data.flags.is_dpi_aware and drvr.hints.is_win10b1607_or_above) {
-                message_handler.dpiScaledSizeHandler(window, wparam, lparam);
+                msg_handler.dpiScaledSizeHandler(window, wparam, lparam);
                 return win32.TRUE;
             }
             return win32.FALSE;
@@ -373,7 +372,7 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a GETMINMAXINFO event\n", .{window.data.id});
             }
             if (!window.data.flags.is_fullscreen) {
-                message_handler.minMaxInfoHandler(window, lparam);
+                msg_handler.minMaxInfoHandler(window, lparam);
             }
             return 0;
         },
@@ -593,7 +592,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SYSCHAR/CHAR event\n", .{window.data.id});
             }
-            message_handler.charEventHandler(window, wparam);
+            msg_handler.charEventHandler(window, wparam);
             if (msg != window_msg.WM_SYSCHAR) {
                 return 0;
             }
@@ -642,7 +641,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a DROPFILES event\n", .{window.data.id});
             }
-            message_handler.dropEventHandler(window, wparam);
+            msg_handler.dropEventHandler(window, wparam);
             return 0;
         },
         else => {},
