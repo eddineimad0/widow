@@ -190,7 +190,7 @@ pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
         },
     };
 
-    hints.prev_image = window_msg.SetCursor(cursor_image);
+    _ = window_msg.SetCursor(cursor_image);
 }
 
 pub fn restoreCursor(hints: *CursorHints) void {
@@ -198,8 +198,7 @@ pub fn restoreCursor(hints: *CursorHints) void {
         .Captured, .Hidden => unCaptureCursor(),
         else => {},
     }
-    _ = window_msg.SetCursor(hints.prev_image);
-    hints.prev_image = null;
+    _ = window_msg.SetCursor(window_msg.LoadCursorW(null, window_msg.IDC_ARROW));
 }
 
 /// Limits the cursor motion to the client rectangle.
@@ -312,7 +311,8 @@ fn createPlatformWindow(
 pub const WindowWin32Data = struct {
     icon: Icon,
     cursor: CursorHints,
-    restore_frame: ?common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
+    // Used when going fullscreen to save restore coords.
+    restore_frame: ?common.geometry.WidowArea,
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,

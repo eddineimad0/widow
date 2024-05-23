@@ -77,7 +77,6 @@ pub fn createIcon(
 
 pub const CursorHints = struct {
     image: ?window_msg.HCURSOR,
-    prev_image: ?window_msg.HCURSOR = null,
     img_shared: bool, // As to avoid deleting system owned cursor images.
     mode: common.cursor.CursorMode,
 };
