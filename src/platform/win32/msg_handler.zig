@@ -321,10 +321,8 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
     }
 }
 
-pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) !void {
+pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
     // TODO: fix event handler.
-    // TODO: can we use a different allocator for better performance?
-    // free old files
     const allocator = window.win32.dropped_files.allocator;
     for (window.win32.dropped_files.items) |file| {
         allocator.free(file);
@@ -359,7 +357,7 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) !void
                 // so it's necessary to add 1
                 const buffer_lenz = buffer_len + 1;
                 if (wide_slice.len == 0) {
-                    wide_slice = try allocator.alloc(u16, buffer_lenz) catch {
+                    wide_slice = allocator.alloc(u16, buffer_lenz) catch {
                         utils.postWindowErrorMsg(
                             wndw.WindowError.OutOfMemory,
                             window.handle,

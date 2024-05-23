@@ -645,8 +645,8 @@ pub const Window = struct {
     /// by default any window created doesn't allow file to be dragged and dropped.
     /// # Parameters
     /// `accepted`: true to allow file dropping, false to block it.
-    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
-        self.impl.setDragAndDrop(accepted);
+    pub inline fn allowDragAndDrop(self: *Self, allow: bool) void {
+        self.impl.setDragAndDrop(allow);
     }
 
     /// Returns a slice that holds the path(s) to the latest dropped file(s)

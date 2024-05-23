@@ -1,7 +1,7 @@
 const std = @import("std");
 const widow = @import("widow");
-const EventType = widow.EventType;
-const EventQueue = widow.EventQueue;
+const EventType = widow.event.EventType;
+const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -53,7 +53,7 @@ pub fn main() !void {
         // Process window events posted by the system.
         try mywindow.waitEvent();
 
-        var event: widow.Event = undefined;
+        var event: widow.event.Event = undefined;
 
         while (ev_queue.popEvent(&event)) {
             switch (event) {
@@ -147,9 +147,9 @@ pub fn main() !void {
                         }
                         if (key.keycode == .U) {
                             if (key.mods.shift) {
-                                mywindow.setDragAndDrop(true);
+                                mywindow.allowDragAndDrop(true);
                             } else {
-                                mywindow.setDragAndDrop(false);
+                                mywindow.allowDragAndDrop(false);
                             }
                         }
                         if (key.keycode == .I) {

@@ -1,10 +1,10 @@
 const std = @import("std");
 const widow = @import("widow");
-const EventType = widow.EventType;
+const EventType = widow.event.EventType;
+const EventQueue = widow.event.EventQueue;
 const ScanCode = widow.keyboard.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
 const CursorShape = widow.cursor.StandardCursorShape;
-const EventQueue = widow.EventQueue;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
@@ -56,7 +56,7 @@ pub fn main() !void {
     //     std.debug.print("Failed to set Window icon.\n", .{});
     // };
 
-    var event: widow.Event = undefined;
+    var event: widow.event.Event = undefined;
     event_loop: while (true) {
         try mywindow.waitEvent();
 
