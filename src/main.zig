@@ -20,9 +20,12 @@ pub const mouse = struct {
     pub const MouseButtonState = common.keyboard_mouse.MouseButtonState;
 };
 
-pub const Event = common.event.Event;
-pub const EventType = common.event.EventType;
-pub const EventQueue = common.event.EventQueue;
+pub const event = struct {
+    pub const Event = common.event.Event;
+    pub const EventType = common.event.EventType;
+    pub const EventQueue = common.event.EventQueue;
+};
+
 pub const VideoMode = common.video_mode.VideoMode;
 pub const WidowContext = cntxt.WidowContext;
 pub const WindowBuilder = window.WindowBuilder;

@@ -24,7 +24,13 @@ pub inline fn keyMSGHandler(
     if (wparam == @intFromEnum(kbd_mouse.VK_CONTROL)) {
         var next_msg: window_msg.MSG = undefined;
         const last_msg_time = window_msg.GetMessageTime();
-        if (window_msg.PeekMessageW(&next_msg, window.handle, 0, 0, window_msg.PM_NOREMOVE) == 1) {
+        if (window_msg.PeekMessageW(
+            &next_msg,
+            window.handle,
+            0,
+            0,
+            window_msg.PM_NOREMOVE,
+        ) == 1) {
             if (next_msg.message == window_msg.WM_KEYDOWN or
                 next_msg.message == window_msg.WM_KEYUP or
                 next_msg.message == window_msg.WM_SYSKEYDOWN or
@@ -315,7 +321,7 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
     }
 }
 
-pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
+pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) !void {
     // TODO: fix event handler.
     // TODO: can we use a different allocator for better performance?
     // free old files
@@ -332,45 +338,67 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
     if (count != 0) err_exit: {
         if (window.win32.dropped_files.capacity < count) {
             window.win32.dropped_files.ensureTotalCapacity(count) catch {
-                std.log.err("Failed to retrieve Dropped Files.\n", .{});
+                utils.postWindowErrorMsg(
+                    wndw.WindowError.OutOfMemory,
+                    window.handle,
+                );
                 break :err_exit;
             };
         }
         for (0..count) |index| {
-            const buffer_len = shell.DragQueryFileW(drop_handle, @truncate(index), null, 0);
+            const buffer_len = shell.DragQueryFileW(
+                drop_handle,
+                @truncate(index),
+                null,
+                0,
+            );
             if (buffer_len != 0) {
                 // The returned length doesn't account for the null terminator,
-                // however DragQueryFile will always write the null terminator even
-                // at the cost of not copying the entire data. so it's necessary to add 1
+                // however DragQueryFile will write the null terminator
+                // even at the cost of not copying the entire data.
+                // so it's necessary to add 1
                 const buffer_lenz = buffer_len + 1;
                 if (wide_slice.len == 0) {
-                    wide_slice = allocator.alloc(u16, buffer_lenz) catch {
-                        std.log.err("Failed to allocate space for dropped Files.\n", .{});
+                    wide_slice = try allocator.alloc(u16, buffer_lenz) catch {
+                        utils.postWindowErrorMsg(
+                            wndw.WindowError.OutOfMemory,
+                            window.handle,
+                        );
                         break :err_exit;
                     };
                 } else if (wide_slice.len < buffer_lenz) {
                     wide_slice = allocator.realloc(wide_slice, buffer_lenz) catch {
-                        std.log.err("Failed to reallocate space for dropped Files.\n", .{});
-                        continue;
+                        utils.postWindowErrorMsg(
+                            wndw.WindowError.OutOfMemory,
+                            window.handle,
+                        );
+                        break :err_exit;
                     };
                 }
-                _ = shell.DragQueryFileW(drop_handle, @truncate(index), @ptrCast(wide_slice.ptr), buffer_lenz);
-                const file_path = utils.wideToUtf8(allocator, wide_slice.ptr[0..buffer_len]) catch {
-                    std.log.err("Failed to retrieve dropped Files.\n", .{});
-                    continue;
+                _ = shell.DragQueryFileW(
+                    drop_handle,
+                    @truncate(index),
+                    @ptrCast(wide_slice.ptr),
+                    buffer_lenz,
+                );
+                const file_path = utils.wideToUtf8(
+                    allocator,
+                    wide_slice.ptr[0..buffer_len],
+                ) catch {
+                    utils.postWindowErrorMsg(
+                        wndw.WindowError.OutOfMemory,
+                        window.handle,
+                    );
+                    break :err_exit;
                 };
-                window.win32.dropped_files.append(file_path) catch {
-                    std.log.err("Failed to copy dropped Files.\n", .{});
-                    allocator.free(file_path);
-                    continue;
-                };
+                window.win32.dropped_files.append(file_path) catch unreachable;
             }
         }
         const event = common.event.createDropFileEvent(
             window.data.id,
         );
         window.sendEvent(&event);
-        allocator.free(wide_slice);
+        if (wide_slice.len != 0) allocator.free(wide_slice);
     }
     shell.DragFinish(drop_handle);
 }

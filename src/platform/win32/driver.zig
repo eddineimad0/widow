@@ -253,7 +253,7 @@ pub const Win32Driver = struct {
 };
 
 fn isWin32VersionMinimum(
-    proc: win32.RtlVerifyVersionInfoProc,
+    func: win32.RtlVerifyVersionInfoProc,
     major: u32,
     minor: u32,
 ) bool {
@@ -295,10 +295,10 @@ fn isWin32VersionMinimum(
         sysinfo.VER_SERVICEPACKMINOR,
         win32.VER_GREATER_EQUAL,
     );
-    return proc(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
+    return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
-fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
+fn isWin10BuildMinimum(func: win32.RtlVerifyVersionInfoProc, build: u32) bool {
     var vi: sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(sysinfo.OSVERSIONINFOEXW);
     vi.dwOSVersionInfoSize = @sizeOf(sysinfo.OSVERSIONINFOEXW);
     vi.dwMajorVersion = 10;
@@ -325,7 +325,7 @@ fn isWin10BuildMinimum(proc: win32.RtlVerifyVersionInfoProc, build: u32) bool {
         sysinfo.VER_BUILDNUMBER,
         win32.VER_GREATER_EQUAL,
     );
-    return proc(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
+    return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
 fn registerHelperClass(
