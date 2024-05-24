@@ -2,12 +2,13 @@ const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const common = @import("common");
 const win32 = @import("win32_defs.zig");
+const utils = @import("utils.zig");
 const mem = std.mem;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const gdi = zigwin32.graphics.gdi;
 
 pub const IconError = error{
-    NoCreate, // Couldn't create the icon.
+    BadIcon, // Couldn't create the icon.
     NullColorMask, // Couldn't create the DIB color mask
     NullMonochromeMask, // Couldn't create The DIB monocrhome mask
 };
@@ -15,7 +16,7 @@ pub const IconError = error{
 /// Creates a bitmap icon or cursor image
 /// the xhot and yhot params are only considered if
 /// is_cursor is true.
-pub fn createIcon(
+fn createWin32Icon(
     pixels: []const u8,
     width: i32,
     height: i32,
@@ -81,7 +82,7 @@ pub const CursorHints = struct {
     mode: common.cursor.CursorMode,
 };
 
-pub fn releaseCursorImage(cursor: *CursorHints) void {
+pub fn destroyCursorImage(cursor: *CursorHints) void {
     if (!cursor.img_shared and cursor.image != null) {
         _ = window_msg.DestroyCursor(cursor.image);
         cursor.image = null;
@@ -103,4 +104,84 @@ pub fn destroyIcon(icon: *Icon) void {
         _ = window_msg.DestroyIcon(handle);
         icon.bg_handle = null;
     }
+}
+
+/// create a platform icon.
+pub fn createIcon(
+    pixels: ?[]const u8,
+    width: i32,
+    height: i32,
+) IconError!Icon {
+    if (pixels) |slice| {
+        const sm_handle = try createWin32Icon(slice, width, height, null, null);
+        const bg_handle = try createWin32Icon(slice, width, height, null, null);
+        return Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle };
+    } else {
+        return Icon{ .sm_handle = null, .bg_handle = null };
+    }
+}
+
+/// Creates a platform cursor.
+pub fn createCursor(
+    pixels: ?[]const u8,
+    width: i32,
+    height: i32,
+    xhot: u32,
+    yhot: u32,
+) IconError!CursorHints {
+    if (pixels) |slice| {
+        const handle = try createWin32Icon(slice, width, height, xhot, yhot);
+        return CursorHints{
+            .image = handle,
+            .shared = false,
+            .mode = common.cursor.CursorMode.Normal,
+        };
+    } else {
+        return CursorHints{
+            .handle = null,
+            .shared = false,
+            .mode = common.cursor.CursorMode.Normal,
+        };
+    }
+}
+
+/// Returns a handle to a shared(standard) platform cursor.
+pub fn createStandardCursor(
+    shape: common.cursor.StandardCursorShape,
+) IconError!CursorHints {
+    const CursorShape = common.cursor.StandardCursorShape;
+
+    const cursor_id = switch (shape) {
+        CursorShape.PointingHand => win32.IDC_HAND,
+        CursorShape.Crosshair => win32.IDC_CROSS,
+        CursorShape.Text => win32.IDC_IBEAM,
+        CursorShape.BkgrndTask => win32.IDC_APPSTARTING,
+        CursorShape.Help => win32.IDC_HELP,
+        CursorShape.Busy => win32.IDC_WAIT,
+        CursorShape.Forbidden => win32.IDC_NO,
+        CursorShape.Move => win32.IDC_SIZEALL,
+        CursorShape.Default => win32.IDC_ARROW,
+    };
+
+    const handle = window_msg.LoadImageA(
+        null,
+        cursor_id,
+        window_msg.GDI_IMAGE_TYPE.CURSOR,
+        0,
+        0,
+        @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
+            @intFromEnum(window_msg.LR_SHARED)),
+    );
+
+    if (handle == null) {
+        // We failed.
+        std.debug.print("error {}\n", .{utils.getLastError()});
+        return error.FailedToLoadStdCursor;
+    }
+
+    return CursorHints{
+        .image = @ptrCast(handle),
+        .shared = true,
+        .mode = common.cursor.CursorMode.Normal,
+    };
 }

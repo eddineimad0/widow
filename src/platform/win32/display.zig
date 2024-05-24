@@ -3,8 +3,10 @@ const mem = std.mem;
 const debug = std.debug;
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
-const gdi = @import("zigwin32").graphics.gdi;
+const zigwin32 = @import("zigwin32");
+const gdi = zigwin32.graphics.gdi;
 const common = @import("common");
+const sys_power = zigwin32.system.power;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const Window = @import("window.zig").Window;
 const VideoMode = common.video_mode.VideoMode;
@@ -413,6 +415,93 @@ pub const Display = struct {
             }
             std.debug.print("current video mode: {}\n", .{self.curr_video});
             std.debug.print("occupying window ref: {?*}\n", .{self.window});
+        }
+    }
+};
+
+pub const DisplayManager = struct {
+    displays: std.ArrayList(Display),
+    occupied_count: u8,
+    expected_video_change: bool, // For skipping unnecessary updates.
+    prev_exec_state: sys_power.EXECUTION_STATE,
+    const Self = @This();
+
+    pub fn init(allocator: mem.Allocator) Self {
+        return .{
+            .occupied_count = 0,
+            .expected_video_change = false,
+            .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
+            .displays = std.ArrayList(Display).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.expected_video_change = true;
+        for (self.displays) |*d| {
+            // if (monitor.window) |*window| {
+            //     window.*.requestRestore();
+            // }
+            // free allocated data.
+            d.deinit();
+        }
+        self.displays.deinit();
+    }
+
+    pub fn initDisplays(self: *Self) !void {
+        self.displays = try pollDisplays(self.displays.allocator);
+        //TODO: register update callback.
+    }
+
+    /// Returns a refrence to the requested Monitor.
+    pub fn findDisplay(self: *Self, dispaly_handle: win32.HMONITOR) !*Display {
+        // Find the monitor.
+        var target: ?*Display = null;
+        for (self.displays.items) |*d| {
+            if (d.handle == dispaly_handle) {
+                target = d;
+                break;
+            }
+        }
+
+        const display = target orelse {
+            std.log.err(
+                "[MonitorStore]: monitor not found, handle={*}",
+                .{dispaly_handle},
+            );
+            return DisplayError.NotFound;
+        };
+
+        return display;
+    }
+
+    pub fn setDisplayVideoMode(
+        self: *Self,
+        display_handle: win32.HMONITOR,
+        mode: ?*common.video_mode.VideoMode,
+    ) !void {
+        const display = try self.findMonitor(display_handle);
+        // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
+        // We Set this here to avoid wastefully updating the monitors map.
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+
+        try display.setVideoMode(mode);
+    }
+
+    pub fn getDisplayVideoMode(
+        self: *const Self,
+        display_handle: win32.HMONITOR,
+        output: *common.video_mode.VideoMode,
+    ) !void {
+        const display = try self.findMonitor(display_handle);
+        display.queryCurrentMode(output);
+    }
+
+    pub fn debugInfos(self: *const Self) void {
+        if (common.IS_DEBUG_BUILD) {
+            for (self.displays.items) |*display| {
+                display.debugInfos(false);
+            }
         }
     }
 };

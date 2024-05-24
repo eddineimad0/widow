@@ -22,9 +22,8 @@ const WindowFlags = common.window_data.WindowFlags;
 pub const WindowError = error{
     CreateFailed,
     NoTitle,
-    UsupportedDrawingContext,
-    DrawingContextReinit,
     OutOfMemory,
+    BadIcon,
 };
 
 // Window Styles as defined by the SDL library.
@@ -693,11 +692,6 @@ pub const Window = struct {
         _ = window_msg.SetCursorPos(point.x, point.y);
     }
 
-    // pub inline fn setCursorHints(self: *Self, h: *const CursorHints) void {
-    //     self.win32.cursor = h.*;
-    //     applyCursorHints(h, self.handle);
-    // }
-
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
         self.win32.cursor.mode = mode;
         applyCursorHints(&self.win32.cursor, self.handle);
@@ -1260,48 +1254,95 @@ pub const Window = struct {
         self.win32.dropped_files.clearAndFree();
     }
 
-    // pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-    //     const new_icon = try intern.createIcon(pixels, width, height);
-    //     const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
-    //         .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
-    //     else blk: {
-    //         const bg_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICON);
-    //         const sm_icon = window_msg.GetClassLongPtrW(self.handle, window_msg.GCLP_HICONSM);
-    //         break :blk .{ bg_icon, sm_icon };
-    //     };
-    //     _ = window_msg.SendMessageW(
-    //         self.handle,
-    //         window_msg.WM_SETICON,
-    //         window_msg.ICON_BIG,
-    //         @bitCast(handles[0]),
-    //     );
-    //     _ = window_msg.SendMessageW(
-    //         self.handle,
-    //         window_msg.WM_SETICON,
-    //         window_msg.ICON_SMALL,
-    //         @bitCast(handles[1]),
-    //     );
-    //     icon.destroyIcon(&self.win32.icon);
-    //     self.win32.icon = new_icon;
-    // }
+    pub fn setIcon(
+        self: *Self,
+        pixels: ?[]const u8,
+        width: i32,
+        height: i32,
+    ) WindowError!void {
+        const new_icon = icon.createIcon(pixels, width, height) catch |err| {
+            return switch (err) {
+                icon.IconError.BadIcon => err,
+                else => WindowError.OutOfMemory,
+            };
+        };
 
-    // pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-    //     const new_cursor = try intern.createCursor(pixels, width, height, xhot, yhot);
-    //     icon.destroyCursor(&self.win32.cursor);
-    //     self.win32.cursor = new_cursor;
-    //     if (self.data.flags.cursor_in_client) {
-    //         updateCursorImage(&self.win32.cursor);
-    //     }
-    // }
-    //
-    // pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-    //     const new_cursor = try intern.createStandardCursor(cursor_shape);
-    //     icon.destroyCursor(&self.win32.cursor);
-    //     self.win32.cursor = new_cursor;
-    //     if (self.data.flags.cursor_in_client) {
-    //         updateCursorImage(&self.win32.cursor);
-    //     }
-    // }
+        const bg_handle, const sm_handle = if (new_icon.sm_handle != null and
+            new_icon.bg_handle != null)
+            .{
+                @intFromPtr(new_icon.bg_handle.?),
+                @intFromPtr(new_icon.sm_handle.?),
+            }
+        else blk: {
+            const bg_icon = window_msg.GetClassLongPtrW(
+                self.handle,
+                window_msg.GCLP_HICON,
+            );
+            const sm_icon = window_msg.GetClassLongPtrW(
+                self.handle,
+                window_msg.GCLP_HICONSM,
+            );
+            break :blk .{ bg_icon, sm_icon };
+        };
+        _ = window_msg.SendMessageW(
+            self.handle,
+            window_msg.WM_SETICON,
+            window_msg.ICON_BIG,
+            @bitCast(bg_handle),
+        );
+        _ = window_msg.SendMessageW(
+            self.handle,
+            window_msg.WM_SETICON,
+            window_msg.ICON_SMALL,
+            @bitCast(sm_handle),
+        );
+        icon.destroyIcon(&self.win32.icon);
+        self.win32.icon = new_icon;
+    }
+
+    pub fn setCursorIcon(
+        self: *Self,
+        pixels: ?[]const u8,
+        width: i32,
+        height: i32,
+        xhot: u32,
+        yhot: u32,
+    ) WindowError!void {
+        const new_cursor = try icon.createCursor(
+            pixels,
+            width,
+            height,
+            xhot,
+            yhot,
+        ) catch |err| {
+            return switch (err) {
+                icon.IconError.BadIcon => err,
+                else => WindowError.OutOfMemory,
+            };
+        };
+        icon.destroyCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor;
+        if (self.data.flags.cursor_in_client) {
+            applyCursorHints(&self.win32.cursor, self.handle);
+        }
+    }
+
+    pub fn setStdCursorIcon(
+        self: *Self,
+        cursor_shape: common.cursor.StandardCursorShape,
+    ) WindowError!void {
+        const new_cursor = try icon.createStandardCursor(cursor_shape) catch |err| {
+            return switch (err) {
+                icon.IconError.BadIcon => err,
+                else => WindowError.OutOfMemory,
+            };
+        };
+        icon.destroyCursor(&self.win32.cursor);
+        self.win32.cursor = new_cursor;
+        if (self.data.flags.cursor_in_client) {
+            applyCursorHints(&self.win32.cursor, self.handle);
+        }
+    }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG_BUILD) {

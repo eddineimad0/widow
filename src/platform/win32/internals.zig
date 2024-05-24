@@ -10,7 +10,6 @@ const error_defs = @import("errors.zig");
 const Win32Driver = @import("driver.zig").Win32Driver;
 const Window = @import("window.zig").Window;
 const window_msg = zigwin32.ui.windows_and_messaging;
-const sys_power = zigwin32.system.power;
 const sys_service = zigwin32.system.system_services;
 
 /// Data our hidden helper window will modify during execution.
@@ -142,77 +141,11 @@ fn registerDevicesNotif(helper_window: win32.HWND, dbi_handle: **anyopaque) void
     ) orelse unreachable; // Should always succeed.
 }
 
-/// create a platform icon.
-pub fn createIcon(
-    pixels: ?[]const u8,
-    width: i32,
-    height: i32,
-) !icon.Icon {
-    if (pixels) |slice| {
-        const sm_handle = try icon.createIcon(slice, width, height, null, null);
-        const bg_handle = try icon.createIcon(slice, width, height, null, null);
-        return icon.Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle };
-    } else {
-        return icon.Icon{ .sm_handle = null, .bg_handle = null };
-    }
-}
-
-/// Creates a platform cursor.
-pub fn createCursor(
-    pixels: ?[]const u8,
-    width: i32,
-    height: i32,
-    xhot: u32,
-    yhot: u32,
-) !icon.Cursor {
-    if (pixels) |slice| {
-        const handle = try icon.createIcon(slice, width, height, xhot, yhot);
-        return icon.Cursor{ .handle = handle, .shared = false, .mode = common.cursor.CursorMode.Normal };
-    } else {
-        return icon.Cursor{ .handle = null, .shared = false, .mode = common.cursor.CursorMode.Normal };
-    }
-}
-
-/// Returns a handle to a shared(standard) platform cursor.
-pub fn createStandardCursor(shape: common.cursor.StandardCursorShape) !icon.Cursor {
-    const CursorShape = common.cursor.StandardCursorShape;
-
-    const cursor_id = switch (shape) {
-        CursorShape.PointingHand => win32.IDC_HAND,
-        CursorShape.Crosshair => win32.IDC_CROSS,
-        CursorShape.Text => win32.IDC_IBEAM,
-        CursorShape.BkgrndTask => win32.IDC_APPSTARTING,
-        CursorShape.Help => win32.IDC_HELP,
-        CursorShape.Busy => win32.IDC_WAIT,
-        CursorShape.Forbidden => win32.IDC_NO,
-        CursorShape.Move => win32.IDC_SIZEALL,
-        CursorShape.Default => win32.IDC_ARROW,
-    };
-
-    const handle = window_msg.LoadImageA(
-        null,
-        cursor_id,
-        window_msg.GDI_IMAGE_TYPE.CURSOR,
-        0,
-        0,
-        @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
-            @intFromEnum(window_msg.LR_SHARED)),
-    );
-
-    if (handle == null) {
-        // We failed.
-        std.debug.print("error {}\n", .{utils.getLastError()});
-        return error.FailedToLoadStdCursor;
-    }
-
-    return icon.Cursor{ .handle = @ptrCast(handle), .shared = true, .mode = common.cursor.CursorMode.Normal };
-}
-
 pub const MonitorStore = struct {
     monitors: std.ArrayList(display.Display),
     used_monitors: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
-    prev_exec_state: sys_power.EXECUTION_STATE,
+    // prev_exec_state: sys_power.EXECUTION_STATE,
     const Self = @This();
 
     /// Initialize the `MonitorStore` struct.
@@ -220,7 +153,7 @@ pub const MonitorStore = struct {
         return .{
             .used_monitors = 0,
             .expected_video_change = false,
-            .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
+            // .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .monitors = try display.pollDisplays(allocator),
         };
     }
@@ -316,13 +249,13 @@ pub const MonitorStore = struct {
         const monitor = try self.findMonitor(monitor_handle);
 
         if (self.used_monitors == 0) {
-            const thread_exec_state = comptime @intFromEnum(sys_power.ES_CONTINUOUS) |
-                @intFromEnum(sys_power.ES_DISPLAY_REQUIRED);
-            // first time acquiring a monitor
-            // prevent the system from entering sleep or turning off.
-            self.prev_exec_state = sys_power.SetThreadExecutionState(
-                @enumFromInt(thread_exec_state),
-            );
+            // const thread_exec_state = comptime @intFromEnum(sys_power.ES_CONTINUOUS) |
+            //     @intFromEnum(sys_power.ES_DISPLAY_REQUIRED);
+            // // first time acquiring a monitor
+            // // prevent the system from entering sleep or turning off.
+            // self.prev_exec_state = sys_power.SetThreadExecutionState(
+            //     @enumFromInt(thread_exec_state),
+            // );
         } else {
             if (monitor.window) |old_window| {
                 if (window.handle != old_window.handle) {
@@ -344,7 +277,7 @@ pub const MonitorStore = struct {
 
         self.used_monitors -= 1;
         if (self.used_monitors == 0) {
-            _ = sys_power.SetThreadExecutionState(self.prev_exec_state);
+            // _ = sys_power.SetThreadExecutionState(self.prev_exec_state);
         }
     }
 
