@@ -51,10 +51,10 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    // const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
-    // mywindow.setIcon(&icon_pixels, 32, 32) catch {
-    //     std.debug.print("Failed to set Window icon.\n", .{});
-    // };
+    const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
+    mywindow.setIcon(&icon_pixels, 32, 32) catch {
+        std.debug.print("Failed to set Window icon.\n", .{});
+    };
 
     var event: widow.event.Event = undefined;
     event_loop: while (true) {
@@ -69,7 +69,6 @@ pub fn main() !void {
                     if (key.state.isPressed()) {
                         switch (key.scancode) {
                             ScanCode.Q => {
-                                // let's request closing the window on pressing Q key
                                 mywindow.queueCloseEvent();
                             },
                             ScanCode.C => {
@@ -82,17 +81,33 @@ pub fn main() !void {
                                 mywindow.setCursorMode(CursorMode.Normal);
                             },
                             ScanCode.I => {
-                                // mywindow.setCursor(&icon_pixels, 32, 32, 0, 0) catch {
-                                //     std.debug.print("Failed to set window's cursor.\n", .{});
-                                // };
+                                mywindow.setCursorIcon(
+                                    &icon_pixels,
+                                    32,
+                                    32,
+                                    0,
+                                    0,
+                                ) catch {
+                                    std.debug.print(
+                                        "Failed to set window's cursor.\n",
+                                        .{},
+                                    );
+                                };
                             },
                             ScanCode.U => {
-                                // mywindow.setStandardCursor(widow.cursor.StandardCursorShape.Help) catch {
-                                //     std.debug.print("Failed to set standard cursor\n", .{});
-                                // };
+                                mywindow.setStdCursorIcon(
+                                    widow.cursor.StandardCursorShape.Help,
+                                ) catch {
+                                    std.debug.print(
+                                        "Failed to set standard cursor\n",
+                                        .{},
+                                    );
+                                };
                             },
                             else => {
-                                std.debug.print("Cursor Position:{}\n", .{mywindow.cursorPosition()});
+                                std.debug.print("Cursor Position:{}\n", .{
+                                    mywindow.cursorPosition(),
+                                });
                             },
                         }
                     }

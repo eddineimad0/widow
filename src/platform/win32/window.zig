@@ -179,17 +179,17 @@ pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
         else => captureCursor(window),
     }
 
-    const cursor_image = switch (hints.mode) {
+    const cursor_icon = switch (hints.mode) {
         .Hidden => null,
         else => img: {
-            break :img if (hints.image) |h|
+            break :img if (hints.icon) |h|
                 h
             else
                 window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
         },
     };
 
-    _ = window_msg.SetCursor(cursor_image);
+    _ = window_msg.SetCursor(cursor_icon);
 }
 
 pub fn restoreCursor(hints: *CursorHints) void {
@@ -356,9 +356,9 @@ pub const Window = struct {
         // Finish setting up the window.
         self.win32 = WindowWin32Data{
             .cursor = CursorHints{
-                .image = null, // uses the default system image
+                .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
-                .img_shared = false,
+                .sys_owned = false,
             },
             .icon = Icon{
                 .sm_handle = null,
@@ -1262,7 +1262,7 @@ pub const Window = struct {
     ) WindowError!void {
         const new_icon = icon.createIcon(pixels, width, height) catch |err| {
             return switch (err) {
-                icon.IconError.BadIcon => err,
+                icon.IconError.BadIcon => WindowError.BadIcon,
                 else => WindowError.OutOfMemory,
             };
         };
@@ -1308,7 +1308,7 @@ pub const Window = struct {
         xhot: u32,
         yhot: u32,
     ) WindowError!void {
-        const new_cursor = try icon.createCursor(
+        const new_cursor = icon.createCursor(
             pixels,
             width,
             height,
@@ -1316,11 +1316,11 @@ pub const Window = struct {
             yhot,
         ) catch |err| {
             return switch (err) {
-                icon.IconError.BadIcon => err,
+                icon.IconError.BadIcon => WindowError.BadIcon,
                 else => WindowError.OutOfMemory,
             };
         };
-        icon.destroyCursor(&self.win32.cursor);
+        icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
             applyCursorHints(&self.win32.cursor, self.handle);
@@ -1331,13 +1331,13 @@ pub const Window = struct {
         self: *Self,
         cursor_shape: common.cursor.StandardCursorShape,
     ) WindowError!void {
-        const new_cursor = try icon.createStandardCursor(cursor_shape) catch |err| {
+        const new_cursor = icon.createStandardCursor(cursor_shape) catch |err| {
             return switch (err) {
-                icon.IconError.BadIcon => err,
+                icon.IconError.BadIcon => WindowError.BadIcon,
                 else => WindowError.OutOfMemory,
             };
         };
-        icon.destroyCursor(&self.win32.cursor);
+        icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
             applyCursorHints(&self.win32.cursor, self.handle);

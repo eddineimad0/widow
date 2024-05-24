@@ -8,6 +8,7 @@ const window_msg = zigwin32.ui.windows_and_messaging;
 const gdi = zigwin32.graphics.gdi;
 
 pub const IconError = error{
+    NotFound, // requested icon resource was not found.
     BadIcon, // Couldn't create the icon.
     NullColorMask, // Couldn't create the DIB color mask
     NullMonochromeMask, // Couldn't create The DIB monocrhome mask
@@ -64,7 +65,8 @@ fn createWin32Icon(
     @memcpy(dib, pixels);
 
     var icon_info = window_msg.ICONINFO{
-        .fIcon = @intFromBool(!is_cursor), // A value of TRUE(1) specifies an icon, FALSE(0) specify a cursor.
+        // A value of TRUE(1) specifies an icon, FALSE(0) specify a cursor.
+        .fIcon = @intFromBool(!is_cursor),
         .xHotspot = xhot,
         .yHotspot = yhot,
         .hbmMask = monochrome_mask,
@@ -73,19 +75,19 @@ fn createWin32Icon(
 
     const icon_handle = window_msg.CreateIconIndirect(&icon_info);
 
-    return icon_handle orelse return IconError.FailedToCreate;
+    return icon_handle orelse return IconError.BadIcon;
 }
 
 pub const CursorHints = struct {
-    image: ?window_msg.HCURSOR,
-    img_shared: bool, // As to avoid deleting system owned cursor images.
+    icon: ?window_msg.HCURSOR,
+    sys_owned: bool, // As to avoid deleting system owned cursor images.
     mode: common.cursor.CursorMode,
 };
 
-pub fn destroyCursorImage(cursor: *CursorHints) void {
-    if (!cursor.img_shared and cursor.image != null) {
-        _ = window_msg.DestroyCursor(cursor.image);
-        cursor.image = null;
+pub fn destroyCursorIcon(cursor: *CursorHints) void {
+    if (!cursor.sys_owned and cursor.icon != null) {
+        _ = window_msg.DestroyCursor(cursor.icon);
+        cursor.icon = null;
     }
 }
 
@@ -113,8 +115,22 @@ pub fn createIcon(
     height: i32,
 ) IconError!Icon {
     if (pixels) |slice| {
-        const sm_handle = try createWin32Icon(slice, width, height, null, null);
-        const bg_handle = try createWin32Icon(slice, width, height, null, null);
+        const sm_handle = try createWin32Icon(
+            slice,
+            width,
+            height,
+            0,
+            0,
+            false,
+        );
+        const bg_handle = try createWin32Icon(
+            slice,
+            width,
+            height,
+            0,
+            0,
+            false,
+        );
         return Icon{ .sm_handle = sm_handle, .bg_handle = bg_handle };
     } else {
         return Icon{ .sm_handle = null, .bg_handle = null };
@@ -130,16 +146,16 @@ pub fn createCursor(
     yhot: u32,
 ) IconError!CursorHints {
     if (pixels) |slice| {
-        const handle = try createWin32Icon(slice, width, height, xhot, yhot);
+        const handle = try createWin32Icon(slice, width, height, xhot, yhot, true);
         return CursorHints{
-            .image = handle,
-            .shared = false,
+            .icon = handle,
+            .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
         };
     } else {
         return CursorHints{
-            .handle = null,
-            .shared = false,
+            .icon = null,
+            .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
         };
     }
@@ -169,19 +185,20 @@ pub fn createStandardCursor(
         window_msg.GDI_IMAGE_TYPE.CURSOR,
         0,
         0,
-        @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
-            @intFromEnum(window_msg.LR_SHARED)),
+        window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+        // @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
+        //     @intFromEnum(window_msg.LR_SHARED)),
     );
 
     if (handle == null) {
         // We failed.
         std.debug.print("error {}\n", .{utils.getLastError()});
-        return error.FailedToLoadStdCursor;
+        return IconError.NotFound;
     }
 
     return CursorHints{
-        .image = @ptrCast(handle),
-        .shared = true,
+        .icon = @ptrCast(handle),
+        .sys_owned = true,
         .mode = common.cursor.CursorMode.Normal,
     };
 }
