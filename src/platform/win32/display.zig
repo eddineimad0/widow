@@ -4,13 +4,15 @@ const debug = std.debug;
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
 const zigwin32 = @import("zigwin32");
-const gdi = zigwin32.graphics.gdi;
 const common = @import("common");
-const sys_power = zigwin32.system.power;
-const Win32Driver = @import("driver.zig").Win32Driver;
-const Window = @import("window.zig").Window;
+const wndw = @import("window.zig");
 const VideoMode = common.video_mode.VideoMode;
+const sys_power = zigwin32.system.power;
+const window_msg = zigwin32.ui.windows_and_messaging;
+const gdi = zigwin32.graphics.gdi;
 const WidowArea = common.geometry.WidowArea;
+const Win32Driver = @import("driver.zig").Win32Driver;
+const Window = wndw.Window;
 const ArrayList = std.ArrayList;
 
 pub const DisplayError = error{
@@ -83,7 +85,7 @@ fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
 }
 
 /// Construct a Vector with all currently connected displays.
-pub fn pollDisplays(
+fn pollDisplays(
     allocator: mem.Allocator,
 ) (mem.Allocator.Error || DisplayError)!ArrayList(Display) {
     // Anticipate at least 4 displays.
@@ -218,7 +220,7 @@ fn pollVideoModes(
 }
 
 /// Populate the given MonitorInfo struct with the corresponding monitor informations.
-pub inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
+inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
     mi.cbSize = @sizeOf(gdi.MONITORINFO);
     _ = gdi.GetMonitorInfoW(
         handle,
@@ -423,8 +425,10 @@ pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
     occupied_count: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
+    helper: ?win32.HWND,
     prev_exec_state: sys_power.EXECUTION_STATE,
     const Self = @This();
+    pub const WINDOW_PROP = std.unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
 
     pub fn init(allocator: mem.Allocator) Self {
         return .{
@@ -432,6 +436,7 @@ pub const DisplayManager = struct {
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .displays = std.ArrayList(Display).init(allocator),
+            .helper = null,
         };
     }
 
@@ -445,11 +450,55 @@ pub const DisplayManager = struct {
             d.deinit();
         }
         self.displays.deinit();
+        _ = window_msg.SetPropW(
+            self.helper,
+            WINDOW_PROP,
+            null, // self shouldn't point to stack memory
+        );
+        _ = window_msg.DestroyWindow(self.helper);
     }
 
     pub fn initDisplays(self: *Self) !void {
+        // poll for connected displays
         self.displays = try pollDisplays(self.displays.allocator);
-        //TODO: register update callback.
+        // create a helper window that keeps checking for hardware
+        // change.
+        self.helper = try wndw.createHiddenWindow(WINDOW_PROP);
+        _ = window_msg.SetPropW(
+            self.helper,
+            WINDOW_PROP,
+            @ptrCast(self), // self shouldn't point to stack memory
+        );
+    }
+
+    /// Updates the displays array by removing all disconnected displays
+    /// and adding new connected ones.
+    pub fn updateDisplays(self: *Self) mem.Allocator.Error!void {
+        self.expected_video_change = true;
+        defer self.expected_video_change = false;
+
+        const new_displays = try pollDisplays(self.displays.allocator);
+
+        for (self.displays.items) |*display| {
+            var disconnected = true;
+            for (new_displays.items) |*new_display| {
+                if (display.equals(new_display)) {
+                    disconnected = false;
+                    break;
+                }
+            }
+
+            if (disconnected) {}
+
+            // avoids changing the video mode when deinit is called.
+            // as it's a useless call to the OS.
+            display.curr_video = 0;
+            display.deinit();
+        }
+
+        self.monitors.deinit();
+
+        self.monitors = new_displays;
     }
 
     /// Returns a refrence to the requested Monitor.
@@ -465,7 +514,7 @@ pub const DisplayManager = struct {
 
         const display = target orelse {
             std.log.err(
-                "[MonitorStore]: monitor not found, handle={*}",
+                "[DisplayManager]: monitor not found, handle={*}",
                 .{dispaly_handle},
             );
             return DisplayError.NotFound;
@@ -495,14 +544,6 @@ pub const DisplayManager = struct {
     ) !void {
         const display = try self.findMonitor(display_handle);
         display.queryCurrentMode(output);
-    }
-
-    pub fn debugInfos(self: *const Self) void {
-        if (common.IS_DEBUG_BUILD) {
-            for (self.displays.items) |*display| {
-                display.debugInfos(false);
-            }
-        }
     }
 };
 

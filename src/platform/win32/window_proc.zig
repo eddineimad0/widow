@@ -5,9 +5,10 @@ const utils = @import("utils.zig");
 const opt = @import("build-options");
 const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
+const wndw = @import("window.zig");
+const display = @import("display.zig");
 const HelperData = @import("internals.zig").HelperData;
 const Win32Driver = @import("driver.zig").Win32Driver;
-const wndw = @import("window.zig");
 const window_msg = zigwin32.ui.windows_and_messaging;
 const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
@@ -19,57 +20,64 @@ pub fn helperWindowProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
-    const user_data: usize = @bitCast(window_msg.GetWindowLongPtrW(
-        hwnd,
-        window_msg.GWLP_USERDATA,
-    ));
-    if (user_data != 0) {
-        const devices: *HelperData = @ptrFromInt(user_data);
-        switch (msg) {
-            window_msg.WM_DISPLAYCHANGE => {
-                // Monitor the window_msg.WM_DISPLAYCHANGE notification
-                // to detect when settings change or when a
-                // display is added or removed.
-                if (opt.LOG_PLATFORM_EVENTS) {
-                    std.log.info("hidden window recieved a DISPLAYCHANGE event\n", .{});
+    switch (msg) {
+        window_msg.WM_DISPLAYCHANGE => {
+            // Monitor the window_msg.WM_DISPLAYCHANGE notification
+            // to detect when settings change or when a
+            // display is added or removed.
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "hidden window recieved a DISPLAYCHANGE event\n",
+                    .{},
+                );
+            }
+            const prop = window_msg.GetPropW(
+                hwnd,
+                display.DisplayManager.WINDOW_PROP,
+            );
+            if (prop) |p| {
+                const manager: *display.DisplayManager = @ptrCast(@alignCast(p));
+                if (!manager.expected_video_change) {
+                    manager.updateDisplays() catch |err| {
+                        // TODO: how to deal with this error.
+                        std.log.err(
+                            "[Display Manager]: Failed to refresh Displays,{}\n",
+                            .{err},
+                        );
+                    };
                 }
-                if (devices.monitor_store_ptr) |store| {
-                    if (!store.expected_video_change) {
-                        store.refreshMonitorsMap() catch |err| {
-                            std.log.err("[Monitor Store]: Failed to refresh monitors,{}\n", .{err});
-                        };
-                    }
-                }
-            },
+            }
+        },
 
-            window_msg.WM_DRAWCLIPBOARD => {
-                // Sent When The clipboard content gets updated.
-                if (opt.LOG_PLATFORM_EVENTS) {
-                    std.log.info("hidden window recieved a DRAWCLIPBOARD event\n", .{});
-                }
-                devices.clipboard_change = true;
-                if (devices.next_clipboard_viewer) |viewer| {
-                    _ = window_msg.SendMessageW(viewer, msg, wparam, lparam);
-                }
-            },
-            window_msg.WM_CHANGECBCHAIN => {
-                // Sent When one of the clipboard viewers is getting removed.
-                if (opt.LOG_PLATFORM_EVENTS) {
-                    std.log.info("hidden window recieved a CHANGECBCHAIN event\n", .{});
-                }
-                if (devices.next_clipboard_viewer) |viewer| {
-                    if (wparam == @intFromPtr(viewer)) {
-                        const ulparam: usize = @bitCast(lparam);
-                        devices.next_clipboard_viewer = @ptrFromInt(ulparam);
-                    } else {
-                        _ = window_msg.SendMessageW(devices.next_clipboard_viewer, msg, wparam, lparam);
-                    }
-                }
-                // last in the chain.
-                return 0;
-            },
-            else => {},
-        }
+        window_msg.WM_DRAWCLIPBOARD => {
+            // Sent When The clipboard content gets updated.
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info("hidden window recieved a DRAWCLIPBOARD event\n", .{});
+            }
+            // devices.clipboard_change = true;
+            // if (devices.next_clipboard_viewer) |viewer| {
+            //     _ = window_msg.SendMessageW(viewer, msg, wparam, lparam);
+            // }
+        },
+
+        window_msg.WM_CHANGECBCHAIN => {
+            // Sent When one of the clipboard viewers is getting removed.
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info("hidden window recieved a CHANGECBCHAIN event\n", .{});
+            }
+            // if (devices.next_clipboard_viewer) |viewer| {
+            //     if (wparam == @intFromPtr(viewer)) {
+            //         const ulparam: usize = @bitCast(lparam);
+            //         devices.next_clipboard_viewer = @ptrFromInt(ulparam);
+            //     } else {
+            //         _ = window_msg.SendMessageW(devices.next_clipboard_viewer, msg, wparam, lparam);
+            //     }
+            // }
+            // last in the chain.
+            return 0;
+        },
+
+        else => {},
     }
     return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
 }

@@ -1,11 +1,26 @@
 const std = @import("std");
+const mem = std.mem;
 const platform = @import("platform");
-const Display = platform.Display;
 
 pub const DisplayManager = struct {
-    monitors: std.ArrayList(Display),
-    used_monitors: u8,
-    expected_video_change: bool, // For skipping unnecessary updates.
-    // prev_exec_state: sys_power.EXECUTION_STATE,
+    impl: platform.DisplayManager,
+    allocator: mem.Allocator,
     const Self = @This();
+
+    pub fn init(allocator: mem.Allocator) !Self {
+        // INFO: the platform implementation should alway be heap
+        // allocated to avoid pointer issues with callbacks.
+        const impl = try allocator.create(platform.DisplayManager);
+        errdefer allocator.destroy(impl);
+        impl.* = platform.DisplayManager.init(allocator);
+        try impl.initDisplays();
+
+        return .{ .impl = impl, .allocator = allocator };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.impl.deinit();
+        self.allocator.destroy(self.impl);
+        self.impl = undefined;
+    }
 };

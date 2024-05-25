@@ -4,13 +4,11 @@ const platform = @import("platform");
 const common = @import("common");
 const geometry = common.geometry;
 
-/// TODO: redoc
+// TODO: remove
 /// A widow context represent an interface to the platform
 /// and is required by other entities in the library
 /// to communicate with platform
 pub const WidowContext = struct {
-    platform_internals: *platform.Internals,
-    monitor_store: *platform.MonitorStore,
     allocator: mem.Allocator,
     next_window_id: u32, // keeps track of assigned ids.
 
@@ -31,34 +29,10 @@ pub const WidowContext = struct {
     /// 'OutOfMemory': function could fail due to memory allocation failure.
     pub fn init(allocator: std.mem.Allocator) !Self {
         var self: Self = undefined;
-        self.platform_internals = try platform.Internals.create(allocator);
-        errdefer self.platform_internals.destroy(allocator);
-        // TODO: remove this refrence.
-        self.monitor_store = try self.platform_internals.initMonitorStoreImpl(allocator);
         self.allocator = allocator;
         self.next_window_id = 0;
         return self;
     }
-
-    /// deinitialize the instance and free allocated ressources.
-    /// # Parameters
-    /// `allocator`: the memory allocator used during initialization.
-    /// # Note
-    /// the WidowContext instance should be the last thing you deinitialize,
-    /// as all other created library entities hold
-    /// a refrence to it, deinitializing this one before the others will cause
-    /// undefined behaviour and crash you application.
-    pub fn deinit(self: *Self) void {
-        self.platform_internals.destroy(self.allocator);
-    }
-
-    // /// Retrieves an event from the event queue,
-    // /// returns false if the queue is empty, true if the `event` parameter was populated.
-    // /// # Parameters
-    // /// `event`: pointer to an event variable to be populated.
-    // pub inline fn pollEvents(self: *Self, event: *common.event.Event) bool {
-    //     return self.events_queue.popEvent(event);
-    // }
 
     /// Returns the current text content of the system clipboard.
     /// # Notes
@@ -82,9 +56,3 @@ pub const WidowContext = struct {
         return self.next_window_id;
     }
 };
-
-test "WidowContext init" {
-    const testing = std.testing;
-    var cntxt = try WidowContext.init(testing.allocator);
-    defer cntxt.deinit(testing.allocator);
-}
