@@ -17,23 +17,6 @@ pub fn build(b: *std.Build) !void {
         "Specify the target display protocol to compile for.",
     );
 
-    const log_platform_events = b.option(
-        bool,
-        "widow_log_platform_events",
-        "Print platform events messages.",
-    ) orelse
-        false;
-
-    const win32_wndclass_name = b.option(
-        []const u8,
-        "widow_win32_wndclass_name",
-        "Specify a name for the win32 WNDClass",
-    ) orelse "WIDOW_CLASS";
-
-    const options = b.addOptions();
-    options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
-    options.addOption([]const u8, "WIN32_WNDCLASS_NAME", win32_wndclass_name);
-
     if (display_target) |t| {
         if (!isDisplayTargetValid(&target, t)) {
             @panic("The specified Os target and display_protocol combination isn't supported.");
@@ -42,7 +25,11 @@ pub fn build(b: *std.Build) !void {
         display_target = detectDispalyTarget(b.allocator, &target);
     }
 
-    const widow = prepareWidowModule(b, display_target.?, options);
+    const widow = prepareWidowModule(
+        b,
+        display_target.?,
+        prepareCompileOptions(b),
+    );
 
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
@@ -179,4 +166,32 @@ fn prepareWidowModule(
     });
 
     return widow;
+}
+
+fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
+    const log_platform_events = b.option(
+        bool,
+        "widow_log_platform_events",
+        "Print platform events messages.",
+    ) orelse
+        false;
+
+    const win32_wndclass_name = b.option(
+        []const u8,
+        "widow_win32_wndclass_name",
+        "Specify a name for the win32 WNDClass",
+    ) orelse "WIDOW_CLASS";
+
+    const win32_icon_res_name = b.option(
+        []const u8,
+        "widow_win32_icon_res_name",
+        "Specify the name of the ressource icon to use on windows os",
+    );
+
+    const options = b.addOptions();
+    options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
+    options.addOption([]const u8, "WIN32_WNDCLASS_NAME", win32_wndclass_name);
+    options.addOption(?[]const u8, "WIN32_ICON_RES_NAME", win32_icon_res_name);
+
+    return options;
 }

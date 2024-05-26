@@ -341,19 +341,21 @@ fn registerMainClass(
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
         opts.WIN32_WNDCLASS_NAME,
     );
-    // TODO:
-    // if (res_icon_name) |icon_name| {
-    //     window_class.hIcon = @ptrCast(window_msg.LoadImageW(
-    //         hinstance,
-    //         wide_icon_name,
-    //         window_msg.IMAGE_ICON,
-    //         0,
-    //         0,
-    //         window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
-    //     ));
-    // }
+
+    if (opts.WIN32_ICON_RES_NAME) |icon_name| {
+        window_class.hIcon = @ptrCast(window_msg.LoadImageW(
+            hinstance,
+            unicode.utf8ToUtf16LeStringLiteral(icon_name),
+            window_msg.IMAGE_ICON,
+            0,
+            0,
+            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+        ));
+    }
+
+    // even if an icon name was provided loading the image might fail
+    // so check hIcon.
     if (window_class.hIcon == null) {
-        // No Icon was provided or we failed.
         window_class.hIcon = @ptrCast(win32.LoadImageW(
             null,
             window_msg.IDI_APPLICATION,
@@ -363,6 +365,7 @@ fn registerMainClass(
             @bitCast(window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
+
     const class = window_msg.RegisterClassExW(&window_class);
     if (class == 0) {
         return DriverError.DupWNDClass;
