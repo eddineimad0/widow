@@ -9,10 +9,38 @@ const WGLCError = error{
     GLCNoHandle,
 };
 
-pub const WinGLContext = struct {
-    glc_handle: opengl.HGLRC,
-    owner: win32.HWND,
+pub const OGLConfig = struct {
+    ver: struct {
+        major: u8,
+        minor: u8,
+    },
+    color: struct {
+        red_bits: u8,
+        green_bits: u8,
+        blue_bitx: u8,
+        alpha_bits: u8,
+    },
+    accum: struct {
+        red_bits: u8,
+        green_bits: u8,
+        blue_bits: u8,
+        alpha_bits: u8,
+    },
+    depth_bits: u8,
+    // buffer_size: u8,
+    stencil_bits: u8,
+    // double_buffer: u8,
+    // stereo: u8,
+    // multisamplebuffers: u8,
+    // multisamplesamples: u8,
+    // floatbuffers: u8,
+    // accelerated: u8,
+};
 
+pub const OGLDriver = struct {
+    cfg: OGLConfig,
+    gl_cntxt: opengl.HGLRC,
+    owner: win32.HWND,
     const Self = @This();
 
     pub fn init(hwnd: win32.HWND) !Self {
@@ -40,7 +68,8 @@ pub const WinGLContext = struct {
             .cDepthBits = 24,
             .cStencilBits = 8,
             .cAuxBuffers = 0,
-            .iLayerType = gdi.PFD_MAIN_PLANE, // TODO: the docs says this field is ignored remove and test.
+            // TODO: the docs says this field is ignored remove and test.
+            .iLayerType = gdi.PFD_MAIN_PLANE,
             .bReserved = 0,
             .dwLayerMask = 0,
             .dwVisibleMask = 0,
@@ -89,4 +118,8 @@ pub const WinGLContext = struct {
         _ = gdi.ReleaseDC(self.owner, wdc);
         return success;
     }
+
+    // pub fn setSwapIntervals(self:*const Self,intrvl:i32) void{
+    //     //TODO:
+    // }
 };

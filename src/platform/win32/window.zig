@@ -259,7 +259,7 @@ fn setWindowPositionIntern(
 }
 
 fn createPlatformWindow(
-    allocator: std.mem.Allocator,
+    allocator: mem.Allocator,
     title: []const u8,
     data: *const WindowData,
     style: u32,
@@ -661,6 +661,7 @@ pub const Window = struct {
 
         var rect: win32.RECT = undefined;
 
+        // TODO: this side effect should be removed.
         if (self.win32.restore_frame) |*frame| {
             // we're exiting fullscreen mode use the saved size.
             rect.left = frame.top_left.x;
