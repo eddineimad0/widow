@@ -624,7 +624,9 @@ pub const Window = struct {
     }
 
     /// Updates the registered window styles to match the current window config.
-    fn updateStyles(self: *Self) void {
+    fn updateStyles(
+        self: *Self,
+    ) void {
         const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .DRAWFRAME = 1,
@@ -673,7 +675,10 @@ pub const Window = struct {
             rect.bottom = self.data.client_area.size.height + rect.top;
         }
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.scalingDPI(null) else null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
+            self.scalingDPI(null)
+        else
+            null;
 
         adjustWindowRect(
             &rect,
@@ -1179,75 +1184,61 @@ pub const Window = struct {
     }
 
     /// Switch the window to fullscreen mode and back;
-    // pub fn setFullscreen(
-    //     self: *Self,
-    //     value: bool,
-    //     video_mode: ?*common.video_mode.VideoMode,
-    // ) !void {
-    //     // TODO: rework
-    //
-    //     // The video mode switch should always be done first
-    //     const monitor_handle = self.occupiedMonitor();
-    //     try self.widow.internals.monitor_store.setMonitorVideoMode(monitor_handle, video_mode);
-    //
-    //     if (self.data.flags.is_fullscreen != value) {
-    //         if (value) {
-    //             // save for when we exit the fullscreen mode
-    //             self.win32.restore_frame = self.data.client_area;
-    //
-    //             self.data.flags.is_fullscreen = true;
-    //             self.updateStyles();
-    //             try self.acquireMonitor(monitor_handle);
-    //         } else {
-    //             try self.releaseMonitor(monitor_handle);
-    //             self.requestRestore();
-    //         }
-    //     }
-    // }
+    pub fn setFullscreen(
+        self: *Self,
+        value: bool,
+    ) bool {
+        const o_display = self.occupiedDisplay() orelse return false;
 
-    pub fn requestRestore(self: *Self) void {
-        self.data.flags.is_fullscreen = false;
-        self.updateStyles();
-        self.win32.restore_frame = null;
+        if (self.data.flags.is_fullscreen != value) {
+            self.data.flags.is_fullscreen = value;
+            if (value) {
+                // save for when we exit the fullscreen mode
+                self.win32.restore_frame = self.data.client_area;
+                self.updateStyles();
+                self.acquireDisplay(o_display);
+            } else {
+                self.updateStyles();
+                self.win32.restore_frame = null;
+            }
+        }
+        return true;
     }
 
-    // pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
-    //     var mon_area: common.geometry.WidowArea = undefined;
-    //
-    //     try self.widow.internals.monitor_store.setMonitorWindow(
-    //         monitor_handle,
-    //         self,
-    //         &mon_area,
-    //     );
-    //
-    //     const POSITION_FLAGS: u32 = @intFromEnum(window_msg.SWP_NOZORDER) |
-    //         @intFromEnum(window_msg.SWP_NOACTIVATE) |
-    //         @intFromEnum(window_msg.SWP_NOCOPYBITS);
-    //
-    //     const top = if (self.data.flags.is_topmost)
-    //         window_msg.HWND_TOPMOST
-    //     else
-    //         window_msg.HWND_NOTOPMOST;
-    //
-    //     setWindowPositionIntern(
-    //         self.handle,
-    //         top,
-    //         POSITION_FLAGS,
-    //         mon_area.top_left.x,
-    //         mon_area.top_left.y,
-    //         mon_area.size.width,
-    //         mon_area.size.height,
-    //     );
-    // }
+    pub fn acquireDisplay(self: *Self, display_handle: win32.HMONITOR) void {
+        var area: common.geometry.WidowArea = undefined;
 
-    // /// Marks the monitor as not being occupied by any window.
-    // pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-    //     try self.widow.internals.monitor_store.releaseMonitor(monitor_handle);
-    // }
+        display.displayFullArea(
+            display_handle,
+            &area,
+        );
 
-    // pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
-    //     return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST).?;
-    // }
+        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+            .NOZORDER = 1,
+            .NOACTIVATE = 1,
+            .NOCOPYBITS = 1,
+        };
+
+        const top = if (self.data.flags.is_topmost)
+            window_msg.HWND_TOPMOST
+        else
+            window_msg.HWND_NOTOPMOST;
+
+        setWindowPositionIntern(
+            self.handle,
+            top,
+            POSITION_FLAGS,
+            area.top_left.x,
+            area.top_left.y,
+            area.size.width,
+            area.size.height,
+        );
+    }
+
+    /// returns a platform handler to the display the window currently appears on
+    pub inline fn occupiedDisplay(self: *const Self) ?win32.HMONITOR {
+        return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST);
+    }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
     pub fn droppedFiles(self: *const Self) [][]const u8 {

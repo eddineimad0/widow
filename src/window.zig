@@ -1,17 +1,12 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const common = @import("common");
 const platform = @import("platform");
+const mem = std.mem;
 const WindowImpl = platform.Window;
-const WidowProps = platform.WidowProps;
 const WindowData = common.window_data.WindowData;
-const Allocator = std.mem.Allocator;
-const WidowContext = @import("context.zig").WidowContext;
 const EventQueue = common.event.EventQueue;
 
 pub const WindowBuilder = struct {
-    allocator: std.mem.Allocator,
-    context: *WidowContext,
     attribs: common.window_data.WindowData,
     title: []const u8,
     const Self = @This();
@@ -25,12 +20,8 @@ pub const WindowBuilder = struct {
     /// The context parameter should point to an initialzed WidowContext instance that lives
     /// as long as the window, i.e destroying the WidowContext instance before the window is destroyed
     /// causes undefined behaviour.
-    pub fn init(
-        context: *WidowContext,
-    ) Self {
+    pub fn init() Self {
         return Self{
-            .allocator = context.allocator,
-            .context = context,
             .title = "",
             // Defalut attributes
             .attribs = common.window_data.WindowData{
@@ -66,12 +57,12 @@ pub const WindowBuilder = struct {
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self) !Window {
+    pub fn build(self: *Self, allocator: mem.Allocator, id: u32) !Window {
         // First window has id of 1,
-        self.attribs.id = self.context.nextWindowId();
+        self.attribs.id = id;
         // The Window should copy the title if needed.
         const window = Window.init(
-            self.allocator,
+            allocator,
             self.title,
             &self.attribs,
         );
@@ -189,7 +180,7 @@ pub const WindowBuilder = struct {
 
 pub const Window = struct {
     impl: *WindowImpl,
-    allocator: Allocator,
+    allocator: mem.Allocator,
     const Self = @This();
 
     /// Initializes and returns a Window instance.
@@ -204,7 +195,7 @@ pub const Window = struct {
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
     pub fn init(
-        allocator: Allocator,
+        allocator: mem.Allocator,
         window_title: []const u8,
         data: *WindowData,
     ) !Self {
@@ -242,8 +233,10 @@ pub const Window = struct {
     }
 
     /// Process pending events and posts them to
-    /// the main event queue.
-    pub inline fn processEvents(self: *Self) platform.WindowError!void {
+    /// the event queue.
+    /// make sure a destination queue is already set in place
+    /// by calling *setEventQueue* otherwise the events won't be reported.
+    pub inline fn pollEvents(self: *Self) platform.WindowError!void {
         return self.impl.processEvents();
     }
 
@@ -577,21 +570,11 @@ pub const Window = struct {
     /// if the function succeeds it returns true else it returns false.
     /// # Parameters
     /// `value`: whether to set or exit fullscreen mode.
-    /// `video_mode`:  a VideoMode to switch to or null to keep the user's
-    /// video mode
     pub fn setFullscreen(
         self: *Self,
         value: bool,
-        video_mode: ?*common.video_mode.VideoMode,
     ) bool {
-        _ = self;
-        _ = value;
-        _ = video_mode;
-        // self.impl.setFullscreen(value, video_mode) catch |err| {
-        //     std.log.err("[Window]:Failed to set Fullscreen mode, error:{}\n", .{err});
-        //     return false;
-        // };
-        return true;
+        return self.impl.setFullscreen(value);
     }
 
     /// Returns whether the window is fullscreen or not.
@@ -674,7 +657,10 @@ pub const Window = struct {
     /// leaving the window.
     /// `CursorMode.Hidden`: this is equivalent to both capturing the cursor,
     /// and removing it's visibility.
-    pub inline fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
+    pub inline fn setCursorMode(
+        self: *Self,
+        mode: common.cursor.CursorMode,
+    ) void {
         self.impl.setCursorMode(mode);
     }
 
@@ -786,6 +772,8 @@ pub const Window = struct {
 
     /// Returns the descriptor or handle used by the platform to
     /// identify the window.
+    /// the platform handle can also be used as an id for the window
+    /// although the values are unpredicatble.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
         return self.impl.handle;
     }

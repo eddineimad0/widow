@@ -1,5 +1,4 @@
 const common = @import("common");
-const cntxt = @import("context.zig");
 const window = @import("window.zig");
 const platform = @import("platform");
 
@@ -27,7 +26,6 @@ pub const event = struct {
 };
 
 pub const VideoMode = common.video_mode.VideoMode;
-pub const WidowContext = cntxt.WidowContext;
 pub const WindowBuilder = window.WindowBuilder;
 pub const initWidowPlatform = platform.initPlatform;
 pub const deinitWidowPlatform = platform.deinitPlatform;

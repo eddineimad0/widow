@@ -11,7 +11,7 @@ const KeyCode = common.keyboard_mouse.KeyCode;
 const KeyState = common.keyboard_mouse.KeyState;
 
 /// For comparing wide c strings.
-pub fn wideStrZCmp(str_a: [*:0]const u16, str_b: [*:0]const u16) bool {
+pub fn wideStrZCmp(noalias str_a: [*:0]const u16, noalias str_b: [*:0]const u16) bool {
     var i: usize = 0;
     while (str_a[i] != 0 and str_b[i] != 0) {
         if (str_a[i] != str_b[i]) {

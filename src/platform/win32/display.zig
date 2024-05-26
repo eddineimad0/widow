@@ -220,11 +220,23 @@ fn pollVideoModes(
 }
 
 /// Populate the given MonitorInfo struct with the corresponding monitor informations.
-inline fn queryMonitorInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
+inline fn queryDisplayInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
     mi.cbSize = @sizeOf(gdi.MONITORINFO);
     _ = gdi.GetMonitorInfoW(
         handle,
         mi,
+    );
+}
+
+/// Populate the `area` with the monitor's full area.
+pub inline fn displayFullArea(handle: win32.HMONITOR, area: *WidowArea) void {
+    var mi: gdi.MONITORINFO = undefined;
+    queryDisplayInfo(handle, &mi);
+    area.* = WidowArea.init(
+        mi.rcMonitor.left,
+        mi.rcMonitor.top,
+        mi.rcMonitor.right - mi.rcMonitor.left,
+        mi.rcMonitor.bottom - mi.rcMonitor.top,
     );
 }
 
@@ -300,18 +312,6 @@ pub const Display = struct {
         // Windows might change the display handle when a new one is plugged or
         // an old one is unplugged so make sure to compare the name.
         return (mem.eql(u8, self.name, other.name));
-    }
-
-    /// Populate the `area` with the monitor's full area.
-    pub inline fn fullArea(self: *const Self, area: *WidowArea) void {
-        var mi: gdi.MONITORINFO = undefined;
-        queryMonitorInfo(self.handle, &mi);
-        area.* = WidowArea.init(
-            mi.rcMonitor.left,
-            mi.rcMonitor.top,
-            mi.rcMonitor.right - mi.rcMonitor.left,
-            mi.rcMonitor.bottom - mi.rcMonitor.top,
-        );
     }
 
     /// Determines if the desired VideoMode `mode` is possible with
@@ -422,6 +422,7 @@ pub const Display = struct {
 };
 
 pub const DisplayManager = struct {
+    // TODO: finish this.
     displays: std.ArrayList(Display),
     occupied_count: u8,
     expected_video_change: bool, // For skipping unnecessary updates.
@@ -473,7 +474,7 @@ pub const DisplayManager = struct {
 
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
-    pub fn updateDisplays(self: *Self) mem.Allocator.Error!void {
+    pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
@@ -496,9 +497,9 @@ pub const DisplayManager = struct {
             display.deinit();
         }
 
-        self.monitors.deinit();
+        self.displays.deinit();
 
-        self.monitors = new_displays;
+        self.displays = new_displays;
     }
 
     /// Returns a refrence to the requested Monitor.

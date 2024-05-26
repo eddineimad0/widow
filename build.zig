@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) !void {
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
-        // "playing_with_inputs",
+        "events_loop",
         "cursor_and_icon",
         // "xorg_basic",
     };
@@ -96,7 +96,10 @@ fn isDisplayTargetValid(
     };
 }
 
-fn detectDispalyTarget(allocator: std.mem.Allocator, target: *const std.Build.ResolvedTarget) DisplayProtocol {
+fn detectDispalyTarget(
+    allocator: std.mem.Allocator,
+    target: *const std.Build.ResolvedTarget,
+) DisplayProtocol {
     const SESSION_TYPE_X11: [*:0]const u8 = "x11";
     const SESSION_TYPE_WAYLAND: [*:0]const u8 = "wayland";
 

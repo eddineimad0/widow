@@ -11,24 +11,11 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    // first we need to preform some platform specific initialization.
     try widow.initWidowPlatform();
-    // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 
-    // Start by creating a WidowContext instance.
-    // the context is at the heart of the library and keeps track of monitors,clipboard,events...
-    // only one instance is needed but you can create as many as you need.
-    var widow_cntxt = widow.WidowContext.init(allocator) catch {
-        std.debug.print("Failed to Allocate a WidowContext instance\n", .{});
-        return;
-    };
-    // destroy it when done.
-    defer widow_cntxt.deinit();
+    var builder = widow.WindowBuilder.init();
 
-    // create a WindowBuilder.
-    var builder = widow.WindowBuilder.init(&widow_cntxt);
-    // customize the window.
     var mywindow = builder.withTitle("Cursor & icon")
         .withSize(1024, 800)
         .withResize(true)
@@ -36,16 +23,13 @@ pub fn main() !void {
         .withPosition(200, 200)
         .withSize(800, 600)
         .withDecoration(true)
-        .build() catch |err| {
+        .build(allocator, 1) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
-    // closes the window when done.
     defer mywindow.deinit();
 
-    // the window will require an event queue to
-    // send events.
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();
 
