@@ -1,11 +1,8 @@
-const internals = @import("internals.zig");
 const win32 = @import("win32_defs.zig");
 const display = @import("display.zig");
 
 pub const Window = @import("window.zig").Window;
 pub const WindowError = @import("window.zig").WindowError;
-pub const MonitorStore = internals.MonitorStore;
-pub const Internals = internals.Internals;
 
 pub const DisplayManager = display.DisplayManager;
 

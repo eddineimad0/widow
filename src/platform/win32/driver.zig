@@ -103,9 +103,6 @@ pub const Win32Driver = struct {
             globl_instance.handles.wnd_class = try registerMainClass(
                 globl_instance.handles.hinstance,
             );
-            globl_instance.handles.helper_class = try registerHelperClass(
-                globl_instance.handles.hinstance,
-            );
 
             // Load the required libraries.
             try globl_instance.loadLibraries();
@@ -326,24 +323,6 @@ fn isWin10BuildMinimum(func: win32.RtlVerifyVersionInfoProc, build: u32) bool {
         win32.VER_GREATER_EQUAL,
     );
     return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
-}
-
-fn registerHelperClass(
-    hinstance: win32.HINSTANCE,
-) !u16 {
-    var helper_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
-    helper_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
-    helper_class.style = window_msg.CS_OWNDC;
-    helper_class.lpfnWndProc = helperWindowProc;
-    helper_class.hInstance = hinstance;
-    helper_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
-        opts.WIN32_WNDCLASS_NAME ++ "_HELPER",
-    );
-    const class = window_msg.RegisterClassExW(&helper_class);
-    if (class == 0) {
-        return DriverError.DupHELPClass;
-    }
-    return class;
 }
 
 fn registerMainClass(
