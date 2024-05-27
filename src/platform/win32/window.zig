@@ -5,7 +5,6 @@ const common = @import("common");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
-const WinGLContext = @import("wgl.zig").WinGLContext;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const mem = std.mem;
 const debug = std.debug;
@@ -334,7 +333,7 @@ pub const WindowWin32Data = struct {
     icon: Icon,
     cursor: CursorHints,
     // Used when going fullscreen to save restore coords.
-    restore_frame: ?common.geometry.WidowArea,
+    prev_frame: common.geometry.WidowArea,
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,
@@ -391,7 +390,10 @@ pub const Window = struct {
             .frame_action = false,
             .position_update = false,
             .dropped_files = std.ArrayList([]const u8).init(allocator),
-            .restore_frame = null,
+            .prev_frame = .{
+                .size = .{ .width = 0, .height = 0 },
+                .top_left = .{ .x = 0, .y = 0 },
+            },
         };
 
         // Process inital events.
@@ -626,6 +628,7 @@ pub const Window = struct {
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(
         self: *Self,
+        update_area: *const common.geometry.WidowArea,
     ) void {
         const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
@@ -660,22 +663,26 @@ pub const Window = struct {
         );
 
         var rect: win32.RECT = undefined;
+        rect.left = update_area.top_left.x;
+        rect.top = update_area.top_left.y;
+        rect.right = update_area.size.width + rect.left;
+        rect.bottom = update_area.size.height + rect.top;
 
         // TODO: this side effect should be removed.
-        if (self.win32.restore_frame) |*frame| {
-            // we're exiting fullscreen mode use the saved size.
-            rect.left = frame.top_left.x;
-            rect.top = frame.top_left.y;
-            rect.right = frame.size.width + frame.top_left.x;
-            rect.bottom = frame.size.height + frame.top_left.y;
-        } else {
-            // we're simply changing some styles.
-            rect.left = self.data.client_area.top_left.x;
-            rect.top = self.data.client_area.top_left.y;
-            rect.right = self.data.client_area.size.width + rect.left;
-            rect.bottom = self.data.client_area.size.height + rect.top;
-        }
-
+        // if (self.win32.prev_frame) |*frame| {
+        //     // we're exiting fullscreen mode use the saved size.
+        //     rect.left = frame.top_left.x;
+        //     rect.top = frame.top_left.y;
+        //     rect.right = frame.size.width + frame.top_left.x;
+        //     rect.bottom = frame.size.height + frame.top_left.y;
+        // } else {
+        //     // we're simply changing some styles.
+        //     rect.left = self.data.client_area.top_left.x;
+        //     rect.top = self.data.client_area.top_left.y;
+        //     rect.right = self.data.client_area.size.width + rect.left;
+        //     rect.bottom = self.data.client_area.size.height + rect.top;
+        // }
+        //
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
             self.scalingDPI(null)
         else
@@ -994,13 +1001,13 @@ pub const Window = struct {
     /// Toggles window resizablitity on(true) or off(false).
     pub fn setResizable(self: *Self, value: bool) void {
         self.data.flags.is_resizable = value;
-        self.updateStyles();
+        self.updateStyles(&self.data.client_area);
     }
 
     /// Toggles window resizablitity on(true) or off(false).
     pub fn setDecorated(self: *Self, value: bool) void {
         self.data.flags.is_decorated = value;
-        self.updateStyles();
+        self.updateStyles(&self.data.client_area);
     }
 
     /// Maximize the window.
@@ -1195,12 +1202,11 @@ pub const Window = struct {
             self.data.flags.is_fullscreen = value;
             if (value) {
                 // save for when we exit the fullscreen mode
-                self.win32.restore_frame = self.data.client_area;
-                self.updateStyles();
+                self.win32.prev_frame = self.data.client_area;
+                self.updateStyles(&self.data.client_area);
                 self.acquireDisplay(o_display);
             } else {
-                self.updateStyles();
-                self.win32.restore_frame = null;
+                self.updateStyles(&self.win32.prev_frame);
             }
         }
         return true;

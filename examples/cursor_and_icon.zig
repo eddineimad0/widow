@@ -79,7 +79,7 @@ pub fn main() !void {
                                 };
                             },
                             ScanCode.U => {
-                                mywindow.setStdCursorIcon(
+                                mywindow.setNativeCursorIcon(
                                     widow.cursor.NativeCursorShape.Help,
                                 ) catch {
                                     std.debug.print(

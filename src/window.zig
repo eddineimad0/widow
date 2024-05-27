@@ -574,6 +574,8 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
+        // TODO: make fullscreen behaviour depends
+        // on window resizable flag.
         return self.impl.setFullscreen(value);
     }
 
@@ -766,7 +768,7 @@ pub const Window = struct {
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
     ) !void {
-        try self.impl.setStdCursorIcon(cursor_shape);
+        try self.impl.setNativeCursorIcon(cursor_shape);
     }
 
     /// Returns the descriptor or handle used by the platform to
