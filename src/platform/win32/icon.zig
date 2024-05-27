@@ -162,10 +162,10 @@ pub fn createCursor(
 }
 
 /// Returns a handle to a shared(standard) platform cursor.
-pub fn createStandardCursor(
-    shape: common.cursor.StandardCursorShape,
+pub fn createNativeCursor(
+    shape: common.cursor.NativeCursorShape,
 ) IconError!CursorHints {
-    const CursorShape = common.cursor.StandardCursorShape;
+    const CursorShape = common.cursor.NativeCursorShape;
 
     const cursor_id = switch (shape) {
         CursorShape.PointingHand => win32.IDC_HAND,
@@ -186,8 +186,6 @@ pub fn createStandardCursor(
         0,
         0,
         window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
-        // @enumFromInt(@intFromEnum(window_msg.LR_DEFAULTSIZE) |
-        //     @intFromEnum(window_msg.LR_SHARED)),
     );
 
     if (handle == null) {

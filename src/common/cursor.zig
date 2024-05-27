@@ -4,7 +4,7 @@ pub const CursorMode = enum(u8) {
     Hidden, // The cursor is disabled and hidden from the user.
 };
 
-pub const StandardCursorShape = enum(u8) {
+pub const NativeCursorShape = enum(u8) {
     Default, // Platform Default cursor.
     Move, // <-|-> Cursor for moving around.
     PointingHand, // Hand with index pointing, used for links on web pages.

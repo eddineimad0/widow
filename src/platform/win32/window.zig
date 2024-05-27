@@ -1342,11 +1342,11 @@ pub const Window = struct {
         }
     }
 
-    pub fn setStdCursorIcon(
+    pub fn setNativeCursorIcon(
         self: *Self,
-        cursor_shape: common.cursor.StandardCursorShape,
+        cursor_shape: common.cursor.NativeCursorShape,
     ) WindowError!void {
-        const new_cursor = icon.createStandardCursor(cursor_shape) catch |err| {
+        const new_cursor = icon.createNativeCursor(cursor_shape) catch |err| {
             return switch (err) {
                 icon.IconError.BadIcon => WindowError.BadIcon,
                 else => WindowError.OutOfMemory,

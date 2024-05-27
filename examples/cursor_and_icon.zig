@@ -4,7 +4,7 @@ const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
 const ScanCode = widow.keyboard.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
-const CursorShape = widow.cursor.StandardCursorShape;
+const CursorShape = widow.cursor.NativeCursorShape;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
@@ -80,7 +80,7 @@ pub fn main() !void {
                             },
                             ScanCode.U => {
                                 mywindow.setStdCursorIcon(
-                                    widow.cursor.StandardCursorShape.Help,
+                                    widow.cursor.NativeCursorShape.Help,
                                 ) catch {
                                     std.debug.print(
                                         "Failed to set standard cursor\n",

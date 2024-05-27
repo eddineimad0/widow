@@ -761,11 +761,10 @@ pub const Window = struct {
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.
     /// # Parameters
-    /// `cursor_shape`: the standard cursor to set from the StandardCursorShape
-    /// enum.
-    pub inline fn setStdCursorIcon(
+    /// `cursor_shape`: cursor to set from the NativeCursorShape enum.
+    pub inline fn setNativeCursorIcon(
         self: *Self,
-        cursor_shape: common.cursor.StandardCursorShape,
+        cursor_shape: common.cursor.NativeCursorShape,
     ) !void {
         try self.impl.setStdCursorIcon(cursor_shape);
     }
