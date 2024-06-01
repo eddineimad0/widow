@@ -10,6 +10,8 @@ pub const DisplayManager = display.DisplayManager;
 pub const DisplayHandle = win32.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
+pub const GLDriver = @import("wgl.zig").GLDriver;
+
 const PlatformDriver = @import("driver.zig").Win32Driver;
 
 pub fn initPlatform() !void {

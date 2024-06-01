@@ -65,28 +65,28 @@ const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
     .CLIPCHILDREN = 1,
 });
 
-pub fn createHiddenWindow(title: [:0]const u16) WindowError!win32.HWND {
-    const drvr = Win32Driver.singleton();
-    const helper_window = win32.CreateWindowExW(
-        0,
-        utils.MAKEINTATOM(drvr.handles.helper_class),
-        title,
-        0,
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
-        null,
-        null,
-        drvr.handles.hinstance,
-        null,
-    ) orelse {
-        return WindowError.CreateFailed;
-    };
-
-    _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
-    return helper_window;
-}
+// pub fn createHiddenWindow(title: [:0]const u16) WindowError!win32.HWND {
+//     const drvr = Win32Driver.singleton();
+//     const helper_window = win32.CreateWindowExW(
+//         0,
+//         utils.MAKEINTATOM(drvr.handles.helper_class),
+//         title,
+//         0,
+//         win32.CW_USEDEFAULT,
+//         win32.CW_USEDEFAULT,
+//         win32.CW_USEDEFAULT,
+//         win32.CW_USEDEFAULT,
+//         null,
+//         null,
+//         drvr.handles.hinstance,
+//         null,
+//     ) orelse {
+//         return WindowError.CreateFailed;
+//     };
+//
+//     _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
+//     return helper_window;
+// }
 
 // Define our own message to report Window Procedure errors back
 pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
@@ -308,11 +308,11 @@ fn createPlatformWindow(
     const drvr = Win32Driver.singleton();
 
     // Create the window.
-    const window_handle = win32.CreateWindowExW(
-        ex_style, // dwExStyles
+    const window_handle = window_msg.CreateWindowExW(
+        @bitCast(ex_style), // dwExStyles
         utils.MAKEINTATOM(drvr.handles.wnd_class),
         window_title, // Window Name
-        style, // dwStyles
+        @bitCast(style), // dwStyles
         frame[0], // X
         frame[1], // Y
         frame[2], // width
