@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("common");
 const platform = @import("platform");
+const gl = @import("gl");
 const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
@@ -777,6 +778,11 @@ pub const Window = struct {
     /// although the values are unpredicatble.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
         return self.impl.handle;
+    }
+
+    pub fn initGLContext(self: *Self, cfg: *const gl.GLConfig) !platform.GLContext {
+        const ctx = try self.impl.initGL(cfg);
+        return ctx;
     }
 
     // Prints some debug information to stdout.

@@ -9,15 +9,18 @@ const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
-const GLConfig = @import("../../gl.zig").GLConfig;
+const GLConfig = @import("gl").GLConfig;
 
-const WGLCError = error{
+const WGLError = error{
     PFDNoMatch,
-    GLCNoHandle,
+    NoRC,
 };
 
 const WGL_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
 const WGL_CONTEXT_MINOR_VERSION_ARB = 0x2092;
+const WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
+const WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
+const WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB = 0x00000002;
 const GL_ARRAY_BUFFER = 0x8892;
 const GL_STATIC_DRAW = 0x88E4;
 const GL_FRAGMENT_SHADER = 0x8B30;
@@ -78,11 +81,61 @@ const WGL_SWAP_COPY_ARB = 0x2029;
 const WGL_SWAP_UNDEFINED_ARB = 0x202A;
 const WGL_TYPE_RGBA_ARB = 0x202B;
 const WGL_TYPE_COLORINDEX_ARB = 0x202C;
+const WGL_TRANSPARENT_GREEN_VALUE_ARB = 0x2038;
+const WGL_TRANSPARENT_ALPHA_VALUE_ARB = 0x203A;
+const WGL_TRANSPARENT_INDEX_VALUE_ARB = 0x203B;
+const WGL_SAMPLE_BUFFERS_ARB = 0x2041;
+const WGL_SAMPLES_ARB = 0x2042;
+const WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB = 0x20A9;
+
+const wgl_proc = struct {
+    var ChoosePixelFormatARB: ?*const fn (
+        hdc: ?gdi.HDC,
+        piAttribIList: ?[*]c_int,
+        pfAttribFList: ?[*]f32,
+        nMaxFormats: win32.UINT,
+        piFormats: ?[*]c_int,
+        nNumFormats: *win32.UINT,
+    ) callconv(win32.WINAPI) win32.BOOL = null;
+
+    var GetPixelFormatAttribivARB: ?*const fn (
+        hdc: ?gdi.HDC,
+        iPixelFormat: c_int,
+        iLayerPlane: c_int,
+        nAttributes: win32.UINT,
+        piAttributes: ?[*]c_int,
+        piValues: ?[*]c_int,
+    ) callconv(win32.WINAPI) win32.BOOL = null;
+
+    var CreateContextAttribsARB: ?*const fn (
+        hdc: ?gdi.HDC,
+        hShareContext: ?opengl.HGLRC,
+        attribList: ?[*]c_int,
+    ) callconv(win32.WINAPI) ?opengl.HGLRC = null;
+
+    var SwapIntervalEXT: ?*const fn (
+        interval: c_int,
+    ) callconv(win32.WINAPI) win32.BOOL = null;
+
+    var GetExtensionsStringARB: ?*const fn (
+        hdc: ?gdi.HDC,
+    ) callconv(win32.WINAPI) ?[*:0]const u8 = null;
+
+    var loaded: bool = false;
+};
+
+const wgl_ext = packed struct {
+    // TODO: get hardware string.
+    var supported_extensions: ?[:0]const u8 = null;
+    var ARB_pixel_format: bool = false;
+    var ARB_create_context: bool = false;
+    var EXT_swap_control: bool = false;
+};
 
 fn hasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
     var haystack = ext_list;
     while (true) {
-        const start = mem.indexOf(u8, haystack, target);
+        const start = mem.indexOf(u8, haystack, mem.span(target));
         if (start) |s| {
             const end = s + mem.len(target);
             if (s == 0 or haystack[s - 1] == ' ') {
@@ -97,17 +150,20 @@ fn hasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
     }
 }
 
-fn createTempContext(window: win32.HWND, cfg: *const GLConfig) WGLCError!opengl.HGLRC {
-    var pfd: opengl.PIXELFORMATDESCRIPTOR = undefined;
+fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void {
     pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
-    pfd.dwFlags = gdi.PFD_DRAW_TO_WINDOW | gdi.PFD_SUPPORT_OPENGL;
-    if (cfg.flags.double_buffer) {
-        pfd.dwFlags |= gdi.PFD_DOUBLEBUFFER;
+    pfd.dwFlags = opengl.PFD_FLAGS{
+        .DRAW_TO_WINDOW = 1,
+        .SUPPORT_OPENGL = 1,
+    };
+
+    if (cfg.flags.double_buffered) {
+        pfd.dwFlags.DOUBLEBUFFER = 1;
     }
-    pfd.iPixelType = gdi.PFD_TYPE_RGBA;
+    pfd.iPixelType = opengl.PFD_TYPE_RGBA;
     // TODO: the docs says this field is ignored remove and test.
-    pfd.iLayerType = gdi.PFD_MAIN_PLANE;
+    pfd.iLayerType = opengl.PFD_MAIN_PLANE;
     pfd.cColorBits = cfg.color.red_bits + cfg.color.green_bits +
         cfg.color.blue_bits;
     pfd.cRedBits = cfg.color.red_bits;
@@ -131,37 +187,50 @@ fn createTempContext(window: win32.HWND, cfg: *const GLConfig) WGLCError!opengl.
     pfd.dwLayerMask = 0;
     pfd.dwVisibleMask = 0;
     pfd.dwDamageMask = 0;
+}
+
+fn createTempContext(
+    window: win32.HWND,
+) WGLError!opengl.HGLRC {
+    var pfd = mem.zeroes(opengl.PIXELFORMATDESCRIPTOR);
+    pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
+    pfd.nVersion = 1;
+    pfd.dwFlags = opengl.PFD_FLAGS{
+        .DRAW_TO_WINDOW = 1,
+        .SUPPORT_OPENGL = 1,
+        .DOUBLEBUFFER = 1,
+    };
 
     const wdc = gdi.GetDC(window);
 
     const pfi = opengl.ChoosePixelFormat(wdc, &pfd);
     if (pfi == 0) {
-        return WGLCError.PFDNoMatch;
+        return WGLError.PFDNoMatch;
     }
 
     if (opengl.SetPixelFormat(wdc, pfi, &pfd) == win32.FALSE) {
-        return WGLCError.PFDNoMatch;
+        return WGLError.PFDNoMatch;
     }
 
     const glc = opengl.wglCreateContext(wdc);
     if (glc == null) {
-        return WGLCError.GLCNoHandle;
+        return WGLError.NoRC;
     }
 
     _ = gdi.ReleaseDC(window, wdc);
 
-    return glc;
+    return glc.?;
 }
 
-fn loadGLExtensions(cfg: *const GLConfig) bool {
+fn loadGLExtensions() bool {
     const drvr = Win32Driver.singleton();
 
     // Create a temp window
     const tmp_wndw = window_msg.CreateWindowExW(
-        0,
+        window_msg.WINDOW_EX_STYLE{},
         utils.MAKEINTATOM(drvr.handles.wnd_class),
-        "",
-        @bitCast(window_msg.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 }),
+        &[_:0]u16{ 0x00, 0x00 },
+        window_msg.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
         0,
         0,
         16,
@@ -176,178 +245,208 @@ fn loadGLExtensions(cfg: *const GLConfig) bool {
         return false;
     }
 
-    defer window_msg.DestroyWindow(tmp_wndw);
+    _ = window_msg.ShowWindow(tmp_wndw, window_msg.SW_HIDE);
 
-    const tmp_glc = try createTempContext(tmp_wndw.?, cfg);
+    defer _ = window_msg.DestroyWindow(tmp_wndw);
+
+    const tmp_glc = createTempContext(tmp_wndw.?) catch {
+        return false;
+    };
+    defer _ = opengl.wglDeleteContext(tmp_glc);
 
     const prev_dc = opengl.wglGetCurrentDC();
     const prev_glc = opengl.wglGetCurrentContext();
 
     const wdc = gdi.GetDC(tmp_wndw);
-    _ = opengl.wglMakeCurrent(wdc, tmp_glc); //TODO: fails ?
+    defer _ = gdi.ReleaseDC(tmp_wndw, wdc);
+
+    if (opengl.wglMakeCurrent(wdc, tmp_glc) != win32.TRUE) {
+        return false;
+    }
+    defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
 
     wgl_proc.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
         "wglGetExtensionsStringARB",
     ));
 
-    wgl_proc.CreateContextAttribsARB = opengl.wglGetProcAddress(
-        "wglCreateContextAttribsARB",
-    );
-
-    const extensions = wgl_proc.GetExtensionsStringARB().?;
+    const extensions = wgl_proc.GetExtensionsStringARB.?(wdc);
     if (extensions) |exts| {
-        wgl_ext.exts = mem.span(exts);
+        wgl_ext.supported_extensions = mem.span(exts);
 
-        if (hasExtension("WGL_ARB_pixel_format", wgl_ext.exts)) {
-            wgl_ext.wgl_arb_pixel_format = true;
-            wgl_proc.ChoosePixelFormatARB = opengl.wglGetProcAddress(
+        if (hasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
+            wgl_ext.ARB_pixel_format = true;
+            wgl_proc.ChoosePixelFormatARB = @ptrCast(opengl.wglGetProcAddress(
                 "wglChoosePixelFormatARB",
-            );
+            ));
+            wgl_proc.GetPixelFormatAttribivARB = @ptrCast(opengl.wglGetProcAddress(
+                "wglGetPixelFormatAttribivARB",
+            ));
         }
 
-        if (hasExtension("wgl_ext_swap_control", wgl_ext.exts)) {
-            wgl_ext.wgl_ext_swap_control = true;
-            wgl_proc.SwapIntervalEXT = opengl.wglGetProcAddress(
+        if (hasExtension("wgl_ext_swap_control", wgl_ext.supported_extensions.?)) {
+            wgl_ext.EXT_swap_control = true;
+            wgl_proc.SwapIntervalEXT = @ptrCast(opengl.wglGetProcAddress(
                 "wglSwapIntervalEXT",
-            );
+            ));
+        }
+
+        if (hasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
+            wgl_ext.ARB_create_context = true;
+            wgl_proc.CreateContextAttribsARB = @ptrCast(opengl.wglGetProcAddress(
+                "wglCreateContextAttribsARB",
+            ));
         }
     }
 
-    _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
-    opengl.wglDeleteContext(tmp_glc);
-    _ = gdi.ReleaseDC(tmp_wndw, wdc);
+    return true;
 }
 
-pub var wgl_proc = struct {
-    var ChoosePixelFormatARB: ?*const fn (
-        hdc: win32.HDC,
-        piAttribIList: [*]c_int,
-        pfAttribFList: [*]f32,
-        nMaxFormats: win32.UINT,
-        piFormats: [*]c_int,
-        nNumFormats: win32.UINT,
-    ) callconv(win32.WINAPI) win32.BOOL = null;
+fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
+    var pfd_attrib_list: [48]c_int = undefined;
+    var gl_attrib_list: [16]c_int = undefined;
+    var pixel_format: [1]c_int = undefined;
+    var format_count: u32 = 0;
+    var index: usize = 0;
+    var pfd: opengl.PIXELFORMATDESCRIPTOR = undefined;
 
-    var CreateContextAttribsARB: ?*const fn (
-        hdc: win32.HDC,
-        hShareContext: opengl.HGLRC,
-        attribList: [*]c_int,
-    ) callconv(win32.WINAPI) ?opengl.HGLRC = null;
+    const dc = gdi.GetDC(window);
 
-    var SwapIntervalEXT: ?*const fn (
-        interval: c_int,
-    ) callconv(win32.WINAPI) win32.BOOL = null;
-
-    var GetExtensionsStringARB: ?*const fn (
-        hdc: win32.HDC,
-    ) callconv(win32.WINAPI) ?[*:0]const u8 = null;
-
-    var loaded: bool = false;
-};
-
-pub var wgl_ext = packed struct {
-    var exts: ?[:0]const u8 = null;
-    var wgl_arb_pixel_format: bool = false;
-    var wgl_ext_swap_control: bool = false;
-};
-
-pub const GLDriver = struct {
-    cfg: GLConfig,
-    glrc: opengl.HGLRC,
-    owner: win32.HWND,
-
-    const Self = @This();
-
-    pub fn init(hwnd: win32.HWND, cfg: *const GLConfig) !Self {
-        if (!Self.wgl_proc.loaded) {
-            _ = loadGLExtensions(cfg);
-        }
-
-        var pfd_attrib_list: [48]c_int = undefined;
-        var gl_attrib_list: [5]c_int = undefined;
-        var pixel_format: [1]c_int = undefined;
-        var format_count: u32 = 0;
-        var index = 0;
-
-        var pfd: opengl.PIXELFORMATDESCRIPTOR = undefined;
+    if (wgl_ext.ARB_pixel_format) {
+        const helper = struct {
+            pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
+                debug.assert(idx.* < list.len);
+                list[idx.*] = attrib;
+                list[idx.* + 1] = val;
+                idx.* += 2;
+            }
+        };
 
         // Support for OpenGL rendering.
-        pfd_attrib_list[index] = WGL_SUPPORT_OPENGL_ARB;
-        pfd_attrib_list[index + 1] = 1;
-        index += 2;
+        helper.setAttribute(&pfd_attrib_list, &index, WGL_SUPPORT_OPENGL_ARB, 1);
 
         // Support for rendering to a window.
-        pfd_attrib_list[index] = WGL_DRAW_TO_WINDOW_ARB;
-        pfd_attrib_list[index + 1] = 1;
-        index += 2;
+        helper.setAttribute(&pfd_attrib_list, &index, WGL_DRAW_TO_WINDOW_ARB, 1);
 
         // Specifiy color bits count.
-        pfd_attrib_list[index] = WGL_RED_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.color.red_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_GREEN_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.color.green_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_BLUE_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.color.blue_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_ALPHA_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.color.alpha_bits;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_RED_BITS_ARB,
+            cfg.color.red_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_GREEN_BITS_ARB,
+            cfg.color.green_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_BLUE_BITS_ARB,
+            cfg.color.blue_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ALPHA_BITS_ARB,
+            cfg.color.alpha_bits,
+        );
 
         if (cfg.flags.accelerated) {
             // Support for hardware acceleration.
-            pfd_attrib_list[index] = WGL_ACCELERATION_ARB;
-            pfd_attrib_list[index + 1] = WGL_FULL_ACCELERATION_ARB;
-            index += 2;
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCELERATION_ARB,
+                WGL_FULL_ACCELERATION_ARB,
+            );
         }
-
         if (cfg.flags.double_buffered) {
             // Support for double buffer.
-            pfd_attrib_list[index] = WGL_DOUBLE_BUFFER_ARB;
-            pfd_attrib_list[index + 1] = 1;
-            index += 2;
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_DOUBLE_BUFFER_ARB,
+                1,
+            );
         }
 
         // Specifiy accum bits count.
-        pfd_attrib_list[index] = WGL_ACCUM_RED_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.accum.red_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_ACCUM_GREEN_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.accum.green_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_ACCUM_BLUE_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.accum.blue_bits;
-        index += 2;
-        pfd_attrib_list[index] = WGL_ACCUM_ALPHA_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.accum.alpha_bits;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCUM_RED_BITS_ARB,
+            cfg.accum.red_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCUM_GREEN_BITS_ARB,
+            cfg.accum.green_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCUM_BLUE_BITS_ARB,
+            cfg.accum.blue_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCUM_ALPHA_BITS_ARB,
+            cfg.accum.alpha_bits,
+        );
 
         // Stencil bits
-        pfd_attrib_list[index] = WGL_STENCIL_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.stencil_bits;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_STENCIL_BITS_ARB,
+            cfg.stencil_bits,
+        );
 
         // Support for var bit depth buffer.
-        pfd_attrib_list[index] = WGL_DEPTH_BITS_ARB;
-        pfd_attrib_list[index + 1] = cfg.depth_bits;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_DEPTH_BITS_ARB,
+            cfg.depth_bits,
+        );
 
         // Support for swapping front and back buffer.
-        pfd_attrib_list[index] = WGL_SWAP_METHOD_ARB;
-        pfd_attrib_list[index + 1] = WGL_SWAP_EXCHANGE_ARB;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_SWAP_METHOD_ARB,
+            WGL_SWAP_EXCHANGE_ARB,
+        );
+
+        if (cfg.flags.stereo) {
+            helper.setAttribute(&pfd_attrib_list, &index, WGL_STEREO_ARB, 1);
+        }
+
+        if (cfg.flags.sRGB) {
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB,
+                1,
+            );
+        }
 
         // Support for the RGBA pixel type.
-        pfd_attrib_list[index] = WGL_PIXEL_TYPE_ARB;
-        pfd_attrib_list[index + 1] = WGL_TYPE_RGBA_ARB;
-        index += 2;
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_PIXEL_TYPE_ARB,
+            WGL_TYPE_RGBA_ARB,
+        );
 
         // Null terminate the attribute list.
         pfd_attrib_list[index] = 0;
 
-        const dc = gdi.GetDC(hwnd);
-        if (wgl_proc.ChoosePixelFormatARB(
+        if (wgl_proc.ChoosePixelFormatARB.?(
             dc,
             &pfd_attrib_list,
             null,
@@ -355,42 +454,71 @@ pub const GLDriver = struct {
             &pixel_format,
             &format_count,
         ) != 1) {
-            //ERROR
+            // Fallback
+            fillPFDstruct(&pfd, cfg);
+            pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
+        }
+    } else {
+        fillPFDstruct(&pfd, cfg);
+        pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
+    }
+
+    if (opengl.SetPixelFormat(dc, pixel_format[0], &pfd) != 1) {
+        return null;
+    }
+
+    if (cfg.ver.major < 3 or !wgl_ext.ARB_create_context) {
+        return opengl.wglCreateContext(dc);
+    }
+
+    // Set the 4.0 version of OpenGL in the attribute list.
+    gl_attrib_list[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
+    gl_attrib_list[1] = cfg.ver.major;
+    gl_attrib_list[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
+    gl_attrib_list[3] = cfg.ver.minor;
+    gl_attrib_list[4] = WGL_CONTEXT_PROFILE_MASK_ARB;
+    gl_attrib_list[5] = if (cfg.profile == .Core)
+        WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+    else
+        WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+
+    gl_attrib_list[6] = 0;
+
+    return wgl_proc.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
+}
+
+pub const GLContext = struct {
+    cfg: GLConfig,
+    glrc: opengl.HGLRC,
+    owner: win32.HWND,
+
+    const Self = @This();
+
+    pub fn init(window: win32.HWND, cfg: *const GLConfig) WGLError!Self {
+        if (!wgl_proc.loaded) {
+            _ = loadGLExtensions();
         }
 
-        if (opengl.SetPixelFormat(dc, pixel_format[0], &pfd) != 1) {
-            //ERROR
-        }
-
-        // Set the 4.0 version of OpenGL in the attribute list.
-        gl_attrib_list[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
-        gl_attrib_list[1] = cfg.ver.major;
-        gl_attrib_list[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
-        gl_attrib_list[3] = cfg.ver.minor;
-
-        gl_attrib_list[5] = 0;
-
-        const rc = wgl_proc.CreateContextAttribsARB(dc, 0, &gl_attrib_list);
-
+        const rc = createGLContext(window, cfg);
         if (rc == null) {
-            //ERROR
+            return WGLError.NoRC;
         }
 
         return .{
             .cfg = cfg.*,
-            .glc_handle = rc.?,
-            .owner = hwnd,
+            .glrc = rc.?,
+            .owner = window,
         };
     }
 
     pub fn deinit(self: *const Self) void {
         _ = opengl.wglMakeCurrent(null, null);
-        _ = opengl.wglDeleteContext(self.glc_handle);
+        _ = opengl.wglDeleteContext(self.glrc);
     }
 
     pub fn makeCurrent(self: *const Self) bool {
         const wdc = gdi.GetDC(self.owner);
-        const success = opengl.wglMakeCurrent(wdc, self.glc_handle) == win32.TRUE;
+        const success = opengl.wglMakeCurrent(wdc, self.glrc) == win32.TRUE;
         _ = gdi.ReleaseDC(self.owner, wdc);
         return success;
     }
@@ -402,7 +530,34 @@ pub const GLDriver = struct {
         return success;
     }
 
-    // pub fn setSwapIntervals(self:*const Self,intrvl:i32) void{
-    //     //TODO:
-    // }
+    pub fn setSwapIntervals(intrvl: i32) bool {
+        if (wgl_ext.EXT_swap_control and intrvl > 0) {
+            return wgl_proc.SwapIntervalEXT(intrvl) == win32.TRUE;
+        }
+        return false;
+    }
 };
+
+pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
+    const lib_loader = zigwin32.system.library_loader;
+
+    var symbol_ptr = opengl.wglGetProcAddress(symbol_name);
+    // wglGetProcAddress returns NULL on failure,
+    // some implementations will return other values. 1, 2, and 3 are used, as well as -1
+    if (symbol_ptr == null or
+        @intFromPtr(symbol_ptr) == 0x1 or
+        @intFromPtr(symbol_ptr) == 0x2 or
+        @intFromPtr(symbol_ptr) == 0x3 or
+        @intFromPtr(symbol_ptr) == @as(usize, @bitCast(@as(isize, -0x1))))
+    {
+        // wglGetProcAddress will not return function pointers from any OpenGL functions
+        // that are directly exported by the OpenGL32.DLL itself.
+        // This means the old ones from OpenGL version 1.1. Fortunately those functions
+        // can be obtained by the Win32's GetProcAddress.
+        const module = lib_loader.LoadLibraryA("opengl32.dll");
+        if (module) |m| {
+            symbol_ptr = lib_loader.GetProcAddress(m, symbol_name);
+        }
+    }
+    return symbol_ptr;
+}

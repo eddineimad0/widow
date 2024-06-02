@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) !void {
         "simple_window",
         "events_loop",
         "cursor_and_icon",
-        // "xorg_basic",
+        "gl_triangle",
     };
 
     for (examples) |example_name| {
@@ -46,7 +46,6 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        // example.root_module.addOptions("build_options", options);
         example.root_module.addImport("widow", widow);
         example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
@@ -122,13 +121,15 @@ fn prepareWidowModule(
     target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
-    const common_module = b.createModule(.{
+    const common_mod = b.createModule(.{
         .root_source_file = .{ .path = "src/common/common.zig" },
     });
 
-    const common_dep = std.Build.Module.Import{ .name = "common", .module = common_module };
+    const gl_mod = b.createModule(.{
+        .root_source_file = .{ .path = "src/opengl/gl.zig" },
+    });
 
-    const platform_module: *std.Build.Module = switch (target) {
+    const platform_mod: *std.Build.Module = switch (target) {
         .Win32 => win32: {
             const zigwin32 = b.createModule(.{
                 .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
@@ -137,7 +138,8 @@ fn prepareWidowModule(
                 .{
                     .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
                     .imports = &.{
-                        common_dep,
+                        .{ .name = "gl", .module = gl_mod },
+                        .{ .name = "common", .module = common_mod },
                         .{ .name = "zigwin32", .module = zigwin32 },
                     },
                 },
@@ -148,7 +150,10 @@ fn prepareWidowModule(
                 .root_source_file = .{
                     .path = "src/platform/linuxbsd/xorg/platform.zig",
                 },
-                .imports = &.{common_dep},
+                .imports = &.{
+                    .{ .name = "gl", .module = gl_mod },
+                    .{ .name = "common", .module = common_mod },
+                },
             },
         ),
         else => {
@@ -156,12 +161,14 @@ fn prepareWidowModule(
         },
     };
 
-    platform_module.addOptions("build-options", opts);
+    platform_mod.addOptions("build-options", opts);
+
     const widow = b.addModule("widow", .{
         .root_source_file = .{ .path = "src/main.zig" },
         .imports = &.{
-            common_dep,
-            .{ .name = "platform", .module = platform_module },
+            .{ .name = "common", .module = common_mod },
+            .{ .name = "platform", .module = platform_mod },
+            .{ .name = "gl", .module = gl_mod },
         },
     });
 

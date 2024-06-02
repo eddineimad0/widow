@@ -1,5 +1,6 @@
 const common = @import("common");
 const window = @import("window.zig");
+const gl = @import("gl");
 const platform = @import("platform");
 
 // Exports
@@ -23,6 +24,12 @@ pub const event = struct {
     pub const Event = common.event.Event;
     pub const EventType = common.event.EventType;
     pub const EventQueue = common.event.EventQueue;
+};
+
+pub const opengl = struct {
+    pub const loaderFunc = platform.glLoaderFunc;
+    pub const GLconfig = gl.GLConfig;
+    usingnamespace @import("opengl/binding.zig");
 };
 
 pub const VideoMode = common.video_mode.VideoMode;

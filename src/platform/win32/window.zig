@@ -2,6 +2,8 @@ const std = @import("std");
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const common = @import("common");
+const wgl = @import("wgl.zig");
+const gl = @import("gl");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
@@ -23,6 +25,7 @@ pub const WindowError = error{
     NoTitle,
     OutOfMemory,
     BadIcon,
+    GLError,
 };
 
 // Window Styles as defined by the SDL library.
@@ -1363,6 +1366,12 @@ pub const Window = struct {
         if (self.data.flags.cursor_in_client) {
             applyCursorHints(&self.win32.cursor, self.handle);
         }
+    }
+
+    pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!wgl.GLContext {
+        return wgl.GLContext.init(self.handle, cfg) catch {
+            return WindowError.GLError;
+        };
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {

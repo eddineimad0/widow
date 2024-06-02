@@ -28,14 +28,16 @@ pub fn mainWindowProc(
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
             const struct_ptr: *window_msg.CREATESTRUCTW = @ptrFromInt(ulparam);
-            const window_data: *const common.window_data.WindowData = @ptrCast(
+            const window_data: ?*const common.window_data.WindowData = @ptrCast(
                 @alignCast(struct_ptr.*.lpCreateParams),
             );
-            const drvr = Win32Driver.singleton();
-            if (window_data.flags.is_dpi_aware and drvr.hints.is_win10b1607_or_above) {
-                _ = drvr.opt_func.EnableNonClientDpiScaling.?(hwnd);
+            if (window_data) |data| {
+                const drvr = Win32Driver.singleton();
+                if (data.flags.is_dpi_aware and drvr.hints.is_win10b1607_or_above) {
+                    _ = drvr.opt_func.EnableNonClientDpiScaling.?(hwnd);
+                }
+                struct_ptr.lpCreateParams = null;
             }
-            struct_ptr.lpCreateParams = null;
         }
         // Skip until the window pointer is registered.
         return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
