@@ -19,7 +19,6 @@ pub fn main() !void {
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
-        .withSize(800, 600)
         .withDecoration(true)
         .build(allocator, 1) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});

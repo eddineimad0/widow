@@ -29,7 +29,7 @@ pub const event = struct {
 pub const opengl = struct {
     pub const loaderFunc = platform.glLoaderFunc;
     pub const GLconfig = gl.GLConfig;
-    usingnamespace @import("opengl/binding.zig");
+    pub usingnamespace @import("opengl/binding.zig");
 };
 
 pub const VideoMode = common.video_mode.VideoMode;

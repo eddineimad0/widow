@@ -164,7 +164,7 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void 
     pfd.iPixelType = opengl.PFD_TYPE_RGBA;
     // TODO: the docs says this field is ignored remove and test.
     pfd.iLayerType = opengl.PFD_MAIN_PLANE;
-    pfd.cColorBits = cfg.color.red_bits + cfg.color.green_bits +
+    pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
         cfg.color.blue_bits;
     pfd.cRedBits = cfg.color.red_bits;
     pfd.cRedShift = 0;
@@ -174,7 +174,7 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void 
     pfd.cBlueShift = 0;
     pfd.cAlphaBits = cfg.color.alpha_bits;
     pfd.cAlphaShift = 0;
-    pfd.cAccumBits = cfg.accum.red_bits + cfg.accum.green_bits +
+    pfd.cAccumBits = @as(u8, cfg.accum.red_bits) + cfg.accum.green_bits +
         cfg.accum.blue_bits + cfg.accum.alpha_bits;
     pfd.cAccumRedBits = cfg.accum.red_bits;
     pfd.cAccumGreenBits = cfg.accum.green_bits;
@@ -252,6 +252,7 @@ fn loadGLExtensions() bool {
     const tmp_glc = createTempContext(tmp_wndw.?) catch {
         return false;
     };
+
     defer _ = opengl.wglDeleteContext(tmp_glc);
 
     const prev_dc = opengl.wglGetCurrentDC();
@@ -263,11 +264,17 @@ fn loadGLExtensions() bool {
     if (opengl.wglMakeCurrent(wdc, tmp_glc) != win32.TRUE) {
         return false;
     }
+
     defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
 
     wgl_proc.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
         "wglGetExtensionsStringARB",
     ));
+
+    if (wgl_proc.GetExtensionsStringARB == null) {
+        // we can't query extensions available on the hardware.
+        return true;
+    }
 
     const extensions = wgl_proc.GetExtensionsStringARB.?(wdc);
     if (extensions) |exts| {
@@ -304,7 +311,8 @@ fn loadGLExtensions() bool {
 fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
     var pfd_attrib_list: [48]c_int = undefined;
     var gl_attrib_list: [16]c_int = undefined;
-    var pixel_format: [1]c_int = undefined;
+    var pfd_fattrib_list = [1]f32{0};
+    var pixel_format = [1]c_int{0};
     var format_count: u32 = 0;
     var index: usize = 0;
     var pfd: opengl.PIXELFORMATDESCRIPTOR = undefined;
@@ -331,6 +339,13 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
+            WGL_COLOR_BITS_ARB,
+            @as(c_int, cfg.color.red_bits) + cfg.color.blue_bits +
+                cfg.color.green_bits,
+        );
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
             WGL_RED_BITS_ARB,
             cfg.color.red_bits,
         );
@@ -353,26 +368,14 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
             cfg.color.alpha_bits,
         );
 
-        if (cfg.flags.accelerated) {
-            // Support for hardware acceleration.
-            helper.setAttribute(
-                &pfd_attrib_list,
-                &index,
-                WGL_ACCELERATION_ARB,
-                WGL_FULL_ACCELERATION_ARB,
-            );
-        }
-        if (cfg.flags.double_buffered) {
-            // Support for double buffer.
-            helper.setAttribute(
-                &pfd_attrib_list,
-                &index,
-                WGL_DOUBLE_BUFFER_ARB,
-                1,
-            );
-        }
-
         // Specifiy accum bits count.
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCUM_BITS_ARB,
+            @as(c_int, cfg.accum.red_bits) + cfg.accum.blue_bits +
+                cfg.accum.green_bits,
+        );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
@@ -397,6 +400,26 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
             WGL_ACCUM_ALPHA_BITS_ARB,
             cfg.accum.alpha_bits,
         );
+
+        if (cfg.flags.accelerated) {
+            // Support for hardware acceleration.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCELERATION_ARB,
+                WGL_FULL_ACCELERATION_ARB,
+            );
+        }
+
+        if (cfg.flags.double_buffered) {
+            // Support for double buffer.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_DOUBLE_BUFFER_ARB,
+                1,
+            );
+        }
 
         // Stencil bits
         helper.setAttribute(
@@ -423,6 +446,7 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         );
 
         if (cfg.flags.stereo) {
+            // color buffer has left/right pairs
             helper.setAttribute(&pfd_attrib_list, &index, WGL_STEREO_ARB, 1);
         }
 
@@ -449,11 +473,11 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         if (wgl_proc.ChoosePixelFormatARB.?(
             dc,
             &pfd_attrib_list,
-            null,
+            &pfd_fattrib_list,
             1,
             &pixel_format,
             &format_count,
-        ) != 1) {
+        ) != win32.TRUE or format_count == 0) {
             // Fallback
             fillPFDstruct(&pfd, cfg);
             pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
@@ -463,7 +487,7 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
     }
 
-    if (opengl.SetPixelFormat(dc, pixel_format[0], &pfd) != 1) {
+    if (opengl.SetPixelFormat(dc, pixel_format[0], &pfd) != win32.TRUE) {
         return null;
     }
 
@@ -471,12 +495,14 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         return opengl.wglCreateContext(dc);
     }
 
-    // Set the 4.0 version of OpenGL in the attribute list.
+    // Set the version of OpenGL in the attribute list.
     gl_attrib_list[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
     gl_attrib_list[1] = cfg.ver.major;
     gl_attrib_list[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
     gl_attrib_list[3] = cfg.ver.minor;
     gl_attrib_list[4] = WGL_CONTEXT_PROFILE_MASK_ARB;
+
+    // Set the OpenGL profile.
     gl_attrib_list[5] = if (cfg.profile == .Core)
         WGL_CONTEXT_CORE_PROFILE_BIT_ARB
     else
@@ -496,7 +522,7 @@ pub const GLContext = struct {
 
     pub fn init(window: win32.HWND, cfg: *const GLConfig) WGLError!Self {
         if (!wgl_proc.loaded) {
-            _ = loadGLExtensions();
+            wgl_proc.loaded = loadGLExtensions();
         }
 
         const rc = createGLContext(window, cfg);
