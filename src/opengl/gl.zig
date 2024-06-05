@@ -1,12 +1,14 @@
-pub const GLProfile = enum {
+pub const GLProfile = enum(u1) {
     Compat,
     Core,
 };
 
+/// Holds configuration for customizing created
+/// opengl context.
 pub const GLConfig = struct {
     ver: struct {
         major: u8 = 4,
-        minor: u8 = 6,
+        minor: u8 = 2,
     } = .{},
 
     color: struct {
@@ -29,7 +31,7 @@ pub const GLConfig = struct {
         double_buffered: bool = true,
         accelerated: bool = true,
         sRGB: bool = true,
-        stereo: bool = true,
+        stereo: bool = false,
     } = .{},
     profile: GLProfile = .Core,
 };

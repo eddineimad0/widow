@@ -27,6 +27,9 @@ pub const event = struct {
 };
 
 pub const opengl = struct {
+    /// platform specific function for fetching
+    /// opengl functions after creating an opengl
+    /// rendering context.
     pub const loaderFunc = platform.glLoaderFunc;
     pub const GLconfig = gl.GLConfig;
 };

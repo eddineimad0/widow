@@ -48,6 +48,7 @@ pub const WindowBuilder = struct {
                     .cursor_in_client = false,
                     .is_dpi_aware = false,
                 },
+                // TODO: review use case
                 .input = common.keyboard_mouse.InputState.init(),
             },
         };
@@ -780,9 +781,13 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
-    pub fn initGLContext(self: *Self, cfg: *const gl.GLConfig) !platform.GLContext {
-        const ctx = try self.impl.initGL(cfg);
-        return ctx;
+    /// Initializes an opengl rendering context for the window and returns
+    /// it. the context creation can be customized through the `cfg` struct
+    pub inline fn initGLContext(
+        self: *Self,
+        cfg: *const gl.GLConfig,
+    ) !platform.GLContext {
+        return self.impl.initGL(cfg);
     }
 
     // Prints some debug information to stdout.
