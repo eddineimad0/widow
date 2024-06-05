@@ -47,6 +47,11 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         example.root_module.addImport("widow", widow);
+        if (mem.eql(u8, example_name, "gl_triangle")) {
+            example.root_module.addImport("gl", b.createModule(.{
+                .root_source_file = .{ .path = "libs/zigglgen/gl-4.2-core.zig" },
+            }));
+        }
         example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);

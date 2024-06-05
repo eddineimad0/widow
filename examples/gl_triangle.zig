@@ -1,11 +1,12 @@
 const std = @import("std");
 const widow = @import("widow");
+const gl = @import("gl");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
-var gl_procs: widow.opengl.ProcTable = undefined;
+var gl_procs: gl.ProcTable = undefined;
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
@@ -42,15 +43,15 @@ pub fn main() !void {
     _ = mywindow.setEventQueue(&ev_queue);
 
     var ctx = try mywindow.initGLContext(
-        &.{ .ver = .{ .major = 3, .minor = 3 }, .profile = .Core },
+        &.{ .ver = .{ .major = 4, .minor = 2 }, .profile = .Core },
     );
     defer ctx.deinit();
     _ = ctx.makeCurrent();
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
-    widow.opengl.makeProcTableCurrent(&gl_procs);
-    defer widow.opengl.makeProcTableCurrent(null);
+    gl.makeProcTableCurrent(&gl_procs);
+    defer gl.makeProcTableCurrent(null);
 
     event_loop: while (true) {
         // sleeps until an event is postd.
@@ -74,15 +75,15 @@ pub fn main() !void {
                     }
                 },
                 EventType.WindowResize => |*new_size| {
-                    widow.opengl.Viewport(0, 0, new_size.width, new_size.height);
+                    gl.Viewport(0, 0, new_size.width, new_size.height);
                 },
                 else => continue,
             }
         }
 
-        widow.opengl.Viewport(0, 0, 800, 600);
-        widow.opengl.ClearColor(0.2, 0.3, 0.3, 1.0);
-        widow.opengl.Clear(widow.opengl.COLOR_BUFFER_BIT);
+        gl.Viewport(0, 0, 800, 600);
+        gl.ClearColor(0.2, 0.3, 0.3, 1.0);
+        gl.Clear(gl.COLOR_BUFFER_BIT);
         _ = ctx.swapBuffers();
     }
 }
