@@ -1,8 +1,6 @@
-const WidowPoint2D = @import("./geometry.zig").WidowPoint2D;
-const WidowArea = @import("./geometry.zig").WidowArea;
-const WidowSize = @import("./geometry.zig").WidowSize;
-const AspectRatio = @import("./geometry.zig").AspectRatio;
-const InputState = @import("./keyboard_and_mouse.zig").InputState;
+const geometry = @import("./geometry.zig");
+
+const InputState = @import("./keyboard_mouse.zig").InputState;
 
 pub const WindowFlags = packed struct {
     is_visible: bool, // Does the window appear on screen or is it hidden from the user.
@@ -19,10 +17,10 @@ pub const WindowFlags = packed struct {
 
 pub const WindowData = struct {
     id: u32,
-    client_area: WidowArea, // The Size and position of the client(content) area.
-    aspect_ratio: ?AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
-    min_size: ?WidowSize, // The minimum limits of the window's size.
-    max_size: ?WidowSize, // The maximum limits of the window's size.
+    client_area: geometry.WidowArea, // The Size and position of the client(content) area.
+    aspect_ratio: ?geometry.WidowAspectRatio, // The (numerator,denominator) of the applied aspect ratio.
+    min_size: ?geometry.WidowSize, // The minimum limits of the window's size.
+    max_size: ?geometry.WidowSize, // The maximum limits of the window's size.
     flags: WindowFlags,
     input: InputState, // Both the keyboard and mouse buttons states.
 };

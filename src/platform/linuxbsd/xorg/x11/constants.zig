@@ -174,6 +174,9 @@ pub const FocusChangeMask = 0x0020_0000;
 pub const PropertyChangeMask = 0x0040_0000;
 pub const ColormapChangeMask = 0x0080_0000;
 pub const OwnerGrabButtonMask = 0x0100_0000;
+pub const QueuedAlready = 0;
+pub const QueuedAfterReading = 1;
+pub const QueuedAfterFlush = 2;
 
 // property modes
 pub const PropModeReplace = 0;
@@ -687,6 +690,6 @@ pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     else => @compileError("Unsupported Unix Platform"),
 };
 
-pub const LIB_X11_INDEX = 0;
-pub const LIB_XRANDR_INDEX = 1;
-pub const LIB_XINERAMA_INDEX = 2;
+pub const LIB_X11_NAME_INDEX = 0;
+pub const LIB_XRANDR_NAME_INDEX = 1;
+pub const LIB_XINERAMA_NAME_INDEX = 2;

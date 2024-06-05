@@ -1,33 +1,35 @@
 const std = @import("std");
+const mem = std.mem;
 const geometry = @import("geometry.zig");
-const input = @import("keyboard_and_mouse.zig");
-const KeyEvent = input.KeyEvent;
-const KeyModifiers = input.KeyModifiers;
-const MouseButtonEvent = input.MouseButtonEvent;
-const WheelEvent = input.WheelEvent;
+const kbd_mouse = @import("keyboard_mouse.zig");
+
+const KeyEvent = kbd_mouse.KeyEvent;
+const KeyModifiers = kbd_mouse.KeyModifiers;
+const MouseButtonEvent = kbd_mouse.MouseButtonEvent;
+const WheelEvent = kbd_mouse.WheelEvent;
 const Queue = @import("queue.zig").Queue;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
-    WindowResize, // The window client area size was changed.
-    WindowFocus, // True/False if the window got keyboard focus.
     WindowShown, // The window was shown to the user.
     WindowHidden, // The window was hidden from the user.
     WindowMaximize, // The window was minimized.
     WindowMinimize, // The window was maximized.
     WindowRestore, // The window was restored(from minimized or maximized state).
-    WindowMove, // The window has been moved, the Point2D struct specify the
-    // new coordinates for the top left corner of the window.
-    FileDrop, // Some file was released in the window area.
-    KeyBoard, // A certain Keyboard key action(press or release) was performed.
-    MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
-    MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
-    MouseMove, // The mouse position (relative to the client area's top left corner) changed.
     MouseEnter, // The mouse entered the client area of the window.
     MouseLeave, // The mouse exited the client area of the window.
+    FileDrop, // Some file was released in the window area.
+    RedrawRequest, // Request from the system to redraw the window's client area.
+    WindowFocus, // True/False if the window got keyboard focus.
+    WindowResize, // The window client area size was changed.
+    WindowMove, // The window has been moved, the Point2D struct specify the
+    // new coordinates for the top left corner of the window.
+    MouseMove, // The mouse position (relative to the client area's top left corner) changed.
+    MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
+    KeyBoard, // A certain Keyboard key action(press or release) was performed.
+    MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
-    RedrawRequest, // Request from the system to redraw the window's client area.
 };
 
 pub const ResizeEvent = struct {
@@ -69,6 +71,7 @@ pub const Event = union(EventType) {
     MouseEnter: u32,
     MouseLeave: u32,
     FileDrop: u32,
+    RedrawRequest: u32,
     WindowFocus: FocusEvent,
     WindowResize: ResizeEvent,
     WindowMove: MoveEvent,
@@ -78,54 +81,57 @@ pub const Event = union(EventType) {
     MouseScroll: WheelEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
-    RedrawRequest: u32,
 };
 
 pub inline fn createCloseEvent(window_id: u32) Event {
-    return Event{ .WindowClose = window_id };
+    return .{ .WindowClose = window_id };
 }
 
 pub inline fn createVisibilityEvent(window_id: u32, shown: bool) Event {
     if (shown) {
-        return Event{ .WindowShown = window_id };
+        return .{ .WindowShown = window_id };
     } else {
-        return Event{ .WindowHidden = window_id };
+        return .{ .WindowHidden = window_id };
     }
 }
 
 pub inline fn createMaximizeEvent(window_id: u32) Event {
-    return Event{ .WindowMaximize = window_id };
+    return .{ .WindowMaximize = window_id };
 }
 
 pub inline fn createMinimizeEvent(window_id: u32) Event {
-    return Event{ .WindowMinimize = window_id };
+    return .{ .WindowMinimize = window_id };
 }
 
 pub inline fn createRestoreEvent(window_id: u32) Event {
-    return Event{ .WindowRestore = window_id };
+    return .{ .WindowRestore = window_id };
 }
 
 pub inline fn createMouseEnterEvent(window_id: u32) Event {
-    return Event{ .MouseEnter = window_id };
+    return .{ .MouseEnter = window_id };
 }
 
 pub inline fn createMouseLeftEvent(window_id: u32) Event {
-    return Event{ .MouseLeave = window_id };
+    return .{ .MouseLeave = window_id };
 }
 
 pub inline fn createDropFileEvent(window_id: u32) Event {
-    return Event{ .FileDrop = window_id };
+    return .{ .FileDrop = window_id };
+}
+
+pub inline fn createRedrawEvent(window_id: u32) Event {
+    return .{ .RedrawRequest = window_id };
 }
 
 pub inline fn createFocusEvent(window_id: u32, focus: bool) Event {
-    return Event{ .WindowFocus = FocusEvent{
+    return .{ .WindowFocus = FocusEvent{
         .window_id = window_id,
         .has_focus = focus,
     } };
 }
 
-pub inline fn createResizeEvent(window_id: u32, width: u32, height: u32) Event {
-    return Event{ .WindowResize = ResizeEvent{
+pub inline fn createResizeEvent(window_id: u32, width: i32, height: i32) Event {
+    return .{ .WindowResize = ResizeEvent{
         .window_id = window_id,
         .width = width,
         .height = height,
@@ -134,13 +140,13 @@ pub inline fn createResizeEvent(window_id: u32, width: u32, height: u32) Event {
 
 pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Event {
     return if (!is_mouse)
-        Event{ .WindowMove = MoveEvent{
+        .{ .WindowMove = MoveEvent{
             .window_id = window_id,
             .x = x,
             .y = y,
         } }
     else
-        Event{ .MouseMove = MoveEvent{
+        .{ .MouseMove = MoveEvent{
             .window_id = window_id,
             .x = x,
             .y = y,
@@ -149,11 +155,11 @@ pub inline fn createMoveEvent(window_id: u32, x: i32, y: i32, is_mouse: bool) Ev
 
 pub inline fn createMouseButtonEvent(
     window_id: u32,
-    button: input.MouseButton,
-    state: input.MouseButtonState,
-    mods: input.KeyModifiers,
+    button: kbd_mouse.MouseButton,
+    state: kbd_mouse.MouseButtonState,
+    mods: kbd_mouse.KeyModifiers,
 ) Event {
-    return Event{ .MouseButton = MouseButtonEvent{
+    return .{ .MouseButton = MouseButtonEvent{
         .window_id = window_id,
         .button = button,
         .state = state,
@@ -163,12 +169,12 @@ pub inline fn createMouseButtonEvent(
 
 pub inline fn createKeyboardEvent(
     window_id: u32,
-    keycode: input.KeyCode,
-    scancode: input.ScanCode,
-    state: input.KeyState,
-    mods: input.KeyModifiers,
+    keycode: kbd_mouse.KeyCode,
+    scancode: kbd_mouse.ScanCode,
+    state: kbd_mouse.KeyState,
+    mods: kbd_mouse.KeyModifiers,
 ) Event {
-    return Event{ .KeyBoard = KeyEvent{
+    return .{ .KeyBoard = KeyEvent{
         .window_id = window_id,
         .keycode = keycode,
         .scancode = scancode,
@@ -177,8 +183,12 @@ pub inline fn createKeyboardEvent(
     } };
 }
 
-pub inline fn createScrollEvent(window_id: u32, wheel: input.MouseWheel, delta: f64) Event {
-    return Event{ .MouseScroll = WheelEvent{
+pub inline fn createScrollEvent(
+    window_id: u32,
+    wheel: kbd_mouse.MouseWheel,
+    delta: f64,
+) Event {
+    return .{ .MouseScroll = WheelEvent{
         .window_id = window_id,
         .wheel = wheel,
         .delta = delta,
@@ -186,54 +196,51 @@ pub inline fn createScrollEvent(window_id: u32, wheel: input.MouseWheel, delta: 
 }
 
 pub inline fn createDPIEvent(window_id: u32, new_dpi: u32, new_scale: f64) Event {
-    return Event{ .DPIChange = DPIChangeEvent{
+    return .{ .DPIChange = DPIChangeEvent{
         .window_id = window_id,
         .dpi = new_dpi,
         .scaler = new_scale,
     } };
 }
 
-pub inline fn createCharEvent(window_id: u32, codepoint: u32, mods: input.KeyModifiers) Event {
-    return Event{ .Character = CharacterEvent{
+pub inline fn createCharEvent(
+    window_id: u32,
+    codepoint: u32,
+    mods: kbd_mouse.KeyModifiers,
+) Event {
+    return .{ .Character = CharacterEvent{
         .window_id = window_id,
         .codepoint = @truncate(codepoint),
         .mods = mods,
     } };
 }
 
-pub inline fn createRedrawEvent(window_id: u32) Event {
-    return Event{ .RedrawRequest = window_id };
-}
-
 pub const EventQueue = struct {
     queue: Queue(Event),
-    events_count: usize,
     const Self = @This();
 
+    /// initializes an event Queue For the window.
+    /// call deinit when done
+    /// # parameters
+    /// 'allocator': used for the queue's heap allocations.
     pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{
+        return .{
             .queue = Queue(Event).init(allocator),
-            .events_count = 0,
         };
     }
 
+    /// frees all queued events.
     pub fn deinit(self: *Self) void {
         self.queue.deinit();
-        self.events_count = 0;
     }
 
-    pub fn queueEvent(self: *Self, event: *const Event) void {
-        self.queue.append(event) catch |err| {
-            std.log.err("queueEvent: Failed to Queue Event,{}\n", .{err});
-            return;
-        };
-        self.events_count += 1;
+    pub fn queueEvent(self: *Self, event: *const Event) mem.Allocator.Error!void {
+        return self.queue.append(event);
     }
 
     pub fn popEvent(self: *Self, event: *Event) bool {
         const first = self.queue.get() orelse return false;
         event.* = first.*;
-        self.events_count -= 1;
         return self.queue.removeFront();
     }
 };

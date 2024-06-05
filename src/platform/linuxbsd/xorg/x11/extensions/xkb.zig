@@ -1,4 +1,3 @@
-// TODO: char types => i8
 const types = @import("../types.zig");
 
 // Constants
@@ -432,7 +431,7 @@ pub const XkbISOAction = extern struct {
     flags: u8,
     mask: u8,
     real_mods: u8,
-    group_XXX: u8,
+    group_XXX: i8,
     affect: u8,
     vmods1: u8,
     vmods2: u8,
@@ -444,7 +443,7 @@ pub const XkbGroupAction = extern struct {
     // char            group_XXX;  /* represents a group index or delta */
     type: u8,
     flags: u8,
-    group_XXX: u8,
+    group_XXX: i8,
 };
 
 pub const XkbPtrAction = extern struct {
@@ -483,7 +482,7 @@ pub const XkbPtrDfltAction = extern struct {
     type: u8,
     flags: u8,
     affect: u8,
-    valueXXX: u8,
+    valueXXX: i8,
 };
 
 pub const XkbSwitchScreenAction = extern struct {
@@ -492,7 +491,7 @@ pub const XkbSwitchScreenAction = extern struct {
     // char            screenXXX;   /* screen number or delta */
     type: u8,
     flags: u8,
-    screenXXX: u8,
+    screenXXX: i8,
 };
 
 pub const XkbCtrlsAction = extern struct {
@@ -1151,7 +1150,6 @@ pub const XkbGeometryRec = extern struct {
     num_sections: c_ushort,
     num_doodads: c_ushort,
     num_key_aliases: c_ushort,
-    //TODO:
     properties: ?[*]XkbPropertyRec,
     colors: ?[*]XkbColorRec,
     shapes: ?[*]XkbShapeRec,

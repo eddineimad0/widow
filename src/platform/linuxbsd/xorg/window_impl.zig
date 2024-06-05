@@ -3,7 +3,7 @@ const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
 const event_handler = @import("event_handler.zig");
-const posix = common.posix;
+const unix = common.unix;
 const Internals = @import("internals.zig").Internals;
 const WindowData = common.window_data.WindowData;
 const X11Driver = @import("driver.zig").X11Driver;
@@ -96,9 +96,9 @@ pub const WindowImpl = struct {
         var ready: u32 = 0;
         // start by flushing and checking for available events.
         while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
-            _ = posix.poll(
+            _ = unix.poll(
                 libx11.ConnectionNumber(x11cntxt.handles.xdisplay),
-                posix.PollFlag.IORead,
+                unix.PollFlag.IORead,
                 -1,
                 &ready,
             );
@@ -113,9 +113,9 @@ pub const WindowImpl = struct {
         var ready: u32 = 0;
         // start by flushing and checking for available events.
         while (libx11.XPending(x11cntxt.handles.xdisplay) == 0) {
-            if (posix.poll(
+            if (unix.poll(
                 libx11.ConnectionNumber(x11cntxt.handles.xdisplay),
-                posix.PollFlag.IORead,
+                unix.PollFlag.IORead,
                 timeout_ns,
                 &ready,
             ) == false) {
@@ -157,7 +157,7 @@ pub const WindowImpl = struct {
         if (self.data.flags.is_fullscreen) {
             return;
         }
-        var size_hints = libx11.XAllocSizeHints();
+        const size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
             const x11cntxt = X11Driver.singleton();
             var supplied: u32 = 0;
@@ -490,7 +490,7 @@ pub const WindowImpl = struct {
         };
 
         defer _ = libx11.XFree(data);
-        var window_title = try allocator.alloc(u8, data_len);
+        const window_title = try allocator.alloc(u8, data_len);
         @memcpy(window_title, data);
         return window_title;
     }

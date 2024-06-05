@@ -1,8 +1,8 @@
 const std = @import("std");
-const posix = @import("common").posix;
 const internals = @import("internals.zig");
-const monitor_impl = @import("monitor_impl.zig");
+const monitor_impl = @import("display.zig");
 const dyn_x11 = @import("x11/dynamic.zig");
+const unix = @import("common").unix;
 const X11Driver = @import("driver.zig").X11Driver;
 
 pub const Internals = internals.Internals;
@@ -21,7 +21,7 @@ pub fn initPlatform(options: anytype) !void {
         "WIDOW_CLASS";
 
     dyn_x11.initDynamicApi() catch |e| {
-        std.log.err("[X11] {s}\n", .{posix.moduleErrorMsg()});
+        std.log.err("[X11] {s}\n", .{unix.moduleErrorMsg()});
         return e;
     };
 

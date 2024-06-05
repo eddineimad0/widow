@@ -1,9 +1,12 @@
 const std = @import("std");
 const widow = @import("widow");
+const gl = @import("gl");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+
+var gl_procs: gl.ProcTable = undefined;
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
@@ -18,11 +21,11 @@ pub fn main() !void {
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
-    var mywindow = builder.withTitle("Simple Window")
-        .withSize(1024, 800)
-        .withResize(true)
+    var mywindow = builder.withTitle("Hello OpenGL triangle")
+        .withResize(false)
         .withDPIAware(true)
         .withPosition(200, 200)
+        .withSize(800, 600)
         .withDecoration(true)
         .build(allocator, 1) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
@@ -38,6 +41,17 @@ pub fn main() !void {
     defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
+
+    var ctx = try mywindow.initGLContext(
+        &.{ .ver = .{ .major = 4, .minor = 2 }, .profile = .Core },
+    );
+    defer ctx.deinit();
+    _ = ctx.makeCurrent();
+
+    if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
+
+    gl.makeProcTableCurrent(&gl_procs);
+    defer gl.makeProcTableCurrent(null);
 
     event_loop: while (true) {
         // sleeps until an event is postd.
@@ -60,8 +74,16 @@ pub fn main() !void {
                         }
                     }
                 },
+                EventType.WindowResize => |*new_size| {
+                    gl.Viewport(0, 0, new_size.width, new_size.height);
+                },
                 else => continue,
             }
         }
+
+        gl.Viewport(0, 0, 800, 600);
+        gl.ClearColor(0.2, 0.3, 0.3, 1.0);
+        gl.Clear(gl.COLOR_BUFFER_BIT);
+        _ = ctx.swapBuffers();
     }
 }

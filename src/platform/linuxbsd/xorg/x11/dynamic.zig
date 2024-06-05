@@ -3,7 +3,7 @@
 //! To allow cross compilation from windows targeting linux we need to stop linking against
 //! X11 system library and instead load it at runtime.
 const std = @import("std");
-const posix = @import("common").posix;
+const unix = @import("common").unix;
 const types = @import("types.zig");
 const defs = @import("constants.zig");
 const xkb = @import("extensions/xkb.zig");
@@ -158,6 +158,10 @@ const XNextEventProc = *const fn (
     display: *types.Display,
     x_event: *types.XEvent,
 ) callconv(.C) c_int;
+const XPeekEventProc = *const fn (
+    display: *types.Display,
+    x_event: *types.XEvent,
+) callconv(.C) c_int;
 const XPendingProc = *const fn (display: *types.Display) callconv(.C) c_int;
 const XQLengthProc = *const fn (display: *types.Display) callconv(.C) c_int;
 const XSendEventProc = *const fn (
@@ -171,7 +175,8 @@ const XSyncProc = *const fn (
     display: *types.Display,
     discard: types.Bool,
 ) callconv(.C) void;
-const XFlushProc = *const fn (Display: *types.Display) callconv(.C) c_int;
+const XFlushProc = *const fn (display: *types.Display) callconv(.C) c_int;
+const XEventsQueuedProc = *const fn (display: ?*types.Display, mode: c_int) callconv(.C) c_int;
 
 // Errors
 const XSetErrorHandlerProc = *const fn (
@@ -249,11 +254,13 @@ pub const dyn_api = struct {
     pub var XDeleteContext: XDeleteContextProc = undefined;
     // Events
     pub var XNextEvent: XNextEventProc = undefined;
+    pub var XPeekEvent: XPeekEventProc = undefined;
     pub var XPending: XPendingProc = undefined;
     pub var XQLength: XQLengthProc = undefined;
     pub var XSendEvent: XSendEventProc = undefined;
     pub var XSync: XSyncProc = undefined;
     pub var XFlush: XFlushProc = undefined;
+    pub var XEventsQueued: XEventsQueuedProc = undefined;
     // Properties
     pub var XSetWMProtocols: XSetWMProtocolsProc = undefined;
     pub var XChangeProperty: XChangePropertyProc = undefined;
@@ -292,7 +299,7 @@ pub const dyn_api = struct {
 
 var __libx11_module: ?*anyopaque = null;
 
-pub fn initDynamicApi() posix.ModuleError!void {
+pub fn initDynamicApi() unix.ModuleError!void {
     // Easy shortcut but require the field.name to be 0 terminated
     // since it will be passed to a c function.
     const MAX_NAME_LENGTH = 256;
@@ -303,18 +310,23 @@ pub fn initDynamicApi() posix.ModuleError!void {
         return;
     }
 
-    __libx11_module = posix.loadPosixModule(defs.XORG_LIBS_NAME[defs.LIB_X11_INDEX]);
+    __libx11_module = unix.loadPosixModule(
+        defs.XORG_LIBS_NAME[defs.LIB_X11_NAME_INDEX],
+    );
     if (__libx11_module) |m| {
         inline for (info.Struct.decls) |*d| {
             if (comptime d.name.len > MAX_NAME_LENGTH - 1) {
-                @compileError("Libx11 function name is greater than the maximum buffer length");
+                @compileError(
+                    "Libx11 function name is greater than the maximum buffer length",
+                );
             }
             std.mem.copyForwards(u8, &field_name, d.name);
             field_name[d.name.len] = 0;
-            const symbol = posix.moduleSymbol(m, @ptrCast(&field_name)) orelse return posix.ModuleError.UndefinedSymbol;
+            const symbol = unix.moduleSymbol(m, @ptrCast(&field_name)) orelse
+                return unix.ModuleError.UndefinedSymbol;
             @field(dyn_api, d.name) = @ptrCast(symbol);
         }
     } else {
-        return posix.ModuleError.NotFound;
+        return unix.ModuleError.NotFound;
     }
 }

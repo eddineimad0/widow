@@ -1,11 +1,12 @@
 const std = @import("std");
 const common = @import("common");
+const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const ScanCode = common.keyboard_and_mouse.ScanCode;
-const KeyCode = common.keyboard_and_mouse.KeyCode;
+const ScanCode = common.keyboard_mouse.ScanCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
 
 pub const KEYCODE_MAP_SIZE = 256;
 
@@ -69,7 +70,7 @@ const KEYNAME_TO_KEYCODE_MAP = [_]NameCodePair{
     .{ KeyCode.Right, "RGHT" },
     .{ KeyCode.Left, "LEFT" },
     .{ KeyCode.Down, "DOWN" },
-    .{ KeyCode.Up, "UP" },
+    .{ KeyCode.Up, @as([*:0]const u8, @ptrCast(&[4]u8{ 'U', 'P', 0x00, 0x00 })) },
     .{ KeyCode.PageUp, "PGUP" },
     .{ KeyCode.PageDown, "PGDN" },
     .{ KeyCode.Home, "HOME" },
@@ -110,13 +111,14 @@ const KEYNAME_TO_KEYCODE_MAP = [_]NameCodePair{
     .{ KeyCode.Equal, "KPEQ" },
     .{ KeyCode.Shift, "LFSH" },
     .{ KeyCode.Control, "LCTL" },
-    .{ KeyCode.Alt, "LALT" },
     .{ KeyCode.Meta, "LWIN" },
     .{ KeyCode.Shift, "RTSH" },
     .{ KeyCode.Control, "RCTL" },
     .{ KeyCode.Alt, "LVL3" },
     .{ KeyCode.Alt, "RALT" },
     .{ KeyCode.Alt, "MDSW" },
+    .{ KeyCode.Alt, "LALT" },
+    .{ KeyCode.Alt, "ALT" },
     .{ KeyCode.Meta, "RWIN" },
     .{ KeyCode.Menu, "MENU" },
     .{ KeyCode.VolumeUp, "VOL+" },
@@ -526,7 +528,7 @@ fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
 
 fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     for (KEYNAME_TO_KEYCODE_MAP) |pair| {
-        if (std.mem.eql(u8, name, std.mem.span(pair[1]))) {
+        if (utils.bytesCmp(name.ptr, pair[1], 4)) {
             return pair[0];
         }
     }
@@ -536,10 +538,9 @@ fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
 pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Allocator.Error!void {
     const UNICODE_MAP_SIZE = 0x400;
     try xkeysym_unicode_mapping.ensureTotalCapacity(UNICODE_MAP_SIZE);
-    // # Taken from godot game enginge, thanks.
+    // "Taken from godot game enginge, thanks."
     // # Keysym to Unicode map, tables taken from FOX toolkit.
-    // Add a few extra mapping at the end.
-    // no need to worry about allocation errors capacity has already been reserved.
+    // no need to worry about allocation errors, capacity has already been reserved.
     xkeysym_unicode_mapping.put(0x01A1, 0x0104) catch unreachable;
     xkeysym_unicode_mapping.put(0x01A2, 0x02D8) catch unreachable;
     xkeysym_unicode_mapping.put(0x01A3, 0x0141) catch unreachable;
@@ -1395,13 +1396,23 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
             );
             min_scancode = desc.min_key_code;
             max_scancode = desc.max_key_code;
-            defer libx11.XkbFreeNames(desc, x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask, libx11.True);
+            defer libx11.XkbFreeNames(
+                desc,
+                x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
+                libx11.True,
+            );
             for (desc.min_key_code..(@as(u32, @intCast(desc.max_key_code)) + 1)) |i| {
-                keycode_lookup_table[i] = mapXKeyNameToKeyCode(&desc.names.?.keys.?[i].name);
+                keycode_lookup_table[i] = mapXKeyNameToKeyCode(
+                    &desc.names.?.keys.?[i].name,
+                );
             }
         }
     } else {
-        _ = libx11.XDisplayKeycodes(x11driver.handles.xdisplay, &min_scancode, &max_scancode);
+        _ = libx11.XDisplayKeycodes(
+            x11driver.handles.xdisplay,
+            &min_scancode,
+            &max_scancode,
+        );
     }
     var keysym_size: c_int = 0;
     const keysym_array = libx11.XGetKeyboardMapping(
@@ -1410,9 +1421,9 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
         max_scancode - min_scancode + 1,
         &keysym_size,
     );
-    var min: u32 = @intCast(min_scancode);
-    var max: u32 = @intCast(max_scancode);
-    var size: u32 = @intCast(keysym_size);
+    const min: u32 = @intCast(min_scancode);
+    const max: u32 = @intCast(max_scancode);
+    const size: u32 = @intCast(keysym_size);
     if (keysym_array) |array| {
         defer _ = libx11.XFree(array);
         for (min..(max + 1)) |scancode| {
@@ -1433,6 +1444,6 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
     }
 }
 
-pub fn keycodeToScancode(code: u8) ScanCode {
+pub inline fn keycodeToScancode(code: u8) ScanCode {
     return SCANCODE_LOOKUP_TABLE[code];
 }

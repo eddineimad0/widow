@@ -1,5 +1,5 @@
 const std = @import("std");
-const monitor_impl = @import("monitor_impl.zig");
+const monitor_impl = @import("display.zig");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
@@ -7,7 +7,7 @@ const keymaps = @import("keymaps.zig");
 const X11driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 const HashMapU32 = std.AutoArrayHashMap(u32, u32);
-const KeyCode = common.keyboard_and_mouse.KeyCode;
+const KeyCode = common.keyboard_mouse.KeyCode;
 
 /// Data our hidden helper window will modify during execution.
 pub const HelperData = struct {
@@ -174,11 +174,10 @@ pub const MonitorStore = struct {
 
     /// Initialize the `MonitorStore` struct.
     pub fn init(allocator: Allocator) Allocator.Error!Self {
-        var self = Self{
+        return .{
             .used_monitors = 0,
             .monitors = try monitor_impl.pollMonitors(allocator),
         };
-        return self;
     }
 
     /// Deinitialize the MonitorStore struct.

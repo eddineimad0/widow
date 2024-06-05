@@ -1,4 +1,5 @@
 const std = @import("std");
+const mem = std.mem;
 
 const DisplayProtocol = enum {
     Win32,
@@ -9,35 +10,35 @@ const DisplayProtocol = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
     var display_target = b.option(
         DisplayProtocol,
         "widow_display_protocol",
-        "Specify the display protocol to compile for.",
+        "Specify the target display protocol to compile for.",
     );
-    const log_platform_events = b.option(bool, "log_platform_events", "Print platform events messages.") orelse
-        false;
 
     if (display_target) |t| {
         if (!isDisplayTargetValid(&target, t)) {
             @panic("The specified Os target and display_protocol combination isn't supported.");
         }
     } else {
-        display_target = detectDispalyTarget(&target, b.allocator);
+        display_target = detectDispalyTarget(b.allocator, &target);
     }
 
-    const options = b.addOptions();
-    options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
-    const config = options.createModule();
+    const widow = prepareWidowModule(
+        b,
+        display_target.?,
+        prepareCompileOptions(b),
+    );
 
-    const widow = prepareWidowModule(b, display_target.?, config);
-
-    const example_step = b.step("example", "Compile example");
+    const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
-        "playing_with_inputs",
+        "events_loop",
         "cursor_and_icon",
-        "xorg_basic",
+        "gl_triangle",
     };
+
     for (examples) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
@@ -45,41 +46,72 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
-        example.addOptions("widow_build_config", options);
-        example.addModule("widow", widow);
+        example.root_module.addImport("widow", widow);
+        if (mem.eql(u8, example_name, "gl_triangle")) {
+            example.root_module.addImport("gl", b.createModule(.{
+                .root_source_file = .{ .path = "libs/zigglgen/gl-4.2-core.zig" },
+            }));
+        }
         example.linkLibC();
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
+
+    const testing_step = b.step("test", "Temp test step");
+    const test_step = b.addTest(.{
+        .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    const zigwin32 = b.createModule(.{
+        .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
+    });
+    const common = b.createModule(.{
+        .root_source_file = .{ .path = "src/common/common.zig" },
+    });
+    test_step.root_module.addImport("zigwin32", zigwin32);
+    test_step.root_module.addImport("common", common);
+    const test_run = b.addRunArtifact(test_step);
+    testing_step.dependOn(&test_run.step);
 }
 
-fn isDisplayTargetValid(os_target: *const std.zig.CrossTarget, protocol_choise: DisplayProtocol) bool {
-    return switch (os_target.getOs().tag) {
-        .windows => protocol_choise == .Win32,
-        .linux, .freebsd, .netbsd => (protocol_choise == .Xorg or protocol_choise == .Wayland),
+fn isDisplayTargetValid(
+    target: *const std.Build.ResolvedTarget,
+    protocol: DisplayProtocol,
+) bool {
+    return switch (target.result.os.tag) {
+        .windows => protocol == .Win32,
+        .linux, .freebsd, .netbsd => (protocol == .Xorg or protocol == .Wayland),
         else => false,
     };
 }
 
-fn detectDispalyTarget(os_target: *const std.zig.CrossTarget, allocator: std.mem.Allocator) DisplayProtocol {
-    const SESSION_X11: [*:0]const u8 = "x11";
-    const SESSION_WAYLAND: [*:0]const u8 = "wayland";
+fn detectDispalyTarget(
+    allocator: std.mem.Allocator,
+    target: *const std.Build.ResolvedTarget,
+) DisplayProtocol {
+    const SESSION_TYPE_X11: [*:0]const u8 = "x11";
+    const SESSION_TYPE_WAYLAND: [*:0]const u8 = "wayland";
 
-    return switch (os_target.getOs().tag) {
+    return switch (target.result.os.tag) {
         .windows => .Win32,
         .linux, .freebsd, .netbsd => unix: {
             // need to determine what display server is being used
-            const display_session_type = std.process.getEnvVarOwned(allocator, "XDG_SESSION_TYPE") catch
-                @panic("Couldn't determine display server type\n");
+            const display_session_type = std.process.getEnvVarOwned(
+                allocator,
+                "XDG_SESSION_TYPE",
+            ) catch @panic("Couldn't determine display server type\n");
+
             defer allocator.free(display_session_type);
+
             if (display_session_type.len == 0) {
                 @panic("XDG_SESSION_TYPE env variable not set");
             }
 
-            if (std.mem.eql(u8, display_session_type, std.mem.span(SESSION_X11))) {
+            if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_X11))) {
                 break :unix .Xorg;
-            } else if (std.mem.eql(u8, display_session_type, std.mem.span(SESSION_WAYLAND))) {
+            } else if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_WAYLAND))) {
                 break :unix .Wayland;
             } else {
                 @panic("Unsupported unix display server");
@@ -89,43 +121,89 @@ fn detectDispalyTarget(os_target: *const std.zig.CrossTarget, allocator: std.mem
     };
 }
 
-fn prepareWidowModule(b: *std.Build, target: DisplayProtocol, config: *std.build.Module) *std.build.Module {
-    const common_module = b.createModule(.{
-        .source_file = .{ .path = "src/common/common.zig" },
-        .dependencies = &.{
-            std.build.ModuleDependency{ .name = "widow_build_config", .module = config },
-        },
+fn prepareWidowModule(
+    b: *std.Build,
+    target: DisplayProtocol,
+    opts: *std.Build.Step.Options,
+) *std.Build.Module {
+    const common_mod = b.createModule(.{
+        .root_source_file = .{ .path = "src/common/common.zig" },
     });
-    const common_dep = std.build.ModuleDependency{ .name = "common", .module = common_module };
 
-    var platform_dep: *std.build.Module = switch (target) {
+    const gl_mod = b.createModule(.{
+        .root_source_file = .{ .path = "src/opengl/gl.zig" },
+    });
+
+    const platform_mod: *std.Build.Module = switch (target) {
         .Win32 => win32: {
-            var zigwin32 = b.createModule(.{
-                .source_file = .{ .path = "libs/zigwin32/win32.zig" },
+            const zigwin32 = b.createModule(.{
+                .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
             });
-            var deps: [2]std.build.ModuleDependency = undefined;
-            deps[0] = common_dep;
-            deps[1] = std.build.ModuleDependency{ .name = "zigwin32", .module = zigwin32 };
             break :win32 b.createModule(
-                .{ .source_file = .{ .path = "src/platform/win32/platform.zig" }, .dependencies = &deps },
+                .{
+                    .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
+                    .imports = &.{
+                        .{ .name = "gl", .module = gl_mod },
+                        .{ .name = "common", .module = common_mod },
+                        .{ .name = "zigwin32", .module = zigwin32 },
+                    },
+                },
             );
         },
-        .Xorg => xorg: {
-            var deps: [1]std.build.ModuleDependency = .{common_dep};
-            break :xorg b.createModule(
-                .{ .source_file = .{ .path = "src/platform/linuxbsd/xorg/platform.zig" }, .dependencies = &deps },
-            );
-        },
+        .Xorg => b.createModule(
+            .{
+                .root_source_file = .{
+                    .path = "src/platform/linuxbsd/xorg/platform.zig",
+                },
+                .imports = &.{
+                    .{ .name = "gl", .module = gl_mod },
+                    .{ .name = "common", .module = common_mod },
+                },
+            },
+        ),
         else => {
             @panic("Unsupported platform");
         },
     };
 
-    const deps = [_]std.build.ModuleDependency{
-        common_dep,
-        std.build.ModuleDependency{ .name = "platform", .module = platform_dep },
-    };
+    platform_mod.addOptions("build-options", opts);
 
-    const widow = b.addModule("widow", .{ .source_file = .{ .path = "src/main.zig" }, .dependencies = &deps });
+    const widow = b.addModule("widow", .{
+        .root_source_file = .{ .path = "src/main.zig" },
+        .imports = &.{
+            .{ .name = "common", .module = common_mod },
+            .{ .name = "platform", .module = platform_mod },
+            .{ .name = "gl", .module = gl_mod },
+        },
+    });
+
     return widow;
+}
+
+fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
+    const log_platform_events = b.option(
+        bool,
+        "widow_log_platform_events",
+        "Print platform events messages.",
+    ) orelse
+        false;
+
+    const win32_wndclass_name = b.option(
+        []const u8,
+        "widow_win32_wndclass_name",
+        "Specify a name for the win32 WNDClass",
+    ) orelse "WIDOW_CLASS";
+
+    const win32_icon_res_name = b.option(
+        []const u8,
+        "widow_win32_icon_res_name",
+        "Specify the name of the ressource icon to use on windows os",
+    );
+
+    const options = b.addOptions();
+    options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
+    options.addOption([]const u8, "WIN32_WNDCLASS_NAME", win32_wndclass_name);
+    options.addOption(?[]const u8, "WIN32_ICON_RES_NAME", win32_icon_res_name);
+
+    return options;
 }

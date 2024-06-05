@@ -9,10 +9,7 @@ pub fn main() !void {
     // first we need to preform some platform specific initialization.
     // an options tuple can be passed to customize the platform init
     // e.g on windows we can set the WNDClass name to a comptime string of our choice,
-    try widow.initWidowPlatform(.{
-        .xres_name = "SIMPLE_WINDOW",
-        .xres_class = "SIMPLE_CLASS",
-    });
+    try widow.initWidowPlatform();
     // clean up code to be called, when done using the library.
     defer widow.deinitWidowPlatform();
 

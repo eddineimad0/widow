@@ -1,4 +1,6 @@
 const std = @import("std");
+const mem = std.mem;
+
 pub fn Queue(comptime T: type) type {
     return struct {
         pub const Node = struct {
@@ -7,10 +9,10 @@ pub fn Queue(comptime T: type) type {
         };
 
         head: ?*Node,
-        allocator: std.mem.Allocator,
+        allocator: mem.Allocator,
 
         const Self = @This();
-        pub fn init(allocator: std.mem.Allocator) Self {
+        pub fn init(allocator: mem.Allocator) Self {
             return Self{
                 .head = null,
                 .allocator = allocator,
@@ -29,7 +31,7 @@ pub fn Queue(comptime T: type) type {
         }
 
         /// Appends `item` to the queue.
-        pub fn append(self: *Self, item: *const T) !void {
+        pub fn append(self: *Self, item: *const T) mem.Allocator.Error!void {
             var node = try self.allocator.create(Node);
             node.next = null;
             node.data = item.*;
