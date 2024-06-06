@@ -192,8 +192,8 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
     var rect: win32.RECT = undefined;
     _ = window_msg.GetWindowRect(window_handle, &rect);
     const size = common.geometry.WidowSize{
-        .width = @intCast(rect.right - rect.left),
-        .height = @intCast(rect.bottom - rect.top),
+        .width = rect.right - rect.left,
+        .height = rect.bottom - rect.top,
     };
     return size;
 }
@@ -254,7 +254,6 @@ fn setWindowPositionIntern(
         top,
         x,
         y,
-        // for some reason windows uses signed int for it's dimensions.
         width,
         height,
         flags,
@@ -271,8 +270,8 @@ fn createPlatformWindow(
     var window_rect = win32.RECT{
         .left = 0,
         .top = 0,
-        .right = @intCast(data.client_area.size.width),
-        .bottom = @intCast(data.client_area.size.height),
+        .right = data.client_area.size.width,
+        .bottom = data.client_area.size.height,
     };
 
     // Calculates the required size of the window rectangle,
@@ -415,8 +414,8 @@ pub const Window = struct {
             var client_rect = win32.RECT{
                 .left = 0,
                 .top = 0,
-                .right = @intCast(self.data.client_area.size.width),
-                .bottom = @intCast(self.data.client_area.size.height),
+                .right = self.data.client_area.size.width,
+                .bottom = self.data.client_area.size.height,
             };
             var dpi_scale: f64 = undefined;
             const dpi = self.scalingDPI(&dpi_scale);
@@ -460,8 +459,8 @@ pub const Window = struct {
                 POSITION_FLAGS,
                 client_rect.left,
                 client_rect.top,
-                (client_rect.right - client_rect.left),
-                (client_rect.bottom - client_rect.top),
+                client_rect.right - client_rect.left,
+                client_rect.bottom - client_rect.top,
             );
         }
 
@@ -773,8 +772,8 @@ pub const Window = struct {
         var rect: win32.RECT = win32.RECT{
             .left = 0,
             .top = 0,
-            .right = @intCast(self.data.client_area.size.width),
-            .bottom = @intCast(self.data.client_area.size.height),
+            .right = self.data.client_area.size.width,
+            .bottom = self.data.client_area.size.height,
         };
 
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.scalingDPI(null) else null;
@@ -840,8 +839,8 @@ pub const Window = struct {
             var new_client_rect = foundation.RECT{
                 .left = 0,
                 .top = 0,
-                .right = @intCast(size.width),
-                .bottom = @intCast(size.height),
+                .right = size.width,
+                .bottom = size.height,
             };
 
             adjustWindowRect(
@@ -934,8 +933,8 @@ pub const Window = struct {
             POSITION_FLAGS,
             0,
             0,
-            @intCast(size.width),
-            @intCast(size.height),
+            size.width,
+            size.height,
         );
     }
 
@@ -991,8 +990,8 @@ pub const Window = struct {
             POSITION_FLAGS,
             0,
             0,
-            @intCast(size.width),
-            @intCast(size.height),
+            size.width,
+            size.height,
         );
     }
 

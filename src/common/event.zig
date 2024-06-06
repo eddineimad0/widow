@@ -34,8 +34,8 @@ pub const EventType = enum(u8) {
 
 pub const ResizeEvent = struct {
     window_id: u32,
-    width: u32,
-    height: u32,
+    width: i32,
+    height: i32,
 };
 
 pub const MoveEvent = struct {

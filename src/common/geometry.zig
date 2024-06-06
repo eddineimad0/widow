@@ -30,7 +30,7 @@ pub const WidowArea = struct {
     size: WidowSize,
 
     const Self = @This();
-    pub fn init(x: i32, y: i32, width: u32, height: u32) Self {
+    pub fn init(x: i32, y: i32, width: i32, height: i32) Self {
         return Self{
             .top_left = WidowPoint2D{ .x = x, .y = y },
             .size = WidowSize{ .width = width, .height = height },

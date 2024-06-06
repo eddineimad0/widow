@@ -1,6 +1,3 @@
-const builtin = @import("builtin");
-const build_config = @import("widow_build_config");
-
 pub const video_mode = @import("video_mode.zig");
 pub const geometry = @import("geometry.zig");
 pub const window_data = @import("window_data.zig");

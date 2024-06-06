@@ -30,7 +30,7 @@ fn createWin32Icon(
     bmp_header.bV5Width = width;
     //  If bV5Height value is negative, the bitmap is a top-down DIB
     //  and its origin is the upper-left corner.
-    bmp_header.bV5Height = -@as(i32, @intCast(height));
+    bmp_header.bV5Height = -height;
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
     // No compression and we will provide the color masks.

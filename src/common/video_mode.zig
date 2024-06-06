@@ -1,10 +1,11 @@
 const std = @import("std");
 const math = std.math;
+const MAX_U32 = math.maxInt(u32);
 
 /// Describes a video mode
 pub const VideoMode = struct {
-    width: u32,
-    height: u32,
+    width: i32,
+    height: i32,
     frequency: u16,
     color_depth: u8,
 
@@ -48,17 +49,17 @@ pub const VideoMode = struct {
         for (0..modes.len, modes) |i, *mode| {
 
             // Euclidean distance.
-            color_diff = @as(isize, mode.color_depth);
-            color_diff -= @as(isize, desired_mode.color_depth);
+            color_diff = @intCast(mode.color_depth);
+            color_diff -= @intCast(desired_mode.color_depth);
             color_diff *|= color_diff;
 
-            rate_diff = @as(isize, mode.frequency);
-            rate_diff -= @as(isize, desired_mode.frequency);
+            rate_diff = @intCast(mode.frequency);
+            rate_diff -= @intCast(desired_mode.frequency);
             rate_diff *|= rate_diff;
 
-            width_diff = @as(isize, mode.width) - @as(isize, desired_mode.width);
+            width_diff = mode.width - desired_mode.width;
             width_diff *|= width_diff;
-            height_diff = @as(isize, mode.height) - @as(isize, desired_mode.height);
+            height_diff = mode.height - desired_mode.height;
             height_diff *|= height_diff;
             size_diff = width_diff + height_diff;
 

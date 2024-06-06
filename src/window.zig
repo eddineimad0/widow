@@ -720,6 +720,7 @@ pub const Window = struct {
         height: i32,
     ) !void {
         if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setIcon(pixels, width, height);
@@ -756,6 +757,7 @@ pub const Window = struct {
         yhot: u32,
     ) !void {
         if (pixels != null) {
+            std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
         try self.impl.setCursorIcon(pixels, width, height, xhot, yhot);
@@ -776,7 +778,7 @@ pub const Window = struct {
     /// the platform handle can also be used as an id for the window
     /// although the values are unpredicatble.
     pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
-        return self.impl.platformHandle();
+        return self.impl.handle;
     }
 
     /// Initializes an opengl rendering context for the window and returns

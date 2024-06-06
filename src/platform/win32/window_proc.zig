@@ -392,16 +392,16 @@ pub fn mainWindowProc(
                 return 0;
             }
 
-            window.data.client_area.size.width = @intCast(new_width);
-            window.data.client_area.size.height = @intCast(new_height);
+            window.data.client_area.size.width = new_width;
+            window.data.client_area.size.height = new_height;
 
             // For windows that allows resizing by dragging it's edges,
             // this message is received multiple times during the resize process
             // causing ton of events allocations.
             const event = common.event.createResizeEvent(
                 window.data.id,
-                @intCast(new_width),
-                @intCast(new_height),
+                new_width,
+                new_height,
             );
             window.sendEvent(&event);
 
