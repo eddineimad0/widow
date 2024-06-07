@@ -136,8 +136,6 @@ pub const X11Driver = struct {
     pid: i32,
     g_dpi: f32,
     g_screen_scale: f32,
-    resource_name: [*:0]const u8,
-    resource_class: [*:0]const u8,
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
     // var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;

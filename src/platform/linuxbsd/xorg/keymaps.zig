@@ -528,7 +528,7 @@ fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
 
 fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     for (KEYNAME_TO_KEYCODE_MAP) |pair| {
-        if (utils.bytesCmp(name.ptr, pair[1], 4)) {
+        if (utils.bytesNCmp(name.ptr, pair[1], 4)) {
             return pair[0];
         }
     }

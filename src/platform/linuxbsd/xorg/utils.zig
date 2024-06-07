@@ -7,13 +7,16 @@ const maxInt = std.math.maxInt;
 
 pub const DEFAULT_SCREEN_DPI: f32 = @as(f32, 96);
 
-pub inline fn strNCpy(src: [*:0]const u8, dst: [*]u8, count: usize) void {
+pub inline fn strNCpy(
+    noalias dst: [*]u8,
+    noalias src: [*:0]const u8,
+    count: usize,
+) void {
     if (common.IS_DEBUG_BUILD) {
         const len = std.mem.len(src);
         debug.assert(len >= count);
     }
 
-    //TODO: switch src and dst args position.
     for (0..count) |i| {
         dst[i] = src[i];
     }
@@ -25,13 +28,20 @@ pub inline fn strZLen(src: [*:0]const u8) usize {
 }
 
 /// returns true if both strings are equals.
-pub inline fn strZEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
+pub inline fn strZEquals(
+    noalias a: [*:0]const u8,
+    noalias b: [*:0]const u8,
+) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
 /// Takes 2 many-items-pointers and compares the first `n` items
 /// the caller should make sure that n isn't outside the pointers bounds.
-pub inline fn bytesCmp(a: [*]const u8, b: [*]const u8, n: usize) bool {
+pub inline fn bytesNCmp(
+    noalias a: [*]const u8,
+    noalias b: [*]const u8,
+    n: usize,
+) bool {
     for (0..n) |i| {
         if (a[i] != b[i]) {
             return false;
