@@ -42,14 +42,14 @@ pub fn build(b: *std.Build) !void {
     for (examples) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = .{ .path = b.fmt("examples/{s}.zig", .{example_name}) },
+            .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
             .target = target,
             .optimize = optimize,
         });
         example.root_module.addImport("widow", widow);
         if (mem.eql(u8, example_name, "gl_triangle")) {
             example.root_module.addImport("gl", b.createModule(.{
-                .root_source_file = .{ .path = "libs/zigglgen/gl-4.2-core.zig" },
+                .root_source_file = b.path("libs/zigglgen/gl-4.2-core.zig"),
             }));
         }
         example.linkLibC();
@@ -60,15 +60,15 @@ pub fn build(b: *std.Build) !void {
 
     const testing_step = b.step("test", "Temp test step");
     const test_step = b.addTest(.{
-        .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
+        .root_source_file = b.path("src/platform/win32/platform.zig"),
         .target = target,
         .optimize = optimize,
     });
     const zigwin32 = b.createModule(.{
-        .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
+        .root_source_file = b.path("libs/zigwin32/win32.zig"),
     });
     const common = b.createModule(.{
-        .root_source_file = .{ .path = "src/common/common.zig" },
+        .root_source_file = b.path("src/common/common.zig"),
     });
     test_step.root_module.addImport("zigwin32", zigwin32);
     test_step.root_module.addImport("common", common);
@@ -127,21 +127,21 @@ fn prepareWidowModule(
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
     const common_mod = b.createModule(.{
-        .root_source_file = .{ .path = "src/common/common.zig" },
+        .root_source_file = b.path("src/common/common.zig"),
     });
 
     const gl_mod = b.createModule(.{
-        .root_source_file = .{ .path = "src/opengl/gl.zig" },
+        .root_source_file = b.path("src/opengl/gl.zig"),
     });
 
     const platform_mod: *std.Build.Module = switch (target) {
         .Win32 => win32: {
             const zigwin32 = b.createModule(.{
-                .root_source_file = .{ .path = "libs/zigwin32/win32.zig" },
+                .root_source_file = b.path("libs/zigwin32/win32.zig"),
             });
             break :win32 b.createModule(
                 .{
-                    .root_source_file = .{ .path = "src/platform/win32/platform.zig" },
+                    .root_source_file = b.path("src/platform/win32/platform.zig"),
                     .imports = &.{
                         .{ .name = "gl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
@@ -152,9 +152,8 @@ fn prepareWidowModule(
         },
         .Xorg => b.createModule(
             .{
-                .root_source_file = .{
-                    .path = "src/platform/linuxbsd/xorg/platform.zig",
-                },
+                .root_source_file = b.path("src/platform/linuxbsd/xorg/platform.zig"),
+
                 .imports = &.{
                     .{ .name = "gl", .module = gl_mod },
                     .{ .name = "common", .module = common_mod },
@@ -169,7 +168,7 @@ fn prepareWidowModule(
     platform_mod.addOptions("build-options", opts);
 
     const widow = b.addModule("widow", .{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .imports = &.{
             .{ .name = "common", .module = common_mod },
             .{ .name = "platform", .module = platform_mod },
