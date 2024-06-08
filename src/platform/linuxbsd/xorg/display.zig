@@ -8,7 +8,7 @@ const X11Driver = @import("driver.zig").X11Driver;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const VideoMode = common.video_mode.VideoMode;
-const WindowImpl = @import("window_impl.zig").WindowImpl;
+const Window = @import("window.zig").Window;
 
 pub const MonitorError = error{
     ModeChangeFailed,
@@ -241,7 +241,7 @@ pub const MonitorImpl = struct {
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
     modes_ids: ArrayList(x11ext.RRMode),
     orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
-    window: ?*WindowImpl, // A pointer to the window occupying(fullscreen)
+    window: ?*Window, // A pointer to the window occupying(fullscreen)
     // the monitor.
 
     const Self = @This();
@@ -409,7 +409,7 @@ pub const MonitorImpl = struct {
     }
 
     /// Set the window Handle.
-    pub inline fn setWindow(self: *Self, window: ?*WindowImpl) void {
+    pub inline fn setWindow(self: *Self, window: ?*Window) void {
         self.window = window;
     }
 

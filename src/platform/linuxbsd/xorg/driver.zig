@@ -127,6 +127,7 @@ const X11EWMH = struct {
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
     //TODO: document.
+    // Custom
 };
 
 pub const X11Driver = struct {
@@ -138,6 +139,7 @@ pub const X11Driver = struct {
     g_screen_scale: f32,
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
+    pub var CUSTOM_CLIENT_ERR: libx11.Atom = 0;
     // var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;
 
     var globl_instance: X11Driver = X11Driver{
@@ -182,24 +184,21 @@ pub const X11Driver = struct {
         .pid = undefined,
         .g_dpi = 0.0,
         .g_screen_scale = 0.0,
-        .resource_name = "",
-        .resource_class = "",
+        // .resource_name = "",
+        // .resource_class = "",
     };
 
     const Self = @This();
 
-    pub fn initSingleton(
-        res_name: [*:0]const u8,
-        res_class: [*:0]const u8,
-    ) XConnectionError!void {
+    pub fn initSingleton() XConnectionError!void {
         @setCold(true);
 
         Self.driver_guard.lock();
         defer driver_guard.unlock();
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
-            g_instance.resource_name = res_name;
-            g_instance.resource_class = res_class;
+            // g_instance.resource_name = ""; // TODO:
+            // g_instance.resource_class = ""; // TODO:
             _ = libx11.XInitThreads();
             // Open a connection to the X server.
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
@@ -498,6 +497,12 @@ pub const X11Driver = struct {
                 @field(self.ewmh, std.mem.span(atom_name)),
             );
         }
+
+        Self.CUSTOM_CLIENT_ERR = libx11.XInternAtom(
+            self.handles.xdisplay,
+            "CUSTOM_CLIENT_ERR",
+            libx11.False,
+        );
     }
 
     fn checkWindowManagerEwmhSupport(self: *Self) void {

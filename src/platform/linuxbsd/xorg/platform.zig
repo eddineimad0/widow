@@ -1,13 +1,11 @@
 const std = @import("std");
-const internals = @import("internals.zig");
 const monitor_impl = @import("display.zig");
 const dyn_x11 = @import("x11/dynamic.zig");
 const unix = @import("common").unix;
 const X11Driver = @import("driver.zig").X11Driver;
 
-pub const Internals = internals.Internals;
-pub const MonitorStore = internals.MonitorStore;
-pub const window_impl = @import("window_impl.zig");
+pub const Window = @import("window.zig").Window;
+pub const WindowError = @import("window.zig").WindowError;
 
 pub fn initPlatform() !void {
     // const res_name = if (@hasField(@TypeOf(options), "xres_name"))

@@ -893,7 +893,7 @@ pub const Window = struct {
             if (self.data.max_size) |*max_size| {
                 // the min size shouldn't be superior to the max size.
                 if (max_size.width < size.width or max_size.height < size.height) {
-                    debug.print(
+                    std.log.err(
                         "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
                         .{ size.width, size.height, max_size.width, max_size.height },
                     );
@@ -952,7 +952,7 @@ pub const Window = struct {
             if (self.data.min_size) |*min_size| {
                 // the max size should be superior or equal to the min size.
                 if (size.width < min_size.width or size.height < min_size.height) {
-                    debug.print(
+                    std.log.err(
                         "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
                         .{ size.width, size.height, min_size.width, min_size.height },
                     );

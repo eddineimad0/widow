@@ -4,52 +4,42 @@ const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
 const event_handler = @import("event_handler.zig");
 const unix = common.unix;
-const Internals = @import("internals.zig").Internals;
 const WindowData = common.window_data.WindowData;
 const X11Driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 
 pub const WindowError = error{
-    WindowCreationFailure,
-    FailedToCopyTitle,
+    CreateFail,
+    BadTitle,
+    OutOfMemory,
 };
 
-/// Holds all the refrences we use to communitcate with the WidowContext.
-pub const WidowProps = struct {
-    events_queue: *common.event.EventQueue,
-    internals: *Internals,
-};
-
-pub const WindowImpl = struct {
+pub const Window = struct {
     data: WindowData,
-    widow: WidowProps,
     handle: libx11.Window,
+    ev_queue: ?*common.event.EventQueue,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = 0,
         .y = 0,
     };
     const Self = @This();
 
-    pub fn create(
+    pub fn init(
         allocator: Allocator,
         window_title: []const u8,
         data: *WindowData,
-        events_queue: *common.event.EventQueue,
-        internals: *Internals,
     ) (Allocator.Error || WindowError)!*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
-        self.widow = WidowProps{
-            .events_queue = events_queue,
-            .internals = internals,
-        };
-        self.data = data.*;
 
-        self.handle = try createPlatformWindow(data);
+        self.data = data.*;
+        self.ev_queue = null;
 
         const x11cntxt = X11Driver.singleton();
+        self.handle = try createPlatformWindow(data, x11cntxt);
+
         if (!x11cntxt.addToXContext(self.handle, @ptrCast(self))) {
-            return WindowError.WindowCreationFailure;
+            return WindowError.CreateFail;
         }
 
         try setInitialWindowPropeties(self.handle);
@@ -66,7 +56,7 @@ pub const WindowImpl = struct {
     }
 
     /// Destroy the window
-    pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
         const x11cntxt = X11Driver.singleton();
         _ = libx11.XUnmapWindow(x11cntxt.handles.xdisplay, self.handle);
@@ -76,21 +66,44 @@ pub const WindowImpl = struct {
         allocator.destroy(self);
     }
 
-    pub fn processEvents(self: *const Self) void {
+    pub fn setEventQueue(
+        self: *Self,
+        queue: ?*common.event.EventQueue,
+    ) ?*common.event.EventQueue {
+        const ret = self.ev_queue;
+        self.ev_queue = queue;
+        return ret;
+    }
+
+    pub fn getEventQueue(self: *const Self) ?*common.event.EventQueue {
+        return self.ev_queue;
+    }
+
+    pub fn processEvents(self: *const Self) WindowError!void {
+        _ = self;
         var e: libx11.XEvent = undefined;
         const x11cntxt = X11Driver.singleton();
         x11cntxt.flushXRequests();
         while (x11cntxt.nextXEvent(&e)) {
             const window = windowFromId(e.xany.window);
             if (window) |w| {
+                if (e.type == libx11.ClientMessage and
+                    e.xclient.message_type == X11Driver.CUSTOM_CLIENT_ERR)
+                {
+                    return @as(WindowError, @errorCast(@errorFromInt(@as(
+                        std.meta.Int(.unsigned, @bitSizeOf(anyerror)),
+                        @intCast(e.xclient.data.l[0]),
+                    ))));
+                }
                 event_handler.handleWindowEvent(&e, w);
             } else {
-                event_handler.handleHelperEvent(&e, self.widow.internals.helper_window);
+                // TODO: what about event not sent for our window
+                // event_handler.handleHelperEvent(&e, self.widow.internals.helper_window);
             }
         }
     }
 
-    pub fn waitEvent(self: *Self) void {
+    pub fn waitEvent(self: *Self) WindowError!void {
         // Indefinetly wait for event
         const x11cntxt = X11Driver.singleton();
         var ready: u32 = 0;
@@ -103,11 +116,11 @@ pub const WindowImpl = struct {
                 &ready,
             );
         }
-        self.processEvents();
+        try self.processEvents();
     }
 
     /// Waits for an event or the timeout interval elapses.
-    pub fn waitEventTimeout(self: *Self, timeout: u32) bool {
+    pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
         const timeout_ns = timeout * std.time.ns_per_ms;
         const x11cntxt = X11Driver.singleton();
         var ready: u32 = 0;
@@ -123,7 +136,7 @@ pub const WindowImpl = struct {
                 return false;
             }
         }
-        self.processEvents();
+        try self.processEvents();
         return true;
     }
 
@@ -144,8 +157,23 @@ pub const WindowImpl = struct {
     }
 
     /// Add an event to the events queue.
-    pub fn sendEvent(self: *Self, event: *const common.event.Event) void {
-        self.widow.events_queue.queueEvent(event);
+    pub fn sendEvent(
+        self: *Self,
+        event: *const common.event.Event,
+    ) void {
+        if (self.ev_queue) |q| {
+            q.queueEvent(event) catch |err| {
+                const x11cntxt = X11Driver.singleton();
+                var ev: libx11.XEvent = undefined;
+                ev.type = libx11.ClientMessage;
+                ev.xclient.window = self.handle;
+                ev.xclient.message_type = X11Driver.CUSTOM_CLIENT_ERR;
+                ev.xclient.format = 32;
+                ev.xclient.data.l[0] = @intFromError(err);
+                std.debug.assert(ev.xclient.message_type != 0);
+                x11cntxt.sendXEvent(&ev, self.handle);
+            };
+        }
     }
 
     /// Updates the size hints to match the the window current state.
@@ -167,7 +195,9 @@ pub const WindowImpl = struct {
                 hints,
                 &supplied,
             );
-            hints.flags &= ~(libx11.PMinSize | libx11.PMaxSize | libx11.PAspect);
+            hints.flags &= ~(libx11.PMinSize |
+                libx11.PMaxSize |
+                libx11.PAspect);
             if (self.data.flags.is_resizable) {
                 if (self.data.min_size) |size| {
                     hints.flags |= libx11.PMinSize;
@@ -193,7 +223,11 @@ pub const WindowImpl = struct {
                 hints.max_width = self.data.client_area.size.width;
                 hints.max_height = self.data.client_area.size.height;
             }
-            _ = libx11.XSetWMNormalHints(x11cntxt.handle.xdisplay, self.handle, hints);
+            _ = libx11.XSetWMNormalHints(
+                x11cntxt.handle.xdisplay,
+                self.handle,
+                hints,
+            );
             _ = libx11.XFree(hints);
         }
     }
@@ -207,9 +241,6 @@ pub const WindowImpl = struct {
         _ = x;
         _ = self;
     }
-
-    // pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
-    // }
 
     /// Notify and flash the taskbar.
     /// Requires window manager support.
@@ -263,7 +294,7 @@ pub const WindowImpl = struct {
 
     /// Returns the Physical size of the window's client area
     pub fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
-        return common.geometry.WidowSize{
+        return .{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
@@ -340,7 +371,12 @@ pub const WindowImpl = struct {
                 if (max_size.width < size.width or max_size.height < size.height) {
                     std.log.err(
                         "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
-                        .{ size.width, size.height, max_size.width, max_size.height },
+                        .{
+                            size.width,
+                            size.height,
+                            max_size.width,
+                            max_size.height,
+                        },
                     );
                     return;
                 }
@@ -372,10 +408,17 @@ pub const WindowImpl = struct {
             std.debug.assert(size.height > 0);
             if (self.data.min_size) |*min_size| {
                 // the max size should be superior or equal to the min size.
-                if (size.width < min_size.width or size.height < min_size.height) {
+                if (size.width < min_size.width or
+                    size.height < min_size.height)
+                {
                     std.log.err(
                         "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
-                        .{ size.width, size.height, min_size.width, min_size.height },
+                        .{
+                            size.width,
+                            size.height,
+                            min_size.width,
+                            min_size.height,
+                        },
                     );
                     return;
                 }
@@ -486,7 +529,7 @@ pub const WindowImpl = struct {
             x11cntxt.ewmh.UTF8_STRING,
             @ptrCast(&data),
         ) catch {
-            return WindowError.FailedToCopyTitle;
+            return WindowError.BadTitle;
         };
 
         defer _ = libx11.XFree(data);
@@ -548,6 +591,7 @@ pub const WindowImpl = struct {
         }
         return true;
     }
+
     // /// Returns the fullscreen mode of the window;
     // pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
     //
@@ -724,6 +768,7 @@ pub const WindowImpl = struct {
 
 fn createPlatformWindow(
     data: *const WindowData,
+    drvr: *const X11Driver,
 ) WindowError!libx11.Window {
     const EVENT_MASK = libx11.KeyReleaseMask |
         libx11.KeyPressMask |
@@ -738,23 +783,29 @@ fn createPlatformWindow(
         libx11.PropertyChangeMask |
         libx11.ExposureMask;
 
-    const x11cntxt = X11Driver.singleton();
+    const visual = libx11.DefaultVisual(
+        drvr.handles.xdisplay,
+        drvr.handles.default_screen,
+    );
+    const depth = libx11.DefaultDepth(
+        drvr.handles.xdisplay,
+        drvr.handles.default_screen,
+    );
 
-    const visual = libx11.DefaultVisual(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
-    const depth = libx11.DefaultDepth(x11cntxt.handles.xdisplay, x11cntxt.handles.default_screen);
-
-    var attribs: libx11.XSetWindowAttributes = std.mem.zeroes(libx11.XSetWindowAttributes);
+    var attribs: libx11.XSetWindowAttributes = std.mem.zeroes(
+        libx11.XSetWindowAttributes,
+    );
 
     attribs.event_mask = EVENT_MASK;
 
     var window_size = data.client_area.size;
     if (data.flags.is_dpi_aware) {
-        window_size.scaleBy(x11cntxt.g_screen_scale);
+        window_size.scaleBy(drvr.g_screen_scale);
     }
 
     const handle = libx11.XCreateWindow(
-        x11cntxt.handles.xdisplay,
-        x11cntxt.handles.root_window,
+        drvr.handles.xdisplay,
+        drvr.handles.root_window,
         data.client_area.top_left.x,
         data.client_area.top_left.y,
         @intCast(window_size.width),
@@ -768,7 +819,7 @@ fn createPlatformWindow(
     );
 
     if (handle == 0) {
-        return WindowError.WindowCreationFailure;
+        return WindowError.CreateFail;
     }
 
     return handle;
@@ -784,7 +835,12 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
         // this allows the window manager to check if a window is still alive and responding
         x11cntxt.ewmh._NET_WM_PING,
     };
-    _ = libx11.XSetWMProtocols(x11cntxt.handles.xdisplay, window, &protocols, protocols.len);
+    _ = libx11.XSetWMProtocols(
+        x11cntxt.handles.xdisplay,
+        window,
+        &protocols,
+        protocols.len,
+    );
 
     libx11.XChangeProperty(
         x11cntxt.handles.xdisplay,
@@ -797,7 +853,9 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
         1,
     );
 
-    if (x11cntxt.ewmh._NET_WM_WINDOW_TYPE != 0 and x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0) {
+    if (x11cntxt.ewmh._NET_WM_WINDOW_TYPE != 0 and
+        x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
+    {
         libx11.XChangeProperty(
             x11cntxt.handles.xdisplay,
             window,
@@ -812,29 +870,35 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
 
     // WMHints.
 
-    var hints = libx11.XAllocWMHints() orelse return WindowError.WindowCreationFailure;
+    var hints = libx11.XAllocWMHints() orelse return WindowError.CreateFail;
     defer _ = libx11.XFree(hints);
     hints.flags = libx11.StateHint;
     hints.initial_state = libx11.NormalState;
     _ = libx11.XSetWMHints(x11cntxt.handles.xdisplay, window, @ptrCast(hints));
 
     // resizablitity
-    // var size_hints = libx11.XAllocSizeHints() orelse return WindowError.WindowCreationFailure;
+    // var size_hints = libx11.XAllocSizeHints() orelse
+    // return WindowError.WindowCreationFailure;
 
     // WMClassHints ?
-    var class_hints = libx11.XAllocClassHint() orelse return WindowError.WindowCreationFailure;
-    defer _ = libx11.XFree(class_hints);
+    // var class_hints = libx11.XAllocClassHint() orelse
+    //     return WindowError.CreateFail;
+    // defer _ = libx11.XFree(class_hints);
 
-    if (utils.strZLen(x11cntxt.resource_name) != 0) {
-        class_hints.res_name = x11cntxt.resource_name;
-    }
+    // if (utils.strZLen(x11cntxt.resource_name) != 0) {
+    //     class_hints.res_name = x11cntxt.resource_name;
+    // }
 
-    class_hints.res_class = x11cntxt.resource_class;
+    // class_hints.res_class = x11cntxt.resource_class; // TODO: resource_class
 
-    _ = libx11.XSetClassHint(x11cntxt.handles.xdisplay, window, @ptrCast(class_hints));
+    // _ = libx11.XSetClassHint(
+    //     x11cntxt.handles.xdisplay,
+    //     window,
+    //     @ptrCast(class_hints),
+    // );
 }
 
-fn windowFromId(window_id: libx11.Window) ?*WindowImpl {
+fn windowFromId(window_id: libx11.Window) ?*Window {
     const x11cntxt = X11Driver.singleton();
     const window = x11cntxt.findInXContext(window_id);
     return @ptrCast(@alignCast(window));
