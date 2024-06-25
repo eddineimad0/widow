@@ -264,7 +264,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *WindowImpl) void {
                 std.log.info("window: #{} recieved LeaveNotify\n", .{window.data.id});
             }
             window.data.flags.cursor_in_client = false;
-            const event = common.event.createMouseLeftEvent(window.data.id);
+            const event = common.event.createMouseExitEvent(window.data.id);
             window.sendEvent(&event);
         },
         libx11.ClientMessage => handleClientMessage(&ev.xclient, window),

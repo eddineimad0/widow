@@ -622,8 +622,8 @@ pub const Window = struct {
     /// # Notes
     /// If you want to automatically be notified
     /// of cursor entering and exiting the window area.
-    /// you can track the `EventType.MouseEntered`
-    /// and `EventType.MouseLeft` events.
+    /// you can track the `EventType.MouseEnter`
+    /// and `EventType.MouseExit` events.
     pub inline fn isHovered(self: *const Self) bool {
         return self.impl.data.flags.cursor_in_client;
     }

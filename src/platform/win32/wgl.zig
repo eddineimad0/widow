@@ -162,7 +162,6 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void 
         pfd.dwFlags.DOUBLEBUFFER = 1;
     }
     pfd.iPixelType = opengl.PFD_TYPE_RGBA;
-    // TODO: the docs says this field is ignored remove and test.
     pfd.iLayerType = opengl.PFD_MAIN_PLANE;
     pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
         cfg.color.blue_bits;

@@ -16,7 +16,6 @@ pub const keyboard = struct {
 
 pub const mouse = struct {
     pub const MouseButton = common.keyboard_mouse.MouseButton;
-    pub const MouseWheel = common.keyboard_mouse.MouseWheel;
     pub const MouseButtonState = common.keyboard_mouse.MouseButtonState;
 };
 

@@ -56,7 +56,7 @@ pub fn main() !void {
                 // MouseScroll => One of the mouse wheels(vertical,horizontal) was scrolled.
                 // MouseMove => The mouse position (relative to the client area's top left corner) changed.
                 // MouseEnter => The mouse entered the client area of the window.
-                // MouseLeave => The mouse exited the client area of the window.
+                // MouseExit => The mouse exited the client area of the window.
                 // DPIChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
                 // RedrawRequest => Request from the system to redraw the window's client area.
@@ -155,16 +155,16 @@ pub fn main() !void {
                 },
                 EventType.MouseScroll => |*scroll| {
                     // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
-                    std.debug.print("Window #{}\nwheel:{} Scrolled by :{d}\n", .{
+                    std.debug.print("Window #{}\nvertical wheel:{d} horizontal wheel:{d}\n", .{
                         scroll.window_id,
-                        scroll.wheel,
-                        scroll.delta,
+                        scroll.x_offset,
+                        scroll.y_offset,
                     });
                 },
                 EventType.MouseEnter => |window_id| {
                     std.debug.print("Mouse Entered the client area of window #{}\n", .{window_id});
                 },
-                EventType.MouseLeave => |window_id| {
+                EventType.MouseExit => |window_id| {
                     std.debug.print("Mouse Left the client area window #{}\n", .{window_id});
                 },
                 EventType.MouseMove => |*motion| {

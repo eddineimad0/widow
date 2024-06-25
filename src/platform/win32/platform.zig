@@ -1,5 +1,6 @@
 const win32 = @import("win32_defs.zig");
 const display = @import("display.zig");
+const time = @import("time.zig");
 
 pub const Window = @import("window.zig").Window;
 pub const WindowError = @import("window.zig").WindowError;

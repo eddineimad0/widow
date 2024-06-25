@@ -263,19 +263,6 @@ pub const MouseButton = enum(u8) {
         @intFromEnum(MouseButton.Left);
 };
 
-pub const MouseWheel = enum(u8) {
-    VerticalWheel,
-    HorizontalWheel,
-    const Self = @This();
-    pub inline fn isVertical(self: *const Self) bool {
-        return self.* == .VerticalWheel;
-    }
-
-    pub inline fn isHorizontal(self: *const Self) bool {
-        return self.* == .HorizontalWheel;
-    }
-};
-
 /// Holds the keyboard and mouse input state for each window.
 /// # Win32
 /// on Windows keeping track of the keyboard state allow
@@ -309,8 +296,8 @@ pub const MouseButtonEvent = struct {
     mods: KeyModifiers,
 };
 
-pub const WheelEvent = struct {
+pub const ScrollEvent = struct {
     window_id: u32,
-    wheel: MouseWheel,
-    delta: f64,
+    x_offset: f64,
+    y_offset: f64,
 };
