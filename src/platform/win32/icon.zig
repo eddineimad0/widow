@@ -82,6 +82,9 @@ pub const CursorHints = struct {
     icon: ?window_msg.HCURSOR,
     sys_owned: bool, // As to avoid deleting system owned cursor images.
     mode: common.cursor.CursorMode,
+    // Track the cursor coordinates in respect to top left corner.
+    x: i32,
+    y: i32,
 };
 
 pub fn destroyCursorIcon(cursor: *CursorHints) void {
@@ -151,12 +154,16 @@ pub fn createCursor(
             .icon = handle,
             .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
+            .x = 0,
+            .y = 0,
         };
     } else {
         return CursorHints{
             .icon = null,
             .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
+            .x = 0,
+            .y = 0,
         };
     }
 }
@@ -198,5 +205,7 @@ pub fn createNativeCursor(
         .icon = @ptrCast(handle),
         .sys_owned = true,
         .mode = common.cursor.CursorMode.Normal,
+        .x = 0,
+        .y = 0,
     };
 }

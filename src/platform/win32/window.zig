@@ -68,29 +68,6 @@ const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
     .CLIPCHILDREN = 1,
 });
 
-// pub fn createHiddenWindow(title: [:0]const u16) WindowError!win32.HWND {
-//     const drvr = Win32Driver.singleton();
-//     const helper_window = win32.CreateWindowExW(
-//         0,
-//         utils.MAKEINTATOM(drvr.handles.helper_class),
-//         title,
-//         0,
-//         win32.CW_USEDEFAULT,
-//         win32.CW_USEDEFAULT,
-//         win32.CW_USEDEFAULT,
-//         win32.CW_USEDEFAULT,
-//         null,
-//         null,
-//         drvr.handles.hinstance,
-//         null,
-//     ) orelse {
-//         return WindowError.CreateFailed;
-//     };
-//
-//     _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
-//     return helper_window;
-// }
-
 // Define our own message to report Window Procedure errors back
 pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 
@@ -384,6 +361,8 @@ pub const Window = struct {
                 .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
                 .sys_owned = false,
+                .x = 0,
+                .y = 0,
             },
             .icon = Icon{
                 .sm_handle = null,
@@ -580,6 +559,16 @@ pub const Window = struct {
         }
         // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
+        // Recenter hidden cursor.
+        // if (self.win32.cursor.mode == .Hidden) {
+        //     const half_w = @divExact(self.data.client_area.size.width, 2);
+        //     const half_y = @divExact(self.data.client_area.size.height, 2);
+        //     if (self.win32.cursor.x != half_w and
+        //         self.win32.cursor.y != half_y)
+        //     {
+        //         self.setCursorPosition(half_w, half_y);
+        //     }
+        // }
     }
 
     pub inline fn getEventQueue(self: *Self) ?*common.event.EventQueue {
@@ -631,7 +620,7 @@ pub const Window = struct {
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(
         self: *Self,
-        update_area: *const common.geometry.WidowArea,
+        new_area: *const common.geometry.WidowArea,
     ) void {
         const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
@@ -666,26 +655,11 @@ pub const Window = struct {
         );
 
         var rect: win32.RECT = undefined;
-        rect.left = update_area.top_left.x;
-        rect.top = update_area.top_left.y;
-        rect.right = update_area.size.width + rect.left;
-        rect.bottom = update_area.size.height + rect.top;
+        rect.left = new_area.top_left.x;
+        rect.top = new_area.top_left.y;
+        rect.right = new_area.size.width + rect.left;
+        rect.bottom = new_area.size.height + rect.top;
 
-        // TODO: this side effect should be removed.
-        // if (self.win32.prev_frame) |*frame| {
-        //     // we're exiting fullscreen mode use the saved size.
-        //     rect.left = frame.top_left.x;
-        //     rect.top = frame.top_left.y;
-        //     rect.right = frame.size.width + frame.top_left.x;
-        //     rect.bottom = frame.size.height + frame.top_left.y;
-        // } else {
-        //     // we're simply changing some styles.
-        //     rect.left = self.data.client_area.top_left.x;
-        //     rect.top = self.data.client_area.top_left.y;
-        //     rect.right = self.data.client_area.size.width + rect.left;
-        //     rect.bottom = self.data.client_area.size.height + rect.top;
-        // }
-        //
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
             self.scalingDPI(null)
         else
@@ -714,19 +688,25 @@ pub const Window = struct {
         );
     }
 
-    pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         var cursor_pos: foundation.POINT = undefined;
         _ = window_msg.GetCursorPos(&cursor_pos);
         _ = gdi.ScreenToClient(self.handle, &cursor_pos);
-        // the cursor_pos is relative to the upper left corner of the window.
+        // the cursor pos is relative to the upper left corner of the window.
         return common.geometry.WidowPoint2D{ .x = cursor_pos.x, .y = cursor_pos.y };
     }
 
-    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
+    pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
         var point = foundation.POINT{
             .x = x,
             .y = y,
         };
+        // no event will be reported.
+        self.win32.cursor.x = point.x;
+        self.win32.cursor.y = point.y;
+        if (self.win32.cursor.mode == .Hidden) {
+            return;
+        }
         _ = gdi.ClientToScreen(self.handle, &point);
         _ = window_msg.SetCursorPos(point.x, point.y);
     }
@@ -1159,7 +1139,6 @@ pub const Window = struct {
             .bottom = 0,
         };
 
-        // TODO: dpi ?
         adjustWindowRect(
             &rect,
             windowStyles(&self.data.flags),
@@ -1207,6 +1186,8 @@ pub const Window = struct {
                 // save for when we exit the fullscreen mode
                 self.win32.prev_frame = self.data.client_area;
                 self.updateStyles(&self.data.client_area);
+                // TODO: for non resizalble window we should change
+                // monitor resoultion
                 self.acquireDisplay(o_display);
             } else {
                 self.updateStyles(&self.win32.prev_frame);

@@ -125,12 +125,15 @@ const wgl_proc = struct {
 };
 
 const wgl_ext = packed struct {
-    // TODO: get hardware string.
     var supported_extensions: ?[:0]const u8 = null;
     var ARB_pixel_format: bool = false;
     var ARB_create_context: bool = false;
     var EXT_swap_control: bool = false;
 };
+
+pub extern "opengl32" fn glGetString(
+    name: u32,
+) callconv(@import("std").os.windows.WINAPI) ?[*:0]const u8;
 
 fn hasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
     var haystack = ext_list;
@@ -162,7 +165,6 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void 
         pfd.dwFlags.DOUBLEBUFFER = 1;
     }
     pfd.iPixelType = opengl.PFD_TYPE_RGBA;
-    // TODO: the docs says this field is ignored remove and test.
     pfd.iLayerType = opengl.PFD_MAIN_PLANE;
     pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
         cfg.color.blue_bits;
@@ -255,17 +257,12 @@ fn loadGLExtensions() bool {
 
     defer _ = opengl.wglDeleteContext(tmp_glc);
 
-    const prev_dc = opengl.wglGetCurrentDC();
-    const prev_glc = opengl.wglGetCurrentContext();
-
     const wdc = gdi.GetDC(tmp_wndw);
     defer _ = gdi.ReleaseDC(tmp_wndw, wdc);
 
     if (opengl.wglMakeCurrent(wdc, tmp_glc) != win32.TRUE) {
         return false;
     }
-
-    defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
 
     wgl_proc.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
         "wglGetExtensionsStringARB",
@@ -514,13 +511,23 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
 }
 
 pub const GLContext = struct {
+    const GL_UNKOWN_VENDOR = "Vendor_Unknown";
+    const GL_UNKOWN_RENDER = "Renderer_Unknown";
     cfg: GLConfig,
     glrc: opengl.HGLRC,
     owner: win32.HWND,
-
+    driver: struct {
+        name: [*:0]const u8,
+        vendor: [*:0]const u8,
+        version: [*:0]const u8,
+    },
     const Self = @This();
 
     pub fn init(window: win32.HWND, cfg: *const GLConfig) WGLError!Self {
+        const prev_dc = opengl.wglGetCurrentDC();
+        const prev_glc = opengl.wglGetCurrentContext();
+        defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
+
         if (!wgl_proc.loaded) {
             wgl_proc.loaded = loadGLExtensions();
         }
@@ -530,10 +537,24 @@ pub const GLContext = struct {
             return WGLError.NoRC;
         }
 
+        const wdc = gdi.GetDC(window);
+        _ = opengl.wglMakeCurrent(wdc, rc) == win32.TRUE;
+
+        const vend = glGetString(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
+        const rend = glGetString(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
+        const ver = glGetString(opengl.GL_VERSION) orelse GL_UNKOWN_RENDER;
+
+        _ = gdi.ReleaseDC(window, wdc);
+
         return .{
             .cfg = cfg.*,
             .glrc = rc.?,
             .owner = window,
+            .driver = .{
+                .name = rend,
+                .vendor = vend,
+                .version = ver,
+            },
         };
     }
 

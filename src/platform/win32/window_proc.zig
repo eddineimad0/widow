@@ -91,14 +91,6 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a PAINT event\n", .{window.data.id});
             }
-            // var paint: zigwin32.graphics.gdi.PAINTSTRUCT = undefined;
-            // const dc = zigwin32.graphics.gdi.BeginPaint(hwnd, &paint);
-            // const x = paint.rcPaint.left;
-            // const y = paint.rcPaint.top;
-            // const w = paint.rcPaint.right - x;
-            // const h = paint.rcPaint.bottom - y;
-            // _ = zigwin32.graphics.gdi.PatBlt(dc, x, y, w, h, zigwin32.graphics.gdi.BLACKNESS);
-            // _ = zigwin32.graphics.gdi.EndPaint(hwnd, &paint);
             const event = common.event.createRedrawEvent(window.data.id);
             window.sendEvent(&event);
         },
@@ -122,11 +114,11 @@ pub fn mainWindowProc(
             // it to the DefWindowProc function.
         },
 
-        window_msg.WM_NCPAINT => {
+        window_msg.WM_NCPAINT, window_msg.WM_NCACTIVATE => {
             // An application can intercept the window_msg.WM_NCPAINT message
             // and paint its own custom window frame
             if (opt.LOG_PLATFORM_EVENTS) {
-                std.log.info("window: {} recieved a NCPAINT event\n", .{window.data.id});
+                std.log.info("window: {} recieved a NCPAINT or NCACTIVATE event\n", .{window.data.id});
             }
             if (!window.data.flags.is_decorated or window.data.flags.is_fullscreen) {
                 // no need to paint the frame for non decorated(Borderless)
@@ -142,7 +134,7 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a MOUSELEAVE event\n", .{window.data.id});
             }
             window.data.flags.cursor_in_client = false;
-            const event = common.event.createMouseLeftEvent(window.data.id);
+            const event = common.event.createMouseExitEvent(window.data.id);
             window.sendEvent(&event);
             // All tracking requested by TrackMouseEvent is canceled
             // when this message is generated.
@@ -205,6 +197,13 @@ pub fn mainWindowProc(
                 window.data.flags.cursor_in_client = true;
             }
             const new_pos = utils.getMousePosition(lparam);
+
+            const dx = new_pos.x - window.win32.cursor.x;
+            const dy = new_pos.y - window.win32.cursor.y;
+            if (dx == 0 and dy == 0) {
+                return 0;
+            }
+
             const event = common.event.createMoveEvent(
                 window.data.id,
                 new_pos.x,
@@ -212,6 +211,9 @@ pub fn mainWindowProc(
                 true,
             );
             window.sendEvent(&event);
+            window.win32.cursor.x = new_pos.x;
+            window.win32.cursor.y = new_pos.y;
+
             return 0;
         },
 
@@ -224,12 +226,12 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEWHEEL event\n", .{window.data.id});
             }
-            const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
-            const wheel_delta = scroll / win32.FWHEEL_DELTA;
+            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const wheel_delta = scroll / @as(f64, win32.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
-                common.keyboard_mouse.MouseWheel.VerticalWheel,
                 wheel_delta,
+                0.0,
             );
             return 0;
         },
@@ -242,11 +244,11 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEHWHEEL event\n", .{window.data.id});
             }
-            const scroll: f32 = @floatFromInt(utils.getYLparam(wparam));
-            const wheel_delta = -(scroll) / win32.FWHEEL_DELTA;
+            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
+            const wheel_delta = -(scroll) / @as(f64, win32.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
-                common.keyboard_mouse.MouseWheel.HorizontalWheel,
+                0.0,
                 wheel_delta,
             );
             return 0;

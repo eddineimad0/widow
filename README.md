@@ -87,7 +87,7 @@ pub fn main() void {
 
 ## Minimum Zig Version
 
-0.13.0
+✅ [0.13.0](https://ziglang.org/documentation/0.13.0/)   
 The main branch will stick to stable zig releases.
 
 ## Dependecies

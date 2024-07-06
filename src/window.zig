@@ -48,7 +48,6 @@ pub const WindowBuilder = struct {
                     .cursor_in_client = false,
                     .is_dpi_aware = false,
                 },
-                // TODO: review use case
                 .input = common.keyboard_mouse.InputState.init(),
             },
         };
@@ -576,8 +575,6 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
-        // TODO: make fullscreen behaviour depends
-        // on window resizable flag.
         return self.impl.setFullscreen(value);
     }
 
@@ -614,7 +611,7 @@ pub const Window = struct {
     /// the origin point(0,0), with y axis pointing to the bottom,
     /// and the x axis pointing to the right
     pub inline fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
-        return self.impl.cursorPositon();
+        return self.impl.cursorPosition();
     }
 
     /// Returns true if the cursor is hovering on the window,
@@ -622,8 +619,8 @@ pub const Window = struct {
     /// # Notes
     /// If you want to automatically be notified
     /// of cursor entering and exiting the window area.
-    /// you can track the `EventType.MouseEntered`
-    /// and `EventType.MouseLeft` events.
+    /// you can track the `EventType.MouseEnter`
+    /// and `EventType.MouseExit` events.
     pub inline fn isHovered(self: *const Self) bool {
         return self.impl.data.flags.cursor_in_client;
     }
@@ -788,6 +785,25 @@ pub const Window = struct {
         cfg: *const gl.GLConfig,
     ) !platform.GLContext {
         return self.impl.initGL(cfg);
+    }
+
+    /// Returns the state of the `key` for the current window.
+    /// the possible state values are *.Pressed* or *.Released* .
+    pub inline fn getKeyState(
+        self: *const Self,
+        key: common.keyboard_mouse.ScanCode,
+    ) common.keyboard_mouse.KeyState {
+        std.debug.assert(key != .Unknown);
+        return self.impl.data.input.keys[@intCast(@intFromEnum(key))];
+    }
+
+    /// Returns the state of the button `btn` for the current window.
+    /// the possible state values are *.Pressed* or *.Released* .
+    pub inline fn getMouseBtnState(
+        self: *const Self,
+        btn: common.keyboard_mouse.MouseButton,
+    ) common.keyboard_mouse.MouseButtonState {
+        return self.impl.data.input.mouse_buttons[@intFromEnum(btn)];
     }
 
     // Prints some debug information to stdout.
