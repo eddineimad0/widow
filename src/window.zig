@@ -575,8 +575,6 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
-        // TODO: make fullscreen behaviour depends
-        // on window resizable flag.
         return self.impl.setFullscreen(value);
     }
 
