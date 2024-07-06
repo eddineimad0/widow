@@ -17,7 +17,7 @@ pub fn main() !void {
     var builder = widow.WindowBuilder.init();
 
     var mywindow = builder.withTitle("Cursor & icon")
-        .withSize(1024, 800)
+        .withSize(800, 600)
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
@@ -47,6 +47,9 @@ pub fn main() !void {
             switch (event) {
                 EventType.WindowClose => {
                     break :event_loop;
+                },
+                EventType.MouseMove => |*pos| {
+                    std.debug.print("Mouse=({},{})\n", .{ pos.x, pos.y });
                 },
                 EventType.KeyBoard => |*key| {
                     if (key.state.isPressed()) {
