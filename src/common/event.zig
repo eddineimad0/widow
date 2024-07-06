@@ -22,7 +22,6 @@ pub const EventType = enum(u8) {
     RedrawRequest, // Request from the system to redraw the window's client area.
     WindowFocus, // True/False if the window got keyboard focus.
     WindowResize, // The window client area size was changed.
-    //BUG: Hidden Mouse continously send this message.
     WindowMove, // The window has been moved, the Point2D struct specify the
     // new coordinates for the top left corner of the window.
     MouseMove, // The mouse position (relative to the client area's top left corner) changed.

@@ -322,7 +322,6 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
 }
 
 pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
-    // TODO: fix event handler.
     const allocator = window.win32.dropped_files.allocator;
     for (window.win32.dropped_files.items) |file| {
         allocator.free(file);
