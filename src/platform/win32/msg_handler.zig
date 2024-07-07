@@ -16,8 +16,6 @@ pub inline fn keyMSGHandler(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) void {
-    // TODO: test more keyboards.
-
     // The right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
