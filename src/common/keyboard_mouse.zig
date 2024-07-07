@@ -282,22 +282,22 @@ pub const InputState = struct {
 
 // Events.
 pub const KeyEvent = struct {
-    window_id: u32, // the window with keyboard focus.
-    keycode: KeyCode,
-    scancode: ScanCode,
-    state: KeyState,
-    mods: KeyModifiers,
+    window_id: u32, // the window with keyboard focus
+    keycode: KeyCode, // current layout symbol
+    scancode: ScanCode, // hardware key symbol
+    state: KeyState, // Pressed or Released
+    mods: KeyModifiers, // state of mod keys (shift,ctrl,capslock...)
 };
 
 pub const MouseButtonEvent = struct {
     window_id: u32,
     button: MouseButton,
-    state: MouseButtonState,
-    mods: KeyModifiers,
+    state: MouseButtonState, // Pressed or Released
+    mods: KeyModifiers, // state of mod keys (shift,ctrl,capslock...)
 };
 
 pub const ScrollEvent = struct {
     window_id: u32,
-    x_offset: f64,
-    y_offset: f64,
+    x_offset: f64, // mouse horizontal scroll offset
+    y_offset: f64, // mouse vertical scroll offset
 };
