@@ -193,6 +193,11 @@ const XAllocSizeHintsProc = *const fn () callconv(.C) ?*types.XSizeHints;
 const XSetWMHintsProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
+    hints: ?[*]types.XSizeHints,
+) callconv(.C) void;
+const XSetWMNormalHintsProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
     hints: ?[*]types.XWMHints,
 ) callconv(.C) void;
 const XSetClassHintProc = *const fn (
@@ -275,6 +280,7 @@ pub const dyn_api = struct {
     pub var XAllocSizeHints: XAllocSizeHintsProc = undefined;
     pub var XAllocClassHint: XAllocClassHintProc = undefined;
     pub var XSetWMHints: XSetWMHintsProc = undefined;
+    pub var XSetWMNormalHints: XSetWMNormalHintsProc = undefined;
     pub var XSetClassHint: XSetClassHintProc = undefined;
     // xkb
     pub var XkbLibraryVersion: xkb.XkbLibraryVersionProc = undefined;

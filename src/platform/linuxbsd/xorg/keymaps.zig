@@ -4,7 +4,7 @@ const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
-const HashMapU32 = std.AutoArrayHashMap(u32, u32);
+pub const SymHashMap = std.AutoArrayHashMap(u32, u32);
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 
@@ -535,7 +535,7 @@ fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     return KeyCode.Unknown;
 }
 
-pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Allocator.Error!void {
+pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *SymHashMap) std.mem.Allocator.Error!void {
     const UNICODE_MAP_SIZE = 0x400;
     try xkeysym_unicode_mapping.ensureTotalCapacity(UNICODE_MAP_SIZE);
     // "Taken from godot game enginge, thanks."

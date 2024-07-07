@@ -8,16 +8,6 @@ pub const Window = @import("window.zig").Window;
 pub const WindowError = @import("window.zig").WindowError;
 
 pub fn initPlatform() !void {
-    // const res_name = if (@hasField(@TypeOf(options), "xres_name"))
-    //     @field(options, "xres_name")
-    // else
-    //     std.c.getenv("RESOURCE_NAME") orelse "";
-    //
-    // const res_class = if (@hasField(@TypeOf(options), "xres_class"))
-    //     @field(options, "xres_class")
-    // else
-    //     "WIDOW_CLASS";
-
     dyn_x11.initDynamicApi() catch |e| {
         std.log.err("[X11] {s}\n", .{unix.moduleErrorMsg()});
         return e;

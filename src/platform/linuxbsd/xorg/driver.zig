@@ -22,7 +22,6 @@ const X11Handles = struct {
 
 const XRRInterface = struct {
     is_v1point3: bool,
-    // TODO: should the functions pointers be optional ?
     XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
     XRRGetScreenResources: x11ext.XRRGetScreenResourcesProc,
     XRRFreeScreenResources: x11ext.XRRFreeScreenResourcesProc,
@@ -62,22 +61,6 @@ const X11Extensions = struct {
 const X11EWMH = struct {
     // true if the window manager is ewmh compliant.
     is_wm_emwh: bool,
-    // _NET_NUMBER_OF_DESKTOPS: libx11.Atom,
-    // indicates the number of virtual desktops.
-    // _NET_VIRTUAL_ROOTS: libx11.Atom,
-    // if the WM supports virtual root windows.
-    // _NET_DESKTOP_VIEWPORT: libx11.Atom,
-    // defines the top left corner of each desktop.
-    // _NET_CLIENT_LIST
-    // lists all application windows managed by this WM.
-    // _NET_DESKTOP_GEOMETRY
-    //     defines the common size of all desktops.
-    // _NET_DESKTOP_NAMES
-    //     lists the names of all virtual desktops.
-    // _NET_DESKTOP_LAYOUT
-    //     shows the layout of the active pager.
-    // _NET_SHOWING_DESKTOP
-    //     is 1 for "showing the desktop" mode.
 
     //############ Client messages ###############
     _NET_WM_STATE: libx11.Atom,
@@ -120,14 +103,12 @@ const X11EWMH = struct {
     _NET_WM_WINDOW_TYPE_NORMAL: libx11.Atom,
     // contains a geometry for each desktop.
     _NET_WORKAREA: libx11.Atom,
-    // gives the index of the current desktop.
+    // the index of the current desktop.
     _NET_CURRENT_DESKTOP: libx11.Atom,
     // gives the currently active window.
     _NET_ACTIVE_WINDOW: libx11.Atom,
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
-    //TODO: document.
-    // Custom
 };
 
 pub const X11Driver = struct {
@@ -137,6 +118,7 @@ pub const X11Driver = struct {
     pid: i32,
     g_dpi: f32,
     g_screen_scale: f32,
+
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
     pub var CUSTOM_CLIENT_ERR: libx11.Atom = 0;
@@ -184,8 +166,6 @@ pub const X11Driver = struct {
         .pid = undefined,
         .g_dpi = 0.0,
         .g_screen_scale = 0.0,
-        // .resource_name = "",
-        // .resource_class = "",
     };
 
     const Self = @This();
@@ -197,8 +177,6 @@ pub const X11Driver = struct {
         defer driver_guard.unlock();
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
-            // g_instance.resource_name = ""; // TODO:
-            // g_instance.resource_class = ""; // TODO:
             _ = libx11.XInitThreads();
             // Open a connection to the X server.
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
@@ -214,7 +192,6 @@ pub const X11Driver = struct {
             );
 
             try g_instance.loadXExtensions();
-            g_instance.readSystemGlobalDPI();
 
             g_instance.ewmh = std.mem.zeroes(@TypeOf(g_instance.ewmh));
             g_instance.initEWMH();
@@ -224,6 +201,7 @@ pub const X11Driver = struct {
                 return XConnectionError.XContextNoMem;
             }
 
+            g_instance.readSystemGlobalDPI();
             g_instance.pid = unix.getpid();
             Self.g_init = true;
         }
@@ -412,8 +390,6 @@ pub const X11Driver = struct {
     }
 
     /// Changes the x server protocol error handler
-    // /// if the handler parameter is null the function use the last_error_handler
-    // /// inner variable.
     /// # Notes:
     /// The default x11 error handler quits the process upon receiving any error,
     /// it's beneficial to change it when we anticipate errors that we
@@ -424,11 +400,6 @@ pub const X11Driver = struct {
     ) ?*const libx11.XErrorHandlerFunc {
         libx11.XSync(self.handles.xdisplay, libx11.False);
         return libx11.XSetErrorHandler(handler);
-        // if (handler) |h| {
-        //     Self.last_error_handler = libx11.XSetErrorHandler(h);
-        // } else {
-        //     _ = libx11.XSetErrorHandler(Self.last_error_handler);
-        // }
     }
 
     fn initEWMH(self: *Self) void {
@@ -441,7 +412,7 @@ pub const X11Driver = struct {
                 continue;
             }
             if (f.name.len > NAME_BUFFER_SIZE - 1) {
-                @compileError("field name size is bigger than NAME_BUFFER_SIZE\n");
+                @compileError("field name '" ++ f.name ++ "' size is bigger than NAME_BUFFER_SIZE\n");
             }
             std.mem.copyForwards(u8, &name_buffer, f.name);
             // since we are using c functions the strings are expected to
@@ -508,7 +479,7 @@ pub const X11Driver = struct {
     fn checkWindowManagerEwmhSupport(self: *Self) void {
 
         // if the _NET_WM_SUPPORTING_WM_CHECK is missing client should
-        // assume a non conforming window manager is present
+        // assume a non ewmh-conforming window manager is present
         var window_ptr: ?*libx11.Window = null;
         _ = utils.x11WindowProperty(
             self.handles.xdisplay,
@@ -524,8 +495,8 @@ pub const X11Driver = struct {
         std.debug.assert(window_ptr != null);
         defer _ = libx11.XFree(window_ptr.?);
 
-        // on success the window_ptr points to the id of the child window created by
-        // the window manager.
+        // on success the window_ptr points to the id of the
+        // child window created by the window manager.
         // this window must also have _NET_WM_SUPPORTING_WM_CHECK property
         // set to the same id(the id of the child window).
 
@@ -638,7 +609,6 @@ pub const X11Driver = struct {
     }
 
     // Enfoce readonly.
-    // TODO: might require refrence counting.
     pub fn singleton() *const Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
@@ -673,7 +643,6 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
             {
                 return 0;
             } else {
-                // TODO: what to do here.
                 return -1;
                 // return X11Driver.last_error_handler.?(display, err);
             }

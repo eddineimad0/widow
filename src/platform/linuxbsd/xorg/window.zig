@@ -3,6 +3,8 @@ const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
 const event_handler = @import("event_handler.zig");
+const bopts = @import("build-options");
+
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
 const X11Driver = @import("driver.zig").X11Driver;
@@ -42,13 +44,13 @@ pub const Window = struct {
             return WindowError.CreateFail;
         }
 
-        try setInitialWindowPropeties(self.handle);
+        try setInitialWindowPropeties(self.handle, data);
 
         self.setTitle(window_title);
         if (self.data.flags.is_visible) {
             self.show();
             if (self.data.flags.is_focused) {
-                // instance.focus();
+                // self.focus();
             }
         }
 
@@ -822,48 +824,55 @@ fn createPlatformWindow(
         return WindowError.CreateFail;
     }
 
+    // TODO: handle non is_decorated = false,
+    // TODO: handle non is_fullscreen = true,
+
     return handle;
 }
 
-fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
+fn setInitialWindowPropeties(
+    window: libx11.Window,
+    data: *const WindowData,
+) WindowError!void {
     // communication protocols
-    const x11cntxt = X11Driver.singleton();
+    const drvr = X11Driver.singleton();
     var protocols = [2]libx11.Atom{
         // this allows us to recieve close request from the window manager.
         // instead of it closing the socket and crashing our app
-        x11cntxt.ewmh.WM_DELETE_WINDOW,
+        drvr.ewmh.WM_DELETE_WINDOW,
         // this allows the window manager to check if a window is still alive and responding
-        x11cntxt.ewmh._NET_WM_PING,
+        drvr.ewmh._NET_WM_PING,
     };
     _ = libx11.XSetWMProtocols(
-        x11cntxt.handles.xdisplay,
+        drvr.handles.xdisplay,
         window,
         &protocols,
         protocols.len,
     );
 
     libx11.XChangeProperty(
-        x11cntxt.handles.xdisplay,
+        drvr.handles.xdisplay,
         window,
-        x11cntxt.ewmh._NET_WM_PID,
+        drvr.ewmh._NET_WM_PID,
         libx11.XA_CARDINAL,
         32,
         libx11.PropModeReplace,
-        @ptrCast(&x11cntxt.pid),
+        @ptrCast(&drvr.pid),
         1,
     );
 
-    if (x11cntxt.ewmh._NET_WM_WINDOW_TYPE != 0 and
-        x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
+    // if supported declare window type.
+    if (drvr.ewmh._NET_WM_WINDOW_TYPE != 0 and
+        drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
     {
         libx11.XChangeProperty(
-            x11cntxt.handles.xdisplay,
+            drvr.handles.xdisplay,
             window,
-            x11cntxt.ewmh._NET_WM_WINDOW_TYPE,
+            drvr.ewmh._NET_WM_WINDOW_TYPE,
             libx11.XA_ATOM,
             32,
             libx11.PropModeReplace,
-            @ptrCast(&x11cntxt.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
+            @ptrCast(&drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
             1,
         );
     }
@@ -874,28 +883,47 @@ fn setInitialWindowPropeties(window: libx11.Window) WindowError!void {
     defer _ = libx11.XFree(hints);
     hints.flags = libx11.StateHint;
     hints.initial_state = libx11.NormalState;
-    _ = libx11.XSetWMHints(x11cntxt.handles.xdisplay, window, @ptrCast(hints));
+    _ = libx11.XSetWMHints(drvr.handles.xdisplay, window, @ptrCast(hints));
 
     // resizablitity
-    // var size_hints = libx11.XAllocSizeHints() orelse
-    // return WindowError.WindowCreationFailure;
+    var size_hints = libx11.XAllocSizeHints() orelse
+        return WindowError.CreateFail;
 
-    // WMClassHints ?
-    // var class_hints = libx11.XAllocClassHint() orelse
-    //     return WindowError.CreateFail;
-    // defer _ = libx11.XFree(class_hints);
+    defer _ = libx11.XFree(size_hints);
+    size_hints.flags |= libx11.PWinGravity;
+    size_hints.win_gravity = libx11.StaticGravity;
 
-    // if (utils.strZLen(x11cntxt.resource_name) != 0) {
-    //     class_hints.res_name = x11cntxt.resource_name;
-    // }
+    var window_size = data.client_area.size;
+    if (data.flags.is_dpi_aware) {
+        window_size.scaleBy(drvr.g_screen_scale);
+    }
 
-    // class_hints.res_class = x11cntxt.resource_class; // TODO: resource_class
+    if (!data.flags.is_resizable) {
+        size_hints.flags |= (libx11.PMinSize | libx11.PMaxSize);
+        size_hints.max_width = window_size.width;
+        size_hints.min_width = window_size.width;
+        size_hints.max_height = window_size.height;
+        size_hints.min_height = window_size.height;
+    }
 
-    // _ = libx11.XSetClassHint(
-    //     x11cntxt.handles.xdisplay,
-    //     window,
-    //     @ptrCast(class_hints),
-    // );
+    _ = libx11.XSetWMNormalHints(
+        drvr.handles.xdisplay,
+        window,
+        @ptrCast(size_hints),
+    );
+
+    // WMClassHints
+    var class_hints = libx11.XAllocClassHint() orelse
+        return WindowError.CreateFail;
+    defer _ = libx11.XFree(class_hints);
+    class_hints.res_name = bopts.X11_RES_NAME.ptr;
+    class_hints.res_class = bopts.X11_CLASS_NAME.ptr;
+
+    _ = libx11.XSetClassHint(
+        drvr.handles.xdisplay,
+        window,
+        @ptrCast(class_hints),
+    );
 }
 
 fn windowFromId(window_id: libx11.Window) ?*Window {
