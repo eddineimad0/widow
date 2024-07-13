@@ -48,7 +48,7 @@ pub fn main() !void {
                 // WindowMaximize => The window was minimized.
                 // WindowMinimize => The window was maximized.
                 // WindowMove => The window has been moved, the Point2D struct specify the
-                // // new coordinates for the top left corner of the window.
+                // new coordinates for the top left corner of the window.
                 // FileDrop => Some file was released in the window area.
                 // KeyBoard => A certain Keyboard key action(press or release) was performed.
                 // MouseButton, => A certain Mouse button action(press or release) was performed while
@@ -71,10 +71,10 @@ pub fn main() !void {
                 },
                 EventType.KeyBoard => |*key| {
                     // This event holds the keyboard key keycode (symbolic representation that
-                    // depends on the language settigns)
-                    // and scancode (Hardware representation of the key, i.e the symbol of the key on the keyboard. ),
-                    // in short scancode is the symbol of the key on the keyboard,the virtual key is the
-                    // symbol the key represents with the current input language settings.
+                    // depends on the layout active on the os)
+                    // and scancode (Hardware representation of the key).
+                    // in short scancode is the symbol of the key on the US keyboard,the virtual key is the
+                    // symbol the key represents with the current input layout settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
                     std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{

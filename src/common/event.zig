@@ -34,31 +34,31 @@ pub const EventType = enum(u8) {
 
 pub const ResizeEvent = struct {
     window_id: u32,
-    width: i32,
-    height: i32,
+    width: i32, // new client width,
+    height: i32, // new client height,
 };
 
 pub const MoveEvent = struct {
     window_id: u32,
-    x: i32,
-    y: i32,
+    x: i32, // new x coordinat of the top left corner
+    y: i32, // new y coordinate of the top left corner
 };
 
 pub const DPIChangeEvent = struct {
     window_id: u32,
-    dpi: u32,
+    dpi: u32, // new display dpi
     scaler: f64,
 };
 
 pub const CharacterEvent = struct {
     window_id: u32,
-    codepoint: u21,
-    mods: KeyModifiers,
+    codepoint: u21, // utf8 character codepoint
+    mods: KeyModifiers, // state of mod keys (shift,ctrl,caps-lock...)
 };
 
 pub const FocusEvent = struct {
     window_id: u32,
-    has_focus: bool,
+    has_focus: bool, // true gained focus else lost focus.
 };
 
 pub const Event = union(EventType) {
