@@ -59,6 +59,22 @@ pub fn main() !void {
                             mywindow.queueCloseEvent();
                         }
                     }
+                    std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                        key.window_id,
+                        key.keycode,
+                        key.scancode,
+                        key.state,
+                        key.mods,
+                    });
+                },
+                EventType.Character => |*char| {
+                    // This event holds a unicode character codepoint and keymodifers that were pressed
+                    // during the event.
+                    std.debug.print("target window #{},character:'{u}'\nmods:{}\n", .{
+                        char.window_id,
+                        char.codepoint,
+                        char.mods,
+                    });
                 },
                 else => continue,
             }
