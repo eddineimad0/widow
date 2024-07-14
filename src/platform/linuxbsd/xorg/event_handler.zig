@@ -133,7 +133,7 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
 }
 
 fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
-    // TODO: Keycode logic and codepoint logic are missing.
+    const km = keymaps.KeyMaps.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
             if (opts.LOG_PLATFORM_EVENTS) {
@@ -142,13 +142,13 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
                     .{ window.data.id, ev.keycode },
                 );
             }
-            // const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
+            const keycode = km.lookupKeyCode(@intCast(ev.keycode));
             const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
             var mods = utils.decodeKeyMods(ev.state);
-            utils.fixKeyMods(&mods, .Up, kbd_mouse.KeyState.Pressed);
+            utils.fixKeyMods(&mods, keycode, kbd_mouse.KeyState.Pressed);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
-                .Up,
+                keycode,
                 scancode,
                 kbd_mouse.KeyState.Pressed,
                 mods,
@@ -156,16 +156,16 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
             window.sendEvent(&event);
             var keysym: libx11.KeySym = 0;
             _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
-            // if (window.widow.internals.lookupKeyCharacter(keysym)) |codepoint| {
-            //     if (opts.LOG_PLATFORM_EVENTS) {
-            //         std.log.info(
-            //             "window: #{} recieved Character:codepoint {}\n",
-            //             .{ window.data.id, codepoint },
-            //         );
-            //     }
-            //     event = common.event.createCharEvent(window.data.id, codepoint, mods);
-            //     window.sendEvent(&event);
-            // }
+            if (km.lookupKeyCharacter(keysym)) |codepoint| {
+                if (opts.LOG_PLATFORM_EVENTS) {
+                    std.log.info(
+                        "window: #{} recieved Character:codepoint {}\n",
+                        .{ window.data.id, codepoint },
+                    );
+                }
+                event = common.event.createCharEvent(window.data.id, codepoint, mods);
+                window.sendEvent(&event);
+            }
         },
         libx11.KeyRelease => {
             // used when we can't set auto repeat through xkb.
@@ -197,13 +197,13 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
                     }
                 }
             }
-            // const keycode = window.widow.internals.lookupKeyCode(@intCast(ev.keycode));
+            const keycode = km.lookupKeyCode(@intCast(ev.keycode));
             const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
             var mods = utils.decodeKeyMods(ev.state);
             utils.fixKeyMods(&mods, .Up, kbd_mouse.KeyState.Released);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
-                .Up,
+                keycode,
                 scancode,
                 kbd_mouse.KeyState.Released,
                 mods,
