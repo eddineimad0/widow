@@ -8,6 +8,28 @@ var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 var gl_procs: gl.ProcTable = undefined;
 
+const VERTEX_SHADER_SRC =
+    \\#version 420 core
+    \\layout (location = 0) in vec3 aPos;
+    \\layout (location = 1) in vec3 aColor;
+    \\out vec4 verColor;
+    \\void main()
+    \\{
+    \\   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+    \\  verColor = vec4(aColor,1.0);
+    \\}
+;
+
+const FRAG_SHADER_SRC =
+    \\#version 420 core
+    \\in vec4 verColor;
+    \\out vec4 fragColor;
+    \\void main()
+    \\{
+    \\    fragColor = verColor;
+    \\}
+;
+
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
@@ -52,10 +74,17 @@ pub fn main() !void {
 
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
+    const client_size = mywindow.clientPixelSize();
+    gl.Viewport(0, 0, client_size.width, client_size.height);
+
+    const vertx_shader = try loadVertexShader(VERTEX_SHADER_SRC);
+    const frag_shader = try loadFragShader(FRAG_SHADER_SRC);
+    const render_prg = try linkRenderProgram(vertx_shader, frag_shader);
+    gl.UseProgram(render_prg);
 
     event_loop: while (true) {
         // sleeps until an event is postd.
-        try mywindow.waitEvent();
+        try mywindow.pollEvents();
 
         var event: widow.event.Event = undefined;
 
@@ -81,9 +110,120 @@ pub fn main() !void {
             }
         }
 
-        gl.Viewport(0, 0, 800, 600);
         gl.ClearColor(0.2, 0.3, 0.3, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
+        try drawTriangle();
         _ = ctx.swapBuffers();
     }
+}
+
+fn loadVertexShader(src: [*:0]const u8) !gl.uint {
+    const vertx_shader = gl.CreateShader(gl.VERTEX_SHADER);
+    if (vertx_shader == 0) {
+        return error.ShaderNoMem;
+    }
+    gl.ShaderSource(vertx_shader, 1, @ptrCast(&src), null);
+    gl.CompileShader(vertx_shader);
+    var sucess: gl.int = 0;
+    gl.GetShaderiv(vertx_shader, gl.COMPILE_STATUS, &sucess);
+    if (sucess == 0) {
+        var log: [512]u8 = undefined;
+        var written: gl.sizei = 0;
+        gl.GetShaderInfoLog(vertx_shader, log.len, &written, @ptrCast(&log));
+        std.log.err("Vertex Shader : {s}", .{log[0..@intCast(written)]});
+        return error.ShaderSyntax;
+    }
+    return vertx_shader;
+}
+
+fn loadFragShader(src: [*:0]const u8) !gl.uint {
+    const frag_shader = gl.CreateShader(gl.FRAGMENT_SHADER);
+    if (frag_shader == 0) {
+        return error.ShaderNoMem;
+    }
+    gl.ShaderSource(frag_shader, 1, @ptrCast(&src), null);
+    gl.CompileShader(frag_shader);
+    var sucess: gl.int = 0;
+    gl.GetShaderiv(frag_shader, gl.COMPILE_STATUS, &sucess);
+    if (sucess == 0) {
+        var log: [512]u8 = undefined;
+        var written: gl.sizei = 0;
+        gl.GetShaderInfoLog(frag_shader, log.len, &written, @ptrCast(&log));
+        std.log.err("Fragment Shader : {s}", .{log[0..@intCast(written)]});
+        return error.ShaderSyntax;
+    }
+    return frag_shader;
+}
+
+fn linkRenderProgram(vertx_shader: gl.uint, frag_shader: gl.uint) !gl.uint {
+    const prg = gl.CreateProgram();
+    if (prg == 0) {
+        return error.ProgramNoMem;
+    }
+    gl.AttachShader(prg, vertx_shader);
+    gl.AttachShader(prg, frag_shader);
+    gl.LinkProgram(prg);
+    var success: gl.int = 0;
+    gl.GetProgramiv(prg, gl.LINK_STATUS, &success);
+    if (success == 0) {
+        var log: [512]u8 = undefined;
+        var written: gl.sizei = 0;
+        gl.GetProgramInfoLog(prg, log.len, &written, @ptrCast(&log));
+        std.log.err("Render Program : {s}", .{log[0..@intCast(written)]});
+        return error.ShaderSyntax;
+    }
+    gl.DeleteShader(vertx_shader);
+    gl.DeleteShader(frag_shader);
+    return prg;
+}
+
+fn drawTriangle() !void {
+    const verticies = [_]f32{
+        // layout position(x,y,z), color(r,g,b)
+        0.0,
+        0.5,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.5,
+        -0.5,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        -0.5,
+        -0.5,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    };
+    var vbos = [1]gl.uint{0};
+    var vaos = [1]gl.uint{0};
+
+    gl.GenVertexArrays(vaos.len, &vaos);
+    gl.BindVertexArray(vaos[0]);
+
+    gl.GenBuffers(vbos.len, @ptrCast(&vbos));
+    gl.BindBuffer(gl.ARRAY_BUFFER, vbos[0]);
+    gl.BufferData(
+        gl.ARRAY_BUFFER,
+        @sizeOf(f32) * verticies.len,
+        @ptrCast(&verticies),
+        gl.STATIC_DRAW,
+    );
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
+    gl.EnableVertexAttribArray(0);
+    gl.VertexAttribPointer(
+        1,
+        3,
+        gl.FLOAT,
+        gl.FALSE,
+        6 * @sizeOf(f32),
+        3 * @sizeOf(f32),
+    );
+    gl.EnableVertexAttribArray(1);
+
+    gl.DrawArrays(gl.TRIANGLES, 0, 3);
 }

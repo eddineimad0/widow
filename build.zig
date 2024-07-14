@@ -57,23 +57,6 @@ pub fn build(b: *std.Build) !void {
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
-
-    const testing_step = b.step("test", "Temp test step");
-    const test_step = b.addTest(.{
-        .root_source_file = b.path("src/platform/win32/platform.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const zigwin32 = b.createModule(.{
-        .root_source_file = b.path("libs/zigwin32/win32.zig"),
-    });
-    const common = b.createModule(.{
-        .root_source_file = b.path("src/common/common.zig"),
-    });
-    test_step.root_module.addImport("zigwin32", zigwin32);
-    test_step.root_module.addImport("common", common);
-    const test_run = b.addRunArtifact(test_step);
-    testing_step.dependOn(&test_run.step);
 }
 
 fn isDisplayTargetValid(
@@ -123,7 +106,7 @@ fn detectDispalyTarget(
 
 fn prepareWidowModule(
     b: *std.Build,
-    target: DisplayProtocol,
+    display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
     const common_mod = b.createModule(.{
@@ -134,18 +117,16 @@ fn prepareWidowModule(
         .root_source_file = b.path("src/opengl/gl.zig"),
     });
 
-    const platform_mod: *std.Build.Module = switch (target) {
+    const platform_mod: *std.Build.Module = switch (display_target) {
         .Win32 => win32: {
-            const zigwin32 = b.createModule(.{
-                .root_source_file = b.path("libs/zigwin32/win32.zig"),
-            });
+            const zigwin32 = b.dependency("zigwin32", .{});
             break :win32 b.createModule(
                 .{
                     .root_source_file = b.path("src/platform/win32/platform.zig"),
                     .imports = &.{
                         .{ .name = "gl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
-                        .{ .name = "zigwin32", .module = zigwin32 },
+                        .{ .name = "zigwin32", .module = zigwin32.module("zigwin32") },
                     },
                 },
             );

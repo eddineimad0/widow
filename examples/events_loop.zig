@@ -48,7 +48,7 @@ pub fn main() !void {
                 // WindowMaximize => The window was minimized.
                 // WindowMinimize => The window was maximized.
                 // WindowMove => The window has been moved, the Point2D struct specify the
-                // // new coordinates for the top left corner of the window.
+                // new coordinates for the top left corner of the window.
                 // FileDrop => Some file was released in the window area.
                 // KeyBoard => A certain Keyboard key action(press or release) was performed.
                 // MouseButton, => A certain Mouse button action(press or release) was performed while
@@ -56,7 +56,7 @@ pub fn main() !void {
                 // MouseScroll => One of the mouse wheels(vertical,horizontal) was scrolled.
                 // MouseMove => The mouse position (relative to the client area's top left corner) changed.
                 // MouseEnter => The mouse entered the client area of the window.
-                // MouseLeave => The mouse exited the client area of the window.
+                // MouseExit => The mouse exited the client area of the window.
                 // DPIChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
                 // RedrawRequest => Request from the system to redraw the window's client area.
@@ -71,10 +71,10 @@ pub fn main() !void {
                 },
                 EventType.KeyBoard => |*key| {
                     // This event holds the keyboard key keycode (symbolic representation that
-                    // depends on the language settigns)
-                    // and scancode (Hardware representation of the key, i.e the symbol of the key on the keyboard. ),
-                    // in short scancode is the symbol of the key on the keyboard,the virtual key is the
-                    // symbol the key represents with the current input language settings.
+                    // depends on the layout active on the os)
+                    // and scancode (Hardware representation of the key).
+                    // in short scancode is the symbol of the key on the US keyboard,the virtual key is the
+                    // symbol the key represents with the current input layout settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
                     std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
@@ -155,16 +155,16 @@ pub fn main() !void {
                 },
                 EventType.MouseScroll => |*scroll| {
                     // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
-                    std.debug.print("Window #{}\nwheel:{} Scrolled by :{d}\n", .{
+                    std.debug.print("Window #{}\nvertical wheel:{d} horizontal wheel:{d}\n", .{
                         scroll.window_id,
-                        scroll.wheel,
-                        scroll.delta,
+                        scroll.x_offset,
+                        scroll.y_offset,
                     });
                 },
                 EventType.MouseEnter => |window_id| {
                     std.debug.print("Mouse Entered the client area of window #{}\n", .{window_id});
                 },
-                EventType.MouseLeave => |window_id| {
+                EventType.MouseExit => |window_id| {
                     std.debug.print("Mouse Left the client area window #{}\n", .{window_id});
                 },
                 EventType.MouseMove => |*motion| {

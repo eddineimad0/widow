@@ -16,8 +16,6 @@ pub inline fn keyMSGHandler(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) void {
-    // TODO: test more keyboards.
-
     // The right ALT key is handled as a CTRL+ALT key.
     // for non-U.S. enhanced 102-key keyboards (AltGr),
     // Solution: don't notify the user of the ctrl event.
@@ -174,13 +172,13 @@ pub inline fn mouseDownMSGHandler(
 
 pub inline fn mouseWheelMSGHandler(
     window: *wndw.Window,
-    wheel: common.keyboard_mouse.MouseWheel,
-    wheel_delta: f64,
+    wheel_delta_x: f64,
+    wheel_delta_y: f64,
 ) void {
     const event = common.event.createScrollEvent(
         window.data.id,
-        wheel,
-        wheel_delta,
+        wheel_delta_x,
+        wheel_delta_y,
     );
     window.sendEvent(&event);
 }
@@ -322,7 +320,6 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
 }
 
 pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
-    // TODO: fix event handler.
     const allocator = window.win32.dropped_files.allocator;
     for (window.win32.dropped_files.items) |file| {
         allocator.free(file);
