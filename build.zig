@@ -106,7 +106,7 @@ fn detectDispalyTarget(
 
 fn prepareWidowModule(
     b: *std.Build,
-    target: DisplayProtocol,
+    display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
     const common_mod = b.createModule(.{
@@ -117,12 +117,9 @@ fn prepareWidowModule(
         .root_source_file = b.path("src/opengl/gl.zig"),
     });
 
-    const platform_mod: *std.Build.Module = switch (target) {
+    const platform_mod: *std.Build.Module = switch (display_target) {
         .Win32 => win32: {
-            const zigwin32 = b.dependency("zigwin32", .{
-                // .target = b.standardTargetOptions(.{}),
-                // .optimize = b.standardOptimizeOption(.{}),
-            });
+            const zigwin32 = b.dependency("zigwin32", .{});
             break :win32 b.createModule(
                 .{
                     .root_source_file = b.path("src/platform/win32/platform.zig"),
