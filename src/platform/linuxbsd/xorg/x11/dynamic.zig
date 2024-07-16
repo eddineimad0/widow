@@ -228,6 +228,30 @@ const XLookupStringProc = *const fn (
     status_in_out: ?*types.XComposeStatus,
 ) callconv(.C) c_int;
 
+const XQueryPointerProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    root: ?*types.Window,
+    child_ret: ?*types.Window,
+    root_x_ret: ?*c_int,
+    root_y_ret: ?*c_int,
+    win_x_ret: ?*c_int,
+    win_y_ret: ?*c_int,
+    mask_ret: ?*c_uint,
+) callconv(.C) types.Bool;
+
+const XWarpPointerProc = *const fn (
+    display: ?*types.Display,
+    src_w: types.Window,
+    dest_w: types.Window,
+    src_x: c_int,
+    src_y: c_int,
+    src_width: c_uint,
+    src_height: c_uint,
+    dest_x: c_int,
+    dest_y: c_int,
+) callconv(.C) c_int;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -301,6 +325,8 @@ pub const dyn_api = struct {
     pub var XDisplayKeycodes: XDisplayKeycodesProc = undefined;
     pub var XGetKeyboardMapping: XGetKeyboardMappingProc = undefined;
     pub var XLookupString: XLookupStringProc = undefined;
+    pub var XQueryPointer: XQueryPointerProc = undefined;
+    pub var XWarpPointer: XWarpPointerProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
