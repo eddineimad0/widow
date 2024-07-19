@@ -13,6 +13,7 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
     if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonRelease\n", .{window.data.id});
     }
+
     const button = switch (e.button) {
         libx11.Button1 => kbd_mouse.MouseButton.Left,
         libx11.Button2 => kbd_mouse.MouseButton.Middle,
@@ -29,6 +30,7 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
             return;
         },
     };
+
     window.data.input.mouse_buttons[@intFromEnum(button)] = .Released;
     const ev = common.event.createMouseButtonEvent(
         window.data.id,
@@ -43,6 +45,7 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void {
     if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonPress\n", .{window.data.id});
     }
+
     const button_event = switch (e.button) {
         libx11.Button1 => ev: {
             window.data.input.mouse_buttons[@intFromEnum(kbd_mouse.MouseButton.Left)] = .Pressed;
@@ -167,6 +170,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
                 window.sendEvent(&event);
             }
         },
+
         libx11.KeyRelease => {
             // used when we can't set auto repeat through xkb.
             const KEY_EVENT_REPEAT_THRESHOLD = 25;
@@ -264,10 +268,15 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            const event = common.event.createMouseEnterEvent(window.data.id);
-            window.sendEvent(&event);
+            const x, const y = .{ ev.xcrossing.x, ev.xcrossing.y };
+            // TODO: update cursor pos and image.
+            const enter_event = common.event.createMouseEnterEvent(window.data.id);
+            window.sendEvent(&enter_event);
             window.data.flags.cursor_in_client = true;
+            const pos_event = common.event.createMoveEvent(window.data.id, x, y, true);
+            window.sendEvent(&pos_event);
         },
+
         libx11.LeaveNotify => {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info(
@@ -279,7 +288,60 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             const event = common.event.createMouseExitEvent(window.data.id);
             window.sendEvent(&event);
         },
+
         libx11.ClientMessage => handleClientMessage(&ev.xclient, window),
+
+        libx11.FocusIn => {
+            // TODO: update cursor image.
+            const event = common.event.createFocusEvent(window.data.id, true);
+            window.sendEvent(&event);
+        },
+
+        libx11.FocusOut => {
+            // TODO: update cursor image.
+            const event = common.event.createFocusEvent(window.data.id, false);
+            window.sendEvent(&event);
+        },
+
+        libx11.MotionNotify => {
+            const x, const y = .{ ev.xmotion.x, ev.xmotion.y };
+            const event = common.event.createMoveEvent(window.data.id, x, y, true);
+            window.sendEvent(&event);
+        },
+
+        libx11.ConfigureNotify => {
+            if (ev.xconfigure.width != window.data.client_area.size.width or
+                ev.xconfigure.height != window.data.client_area.size.height)
+            {
+                window.data.client_area.size.width = ev.xconfigure.width;
+                window.data.client_area.size.height = ev.xconfigure.height;
+
+                const event = common.event.createResizeEvent(
+                    window.data.id,
+                    ev.xconfigure.width,
+                    ev.xconfigure.height,
+                );
+                window.sendEvent(&event);
+            }
+
+            const wndw_pos_x, const wndw_pos_y = .{ ev.xconfigure.x, ev.xconfigure.y };
+
+            if (wndw_pos_x != window.data.client_area.top_left.x or
+                wndw_pos_y != window.data.client_area.top_left.y)
+            {
+                window.data.client_area.top_left.x = wndw_pos_x;
+                window.data.client_area.top_left.y = wndw_pos_y;
+
+                const event = common.event.createMoveEvent(
+                    window.data.id,
+                    wndw_pos_x,
+                    wndw_pos_y,
+                    false,
+                );
+                window.sendEvent(&event);
+            }
+        },
+
         else => {},
     }
 }
