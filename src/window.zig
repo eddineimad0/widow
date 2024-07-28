@@ -703,6 +703,8 @@ pub const Window = struct {
     /// to set the platform default icon.
     /// `width` : the width of the icon in pixels.
     /// `height`: the height of the icon in pixels.
+    /// 'allocator': some platform require the pixel data to be transformed,
+    /// the allocator is used to dynamically create the recepient buffer.
     /// # Notes
     /// This function expects non-premultiplied, 32-bits RGBA pixels
     /// i.e. each channel's value should not be scaled by the alpha
@@ -715,12 +717,13 @@ pub const Window = struct {
         pixels: ?[]const u8,
         width: i32,
         height: i32,
+        allocator: std.mem.Allocator,
     ) !void {
         if (pixels != null) {
             std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
         }
-        try self.impl.setIcon(pixels, width, height);
+        try self.impl.setIcon(pixels, width, height, allocator);
     }
 
     /// Sets the Widow's cursor to an image from the RGBA pixels data.

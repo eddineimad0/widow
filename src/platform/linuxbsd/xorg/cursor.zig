@@ -18,7 +18,7 @@ pub const CursorHints = struct {
     pos: common.geometry.WidowPoint2D,
 };
 
-fn createX11Cursor(
+pub fn createX11Cursor(
     pixels: []const u8,
     width: i32,
     height: i32,
@@ -43,10 +43,10 @@ fn createX11Cursor(
     const pixl_sz: usize = @intCast(width * height);
     for (0..pixl_sz) |i| {
         // accepted format is ARGB.
-        curs_img.pixels[i] = ((@as(u32, pixels[i + 3]) << 24) |
-            (@as(u32, pixels[i + 0]) << 16) |
-            (@as(u32, pixels[i + 1]) << 8) |
-            @as(u32, pixels[i + 2]));
+        curs_img.pixels[i] = ((@as(u32, pixels[(4 * i) + 3]) << 24) |
+            (@as(u32, pixels[(4 * i) + 0]) << 16) |
+            (@as(u32, pixels[(4 * i) + 1]) << 8) |
+            @as(u32, pixels[(4 * i) + 2]));
     }
 
     return drvr.extensions.xcursor.XcursorImageLoadCursor(
@@ -67,7 +67,7 @@ pub fn createNativeCursor(
             drvr.handles.xdisplay,
         ) orelse "default";
 
-        const cursor_name = switch (shape) {
+        const cursor_name: [*:0]const u8 = switch (shape) {
             CursorShape.PointingHand => "pointer",
             CursorShape.Crosshair => "crosshair",
             CursorShape.Text => "text",
@@ -90,7 +90,7 @@ pub fn createNativeCursor(
     }
 
     if (cursor_handle == 0) {
-        const cursor_shape = switch (shape) {
+        const cursor_shape: c_uint = switch (shape) {
             CursorShape.PointingHand => libx11.XC_hand1,
             CursorShape.Crosshair => libx11.XC_crosshair,
             CursorShape.Text => libx11.XC_xterm,
@@ -124,6 +124,7 @@ pub fn destroyCursorIcon(cursor: *CursorHints) void {
     const drvr = X11Driver.singleton();
     if (cursor.icon != 0) {
         _ = libx11.XFreeCursor(drvr.handles.xdisplay, cursor.icon);
+        cursor.icon = 0;
     }
 }
 

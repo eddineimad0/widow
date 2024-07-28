@@ -6,15 +6,21 @@ const cursor = @import("cursor.zig");
 const event_handler = @import("event_handler.zig");
 const bopts = @import("build-options");
 
+const debug = std.debug;
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
 const X11Driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 
+const _NET_WM_STATE_REMOVE = 0;
+const _NET_WM_STATE_ADD = 1;
+const _NET_WM_STATE_TOGGLE = 2;
+
 pub const WindowError = error{
     CreateFail,
     BadTitle,
     OutOfMemory,
+    BadIcon,
 };
 
 pub const Window = struct {
@@ -112,7 +118,6 @@ pub const Window = struct {
                 event_handler.handleWindowEvent(&e, w);
             } else {
                 // TODO: what about event not sent for our window
-                // event_handler.handleHelperEvent(&e, self.widow.internals.helper_window);
             }
         }
     }
@@ -259,8 +264,6 @@ pub const Window = struct {
             // unsupported by the current window manager.
             return false;
         }
-        // TODO: refactor + Test.
-        const _NET_WM_STATE_ADD = @as(c_long, 1);
 
         var event = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
@@ -490,7 +493,7 @@ pub const Window = struct {
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
-                            1, // NET_WM_STATE_ADD
+                            _NET_WM_STATE_ADD,
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
                             1,
@@ -529,7 +532,7 @@ pub const Window = struct {
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
-                            0, // NET_WM_STATE_REMOVE
+                            _NET_WM_STATE_REMOVE,
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
                             1,
@@ -689,7 +692,7 @@ pub const Window = struct {
     //     self.win32.dropped_files.clearAndFree();
     // }
 
-    pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         const drvr = X11Driver.singleton();
         var root: libx11.Window = undefined;
         var child: libx11.Window = undefined;
@@ -733,7 +736,36 @@ pub const Window = struct {
         cursor.applyCursorHints(&self.x11.cursor, self.handle);
     }
 
-    //TODO:test
+    pub fn setCursorIcon(
+        self: *Self,
+        pixels: ?[]const u8,
+        width: i32,
+        height: i32,
+        xhot: u32,
+        yhot: u32,
+    ) WindowError!void {
+        var new_cursor: libx11.Cursor = 0;
+        if (pixels) |p| {
+            new_cursor = cursor.createX11Cursor(
+                p,
+                width,
+                height,
+                xhot,
+                yhot,
+            ) catch |err| {
+                return switch (err) {
+                    cursor.IconError.BadIcon => WindowError.BadIcon,
+                    else => WindowError.OutOfMemory,
+                };
+            };
+        }
+        cursor.destroyCursorIcon(&self.x11.cursor);
+        self.x11.cursor.icon = new_cursor;
+        if (self.data.flags.cursor_in_client) {
+            cursor.applyCursorHints(&self.x11.cursor, self.handle);
+        }
+    }
+
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
@@ -744,10 +776,49 @@ pub const Window = struct {
         cursor.destroyCursorIcon(&self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
-        self.x11.cursor.sys_owned = new_cursor.sys_owned;
         if (self.data.flags.cursor_in_client) {
             cursor.applyCursorHints(&self.x11.cursor, self.handle);
         }
+    }
+
+    pub fn setIcon(
+        self: *Self,
+        pixels: ?[]const u8,
+        width: i32,
+        height: i32,
+        allocator: std.mem.Allocator,
+    ) WindowError!void {
+        const drvr = X11Driver.singleton();
+        if (pixels) |p| {
+            const pixl_data_size = width * height;
+            var icon_buffer = try allocator.alloc(c_long, 2 + @as(usize, @intCast(pixl_data_size)));
+            defer allocator.free(icon_buffer);
+            icon_buffer[0] = @intCast(width);
+            icon_buffer[1] = @intCast(height);
+            for (0..@as(usize, @intCast(pixl_data_size))) |i| {
+                icon_buffer[2 + i] = ((@as(c_long, p[(4 * i) + 3]) << 24) |
+                    (@as(c_long, p[(4 * i) + 0]) << 16) |
+                    (@as(c_long, p[(4 * i) + 1]) << 8) |
+                    @as(c_long, p[(4 * i) + 2]));
+            }
+            libx11.XChangeProperty(
+                drvr.handles.xdisplay,
+                self.handle,
+                drvr.ewmh._NET_WM_ICON,
+                libx11.XA_CARDINAL,
+                32,
+                libx11.PropModeReplace,
+                @ptrCast(icon_buffer.ptr),
+                @intCast(2 + pixl_data_size),
+            );
+        } else {
+            libx11.XDeleteProperty(
+                drvr.handles.xdisplay,
+                self.handle,
+                drvr.ewmh._NET_WM_ICON,
+            );
+        }
+        drvr.flushXRequests();
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {

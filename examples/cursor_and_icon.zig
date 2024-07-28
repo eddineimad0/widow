@@ -35,7 +35,7 @@ pub fn main() !void {
     _ = mywindow.setEventQueue(&ev_queue);
 
     const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
-    mywindow.setIcon(&icon_pixels, 32, 32) catch {
+    mywindow.setIcon(&icon_pixels, 32, 32, allocator) catch {
         std.debug.print("Failed to set Window icon.\n", .{});
     };
 
