@@ -269,7 +269,8 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                 );
             }
             const x, const y = .{ ev.xcrossing.x, ev.xcrossing.y };
-            // TODO: update cursor pos and image.
+            window.x11.cursor.pos = .{ .x = x, .y = y };
+            // TODO: update cursor image.
             const enter_event = common.event.createMouseEnterEvent(window.data.id);
             window.sendEvent(&enter_event);
             window.data.flags.cursor_in_client = true;
@@ -292,24 +293,52 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
         libx11.ClientMessage => handleClientMessage(&ev.xclient, window),
 
         libx11.FocusIn => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved FocusIn\n",
+                    .{window.data.id},
+                );
+            }
             // TODO: update cursor image.
             const event = common.event.createFocusEvent(window.data.id, true);
             window.sendEvent(&event);
         },
 
         libx11.FocusOut => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved FocusOut\n",
+                    .{window.data.id},
+                );
+            }
             // TODO: update cursor image.
             const event = common.event.createFocusEvent(window.data.id, false);
             window.sendEvent(&event);
         },
 
         libx11.MotionNotify => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved MotionNotify\n",
+                    .{window.data.id},
+                );
+            }
             const x, const y = .{ ev.xmotion.x, ev.xmotion.y };
-            const event = common.event.createMoveEvent(window.data.id, x, y, true);
-            window.sendEvent(&event);
+            if (x != window.x11.cursor.pos.x or y != window.x11.cursor.pos.y) {
+                window.x11.cursor.pos = .{ .x = x, .y = y };
+                const event = common.event.createMoveEvent(window.data.id, x, y, true);
+                window.sendEvent(&event);
+            }
         },
 
         libx11.ConfigureNotify => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved ConfigureNotify\n",
+                    .{window.data.id},
+                );
+            }
+
             if (ev.xconfigure.width != window.data.client_area.size.width or
                 ev.xconfigure.height != window.data.client_area.size.height)
             {
@@ -340,6 +369,17 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                 );
                 window.sendEvent(&event);
             }
+        },
+
+        libx11.Expose => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved Expose\n",
+                    .{window.data.id},
+                );
+            }
+            const event = common.event.createRedrawEvent(window.data.id);
+            window.sendEvent(&event);
         },
 
         else => {},

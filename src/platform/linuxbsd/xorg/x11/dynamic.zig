@@ -90,7 +90,6 @@ const XIconifyWindowProc = *const fn (
     window: types.Window,
     screen_number: c_int,
 ) callconv(.C) types.Status;
-
 // Properties
 const XSetWMProtocolsProc = *const fn (
     display: ?*types.Display,
@@ -252,6 +251,33 @@ const XWarpPointerProc = *const fn (
     dest_y: c_int,
 ) callconv(.C) c_int;
 
+const XGetWindowAttributesProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    attribs_return: *types.XWindowAttributes,
+) callconv(.C) types.Status;
+
+const XCreateFontCursorProc = *const fn (
+    display: ?*types.Display,
+    shape: c_uint,
+) callconv(.C) types.Cursor;
+
+const XFreeCursorProc = *const fn (
+    display: ?*types.Display,
+    cursor: types.Cursor,
+) callconv(.C) c_int;
+
+const XDefineCursorProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    cursor: types.Cursor,
+) callconv(.C) c_int;
+
+const XUndefineCursorProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+) callconv(.C) c_int;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -295,6 +321,7 @@ pub const dyn_api = struct {
     pub var XChangeProperty: XChangePropertyProc = undefined;
     pub var XDeleteProperty: XDeletePropertyProc = undefined;
     pub var XGetWindowProperty: XGetWindowPropertyProc = undefined;
+    pub var XGetWindowAttributes: XGetWindowAttributesProc = undefined;
     pub var XInternAtom: XInternAtomProc = undefined;
     // Errors
     pub var XSetErrorHandler: XSetErrorHandlerProc = undefined;
@@ -327,6 +354,11 @@ pub const dyn_api = struct {
     pub var XLookupString: XLookupStringProc = undefined;
     pub var XQueryPointer: XQueryPointerProc = undefined;
     pub var XWarpPointer: XWarpPointerProc = undefined;
+    // cursor
+    pub var XCreateFontCursor: XCreateFontCursorProc = undefined;
+    pub var XFreeCursor: XFreeCursorProc = undefined;
+    pub var XDefineCursor: XDefineCursorProc = undefined;
+    pub var XUndefineCursor: XUndefineCursorProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

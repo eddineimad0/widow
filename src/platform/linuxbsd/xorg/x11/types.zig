@@ -148,6 +148,32 @@ pub const XSetWindowAttributes = extern struct {
     cursor: Cursor,
 };
 
+pub const XWindowAttributes = struct {
+    x: c_int,
+    y: c_int, // location of window
+    width: c_int,
+    height: c_int, // width and height of window */
+    border_width: c_int, // border width of window */
+    depth: c_int, // depth of window */
+    visual: ?*Visual, // the associated visual structure */
+    root: Window, // root of screen containing window */
+    class: c_int, // InputOutput, InputOnly*/
+    bit_gravity: c_int, // one of the bit gravity values */
+    win_gravity: c_int, // one of the window gravity values */
+    backing_store: c_int, // NotUseful, WhenMapped, Always */
+    backing_planes: c_ulong, // planes to be preserved if possible */
+    backing_pixel: c_ulong, // value to be used when restoring planes */
+    save_under: Bool, // boolean, should bits under be saved? */
+    colormap: Colormap, // color map to be associated with window */
+    map_installed: Bool, // boolean, is color map currently installed*/
+    map_state: c_int, // IsUnmapped, IsUnviewable, IsViewable */
+    all_event_masks: c_long, // set of events all people have interest in*/
+    your_event_mask: c_long, // my event mask */
+    do_not_propagate_mask: c_long, // set of events that should not propagate */
+    override_redirect: bool, // boolean value for override-redirect */
+    screen: ?*Screen, // back pointer to correct screen */
+};
+
 pub const Visual = extern struct {
     ext_data: ?[*]XExtData,
     visualid: VisualID,

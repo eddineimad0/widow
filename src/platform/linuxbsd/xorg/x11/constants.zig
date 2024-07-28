@@ -679,13 +679,29 @@ pub const XUTF8StringStyle = 4;
 pub const NormalState = 1;
 pub const IconicState = 3;
 
+// cursor icon
+pub const XC_left_ptr = 68;
+pub const XC_xterm = 152;
+pub const XC_crosshair = 32;
+pub const XC_hand1 = 58;
+pub const XC_hand2 = 60;
+pub const XC_fleur = 52;
+pub const XC_circle = 24;
+pub const XC_question_arrow = 92;
+pub const XC_watch = 150;
+pub const XC_exchange = 50;
+pub const XC_X_cursor = 0;
+
 /// Determine the modules name at comptime.
 pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{
-        "libX11.so.6", "libXrandr.so.2", "libXinerama.so.1",
+        "libX11.so.6", "libXrandr.so.2", "libXinerama.so.1", "libXcursor.so.1",
     },
     .freebsd, .netbsd, .openbsd => [_][*:0]const u8{
-        "libX11.so", "libXrandr.so", "libXinerama.so",
+        "libX11.so",
+        "libXrandr.so",
+        "libXinerama.so",
+        "libXcursor.so",
     },
     else => @compileError("Unsupported Unix Platform"),
 };
@@ -693,3 +709,4 @@ pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
 pub const LIB_X11_NAME_INDEX = 0;
 pub const LIB_XRANDR_NAME_INDEX = 1;
 pub const LIB_XINERAMA_NAME_INDEX = 2;
+pub const LIB_XCURSOR_NAME_INDEX = 3;

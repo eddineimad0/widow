@@ -18,6 +18,8 @@ const X11Handles = struct {
     xcontext: libx11.XContext,
     xrandr: ?*anyopaque,
     xinerama: ?*anyopaque,
+    xcursor: ?*anyopaque,
+    hidden_cursor: libx11.Cursor,
 };
 
 const XRRInterface = struct {
@@ -50,10 +52,20 @@ const XkbInterface = struct {
     event_code: c_int,
 };
 
+const XcursorInterface = struct {
+    XcursorImageCreate: x11ext.XcursorImageCreateProc,
+    XcursorImageDestroy: x11ext.XcursorImageDestroyProc,
+    XcursorLibraryLoadImage: x11ext.XcursorLibraryLoadImageProc,
+    XcursorGetTheme: x11ext.XcursorGetThemeProc,
+    XcursorGetDefaultSize: x11ext.XcursorGetDefaultSizeProc,
+    XcursorImageLoadCursor: x11ext.XcursorImageLoadCursorProc,
+};
+
 const X11Extensions = struct {
     xrandr: XRRInterface,
     xinerama: XrmInterface,
     xkb: XkbInterface,
+    xcursor: XcursorInterface,
 };
 
 /// holds the value of various hints a window manager can have.
@@ -132,6 +144,8 @@ pub const X11Driver = struct {
             .xcontext = undefined,
             .xrandr = null,
             .xinerama = null,
+            .xcursor = null,
+            .hidden_cursor = 0,
         },
         .extensions = X11Extensions{
             .xrandr = XRRInterface{
@@ -160,6 +174,14 @@ pub const X11Driver = struct {
                 .is_available = false,
                 .is_auto_repeat_detectable = false,
                 .event_code = 0,
+            },
+            .xcursor = .{
+                .XcursorImageCreate = undefined,
+                .XcursorImageDestroy = undefined,
+                .XcursorGetTheme = undefined,
+                .XcursorGetDefaultSize = undefined,
+                .XcursorLibraryLoadImage = undefined,
+                .XcursorImageLoadCursor = undefined,
             },
         },
         .ewmh = undefined,
@@ -203,6 +225,27 @@ pub const X11Driver = struct {
 
             g_instance.readSystemGlobalDPI();
             g_instance.pid = unix.getpid();
+
+            // Create hidden cursor
+            var curs_img = g_instance.extensions.xcursor.XcursorImageCreate(
+                16,
+                16,
+            ) orelse return XConnectionError.ConnectionFailed;
+
+            defer g_instance.extensions.xcursor.XcursorImageDestroy(curs_img);
+
+            curs_img.xhot = 0;
+            curs_img.yhot = 0;
+
+            for (0..256) |i| {
+                curs_img.pixels[i] = 0x00000000;
+            }
+
+            g_instance.handles.hidden_cursor = g_instance.extensions.xcursor.XcursorImageLoadCursor(
+                g_instance.handles.xdisplay,
+                curs_img,
+            );
+
             Self.g_init = true;
         }
     }
@@ -343,17 +386,47 @@ pub const X11Driver = struct {
                 x11ext.XkbGroupStateMask,
             );
         }
+
+        self.handles.xcursor = unix.loadPosixModule(
+            libx11.XORG_LIBS_NAME[libx11.LIB_XCURSOR_NAME_INDEX],
+        );
+
+        if (self.handles.xcursor) |h| {
+            self.extensions.xcursor.XcursorImageCreate = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageCreate").?,
+            );
+            self.extensions.xcursor.XcursorImageDestroy = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageDestroy").?,
+            );
+            self.extensions.xcursor.XcursorLibraryLoadImage = @ptrCast(
+                unix.moduleSymbol(h, "XcursorLibraryLoadImage").?,
+            );
+            self.extensions.xcursor.XcursorGetTheme = @ptrCast(
+                unix.moduleSymbol(h, "XcursorGetTheme").?,
+            );
+            self.extensions.xcursor.XcursorGetDefaultSize = @ptrCast(
+                unix.moduleSymbol(h, "XcursorGetDefaultSize").?,
+            );
+            self.extensions.xcursor.XcursorImageLoadCursor = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageLoadCursor").?,
+            );
+        }
     }
 
     fn unloadXExtensions(self: *Self) void {
+        if (self.handles.xrandr) |handle| {
+            unix.freePosixModule(handle);
+            self.handles.xrandr = null;
+        }
+
         if (self.handles.xinerama) |handle| {
             unix.freePosixModule(handle);
             self.handles.xinerama = null;
         }
 
-        if (self.handles.xrandr) |handle| {
+        if (self.handles.xcursor) |handle| {
             unix.freePosixModule(handle);
-            self.handles.xrandr = null;
+            self.handles.xcursor = null;
         }
     }
 

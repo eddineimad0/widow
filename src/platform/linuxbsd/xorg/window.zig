@@ -2,6 +2,7 @@ const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
+const icon = @import("icon.zig");
 const event_handler = @import("event_handler.zig");
 const bopts = @import("build-options");
 
@@ -20,6 +21,10 @@ pub const Window = struct {
     data: WindowData,
     handle: libx11.Window,
     ev_queue: ?*common.event.EventQueue,
+    x11: struct {
+        cursor: icon.CursorHints,
+    },
+
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = 0,
         .y = 0,
@@ -36,6 +41,13 @@ pub const Window = struct {
 
         self.data = data.*;
         self.ev_queue = null;
+        self.x11 = .{
+            .cursor = .{
+                .mode = .Normal,
+                .icon = libx11.None,
+                .pos = .{ .x = 0, .y = 0 },
+            },
+        };
 
         const drvr = X11Driver.singleton();
         self.handle = try createPlatformWindow(data, drvr);
@@ -241,7 +253,6 @@ pub const Window = struct {
         var root_x: c_int, var root_y: c_int = .{ undefined, undefined };
         var win_x: c_int, var win_y: c_int = .{ undefined, undefined };
         var mask: c_uint = undefined;
-        // TODO: if querypointer return false.
         _ = libx11.XQueryPointer(
             drvr.handles.xdisplay,
             self.handle,
@@ -258,7 +269,7 @@ pub const Window = struct {
     }
 
     pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
-        // TODO: cache to avoid event reporting.
+        self.x11.cursor.pos = .{ .x = x, .y = y };
         const drvr = X11Driver.singleton();
         _ = libx11.XWarpPointer(
             drvr.handles.xdisplay,
@@ -319,9 +330,9 @@ pub const Window = struct {
     /// Moves the client's top left corner
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
-        _ = y;
-        _ = x;
-        _ = self;
+        const drvr = X11Driver.singleton();
+        libx11.XMoveWindow(drvr.handles.xdisplay, self.handle, @intCast(x), @intCast(y));
+        drvr.flushXRequests();
     }
 
     /// Returns the Physical size of the window's client area
@@ -332,59 +343,43 @@ pub const Window = struct {
         };
     }
 
-    // /// Returns the logical size of the window's client area
-    // pub fn clientSize(self: *const Self) common.geometry.WidowSize {
-    // }
+    /// Returns the logical size of the window's client area
+    pub fn clientSize(self: *const Self) common.geometry.WidowSize {
+        var attribs: libx11.XWindowAttributes = undefined;
+        const drvr = X11Driver.singleton();
+        _ = libx11.XGetWindowAttributes(
+            drvr.handles.xdisplay,
+            self.handle,
+            &attribs,
+        );
 
-    // /// Sets the new (width,height) of the window's client area
-    // pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
-    //     if (!self.data.flags.is_fullscreen) {
-    //         var dpi: ?u32 = null;
-    //         if (self.data.flags.is_dpi_aware) {
-    //             var scaler: f64 = undefined;
-    //             dpi = self.scalingDPI(&scaler);
-    //             size.scaleBy(scaler);
-    //         }
-    //
-    //         var new_client_rect = win32_foundation.RECT{
-    //             .left = 0,
-    //             .top = 0,
-    //             .right = size.width,
-    //             .bottom = size.height,
-    //         };
-    //
-    //         adjustWindowRect(
-    //             &new_client_rect,
-    //             windowStyles(&self.data.flags),
-    //             windowExStyles(&self.data.flags),
-    //             dpi,
-    //         );
-    //         if (self.data.flags.is_maximized) {
-    //             // un-maximize the window
-    //             self.restore();
-    //         }
-    //
-    //         const POSITION_FLAGS: u32 = comptime @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-    //             @intFromEnum(win32_window_messaging.SWP_NOREPOSITION) |
-    //             @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-    //             @intFromEnum(win32_window_messaging.SWP_NOMOVE);
-    //
-    //         const top = if (self.data.flags.is_topmost)
-    //             win32_window_messaging.HWND_TOPMOST
-    //         else
-    //             win32_window_messaging.HWND_NOTOPMOST;
-    //
-    //         setWindowPositionIntern(
-    //             self.handle,
-    //             top,
-    //             POSITION_FLAGS,
-    //             0,
-    //             0,
-    //             new_client_rect.right - new_client_rect.left,
-    //             new_client_rect.bottom - new_client_rect.top,
-    //         );
-    //     }
-    // }
+        return .{
+            .width = @intCast(attribs.width),
+            .height = @intCast(attribs.height),
+        };
+    }
+
+    /// Sets the new (width,height) of the window's client area
+    pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
+        // if (self.data.flags.is_maximized) {
+        //     // un-maximize the window
+        //     self.restore();
+        // }
+
+        if (self.data.flags.is_dpi_aware) {
+            const drvr = X11Driver.singleton();
+            size.scaleBy(drvr.g_screen_scale);
+        }
+        const drvr = X11Driver.singleton();
+        _ = libx11.XResizeWindow(
+            drvr.handles.xdisplay,
+            self.handle,
+            @intCast(size.width),
+            @intCast(size.height),
+        );
+
+        drvr.flushXRequests();
+    }
 
     pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
         if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
@@ -501,10 +496,33 @@ pub const Window = struct {
         self.data.flags.is_minimized = true;
     }
 
-    // /// Restores the minimized or maximized window to a normal window.
-    // pub fn restore(self: *const Self) void {
-    //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_RESTORE);
-    // }
+    /// Restores the minimized or maximized window to a normal window.
+    pub fn restore(self: *const Self) void {
+        const drvr = X11Driver.singleton();
+        if (drvr.ewmh._NET_WM_STATE != 0 and
+            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT != 0 and
+            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
+        {
+            var ev = libx11.XEvent{
+                .xclient = .{
+                    .window = self.handle,
+                    .format = 32,
+                    .message_type = drvr.ewmh._NET_WM_STATE,
+                    .data = .{
+                        .l = .{
+                            // TODO: STATE REMOVE,
+                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
+                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
+                            1,
+                            0,
+                        },
+                    },
+                },
+            };
+            drvr.sendXEvent(&ev, drvr.handles.root_window);
+        }
+        drvr.flushXRequests();
+    }
 
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, new_title: []const u8) void {
@@ -624,71 +642,6 @@ pub const Window = struct {
         return true;
     }
 
-    // /// Returns the fullscreen mode of the window;
-    // pub fn setFullscreen(self: *Self, value: bool, video_mode: ?*common.video_mode.VideoMode) !void {
-    //
-    //     // The video mode switch should always be done first
-    //     const monitor_handle = self.occupiedMonitor();
-    //     try self.widow.monitors.setMonitorVideoMode(monitor_handle, video_mode);
-    //
-    //     if (self.data.flags.is_fullscreen != value) {
-    //         if (value) {
-    //             // save for when we exit the fullscreen mode
-    //             self.win32.restore_frame = self.data.client_area;
-    //
-    //             self.data.flags.is_fullscreen = true;
-    //             self.updateStyles();
-    //             try self.acquireMonitor(monitor_handle);
-    //         } else {
-    //             try self.releaseMonitor(monitor_handle);
-    //             self.requestRestore();
-    //         }
-    //     }
-    // }
-    //
-    // pub fn requestRestore(self: *Self) void {
-    //     self.data.flags.is_fullscreen = false;
-    //     self.updateStyles();
-    //     self.win32.restore_frame = null;
-    // }
-    //
-    // pub fn acquireMonitor(self: *Self, monitor_handle: win32.HMONITOR) !void {
-    //     var mon_area: common.geometry.WidowArea = undefined;
-    //
-    //     try self.widow.monitors.setMonitorWindow(
-    //         monitor_handle,
-    //         self,
-    //         &mon_area,
-    //     );
-    //
-    //     const POSITION_FLAGS: u32 = @intFromEnum(win32_window_messaging.SWP_NOZORDER) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOACTIVATE) |
-    //         @intFromEnum(win32_window_messaging.SWP_NOCOPYBITS);
-    //
-    //     const top = if (self.data.flags.is_topmost)
-    //         win32_window_messaging.HWND_TOPMOST
-    //     else
-    //         win32_window_messaging.HWND_NOTOPMOST;
-    //
-    //     setWindowPositionIntern(
-    //         self.handle,
-    //         top,
-    //         POSITION_FLAGS,
-    //         mon_area.top_left.x,
-    //         mon_area.top_left.y,
-    //         mon_area.size.width,
-    //         mon_area.size.height,
-    //     );
-    // }
-    //
-    // pub fn releaseMonitor(self: *const Self, monitor_handle: win32.HMONITOR) !void {
-    //     try self.widow.monitors.restoreMonitor(monitor_handle);
-    // }
-    //
-    // pub inline fn occupiedMonitor(self: *const Self) win32.HMONITOR {
-    //     return win32_gdi.MonitorFromWindow(self.handle, win32_gdi.MONITOR_DEFAULTTONEAREST).?;
-    // }
-    //
     // /// Returns a cached slice that contains the path(s) to the last dropped file(s).
     // pub fn droppedFiles(self: *const Self) [][]const u8 {
     //     return self.win32.dropped_files.items;
@@ -716,49 +669,23 @@ pub const Window = struct {
     //     }
     //     self.win32.dropped_files.clearAndFree();
     // }
-    //
-    // pub fn setIcon(self: *Self, pixels: ?[]const u8, width: i32, height: i32) !void {
-    //     const new_icon = try internals.createIcon(pixels, width, height);
-    //     const handles = if (new_icon.sm_handle != null and new_icon.bg_handle != null)
-    //         .{ @intFromPtr(new_icon.bg_handle.?), @intFromPtr(new_icon.sm_handle.?) }
-    //     else blk: {
-    //         const bg_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICON);
-    //         const sm_icon = win32_window_messaging.GetClassLongPtrW(self.handle, win32_window_messaging.GCLP_HICONSM);
-    //         break :blk .{ bg_icon, sm_icon };
-    //     };
-    //     _ = win32_window_messaging.SendMessageW(
-    //         self.handle,
-    //         win32_window_messaging.WM_SETICON,
-    //         win32_window_messaging.ICON_BIG,
-    //         @bitCast(handles[0]),
-    //     );
-    //     _ = win32_window_messaging.SendMessageW(
-    //         self.handle,
-    //         win32_window_messaging.WM_SETICON,
-    //         win32_window_messaging.ICON_SMALL,
-    //         @bitCast(handles[1]),
-    //     );
-    //     icon.destroyIcon(&self.win32.icon);
-    //     self.win32.icon = new_icon;
-    // }
-    //
-    // pub fn setCursor(self: *Self, pixels: ?[]const u8, width: i32, height: i32, xhot: u32, yhot: u32) !void {
-    //     const new_cursor = try internals.createCursor(pixels, width, height, xhot, yhot);
-    //     icon.destroyCursor(&self.win32.cursor);
-    //     self.win32.cursor = new_cursor;
-    //     if (self.data.flags.cursor_in_client) {
-    //         updateCursorImage(&self.win32.cursor);
-    //     }
-    // }
-    //
-    // pub fn setStandardCursor(self: *Self, cursor_shape: common.cursor.StandardCursorShape) !void {
-    //     const new_cursor = try internals.createStandardCursor(cursor_shape);
-    //     icon.destroyCursor(&self.win32.cursor);
-    //     self.win32.cursor = new_cursor;
-    //     if (self.data.flags.cursor_in_client) {
-    //         updateCursorImage(&self.win32.cursor);
-    //     }
-    // }
+
+    //TEST
+    pub fn setNativeCursorIcon(
+        self: *Self,
+        cursor_shape: common.cursor.NativeCursorShape,
+    ) WindowError!void {
+        const new_cursor = icon.createNativeCursor(cursor_shape) catch {
+            return WindowError.OutOfMemory;
+        };
+        icon.destroyCursorIcon(&self.x11.cursor);
+        self.x11.cursor.icon = new_cursor.icon;
+        self.x11.cursor.mode = new_cursor.mode;
+        self.x11.cursor.sys_owned = new_cursor.sys_owned;
+        if (self.data.flags.cursor_in_client) {
+            icon.applyCursorHints(&self.x11.cursor, self.handle);
+        }
+    }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG) {
