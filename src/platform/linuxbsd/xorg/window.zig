@@ -2,7 +2,7 @@ const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const utils = @import("utils.zig");
-const icon = @import("icon.zig");
+const cursor = @import("cursor.zig");
 const event_handler = @import("event_handler.zig");
 const bopts = @import("build-options");
 
@@ -22,7 +22,7 @@ pub const Window = struct {
     handle: libx11.Window,
     ev_queue: ?*common.event.EventQueue,
     x11: struct {
-        cursor: icon.CursorHints,
+        cursor: cursor.CursorHints,
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
@@ -62,7 +62,7 @@ pub const Window = struct {
         if (self.data.flags.is_visible) {
             self.show();
             if (self.data.flags.is_focused) {
-                // self.focus();
+                self.focus();
             }
         }
 
@@ -159,6 +159,7 @@ pub const Window = struct {
         std.debug.assert(self.handle != 0);
         const drvr = X11Driver.singleton();
         _ = libx11.XMapWindow(drvr.handles.xdisplay, self.handle);
+        drvr.flushXRequests();
         self.data.flags.is_visible = true;
     }
 
@@ -167,6 +168,7 @@ pub const Window = struct {
         std.debug.assert(self.handle != 0);
         const drvr = X11Driver.singleton();
         _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
+        drvr.flushXRequests();
         self.data.flags.is_visible = false;
     }
 
@@ -246,45 +248,6 @@ pub const Window = struct {
         }
     }
 
-    pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
-        const drvr = X11Driver.singleton();
-        var root: libx11.Window = undefined;
-        var child: libx11.Window = undefined;
-        var root_x: c_int, var root_y: c_int = .{ undefined, undefined };
-        var win_x: c_int, var win_y: c_int = .{ undefined, undefined };
-        var mask: c_uint = undefined;
-        _ = libx11.XQueryPointer(
-            drvr.handles.xdisplay,
-            self.handle,
-            &root,
-            &child,
-            &root_x,
-            &root_y,
-            &win_x,
-            &win_y,
-            &mask,
-        );
-
-        return .{ .x = win_x, .y = win_y };
-    }
-
-    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
-        self.x11.cursor.pos = .{ .x = x, .y = y };
-        const drvr = X11Driver.singleton();
-        _ = libx11.XWarpPointer(
-            drvr.handles.xdisplay,
-            libx11.None,
-            self.handle,
-            0,
-            0,
-            0,
-            0,
-            @intCast(x),
-            @intCast(y),
-        );
-        drvr.flushXRequests();
-    }
-
     /// Notify and flash the taskbar.
     /// Requires window manager support.
     /// returns true on success.
@@ -299,7 +262,6 @@ pub const Window = struct {
         // TODO: refactor + Test.
         const _NET_WM_STATE_ADD = @as(c_long, 1);
 
-        std.debug.print("\nFlashin\n", .{});
         var event = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
                 .type = libx11.ClientMessage,
@@ -319,7 +281,19 @@ pub const Window = struct {
             },
         };
         drvr.sendXEvent(&event, drvr.windowManagerId());
+        drvr.flushXRequests();
         return true;
+    }
+
+    pub fn focus(self: *Self) void {
+        const drvr = X11Driver.singleton();
+        libx11.XRaiseWindow(drvr.handles.xdisplay, self.handle);
+        libx11.XSetInputFocus(
+            drvr.handles.xdisplay,
+            self.handle,
+            libx11.RevertToParent,
+            libx11.CurrentTime,
+        );
     }
 
     /// Returns the position of the top left corner of the client area.
@@ -361,10 +335,10 @@ pub const Window = struct {
 
     /// Sets the new (width,height) of the window's client area
     pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
-        // if (self.data.flags.is_maximized) {
-        //     // un-maximize the window
-        //     self.restore();
-        // }
+        if (self.data.flags.is_maximized) {
+            // un-maximize the window
+            self.restore();
+        }
 
         if (self.data.flags.is_dpi_aware) {
             const drvr = X11Driver.singleton();
@@ -473,16 +447,61 @@ pub const Window = struct {
         self.updateNormalHints();
     }
 
-    // /// Toggles window resizablitity on(true) or off(false).
-    // pub fn setDecorated(self: *Self, value: bool) void {
-    //     self.data.flags.is_decorated = value;
-    //     self.updateStyles();
-    // }
-    //
-    // /// Maximize the window.
-    // pub fn maximize(self: *const Self) void {
-    //     _ = win32_window_messaging.ShowWindow(self.handle, win32_window_messaging.SW_MAXIMIZE);
-    // }
+    /// Toggles window resizablitity on(true) or off(false).
+    pub fn setDecorated(self: *Self, value: bool) void {
+        const drvr = X11Driver.singleton();
+        self.data.flags.is_decorated = value;
+        var deco_hints: extern struct {
+            flags: c_ulong,
+            functins: c_ulong,
+            decorations: c_ulong,
+            input_mode: c_long,
+            status: c_ulong,
+        } = undefined;
+
+        deco_hints = std.mem.zeroes(@TypeOf(deco_hints));
+
+        deco_hints.flags = 2;
+        deco_hints.decorations = if (value) 1 else 0;
+
+        libx11.XChangeProperty(
+            drvr.handles.xdisplay,
+            self.handle,
+            drvr.ewmh._MOTIF_WM_HINTS,
+            drvr.ewmh._MOTIF_WM_HINTS,
+            32,
+            libx11.PropModeReplace,
+            @ptrCast(&deco_hints),
+            @intCast(@sizeOf(@TypeOf(deco_hints)) / @sizeOf(c_long)),
+        );
+    }
+
+    /// Maximize the window.
+    pub fn maximize(self: *const Self) void {
+        const drvr = X11Driver.singleton();
+        if (drvr.ewmh._NET_WM_STATE != 0 and
+            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT != 0 and
+            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
+        {
+            var ev = libx11.XEvent{
+                .xclient = .{
+                    .window = self.handle,
+                    .format = 32,
+                    .message_type = drvr.ewmh._NET_WM_STATE,
+                    .data = .{
+                        .l = .{
+                            1, // NET_WM_STATE_ADD
+                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
+                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
+                            1,
+                            0,
+                        },
+                    },
+                },
+            };
+            drvr.sendXEvent(&ev, drvr.windowManagerId());
+        }
+    }
 
     /// Minimizes the window.
     pub fn minimize(self: *Self) void {
@@ -510,7 +529,7 @@ pub const Window = struct {
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
-                            // TODO: STATE REMOVE,
+                            0, // NET_WM_STATE_REMOVE
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
                             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
                             1,
@@ -519,7 +538,7 @@ pub const Window = struct {
                     },
                 },
             };
-            drvr.sendXEvent(&ev, drvr.handles.root_window);
+            drvr.sendXEvent(&ev, drvr.windowManagerId());
         }
         drvr.flushXRequests();
     }
@@ -670,20 +689,64 @@ pub const Window = struct {
     //     self.win32.dropped_files.clearAndFree();
     // }
 
-    //TEST
+    pub fn cursorPositon(self: *const Self) common.geometry.WidowPoint2D {
+        const drvr = X11Driver.singleton();
+        var root: libx11.Window = undefined;
+        var child: libx11.Window = undefined;
+        var root_x: c_int, var root_y: c_int = .{ undefined, undefined };
+        var win_x: c_int, var win_y: c_int = .{ undefined, undefined };
+        var mask: c_uint = undefined;
+        _ = libx11.XQueryPointer(
+            drvr.handles.xdisplay,
+            self.handle,
+            &root,
+            &child,
+            &root_x,
+            &root_y,
+            &win_x,
+            &win_y,
+            &mask,
+        );
+
+        return .{ .x = win_x, .y = win_y };
+    }
+
+    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
+        self.x11.cursor.pos = .{ .x = x, .y = y };
+        const drvr = X11Driver.singleton();
+        _ = libx11.XWarpPointer(
+            drvr.handles.xdisplay,
+            libx11.None,
+            self.handle,
+            0,
+            0,
+            0,
+            0,
+            @intCast(x),
+            @intCast(y),
+        );
+        drvr.flushXRequests();
+    }
+
+    pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
+        self.x11.cursor.mode = mode;
+        cursor.applyCursorHints(&self.x11.cursor, self.handle);
+    }
+
+    //TODO:test
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
     ) WindowError!void {
-        const new_cursor = icon.createNativeCursor(cursor_shape) catch {
+        const new_cursor = cursor.createNativeCursor(cursor_shape) catch {
             return WindowError.OutOfMemory;
         };
-        icon.destroyCursorIcon(&self.x11.cursor);
+        cursor.destroyCursorIcon(&self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
         self.x11.cursor.sys_owned = new_cursor.sys_owned;
         if (self.data.flags.cursor_in_client) {
-            icon.applyCursorHints(&self.x11.cursor, self.handle);
+            cursor.applyCursorHints(&self.x11.cursor, self.handle);
         }
     }
 
@@ -764,7 +827,7 @@ fn createPlatformWindow(
 
     const handle = libx11.XCreateWindow(
         drvr.handles.xdisplay,
-        drvr.handles.root_window,
+        drvr.windowManagerId(),
         data.client_area.top_left.x,
         data.client_area.top_left.y,
         @intCast(window_size.width),

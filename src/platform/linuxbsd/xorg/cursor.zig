@@ -130,10 +130,10 @@ pub fn destroyCursorIcon(cursor: *CursorHints) void {
 pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
     const drvr = X11Driver.singleton();
 
-    // switch (cursor.mode) {
-    //     // .Normal => unCaptureCursor(),
-    //     // else => captureCursor(window),
-    // }
+    switch (cursor.mode) {
+        .Normal => unCaptureCursor(),
+        else => captureCursor(window),
+    }
 
     const cursor_icon = switch (cursor.mode) {
         .Hidden => drvr.handles.hidden_cursor,
@@ -148,4 +148,28 @@ pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
 
     _ = libx11.XDefineCursor(drvr.handles.xdisplay, window, cursor_icon);
     drvr.flushXRequests();
+}
+
+pub fn unCaptureCursor() void {
+    const drvr = X11Driver.singleton();
+    libx11.XUngrabPointer(
+        drvr.handles.xdisplay,
+        libx11.CurrentTime,
+    );
+}
+
+pub fn captureCursor(w: libx11.Window) void {
+    const drvr = X11Driver.singleton();
+    const retv = libx11.XGrabPointer(
+        drvr.handles.xdisplay,
+        w,
+        libx11.True,
+        libx11.ButtonPressMask | libx11.ButtonReleaseMask | libx11.PointerMotionMask,
+        libx11.GrabModeAsync,
+        libx11.GrabModeAsync,
+        w,
+        libx11.None,
+        libx11.CurrentTime,
+    );
+    std.debug.assert(retv == libx11.GrabSuccess);
 }

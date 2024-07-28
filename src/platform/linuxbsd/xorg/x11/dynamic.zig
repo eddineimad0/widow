@@ -278,6 +278,35 @@ const XUndefineCursorProc = *const fn (
     w: types.Window,
 ) callconv(.C) c_int;
 
+const XGrabPointerProc = *const fn (
+    display: ?*types.Display,
+    grab_window: types.Window,
+    owner_event: types.Bool,
+    event_mask: c_uint,
+    pointer_mode: c_int,
+    keyboard_mode: c_int,
+    confine_to: types.Window,
+    cursor: types.Cursor,
+    time: types.Time,
+) callconv(.C) c_int;
+
+const XUngrabPointerProc = *const fn (
+    display: ?*types.Display,
+    time: types.Time,
+) callconv(.C) void;
+
+const XRaiseWindowProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+) callconv(.C) void;
+
+const XSetInputFocusProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    revert_to: c_int,
+    time: types.Time,
+) callconv(.C) void;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -359,6 +388,11 @@ pub const dyn_api = struct {
     pub var XFreeCursor: XFreeCursorProc = undefined;
     pub var XDefineCursor: XDefineCursorProc = undefined;
     pub var XUndefineCursor: XUndefineCursorProc = undefined;
+    pub var XGrabPointer: XGrabPointerProc = undefined;
+    pub var XUngrabPointer: XUngrabPointerProc = undefined;
+
+    pub var XRaiseWindow: XRaiseWindowProc = undefined;
+    pub var XSetInputFocus: XSetInputFocusProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
