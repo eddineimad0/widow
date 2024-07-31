@@ -29,6 +29,11 @@ pub const Window = struct {
     ev_queue: ?*common.event.EventQueue,
     x11: struct {
         cursor: cursor.CursorHints,
+        xdnd_req: struct {
+            src: c_long,
+            ver: c_long,
+            format: c_long,
+        },
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
@@ -47,13 +52,15 @@ pub const Window = struct {
 
         self.data = data.*;
         self.ev_queue = null;
-        self.x11 = .{
-            .cursor = .{
-                .mode = .Normal,
-                .icon = libx11.None,
-                .pos = .{ .x = 0, .y = 0 },
-            },
-        };
+        self.x11 = .{ .cursor = .{
+            .mode = .Normal,
+            .icon = libx11.None,
+            .pos = .{ .x = 0, .y = 0 },
+        }, .xdnd_req = .{
+            .src = 0,
+            .ver = 0,
+            .format = 0,
+        } };
 
         const drvr = X11Driver.singleton();
         self.handle = try createPlatformWindow(data, drvr);
@@ -65,6 +72,10 @@ pub const Window = struct {
         try setInitialWindowPropeties(self.handle, data);
 
         self.setTitle(window_title);
+        if (!self.data.flags.is_decorated) {
+            self.setDecorated(false);
+        }
+
         if (self.data.flags.is_visible) {
             self.show();
             if (self.data.flags.is_focused) {
@@ -209,14 +220,14 @@ pub const Window = struct {
         const size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
             const drvr = X11Driver.singleton();
-            var supplied: u32 = 0;
+            var supplied: c_long = 0;
             _ = libx11.XGetWMNormalHints(
-                drvr.handle.xdisplay,
+                drvr.handles.xdisplay,
                 self.handle,
                 hints,
                 &supplied,
             );
-            hints.flags &= ~(libx11.PMinSize |
+            hints.flags &= ~@as(c_long, libx11.PMinSize |
                 libx11.PMaxSize |
                 libx11.PAspect);
             if (self.data.flags.is_resizable) {
@@ -245,9 +256,9 @@ pub const Window = struct {
                 hints.max_height = self.data.client_area.size.height;
             }
             _ = libx11.XSetWMNormalHints(
-                drvr.handle.xdisplay,
+                drvr.handles.xdisplay,
                 self.handle,
-                hints,
+                @ptrCast(hints),
             );
             _ = libx11.XFree(hints);
         }
@@ -290,13 +301,38 @@ pub const Window = struct {
 
     pub fn focus(self: *Self) void {
         const drvr = X11Driver.singleton();
-        libx11.XRaiseWindow(drvr.handles.xdisplay, self.handle);
-        libx11.XSetInputFocus(
-            drvr.handles.xdisplay,
-            self.handle,
-            libx11.RevertToParent,
-            libx11.CurrentTime,
-        );
+        if (drvr.ewmh._NET_ACTIVE_WINDOW != 0) {
+            var ev = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
+                    .window = self.handle,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = libx11.True,
+                    .message_type = drvr.ewmh._NET_ACTIVE_WINDOW,
+                    .data = .{
+                        .l = .{
+                            _NET_WM_STATE_ADD,
+                            0,
+                            0,
+                            0,
+                            0,
+                        },
+                    },
+                },
+            };
+            drvr.sendXEvent(&ev, drvr.windowManagerId());
+        } else {
+            libx11.XRaiseWindow(drvr.handles.xdisplay, self.handle);
+            libx11.XSetInputFocus(
+                drvr.handles.xdisplay,
+                self.handle,
+                libx11.RevertToParent,
+                libx11.CurrentTime,
+            );
+        }
+        drvr.flushXRequests();
     }
 
     /// Returns the position of the top left corner of the client area.
@@ -308,7 +344,7 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         const drvr = X11Driver.singleton();
-        libx11.XMoveWindow(drvr.handles.xdisplay, self.handle, @intCast(x), @intCast(y));
+        _ = libx11.XMoveWindow(drvr.handles.xdisplay, self.handle, @intCast(x), @intCast(y));
         drvr.flushXRequests();
     }
 
@@ -347,6 +383,7 @@ pub const Window = struct {
             const drvr = X11Driver.singleton();
             size.scaleBy(drvr.g_screen_scale);
         }
+
         const drvr = X11Driver.singleton();
         _ = libx11.XResizeWindow(
             drvr.handles.xdisplay,
@@ -487,9 +524,13 @@ pub const Window = struct {
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
         {
             var ev = libx11.XEvent{
-                .xclient = .{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
                     .window = self.handle,
                     .format = 32,
+                    .serial = 0,
+                    .send_event = libx11.True,
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
@@ -526,15 +567,19 @@ pub const Window = struct {
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
         {
             var ev = libx11.XEvent{
-                .xclient = .{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
                     .window = self.handle,
                     .format = 32,
+                    .serial = 0,
+                    .send_event = libx11.True,
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
                             _NET_WM_STATE_REMOVE,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT),
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ),
                             1,
                             0,
                         },
@@ -664,21 +709,73 @@ pub const Window = struct {
         return true;
     }
 
+    /// Switch the window to fullscreen mode and back;
+    pub fn setFullscreen(
+        self: *Self,
+        value: bool,
+    ) bool {
+        const drvr = X11Driver.singleton();
+        if (drvr.ewmh._NET_WM_STATE_FULLSCREEN == 0 or
+            drvr.ewmh._NET_WM_STATE == 0)
+        {
+            // unsupported by the current window manager.
+            return false;
+        }
+
+        var event = libx11.XEvent{
+            .xclient = libx11.XClientMessageEvent{
+                .type = libx11.ClientMessage,
+                .display = drvr.handles.xdisplay,
+                .window = self.handle,
+                .message_type = drvr.ewmh._NET_WM_STATE,
+                .format = 32,
+                .serial = 0,
+                .send_event = libx11.True,
+                .data = .{ .l = [5]c_long{
+                    if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                    @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
+                    0,
+                    0,
+                    0,
+                } },
+            },
+        };
+
+        drvr.sendXEvent(&event, drvr.windowManagerId());
+        drvr.flushXRequests();
+        return true;
+    }
+
     // /// Returns a cached slice that contains the path(s) to the last dropped file(s).
     // pub fn droppedFiles(self: *const Self) [][]const u8 {
     //     return self.win32.dropped_files.items;
     // }
-    //
-    // pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
-    //     const accept = if (accepted)
-    //         win32.TRUE
-    //     else blk: {
-    //         self.freeDroppedFiles();
-    //         break :blk win32.FALSE;
-    //     };
-    //     DragAcceptFiles(self.handle, accept);
-    // }
-    //
+
+    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
+        const version: i32 = libx11.XDND_VER;
+        const drvr = X11Driver.singleton();
+
+        if (accepted) {
+            libx11.XChangeProperty(
+                drvr.handles.xdisplay,
+                self.handle,
+                drvr.ewmh.XdndAware,
+                libx11.XA_ATOM,
+                32,
+                libx11.PropModeReplace,
+                @ptrCast(&version),
+                1,
+            );
+        } else {
+            libx11.XDeleteProperty(
+                drvr.handles.xdisplay,
+                self.handle,
+                drvr.ewmh.XdndAware,
+            );
+        }
+        drvr.flushXRequests();
+    }
+
     // /// Frees the allocated memory used to hold the file(s) path(s).
     // pub fn freeDroppedFiles(self: *Self) void {
     //     // Avoid double free.
@@ -822,7 +919,7 @@ pub const Window = struct {
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
-        if (common.IS_DEBUG) {
+        if (common.IS_DEBUG_BUILD) {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
@@ -915,7 +1012,6 @@ fn createPlatformWindow(
         return WindowError.CreateFail;
     }
 
-    // TODO: handle non is_decorated = false,
     // TODO: handle non is_fullscreen = true,
 
     return handle;

@@ -121,6 +121,18 @@ const X11EWMH = struct {
     _NET_ACTIVE_WINDOW: libx11.Atom,
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
+
+    // X drag and drop
+    XdndAware: libx11.Atom,
+    XdndEnter: libx11.Atom,
+    XdndPosition: libx11.Atom,
+    XdndStatus: libx11.Atom,
+    XdndActionCopy: libx11.Atom,
+    XdndDrop: libx11.Atom,
+    XdndFinished: libx11.Atom,
+    XdndSelection: libx11.Atom,
+    XdndTypeList: libx11.Atom,
+    text_uri_list: libx11.Atom,
 };
 
 pub const X11Driver = struct {

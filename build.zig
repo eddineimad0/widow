@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) !void {
     const examples = [_][]const u8{
         "simple_window",
         "cursor_and_icon",
-        // "events_loop",
+        "events_loop",
         // "gl_triangle",
     };
 

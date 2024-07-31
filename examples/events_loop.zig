@@ -228,19 +228,20 @@ pub fn main() !void {
                     });
                 },
                 EventType.FileDrop => |window_id| {
+                    _ = window_id;
 
                     // Get a Slice containing the path(s) to the latest file(s).
-                    const files = mywindow.droppedFiles();
-                    for (files) |*file| {
-                        std.debug.print("File: {s} Dropped on window #{}\n", .{ file.*, window_id });
-                    }
+                    // const files = mywindow.droppedFiles();
+                    // for (files) |*file| {
+                    //     std.debug.print("File: {s} Dropped on window #{}\n", .{ file.*, window_id });
+                    // }
 
                     // if the files cache exceed a certain threshold,
                     // you may want to manually free it.
-                    if (files.len > 5) {
-                        std.log.info("Free drop cache\n", .{});
-                        mywindow.freeDroppedFiles();
-                    }
+                    // if (files.len > 5) {
+                    //     std.log.info("Free drop cache\n", .{});
+                    //     mywindow.freeDroppedFiles();
+                    // }
                 },
                 EventType.WindowMove => |*new_pos| {
                     std.debug.print(

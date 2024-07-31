@@ -692,6 +692,8 @@ pub const XC_watch = 150;
 pub const XC_exchange = 50;
 pub const XC_X_cursor = 0;
 
+pub const XDND_VER = 5;
+
 /// Determine the modules name at comptime.
 pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{

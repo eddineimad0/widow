@@ -106,9 +106,9 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void {
 
 /// handles ICCCM messages.
 fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
-    const x11cntxt = X11Driver.singleton();
-    if (e.message_type == x11cntxt.ewmh.WM_PROTOCOLS) {
-        if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh.WM_DELETE_WINDOW) {
+    const drvr = X11Driver.singleton();
+    if (e.message_type == drvr.ewmh.WM_PROTOCOLS) {
+        if (@as(libx11.Atom, @intCast(e.data.l[0])) == drvr.ewmh.WM_DELETE_WINDOW) {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info(
                     "window: #{} recieved ClientMessage:WM_DELETE_WINDOW\n",
@@ -118,7 +118,7 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             const event = common.event.createCloseEvent(w.data.id);
             w.sendEvent(&event);
         }
-        if (@as(libx11.Atom, @intCast(e.data.l[0])) == x11cntxt.ewmh._NET_WM_PING) {
+        if (@as(libx11.Atom, @intCast(e.data.l[0])) == drvr.ewmh._NET_WM_PING) {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info(
                     "window: #{} recieved ClientMessage:_NET_WM_PING\n",
@@ -129,9 +129,46 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             // we just need to keep sending ping until the communication
             // is over.
             var reply = libx11.XEvent{ .xclient = e.* };
-            reply.xclient.window = x11cntxt.windowManagerId();
-            x11cntxt.sendXEvent(&reply, x11cntxt.windowManagerId());
+            reply.xclient.window = drvr.windowManagerId();
+            drvr.sendXEvent(&reply, drvr.windowManagerId());
         }
+    } else if (e.message_type == drvr.ewmh.XdndEnter) {
+        w.x11.xdnd_req.src = e.data.l[0];
+        w.x11.xdnd_req.ver = e.data.l[1] >> 24;
+        w.x11.xdnd_req.format = 0;
+
+        var extra_formats_count: u32 = 0;
+        var extra_formats: [*]const libx11.Atom = undefined;
+        const extra_types = e.data.l[0] & 1;
+        if (extra_types != 0) {
+            extra_formats_count = utils.x11WindowProperty(
+                drvr.handles.xdisplay,
+                @bitCast(w.x11.xdnd_req.src),
+                drvr.ewmh.XdndTypeList,
+                libx11.XA_ATOM,
+                @ptrCast(&extra_formats),
+            ) catch err: {
+                extra_formats = @ptrCast(&e.data.l[2]);
+                break :err 3;
+            };
+            std.debug.assert(extra_formats_count != 0);
+        } else {
+            extra_formats_count = 3;
+            extra_formats = @ptrCast(&e.data.l[2]);
+        }
+
+        for (0..extra_formats_count) |i| {
+            if (extra_formats[i] == drvr.ewmh.text_uri_list) {
+                w.x11.xdnd_req.format = @intCast(drvr.ewmh.text_uri_list);
+                break;
+            }
+        }
+
+        if (extra_types != 0 and @intFromPtr(extra_formats) != @intFromPtr(&e.data.l[2])) {
+            _ = libx11.XFree(@constCast(extra_formats));
+        }
+    } else if (e.message_type == drvr.ewmh.XdndDrop) {
+        // TODO:
     }
 }
 
