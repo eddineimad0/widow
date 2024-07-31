@@ -314,6 +314,15 @@ const XGetWMNormalHintsProc = *const fn (
     supplied_return: *c_long,
 ) callconv(.C) types.Status;
 
+const XConvertSelectionProc = *const fn (
+    display: ?*types.Display,
+    selection: types.Atom,
+    target: types.Atom,
+    property: types.Atom,
+    requestor: types.Window,
+    time: types.Time,
+) callconv(.C) void;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -412,6 +421,7 @@ pub const dyn_api = struct {
     pub var XRaiseWindow: XRaiseWindowProc = undefined;
     pub var XSetInputFocus: XSetInputFocusProc = undefined;
     pub var XGetWMNormalHints: XGetWMNormalHintsProc = undefined;
+    pub var XConvertSelection: XConvertSelectionProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

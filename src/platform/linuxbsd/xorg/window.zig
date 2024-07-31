@@ -33,6 +33,8 @@ pub const Window = struct {
             src: c_long,
             ver: c_long,
             format: c_long,
+            raw_data: ?[*]const u8,
+            paths: std.ArrayList([]const u8),
         },
     },
 
@@ -60,6 +62,8 @@ pub const Window = struct {
             .src = 0,
             .ver = 0,
             .format = 0,
+            .raw_data = null,
+            .paths = std.ArrayList([]const u8).init(allocator),
         } };
 
         const drvr = X11Driver.singleton();
@@ -93,6 +97,10 @@ pub const Window = struct {
         _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(drvr.handles.xdisplay, self.handle);
         _ = drvr.removeFromXContext(self.handle);
+        if (self.x11.xdnd_req.raw_data) |rd| {
+            _ = libx11.XFree(@constCast(rd));
+        }
+        self.x11.xdnd_req.paths.deinit();
         self.handle = 0;
         allocator.destroy(self);
     }
@@ -746,11 +754,6 @@ pub const Window = struct {
         return true;
     }
 
-    // /// Returns a cached slice that contains the path(s) to the last dropped file(s).
-    // pub fn droppedFiles(self: *const Self) [][]const u8 {
-    //     return self.win32.dropped_files.items;
-    // }
-
     pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
         const version: i32 = libx11.XDND_VER;
         const drvr = X11Driver.singleton();
@@ -776,18 +779,20 @@ pub const Window = struct {
         drvr.flushXRequests();
     }
 
-    // /// Frees the allocated memory used to hold the file(s) path(s).
-    // pub fn freeDroppedFiles(self: *Self) void {
-    //     // Avoid double free.
-    //     if (self.win32.dropped_files.capacity == 0) {
-    //         return;
-    //     }
-    //     const allocator = self.win32.dropped_files.allocator;
-    //     for (self.win32.dropped_files.items) |item| {
-    //         allocator.free(item);
-    //     }
-    //     self.win32.dropped_files.clearAndFree();
-    // }
+    // /// Returns a cached slice that contains the path(s) to the last dropped file(s).
+    pub fn droppedFiles(self: *const Self) [][]const u8 {
+        return self.x11.xdnd_req.paths.items;
+    }
+
+    /// Frees the allocated memory used to hold the file(s) path(s).
+    pub fn freeDroppedFiles(self: *Self) void {
+        // Avoid double free.
+        if (self.x11.xdnd_req.raw_data) |rd| {
+            _ = libx11.XFree(@constCast(rd));
+        }
+
+        self.x11.xdnd_req.paths.clearAndFree();
+    }
 
     pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         const drvr = X11Driver.singleton();

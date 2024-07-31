@@ -1,9 +1,10 @@
 //! This file contains helper function to use on the linux platforms
 const std = @import("std");
-const debug = std.debug;
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const maxInt = std.math.maxInt;
+const mem = std.mem;
+const debug = std.debug;
 
 pub const DEFAULT_SCREEN_DPI: f32 = @as(f32, 96);
 
@@ -131,5 +132,22 @@ pub fn fixKeyMods(
         mods.num_lock = (mods.num_lock and keycode != .NumLock);
         mods.meta = (mods.meta and keycode != .Meta);
         mods.caps_lock = (mods.caps_lock and keycode != .CapsLock);
+    }
+}
+
+pub fn parseDroppedFilesURI(data: [:0]const u8, output: *std.ArrayList([]const u8)) mem.Allocator.Error!void {
+    try output.ensureTotalCapacity(4);
+    var iter = mem.tokenizeSequence(u8, data, "\r\n");
+    while (iter.next()) |tok| {
+        if (tok[0] == '#') {
+            continue;
+        }
+
+        var start: usize = 0;
+        if (mem.eql(u8, tok[0..7], "file://")) {
+            start = 7;
+        }
+
+        try output.append(tok[start..]);
     }
 }

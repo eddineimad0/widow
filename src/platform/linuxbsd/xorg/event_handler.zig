@@ -168,7 +168,37 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             _ = libx11.XFree(@constCast(extra_formats));
         }
     } else if (e.message_type == drvr.ewmh.XdndDrop) {
-        // TODO:
+        if (w.x11.xdnd_req.format != 0) {
+            libx11.XConvertSelection(
+                drvr.handles.xdisplay,
+                drvr.ewmh.XdndSelection,
+                @intCast(w.x11.xdnd_req.format),
+                drvr.ewmh.XdndSelection,
+                w.handle,
+                @intCast(e.data.l[2]),
+            );
+        } else {
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
+                    .window = @intCast(w.x11.xdnd_req.src),
+                    .message_type = drvr.ewmh.XdndFinished,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = libx11.True,
+                    .data = .{ .l = [5]c_long{
+                        @intCast(w.handle),
+                        0,
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
+            drvr.sendXEvent(&event, @intCast(w.x11.xdnd_req.src));
+            drvr.flushXRequests();
+        }
     }
 }
 
@@ -252,6 +282,80 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
             window.sendEvent(&event);
         },
         else => unreachable,
+    }
+}
+
+fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
+    const drvr = X11Driver.singleton();
+    if (e.property != drvr.ewmh.XdndSelection) {
+        return;
+    }
+
+    var success: c_long = 0;
+
+    var dropped_data: ?[*]u8 = null;
+    const ret = utils.x11WindowProperty(
+        drvr.handles.xdisplay,
+        e.requestor,
+        e.property,
+        e.target,
+        @ptrCast(&dropped_data),
+    ) catch 0;
+
+    if (dropped_data) |data| {
+        if (window.x11.xdnd_req.raw_data) |rd| {
+            // free old file uri list.
+            _ = libx11.XFree(@constCast(rd));
+        }
+        window.x11.xdnd_req.raw_data = data;
+
+        if (ret != 0) {
+            success = 1;
+        }
+        window.x11.xdnd_req.paths.clearRetainingCapacity();
+        const data_len = utils.strZLen(@ptrCast(data));
+        var data_slice: [:0]const u8 = undefined;
+        data_slice.ptr = @ptrCast(data);
+        data_slice.len = data_len;
+        utils.parseDroppedFilesURI(data_slice, &window.x11.xdnd_req.paths) catch |err| {
+            var ev: libx11.XEvent = undefined;
+            ev.type = libx11.ClientMessage;
+            ev.xclient.window = window.handle;
+            ev.xclient.message_type = X11Driver.CUSTOM_CLIENT_ERR;
+            ev.xclient.format = 32;
+            ev.xclient.data.l[0] = @intFromError(err);
+            std.debug.assert(ev.xclient.message_type != 0);
+            drvr.sendXEvent(&ev, window.handle);
+        };
+    }
+
+    var event = libx11.XEvent{
+        .xclient = libx11.XClientMessageEvent{
+            .type = libx11.ClientMessage,
+            .display = drvr.handles.xdisplay,
+            .window = @intCast(window.x11.xdnd_req.src),
+            .message_type = drvr.ewmh.XdndFinished,
+            .format = 32,
+            .serial = 0,
+            .send_event = libx11.True,
+            .data = .{ .l = [5]c_long{
+                @intCast(window.handle),
+                success,
+                @intCast(drvr.ewmh.XdndActionCopy),
+                0,
+                0,
+            } },
+        },
+    };
+
+    drvr.sendXEvent(&event, @intCast(window.x11.xdnd_req.src));
+    drvr.flushXRequests();
+
+    if (success == 1) {
+        const drop_event = common.event.createDropFileEvent(
+            window.data.id,
+        );
+        window.sendEvent(&drop_event);
     }
 }
 
@@ -418,6 +522,8 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             const event = common.event.createRedrawEvent(window.data.id);
             window.sendEvent(&event);
         },
+
+        libx11.SelectionNotify => handleXSelection(&ev.xselection, window),
 
         else => {},
     }
