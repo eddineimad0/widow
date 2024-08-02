@@ -271,7 +271,7 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
             const keycode = km.lookupKeyCode(@intCast(ev.keycode));
             const scancode = keymaps.keycodeToScancode(@intCast(ev.keycode));
             var mods = utils.decodeKeyMods(ev.state);
-            utils.fixKeyMods(&mods, .Up, kbd_mouse.KeyState.Released);
+            utils.fixKeyMods(&mods, keycode, kbd_mouse.KeyState.Released);
             var event = common.event.createKeyboardEvent(
                 window.data.id,
                 keycode,

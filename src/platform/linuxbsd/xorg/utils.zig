@@ -122,16 +122,12 @@ pub fn fixKeyMods(
         mods.shift = (mods.shift or keycode == .Shift);
         mods.ctrl = (mods.ctrl or keycode == .Control);
         mods.alt = (mods.alt or keycode == .Alt);
-        mods.num_lock = (mods.num_lock or keycode == .NumLock);
         mods.meta = (mods.meta or keycode == .Meta);
-        mods.caps_lock = (mods.caps_lock or keycode == .CapsLock);
     } else {
         mods.shift = (mods.shift and keycode != .Shift);
         mods.ctrl = (mods.ctrl and keycode != .Control);
         mods.alt = (mods.alt and keycode != .Alt);
-        mods.num_lock = (mods.num_lock and keycode != .NumLock);
         mods.meta = (mods.meta and keycode != .Meta);
-        mods.caps_lock = (mods.caps_lock and keycode != .CapsLock);
     }
 }
 
