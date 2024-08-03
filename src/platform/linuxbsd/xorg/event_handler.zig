@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const cursor = @import("cursor.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 const keymaps = @import("keymaps.zig");
@@ -133,6 +134,12 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             drvr.sendXEvent(&reply, drvr.windowManagerId());
         }
     } else if (e.message_type == drvr.ewmh.XdndEnter) {
+        if (opts.LOG_PLATFORM_EVENTS) {
+            std.log.info(
+                "window: #{} recieved ClientMessage:XdndEnter\n",
+                .{w.handle},
+            );
+        }
         w.x11.xdnd_req.src = e.data.l[0];
         w.x11.xdnd_req.ver = e.data.l[1] >> 24;
         w.x11.xdnd_req.format = 0;
@@ -151,11 +158,12 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
                 extra_formats = @ptrCast(&e.data.l[2]);
                 break :err 3;
             };
-            std.debug.assert(extra_formats_count != 0);
         } else {
             extra_formats_count = 3;
             extra_formats = @ptrCast(&e.data.l[2]);
         }
+
+        std.debug.assert(extra_formats_count != 0);
 
         for (0..extra_formats_count) |i| {
             if (extra_formats[i] == drvr.ewmh.text_uri_list) {
@@ -168,6 +176,12 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             _ = libx11.XFree(@constCast(extra_formats));
         }
     } else if (e.message_type == drvr.ewmh.XdndDrop) {
+        if (opts.LOG_PLATFORM_EVENTS) {
+            std.log.info(
+                "window: #{} recieved ClientMessage:XdndDrop\n",
+                .{w.handle},
+            );
+        }
         if (w.x11.xdnd_req.format != 0) {
             libx11.XConvertSelection(
                 drvr.handles.xdisplay,
@@ -199,6 +213,55 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             drvr.sendXEvent(&event, @intCast(w.x11.xdnd_req.src));
             drvr.flushXRequests();
         }
+    } else if (e.message_type == drvr.ewmh.XdndPosition) {
+        if (opts.LOG_PLATFORM_EVENTS) {
+            std.log.info(
+                "window: #{} recieved ClientMessage:XdndPosition\n",
+                .{w.handle},
+            );
+        }
+        const x_root, const y_root = .{ (e.data.l[2] >> 16) & 0xffff, e.data.l[2] & 0xffff };
+        var x: c_int, var y: c_int = .{ 0, 0 };
+        var child: libx11.Window = 0;
+
+        _ = libx11.XTranslateCoordinates(
+            drvr.handles.xdisplay,
+            drvr.windowManagerId(),
+            w.handle,
+            @intCast(x_root),
+            @intCast(y_root),
+            &x,
+            &y,
+            &child,
+        );
+        const event = common.event.createMoveEvent(
+            w.data.id,
+            @intCast(x),
+            @intCast(y),
+            true,
+        );
+        w.sendEvent(&event);
+
+        var reply = libx11.XEvent{
+            .xclient = libx11.XClientMessageEvent{
+                .type = libx11.ClientMessage,
+                .display = drvr.handles.xdisplay,
+                .window = @intCast(w.x11.xdnd_req.src),
+                .message_type = drvr.ewmh.XdndStatus,
+                .format = 32,
+                .serial = 0,
+                .send_event = libx11.True,
+                .data = .{ .l = [5]c_long{
+                    @intCast(w.handle),
+                    1,
+                    0,
+                    0,
+                    @intCast(drvr.ewmh.XdndActionCopy),
+                } },
+            },
+        };
+        drvr.sendXEvent(&reply, @intCast(w.x11.xdnd_req.src));
+        drvr.flushXRequests();
     }
 }
 
@@ -359,6 +422,63 @@ fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
     }
 }
 
+fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
+    const drvr = X11Driver.singleton();
+    if (e.state != libx11.PropertyNewValue) {
+        return;
+    }
+
+    if (e.atom == drvr.ewmh.WM_STATE) {
+        var state: ?*extern struct {
+            state: u32,
+            icon: libx11.Window,
+        } = null;
+
+        _ = utils.x11WindowProperty(
+            drvr.handles.xdisplay,
+            window.handle,
+            drvr.ewmh.WM_STATE,
+            drvr.ewmh.WM_STATE,
+            @ptrCast(&state),
+        ) catch return;
+
+        if (state) |s| {
+            defer libx11.XFree(@ptrCast(state));
+            window.data.flags.is_minimized = s.state == libx11.IconicState;
+        }
+        const event = common.event.createMinimizeEvent(window.data.id);
+        window.sendEvent(&event);
+    } else if (e.atom == drvr.ewmh._NET_WM_STATE) {
+        var state: ?[*]libx11.Atom = null;
+        const count = utils.x11WindowProperty(
+            drvr.handles.xdisplay,
+            window.handle,
+            drvr.ewmh._NET_WM_STATE,
+            libx11.XA_ATOM,
+            @ptrCast(&state),
+        ) catch return;
+
+        if (state) |s| {
+            defer libx11.XFree(@ptrCast(state));
+            var maximized = false;
+            for (0..count) |i| {
+                if (s[i] == drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT or
+                    s[i] == drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ)
+                {
+                    maximized = true;
+                    break;
+                }
+            }
+
+            if (maximized) {
+                window.data.flags.is_maximized = maximized;
+                const event = common.event.createMaximizeEvent(window.data.id);
+                window.sendEvent(&event);
+            }
+        }
+    }
+}
+
 // fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
 //     _ = helper_data;
 //     if (opts.LOG_PLATFORM_EVENTS) {
@@ -411,11 +531,18 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             }
             const x, const y = .{ ev.xcrossing.x, ev.xcrossing.y };
             window.x11.cursor.pos = .{ .x = x, .y = y };
-            // TODO: update cursor image.
-            const enter_event = common.event.createMouseEnterEvent(window.data.id);
+            cursor.applyCursorHints(&window.x11.cursor, window.handle);
+            const enter_event = common.event.createMouseEnterEvent(
+                window.data.id,
+            );
             window.sendEvent(&enter_event);
             window.data.flags.cursor_in_client = true;
-            const pos_event = common.event.createMoveEvent(window.data.id, x, y, true);
+            const pos_event = common.event.createMoveEvent(
+                window.data.id,
+                x,
+                y,
+                true,
+            );
             window.sendEvent(&pos_event);
         },
 
@@ -440,7 +567,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            // TODO: update cursor image.
+            cursor.applyCursorHints(&window.x11.cursor, window.handle);
             const event = common.event.createFocusEvent(window.data.id, true);
             window.sendEvent(&event);
         },
@@ -452,7 +579,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            // TODO: update cursor image.
+            cursor.undoCursorHints(&window.x11.cursor, window.handle);
             const event = common.event.createFocusEvent(window.data.id, false);
             window.sendEvent(&event);
         },
@@ -521,6 +648,15 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             }
             const event = common.event.createRedrawEvent(window.data.id);
             window.sendEvent(&event);
+        },
+
+        libx11.PropertyNotify => {
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved PropertyNotify\n",
+                    .{window.data.id},
+                );
+            }
         },
 
         libx11.SelectionNotify => handleXSelection(&ev.xselection, window),

@@ -128,6 +128,20 @@ pub fn destroyCursorIcon(cursor: *CursorHints) void {
     }
 }
 
+pub fn undoCursorHints(cursor: *CursorHints, window: libx11.Window) void {
+    const drvr = X11Driver.singleton();
+
+    switch (cursor.mode) {
+        .Captured, .Hidden => {
+            unCaptureCursor();
+            _ = libx11.XUndefineCursor(drvr.handles.xdisplay, window);
+        },
+        else => {},
+    }
+
+    drvr.flushXRequests();
+}
+
 pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
     const drvr = X11Driver.singleton();
 

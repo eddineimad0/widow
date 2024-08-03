@@ -323,6 +323,17 @@ const XConvertSelectionProc = *const fn (
     time: types.Time,
 ) callconv(.C) void;
 
+const XTranslateCoordinatesProc = *const fn (
+    display: ?*types.Display,
+    src_w: types.Window,
+    dest_w: types.Window,
+    src_x: c_int,
+    src_y: c_int,
+    dest_x: *c_int,
+    dest_y: *c_int,
+    child_ret: *types.Window,
+) callconv(.C) types.Bool;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -422,6 +433,8 @@ pub const dyn_api = struct {
     pub var XSetInputFocus: XSetInputFocusProc = undefined;
     pub var XGetWMNormalHints: XGetWMNormalHintsProc = undefined;
     pub var XConvertSelection: XConvertSelectionProc = undefined;
+
+    pub var XTranslateCoordinates: XTranslateCoordinatesProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
