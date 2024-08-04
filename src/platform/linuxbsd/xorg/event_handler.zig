@@ -423,6 +423,12 @@ fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
 }
 
 fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
+    if (opts.LOG_PLATFORM_EVENTS) {
+        std.log.info(
+            "window: #{} recieved PropertyNotify\n",
+            .{window.data.id},
+        );
+    }
     const drvr = X11Driver.singleton();
     if (e.state != libx11.PropertyNewValue) {
         return;
@@ -443,7 +449,7 @@ fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
         ) catch return;
 
         if (state) |s| {
-            defer libx11.XFree(@ptrCast(state));
+            defer _ = libx11.XFree(@ptrCast(state));
             window.data.flags.is_minimized = s.state == libx11.IconicState;
         }
         const event = common.event.createMinimizeEvent(window.data.id);
@@ -459,7 +465,7 @@ fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
         ) catch return;
 
         if (state) |s| {
-            defer libx11.XFree(@ptrCast(state));
+            defer _ = libx11.XFree(@ptrCast(state));
             var maximized = false;
             for (0..count) |i| {
                 if (s[i] == drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT or
@@ -650,14 +656,7 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             window.sendEvent(&event);
         },
 
-        libx11.PropertyNotify => {
-            if (opts.LOG_PLATFORM_EVENTS) {
-                std.log.info(
-                    "window: #{} recieved PropertyNotify\n",
-                    .{window.data.id},
-                );
-            }
-        },
+        libx11.PropertyNotify => handlePropertyNotify(&ev.xproperty, window),
 
         libx11.SelectionNotify => handleXSelection(&ev.xselection, window),
 

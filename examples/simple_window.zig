@@ -59,7 +59,7 @@ pub fn main() !void {
                             mywindow.queueCloseEvent();
                         }
                     }
-                    std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                    std.debug.print("Window #{}\nKeycode:{}\nScancode:{}\nState:{}\nmods:{}\n", .{
                         key.window_id,
                         key.keycode,
                         key.scancode,

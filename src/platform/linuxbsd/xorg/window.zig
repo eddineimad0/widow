@@ -295,7 +295,7 @@ pub const Window = struct {
                 .send_event = libx11.True,
                 .data = .{ .l = [5]c_long{
                     _NET_WM_STATE_ADD,
-                    drvr.ewmh._NET_WM_STATE_DEMANDS_ATTENTION,
+                    @intCast(drvr.ewmh._NET_WM_STATE_DEMANDS_ATTENTION),
                     0,
                     1,
                     0,
@@ -352,7 +352,13 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         const drvr = X11Driver.singleton();
-        _ = libx11.XMoveWindow(drvr.handles.xdisplay, self.handle, @intCast(x), @intCast(y));
+        //BUG: for some reason the window is moved to the wrong position.
+        _ = libx11.XMoveWindow(
+            drvr.handles.xdisplay,
+            self.handle,
+            @intCast(x),
+            @intCast(y),
+        );
         drvr.flushXRequests();
     }
 
@@ -387,12 +393,19 @@ pub const Window = struct {
             self.restore();
         }
 
+        self.data.client_area.size = size.*;
         if (self.data.flags.is_dpi_aware) {
             const drvr = X11Driver.singleton();
-            size.scaleBy(drvr.g_screen_scale);
+            self.data.client_area.size.scaleBy(drvr.g_screen_scale);
         }
 
         const drvr = X11Driver.singleton();
+        if (!self.data.flags.is_resizable) {
+            // we need to update the maxwidth and maxheight
+            // size hints.
+            self.updateNormalHints();
+        }
+
         _ = libx11.XResizeWindow(
             drvr.handles.xdisplay,
             self.handle,
@@ -484,7 +497,7 @@ pub const Window = struct {
         self.updateNormalHints();
     }
 
-    pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.AspectRatio) void {
+    pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.WidowAspectRatio) void {
         self.data.aspect_ratio = ratio;
         self.updateNormalHints();
     }
@@ -497,20 +510,23 @@ pub const Window = struct {
 
     /// Toggles window resizablitity on(true) or off(false).
     pub fn setDecorated(self: *Self, value: bool) void {
+        const MWM_HINTS_DECORATIONS = 2;
+        const MWM_DECOR_ALL = 1;
+        const PROP_MOTIF_WM_HINTS_ELEMENTS = 5;
         const drvr = X11Driver.singleton();
         self.data.flags.is_decorated = value;
-        var deco_hints: extern struct {
+        var motif_hints: extern struct {
             flags: c_ulong,
-            functins: c_ulong,
+            functions: c_ulong,
             decorations: c_ulong,
             input_mode: c_long,
             status: c_ulong,
         } = undefined;
 
-        deco_hints = std.mem.zeroes(@TypeOf(deco_hints));
+        motif_hints = std.mem.zeroes(@TypeOf(motif_hints));
 
-        deco_hints.flags = 2;
-        deco_hints.decorations = if (value) 1 else 0;
+        motif_hints.flags = MWM_HINTS_DECORATIONS;
+        motif_hints.decorations = if (value) MWM_DECOR_ALL else 0;
 
         libx11.XChangeProperty(
             drvr.handles.xdisplay,
@@ -519,8 +535,8 @@ pub const Window = struct {
             drvr.ewmh._MOTIF_WM_HINTS,
             32,
             libx11.PropModeReplace,
-            @ptrCast(&deco_hints),
-            @intCast(@sizeOf(@TypeOf(deco_hints)) / @sizeOf(c_long)),
+            @ptrCast(&motif_hints),
+            PROP_MOTIF_WM_HINTS_ELEMENTS,
         );
     }
 
@@ -921,6 +937,74 @@ pub const Window = struct {
             );
         }
         drvr.flushXRequests();
+    }
+
+    fn windowFrameSize(
+        self: *const Self,
+        left: *i32,
+        top: *i32,
+        right: *i32,
+        bottom: *i32,
+    ) bool {
+        const drvr = X11Driver.singleton();
+        if (self.data.flags.is_fullscreen or
+            !self.data.flags.is_decorated or
+            drvr.ewmh._NET_REQUEST_FRAME_EXTENTS == 0)
+        {
+            left.* = 0;
+            right.* = 0;
+            top.* = 0;
+            bottom.* = 0;
+            return true;
+        }
+
+        var ev = libx11.XEvent{
+            .xclient = libx11.XClientMessageEvent{
+                .type = libx11.ClientMessage,
+                .display = drvr.handles.xdisplay,
+                .window = self.handle,
+                .format = 32,
+                .serial = 0,
+                .send_event = libx11.True,
+                .message_type = drvr.ewmh._NET_REQUEST_FRAME_EXTENTS,
+                .data = .{
+                    .l = .{
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                    },
+                },
+            },
+        };
+        drvr.sendXEvent(&ev, drvr.windowManagerId());
+        drvr.flushXRequests();
+
+        var extents: ?[*]c_long = null;
+
+        const length = utils.x11WindowProperty(
+            drvr.handles.xdisplay,
+            self.handle,
+            drvr.ewmh._NET_FRAME_EXTENTS,
+            libx11.XA_CARDINAL,
+            @ptrCast(&extents),
+        ) catch return false;
+
+        if (extents) |ex| {
+            defer _ = libx11.XFree(@ptrCast(ex));
+            if (length != 4) {
+                return false;
+            }
+
+            left.* = @intCast(ex[0]);
+            right.* = @intCast(ex[1]);
+            top.* = @intCast(ex[2]);
+            bottom.* = @intCast(ex[3]);
+            return true;
+        }
+
+        return false;
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {

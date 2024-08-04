@@ -391,7 +391,7 @@ pub const Window = struct {
     /// than zero,e.g:(16,9) for 16:9 ratio or (4,3) for 4:3 ratio.
     pub inline fn setAspectRatio(
         self: *Self,
-        ratio: ?common.geometry.AspectRatio,
+        ratio: ?common.geometry.WidowAspectRatio,
     ) void {
         if (ratio) |*value| {
             std.debug.assert(value.x > 0);
@@ -561,10 +561,12 @@ pub const Window = struct {
 
     /// Requests user attention to the window,
     /// this has no effect if the application is already focused.
-    pub fn requestUserAttention(self: *const Self) void {
+    /// returns true if the request was successful.
+    pub fn requestUserAttention(self: *const Self) bool {
         if (!self.impl.data.flags.is_focused) {
-            self.impl.flash();
+            return self.impl.flash();
         }
+        return false;
     }
 
     /// Switches the window to fullscreen or back to windowed mode.
