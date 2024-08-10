@@ -185,6 +185,19 @@ pub const Visual = extern struct {
     map_entries: c_int,
 };
 
+pub const XVisualInfo = extern struct {
+    visual: ?*Visual,
+    visualid: VisualID,
+    screen: c_int,
+    depth: c_int,
+    class: c_int,
+    red_mask: c_ulong,
+    green_mask: c_ulong,
+    blue_mask: c_ulong,
+    colormap_size: c_int,
+    bits_per_rgb: c_int,
+};
+
 pub const XAnyEvent = extern struct {
     type: c_int,
     serial: c_ulong,

@@ -82,11 +82,6 @@ const X11EWMH = struct {
     _NET_WM_STATE_MAXIMIZED_HORZ: libx11.Atom,
     _NET_WM_STATE_DEMANDS_ATTENTION: libx11.Atom,
 
-    //########### Application Window Properties ##########
-    _NET_WM_VISIBLE_NAME: libx11.Atom,
-    _NET_WM_VISIBLE_ICON_NAME: libx11.Atom,
-    _NET_WM_DESKTOP: libx11.Atom,
-
     // ########## Protocols #################
     // list atoms that identifies a communication protocol between
     // the client and the window manager in which
@@ -97,30 +92,28 @@ const X11EWMH = struct {
     // delete used to notify window of a close requests.
     WM_DELETE_WINDOW: libx11.Atom,
 
-    //########## Property Types ################
+    //########## Window Properties ################
     UTF8_STRING: libx11.Atom,
     WM_STATE: libx11.Atom,
+    _NET_SUPPORTED: libx11.Atom, // lists all the EWMH protocols supported by this WM.
     _NET_SUPPORTING_WM_CHECK: libx11.Atom,
-    // lists all the EWMH protocols supported by this WM.
-    _NET_SUPPORTED: libx11.Atom,
     _NET_WM_ICON: libx11.Atom,
     _NET_WM_PID: libx11.Atom,
     _NET_WM_NAME: libx11.Atom,
     _NET_WM_ICON_NAME: libx11.Atom,
-    _NET_WM_BYPASS_COMPOSITOR: libx11.Atom,
+    _NET_WM_VISIBLE_NAME: libx11.Atom,
+    _NET_WM_VISIBLE_ICON_NAME: libx11.Atom,
     _NET_WM_WINDOW_OPACITY: libx11.Atom,
     _MOTIF_WM_HINTS: libx11.Atom,
     _NET_WM_FULLSCREEN_MONITORS: libx11.Atom,
     _NET_WM_WINDOW_TYPE: libx11.Atom,
     _NET_WM_WINDOW_TYPE_NORMAL: libx11.Atom,
-    // contains a geometry for each desktop.
-    _NET_WORKAREA: libx11.Atom,
-    // the index of the current desktop.
-    _NET_CURRENT_DESKTOP: libx11.Atom,
-    // gives the currently active window.
-    _NET_ACTIVE_WINDOW: libx11.Atom,
+    _NET_WORKAREA: libx11.Atom, // geometry for each desktop.
+    _NET_CURRENT_DESKTOP: libx11.Atom, // the index of the current desktop.
+    _NET_ACTIVE_WINDOW: libx11.Atom, // currently active window.
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
+    _NET_WM_BYPASS_COMPOSITOR: libx11.Atom,
 
     // X drag and drop
     XdndAware: libx11.Atom,
@@ -488,27 +481,61 @@ pub const X11Driver = struct {
     }
 
     fn initEWMH(self: *Self) void {
-        const info = @typeInfo(@TypeOf(self.ewmh));
-        const NAME_BUFFER_SIZE = 256;
-        var name_buffer: [NAME_BUFFER_SIZE]u8 = undefined;
-        inline for (info.Struct.fields) |*f| {
-            // only set the atoms.
-            if (f.type != libx11.Atom) {
-                continue;
-            }
-            if (f.name.len > NAME_BUFFER_SIZE - 1) {
-                @compileError("field name '" ++ f.name ++ "' size is bigger than NAME_BUFFER_SIZE\n");
-            }
-            std.mem.copyForwards(u8, &name_buffer, f.name);
-            // since we are using c functions the strings are expected to
-            // be null terminated.
-            name_buffer[f.name.len] = 0;
-            @field(self.ewmh, f.name) = libx11.XInternAtom(
-                self.handles.xdisplay,
-                @ptrCast(&name_buffer),
-                libx11.False,
-            );
-        }
+        self.ewmh.UTF8_STRING =
+            libx11.XInternAtom(self.handles.xdisplay, "UTF8_STRING", libx11.False);
+
+        self.ewmh.XdndAware =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndAware", libx11.False);
+        self.ewmh.XdndEnter =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndEnter", libx11.False);
+        self.ewmh.XdndPosition =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndPosition", libx11.False);
+        self.ewmh.XdndStatus =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndStatus", libx11.False);
+        self.ewmh.XdndActionCopy =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndActionCopy", libx11.False);
+        self.ewmh.XdndDrop =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndDrop", libx11.False);
+        self.ewmh.XdndFinished =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndFinished", libx11.False);
+        self.ewmh.XdndSelection =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndSelection", libx11.False);
+        self.ewmh.XdndTypeList =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndTypeList", libx11.False);
+        self.ewmh.text_uri_list =
+            libx11.XInternAtom(self.handles.xdisplay, "text/uri-list", libx11.False);
+
+        self.ewmh.WM_PROTOCOLS =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_PROTOCOLS", libx11.False);
+        self.ewmh.WM_STATE =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_STATE", libx11.False);
+        self.ewmh.WM_DELETE_WINDOW =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_DELETE_WINDOW", libx11.False);
+        self.ewmh._NET_SUPPORTED =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTED", libx11.False);
+        self.ewmh._NET_SUPPORTING_WM_CHECK =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTING_WM_CHECK", libx11.False);
+        self.ewmh._NET_WM_ICON =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON", libx11.False);
+        self.ewmh._NET_WM_PING =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PING", libx11.False);
+        self.ewmh._NET_WM_PID =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PID", libx11.False);
+        self.ewmh._NET_WM_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_NAME", libx11.False);
+        self.ewmh._NET_WM_ICON_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON_NAME", libx11.False);
+        self.ewmh._NET_WM_BYPASS_COMPOSITOR =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_BYPASS_COMPOSITOR", libx11.False);
+        self.ewmh._NET_WM_WINDOW_OPACITY =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_WINDOW_OPACITY", libx11.False);
+        self.ewmh._MOTIF_WM_HINTS =
+            libx11.XInternAtom(self.handles.xdisplay, "_MOTIF_WM_HINTS", libx11.False);
+        self.ewmh._NET_WM_VISIBLE_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_NAME", libx11.False);
+        self.ewmh._NET_WM_VISIBLE_ICON_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_ICON_NAME", libx11.False);
+
         self.checkWindowManagerEwmhSupport();
         if (!self.ewmh.is_wm_emwh) {
             return;
@@ -547,10 +574,16 @@ pub const X11Driver = struct {
         };
 
         inline for (REQUIRE_WM_SUPPORT) |atom_name| {
+            const needle = libx11.XInternAtom(
+                self.handles.xdisplay,
+                atom_name,
+                libx11.False,
+            );
+
             @field(self.ewmh, std.mem.span(atom_name)) = atomIfSupported(
                 supported.?,
                 atom_count,
-                @field(self.ewmh, std.mem.span(atom_name)),
+                needle,
             );
         }
 

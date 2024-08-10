@@ -221,7 +221,7 @@ pub const Window = struct {
     /// updated with the desired value before calling this function.
     /// Note:
     /// If the window is fullscreen the function returns immmediately.
-    fn updateNormalHints(self: *Self) void {
+    fn updateSizeHints(self: *Self) void {
         if (self.data.flags.is_fullscreen) {
             return;
         }
@@ -403,7 +403,7 @@ pub const Window = struct {
         if (!self.data.flags.is_resizable) {
             // we need to update the maxwidth and maxheight
             // size hints.
-            self.updateNormalHints();
+            self.updateSizeHints();
         }
 
         _ = libx11.XResizeWindow(
@@ -454,7 +454,7 @@ pub const Window = struct {
             self.data.min_size = null;
         }
 
-        self.updateNormalHints();
+        self.updateSizeHints();
     }
 
     pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
@@ -494,24 +494,24 @@ pub const Window = struct {
             self.data.max_size = null;
         }
 
-        self.updateNormalHints();
+        self.updateSizeHints();
     }
 
     pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.WidowAspectRatio) void {
         self.data.aspect_ratio = ratio;
-        self.updateNormalHints();
+        self.updateSizeHints();
     }
 
     /// Toggles window resizablitity on(true) or off(false).
     pub fn setResizable(self: *Self, value: bool) void {
         self.data.flags.is_resizable = value;
-        self.updateNormalHints();
+        self.updateSizeHints();
     }
 
     /// Toggles window resizablitity on(true) or off(false).
     pub fn setDecorated(self: *Self, value: bool) void {
-        const MWM_HINTS_DECORATIONS = 2;
-        const MWM_DECOR_ALL = 1;
+        const MWM_HINTS_DECORATIONS = 1 << 1;
+        const MWM_DECOR_ALL = 1 << 0;
         const PROP_MOTIF_WM_HINTS_ELEMENTS = 5;
         const drvr = X11Driver.singleton();
         self.data.flags.is_decorated = value;
@@ -522,8 +522,6 @@ pub const Window = struct {
             input_mode: c_long,
             status: c_ulong,
         } = undefined;
-
-        motif_hints = std.mem.zeroes(@TypeOf(motif_hints));
 
         motif_hints.flags = MWM_HINTS_DECORATIONS;
         motif_hints.decorations = if (value) MWM_DECOR_ALL else 0;
