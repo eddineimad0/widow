@@ -9,7 +9,7 @@ const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
-const GLConfig = @import("gl").GLConfig;
+const gl = @import("gl");
 
 const WGLError = error{
     PFDNoMatch,
@@ -88,7 +88,7 @@ const WGL_SAMPLE_BUFFERS_ARB = 0x2041;
 const WGL_SAMPLES_ARB = 0x2042;
 const WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB = 0x20A9;
 
-const wgl_proc = struct {
+const wgl_ext = struct {
     var ChoosePixelFormatARB: ?*const fn (
         hdc: ?gdi.HDC,
         piAttribIList: ?[*]c_int,
@@ -121,39 +121,15 @@ const wgl_proc = struct {
         hdc: ?gdi.HDC,
     ) callconv(win32.WINAPI) ?[*:0]const u8 = null;
 
-    var loaded: bool = false;
-};
-
-const wgl_ext = packed struct {
     var supported_extensions: ?[:0]const u8 = null;
     var ARB_pixel_format: bool = false;
     var ARB_create_context: bool = false;
     var EXT_swap_control: bool = false;
+
+    var loaded: bool = false;
 };
 
-pub extern "opengl32" fn glGetString(
-    name: u32,
-) callconv(@import("std").os.windows.WINAPI) ?[*:0]const u8;
-
-fn hasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
-    var haystack = ext_list;
-    while (true) {
-        const start = mem.indexOf(u8, haystack, mem.span(target));
-        if (start) |s| {
-            const end = s + mem.len(target);
-            if (s == 0 or haystack[s - 1] == ' ') {
-                if (haystack[end] == ' ' or haystack[end] == 0) {
-                    return true;
-                }
-            }
-            haystack = ext_list[end..];
-        } else {
-            return false;
-        }
-    }
-}
-
-fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const GLConfig) void {
+fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const gl.GLConfig) void {
     pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
     pfd.dwFlags = opengl.PFD_FLAGS{
@@ -264,39 +240,39 @@ fn loadGLExtensions() bool {
         return false;
     }
 
-    wgl_proc.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
+    wgl_ext.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
         "wglGetExtensionsStringARB",
     ));
 
-    if (wgl_proc.GetExtensionsStringARB == null) {
+    if (wgl_ext.GetExtensionsStringARB == null) {
         // we can't query extensions available on the hardware.
         return true;
     }
 
-    const extensions = wgl_proc.GetExtensionsStringARB.?(wdc);
+    const extensions = wgl_ext.GetExtensionsStringARB.?(wdc);
     if (extensions) |exts| {
         wgl_ext.supported_extensions = mem.span(exts);
 
-        if (hasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
+        if (gl.glHasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_pixel_format = true;
-            wgl_proc.ChoosePixelFormatARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.ChoosePixelFormatARB = @ptrCast(opengl.wglGetProcAddress(
                 "wglChoosePixelFormatARB",
             ));
-            wgl_proc.GetPixelFormatAttribivARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.GetPixelFormatAttribivARB = @ptrCast(opengl.wglGetProcAddress(
                 "wglGetPixelFormatAttribivARB",
             ));
         }
 
-        if (hasExtension("wgl_ext_swap_control", wgl_ext.supported_extensions.?)) {
+        if (gl.glHasExtension("wgl_ext_swap_control", wgl_ext.supported_extensions.?)) {
             wgl_ext.EXT_swap_control = true;
-            wgl_proc.SwapIntervalEXT = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.SwapIntervalEXT = @ptrCast(opengl.wglGetProcAddress(
                 "wglSwapIntervalEXT",
             ));
         }
 
-        if (hasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
+        if (gl.glHasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_create_context = true;
-            wgl_proc.CreateContextAttribsARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.CreateContextAttribsARB = @ptrCast(opengl.wglGetProcAddress(
                 "wglCreateContextAttribsARB",
             ));
         }
@@ -305,7 +281,7 @@ fn loadGLExtensions() bool {
     return true;
 }
 
-fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
+fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
     var pfd_attrib_list: [48]c_int = undefined;
     var gl_attrib_list: [16]c_int = undefined;
     var pfd_fattrib_list = [1]f32{0};
@@ -467,7 +443,7 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
         // Null terminate the attribute list.
         pfd_attrib_list[index] = 0;
 
-        if (wgl_proc.ChoosePixelFormatARB.?(
+        if (wgl_ext.ChoosePixelFormatARB.?(
             dc,
             &pfd_attrib_list,
             &pfd_fattrib_list,
@@ -507,13 +483,13 @@ fn createGLContext(window: win32.HWND, cfg: *const GLConfig) ?opengl.HGLRC {
 
     gl_attrib_list[6] = 0;
 
-    return wgl_proc.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
+    return wgl_ext.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
 }
 
 pub const GLContext = struct {
     const GL_UNKOWN_VENDOR = "Vendor_Unknown";
     const GL_UNKOWN_RENDER = "Renderer_Unknown";
-    cfg: GLConfig,
+    cfg: gl.GLConfig,
     glrc: opengl.HGLRC,
     owner: win32.HWND,
     driver: struct {
@@ -523,13 +499,13 @@ pub const GLContext = struct {
     },
     const Self = @This();
 
-    pub fn init(window: win32.HWND, cfg: *const GLConfig) WGLError!Self {
+    pub fn init(window: win32.HWND, cfg: *const gl.GLConfig) WGLError!Self {
         const prev_dc = opengl.wglGetCurrentDC();
         const prev_glc = opengl.wglGetCurrentContext();
         defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
 
-        if (!wgl_proc.loaded) {
-            wgl_proc.loaded = loadGLExtensions();
+        if (!wgl_ext.loaded) {
+            wgl_ext.loaded = loadGLExtensions();
         }
 
         const rc = createGLContext(window, cfg);
@@ -540,9 +516,17 @@ pub const GLContext = struct {
         const wdc = gdi.GetDC(window);
         _ = opengl.wglMakeCurrent(wdc, rc);
 
-        const vend = glGetString(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
-        const rend = glGetString(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
-        const ver = glGetString(opengl.GL_VERSION) orelse "";
+        var vend: [*:0]const u8 = GL_UNKOWN_VENDOR;
+        var rend: [*:0]const u8 = GL_UNKOWN_RENDER;
+        var ver: [*:0]const u8 = "";
+
+        var glGetString: ?*const fn (name: u32) callconv(@import("std").os.windows.WINAPI) ?[*:0]const u8 = null;
+        glGetString = @ptrCast(glLoaderFunc("glGetString"));
+        if (glGetString) |func| {
+            vend = func(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
+            rend = func(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
+            ver = func(opengl.GL_VERSION) orelse "";
+        }
 
         _ = gdi.ReleaseDC(window, wdc);
 
@@ -579,7 +563,7 @@ pub const GLContext = struct {
 
     pub fn setSwapIntervals(intrvl: i32) bool {
         if (wgl_ext.EXT_swap_control and intrvl > 0) {
-            return wgl_proc.SwapIntervalEXT(intrvl) == win32.TRUE;
+            return wgl_ext.SwapIntervalEXT(intrvl) == win32.TRUE;
         }
         return false;
     }
