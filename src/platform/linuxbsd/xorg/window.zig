@@ -1,6 +1,8 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const glx = @import("glx.zig");
+const gl = @import("gl");
 const utils = @import("utils.zig");
 const cursor = @import("cursor.zig");
 const event_handler = @import("event_handler.zig");
@@ -21,6 +23,7 @@ pub const WindowError = error{
     BadTitle,
     OutOfMemory,
     BadIcon,
+    GLError,
 };
 
 pub const Window = struct {
@@ -1003,6 +1006,12 @@ pub const Window = struct {
         }
 
         return false;
+    }
+
+    pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!glx.GLContext {
+        return glx.GLContext.init(self.handle, cfg) catch {
+            return WindowError.GLError;
+        };
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {

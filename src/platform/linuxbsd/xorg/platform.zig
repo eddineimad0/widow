@@ -23,6 +23,9 @@ pub fn deinitPlatform() void {
     KeyMaps.deinitSingleton();
 }
 
+pub const GLContext = @import("glx.zig").GLContext;
+pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
+
 // test "initPlatform Thread safety" {
 //     const builtin = @import("builtin");
 //     if (builtin.single_threaded) {
