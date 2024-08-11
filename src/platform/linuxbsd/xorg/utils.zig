@@ -1,19 +1,23 @@
 //! This file contains helper function to use on the linux platforms
 const std = @import("std");
-const debug = std.debug;
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const maxInt = std.math.maxInt;
+const mem = std.mem;
+const debug = std.debug;
 
 pub const DEFAULT_SCREEN_DPI: f32 = @as(f32, 96);
 
-pub inline fn strNCpy(src: [*:0]const u8, dst: [*]u8, count: usize) void {
+pub inline fn strNCpy(
+    noalias dst: [*]u8,
+    noalias src: [*:0]const u8,
+    count: usize,
+) void {
     if (common.IS_DEBUG_BUILD) {
         const len = std.mem.len(src);
         debug.assert(len >= count);
     }
 
-    //TODO: switch src and dst args position.
     for (0..count) |i| {
         dst[i] = src[i];
     }
@@ -25,13 +29,20 @@ pub inline fn strZLen(src: [*:0]const u8) usize {
 }
 
 /// returns true if both strings are equals.
-pub inline fn strZEquals(a: [*:0]const u8, b: [*:0]const u8) bool {
+pub inline fn strZEquals(
+    noalias a: [*:0]const u8,
+    noalias b: [*:0]const u8,
+) bool {
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
 /// Takes 2 many-items-pointers and compares the first `n` items
 /// the caller should make sure that n isn't outside the pointers bounds.
-pub inline fn bytesCmp(a: [*]const u8, b: [*]const u8, n: usize) bool {
+pub inline fn bytesNCmp(
+    noalias a: [*]const u8,
+    noalias b: [*]const u8,
+    n: usize,
+) bool {
     for (0..n) |i| {
         if (a[i] != b[i]) {
             return false;
@@ -111,15 +122,28 @@ pub fn fixKeyMods(
         mods.shift = (mods.shift or keycode == .Shift);
         mods.ctrl = (mods.ctrl or keycode == .Control);
         mods.alt = (mods.alt or keycode == .Alt);
-        mods.num_lock = (mods.num_lock or keycode == .NumLock);
         mods.meta = (mods.meta or keycode == .Meta);
-        mods.caps_lock = (mods.caps_lock or keycode == .CapsLock);
     } else {
         mods.shift = (mods.shift and keycode != .Shift);
         mods.ctrl = (mods.ctrl and keycode != .Control);
         mods.alt = (mods.alt and keycode != .Alt);
-        mods.num_lock = (mods.num_lock and keycode != .NumLock);
         mods.meta = (mods.meta and keycode != .Meta);
-        mods.caps_lock = (mods.caps_lock and keycode != .CapsLock);
+    }
+}
+
+pub fn parseDroppedFilesURI(data: [:0]const u8, output: *std.ArrayList([]const u8)) mem.Allocator.Error!void {
+    try output.ensureTotalCapacity(4);
+    var iter = mem.tokenizeSequence(u8, data, "\r\n");
+    while (iter.next()) |tok| {
+        if (tok[0] == '#') {
+            continue;
+        }
+
+        var start: usize = 0;
+        if (mem.eql(u8, tok[0..7], "file://")) {
+            start = 7;
+        }
+
+        try output.append(tok[start..]);
     }
 }

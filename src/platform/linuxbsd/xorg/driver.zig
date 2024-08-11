@@ -18,11 +18,12 @@ const X11Handles = struct {
     xcontext: libx11.XContext,
     xrandr: ?*anyopaque,
     xinerama: ?*anyopaque,
+    xcursor: ?*anyopaque,
+    hidden_cursor: libx11.Cursor,
 };
 
 const XRRInterface = struct {
     is_v1point3: bool,
-    // TODO: should the functions pointers be optional ?
     XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
     XRRGetScreenResources: x11ext.XRRGetScreenResourcesProc,
     XRRFreeScreenResources: x11ext.XRRFreeScreenResourcesProc,
@@ -51,10 +52,20 @@ const XkbInterface = struct {
     event_code: c_int,
 };
 
+const XcursorInterface = struct {
+    XcursorImageCreate: x11ext.XcursorImageCreateProc,
+    XcursorImageDestroy: x11ext.XcursorImageDestroyProc,
+    XcursorLibraryLoadImage: x11ext.XcursorLibraryLoadImageProc,
+    XcursorGetTheme: x11ext.XcursorGetThemeProc,
+    XcursorGetDefaultSize: x11ext.XcursorGetDefaultSizeProc,
+    XcursorImageLoadCursor: x11ext.XcursorImageLoadCursorProc,
+};
+
 const X11Extensions = struct {
     xrandr: XRRInterface,
     xinerama: XrmInterface,
     xkb: XkbInterface,
+    xcursor: XcursorInterface,
 };
 
 /// holds the value of various hints a window manager can have.
@@ -62,22 +73,6 @@ const X11Extensions = struct {
 const X11EWMH = struct {
     // true if the window manager is ewmh compliant.
     is_wm_emwh: bool,
-    // _NET_NUMBER_OF_DESKTOPS: libx11.Atom,
-    // indicates the number of virtual desktops.
-    // _NET_VIRTUAL_ROOTS: libx11.Atom,
-    // if the WM supports virtual root windows.
-    // _NET_DESKTOP_VIEWPORT: libx11.Atom,
-    // defines the top left corner of each desktop.
-    // _NET_CLIENT_LIST
-    // lists all application windows managed by this WM.
-    // _NET_DESKTOP_GEOMETRY
-    //     defines the common size of all desktops.
-    // _NET_DESKTOP_NAMES
-    //     lists the names of all virtual desktops.
-    // _NET_DESKTOP_LAYOUT
-    //     shows the layout of the active pager.
-    // _NET_SHOWING_DESKTOP
-    //     is 1 for "showing the desktop" mode.
 
     //############ Client messages ###############
     _NET_WM_STATE: libx11.Atom,
@@ -86,11 +81,6 @@ const X11EWMH = struct {
     _NET_WM_STATE_MAXIMIZED_VERT: libx11.Atom,
     _NET_WM_STATE_MAXIMIZED_HORZ: libx11.Atom,
     _NET_WM_STATE_DEMANDS_ATTENTION: libx11.Atom,
-
-    //########### Application Window Properties ##########
-    _NET_WM_VISIBLE_NAME: libx11.Atom,
-    _NET_WM_VISIBLE_ICON_NAME: libx11.Atom,
-    _NET_WM_DESKTOP: libx11.Atom,
 
     // ########## Protocols #################
     // list atoms that identifies a communication protocol between
@@ -102,31 +92,40 @@ const X11EWMH = struct {
     // delete used to notify window of a close requests.
     WM_DELETE_WINDOW: libx11.Atom,
 
-    //########## Property Types ################
+    //########## Window Properties ################
     UTF8_STRING: libx11.Atom,
     WM_STATE: libx11.Atom,
+    _NET_SUPPORTED: libx11.Atom, // lists all the EWMH protocols supported by this WM.
     _NET_SUPPORTING_WM_CHECK: libx11.Atom,
-    // lists all the EWMH protocols supported by this WM.
-    _NET_SUPPORTED: libx11.Atom,
     _NET_WM_ICON: libx11.Atom,
     _NET_WM_PID: libx11.Atom,
     _NET_WM_NAME: libx11.Atom,
     _NET_WM_ICON_NAME: libx11.Atom,
-    _NET_WM_BYPASS_COMPOSITOR: libx11.Atom,
+    _NET_WM_VISIBLE_NAME: libx11.Atom,
+    _NET_WM_VISIBLE_ICON_NAME: libx11.Atom,
     _NET_WM_WINDOW_OPACITY: libx11.Atom,
     _MOTIF_WM_HINTS: libx11.Atom,
     _NET_WM_FULLSCREEN_MONITORS: libx11.Atom,
     _NET_WM_WINDOW_TYPE: libx11.Atom,
     _NET_WM_WINDOW_TYPE_NORMAL: libx11.Atom,
-    // contains a geometry for each desktop.
-    _NET_WORKAREA: libx11.Atom,
-    // gives the index of the current desktop.
-    _NET_CURRENT_DESKTOP: libx11.Atom,
-    // gives the currently active window.
-    _NET_ACTIVE_WINDOW: libx11.Atom,
+    _NET_WORKAREA: libx11.Atom, // geometry for each desktop.
+    _NET_CURRENT_DESKTOP: libx11.Atom, // the index of the current desktop.
+    _NET_ACTIVE_WINDOW: libx11.Atom, // currently active window.
     _NET_FRAME_EXTENTS: libx11.Atom,
     _NET_REQUEST_FRAME_EXTENTS: libx11.Atom,
-    //TODO: document.
+    _NET_WM_BYPASS_COMPOSITOR: libx11.Atom,
+
+    // X drag and drop
+    XdndAware: libx11.Atom,
+    XdndEnter: libx11.Atom,
+    XdndPosition: libx11.Atom,
+    XdndStatus: libx11.Atom,
+    XdndActionCopy: libx11.Atom,
+    XdndDrop: libx11.Atom,
+    XdndFinished: libx11.Atom,
+    XdndSelection: libx11.Atom,
+    XdndTypeList: libx11.Atom,
+    text_uri_list: libx11.Atom,
 };
 
 pub const X11Driver = struct {
@@ -136,10 +135,10 @@ pub const X11Driver = struct {
     pid: i32,
     g_dpi: f32,
     g_screen_scale: f32,
-    resource_name: [*:0]const u8,
-    resource_class: [*:0]const u8,
+
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
+    pub var CUSTOM_CLIENT_ERR: libx11.Atom = 0;
     // var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;
 
     var globl_instance: X11Driver = X11Driver{
@@ -150,6 +149,8 @@ pub const X11Driver = struct {
             .xcontext = undefined,
             .xrandr = null,
             .xinerama = null,
+            .xcursor = null,
+            .hidden_cursor = 0,
         },
         .extensions = X11Extensions{
             .xrandr = XRRInterface{
@@ -179,29 +180,30 @@ pub const X11Driver = struct {
                 .is_auto_repeat_detectable = false,
                 .event_code = 0,
             },
+            .xcursor = .{
+                .XcursorImageCreate = undefined,
+                .XcursorImageDestroy = undefined,
+                .XcursorGetTheme = undefined,
+                .XcursorGetDefaultSize = undefined,
+                .XcursorLibraryLoadImage = undefined,
+                .XcursorImageLoadCursor = undefined,
+            },
         },
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
         .g_screen_scale = 0.0,
-        .resource_name = "",
-        .resource_class = "",
     };
 
     const Self = @This();
 
-    pub fn initSingleton(
-        res_name: [*:0]const u8,
-        res_class: [*:0]const u8,
-    ) XConnectionError!void {
+    pub fn initSingleton() XConnectionError!void {
         @setCold(true);
 
         Self.driver_guard.lock();
         defer driver_guard.unlock();
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
-            g_instance.resource_name = res_name;
-            g_instance.resource_class = res_class;
             _ = libx11.XInitThreads();
             // Open a connection to the X server.
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
@@ -217,7 +219,6 @@ pub const X11Driver = struct {
             );
 
             try g_instance.loadXExtensions();
-            g_instance.readSystemGlobalDPI();
 
             g_instance.ewmh = std.mem.zeroes(@TypeOf(g_instance.ewmh));
             g_instance.initEWMH();
@@ -227,7 +228,29 @@ pub const X11Driver = struct {
                 return XConnectionError.XContextNoMem;
             }
 
+            g_instance.readSystemGlobalDPI();
             g_instance.pid = unix.getpid();
+
+            // Create hidden cursor
+            var curs_img = g_instance.extensions.xcursor.XcursorImageCreate(
+                16,
+                16,
+            ) orelse return XConnectionError.ConnectionFailed;
+
+            defer g_instance.extensions.xcursor.XcursorImageDestroy(curs_img);
+
+            curs_img.xhot = 0;
+            curs_img.yhot = 0;
+
+            for (0..256) |i| {
+                curs_img.pixels[i] = 0x00000000;
+            }
+
+            g_instance.handles.hidden_cursor = g_instance.extensions.xcursor.XcursorImageLoadCursor(
+                g_instance.handles.xdisplay,
+                curs_img,
+            );
+
             Self.g_init = true;
         }
     }
@@ -368,17 +391,47 @@ pub const X11Driver = struct {
                 x11ext.XkbGroupStateMask,
             );
         }
+
+        self.handles.xcursor = unix.loadPosixModule(
+            libx11.XORG_LIBS_NAME[libx11.LIB_XCURSOR_NAME_INDEX],
+        );
+
+        if (self.handles.xcursor) |h| {
+            self.extensions.xcursor.XcursorImageCreate = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageCreate").?,
+            );
+            self.extensions.xcursor.XcursorImageDestroy = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageDestroy").?,
+            );
+            self.extensions.xcursor.XcursorLibraryLoadImage = @ptrCast(
+                unix.moduleSymbol(h, "XcursorLibraryLoadImage").?,
+            );
+            self.extensions.xcursor.XcursorGetTheme = @ptrCast(
+                unix.moduleSymbol(h, "XcursorGetTheme").?,
+            );
+            self.extensions.xcursor.XcursorGetDefaultSize = @ptrCast(
+                unix.moduleSymbol(h, "XcursorGetDefaultSize").?,
+            );
+            self.extensions.xcursor.XcursorImageLoadCursor = @ptrCast(
+                unix.moduleSymbol(h, "XcursorImageLoadCursor").?,
+            );
+        }
     }
 
     fn unloadXExtensions(self: *Self) void {
+        if (self.handles.xrandr) |handle| {
+            unix.freePosixModule(handle);
+            self.handles.xrandr = null;
+        }
+
         if (self.handles.xinerama) |handle| {
             unix.freePosixModule(handle);
             self.handles.xinerama = null;
         }
 
-        if (self.handles.xrandr) |handle| {
+        if (self.handles.xcursor) |handle| {
             unix.freePosixModule(handle);
-            self.handles.xrandr = null;
+            self.handles.xcursor = null;
         }
     }
 
@@ -415,8 +468,6 @@ pub const X11Driver = struct {
     }
 
     /// Changes the x server protocol error handler
-    // /// if the handler parameter is null the function use the last_error_handler
-    // /// inner variable.
     /// # Notes:
     /// The default x11 error handler quits the process upon receiving any error,
     /// it's beneficial to change it when we anticipate errors that we
@@ -427,35 +478,64 @@ pub const X11Driver = struct {
     ) ?*const libx11.XErrorHandlerFunc {
         libx11.XSync(self.handles.xdisplay, libx11.False);
         return libx11.XSetErrorHandler(handler);
-        // if (handler) |h| {
-        //     Self.last_error_handler = libx11.XSetErrorHandler(h);
-        // } else {
-        //     _ = libx11.XSetErrorHandler(Self.last_error_handler);
-        // }
     }
 
     fn initEWMH(self: *Self) void {
-        const info = @typeInfo(@TypeOf(self.ewmh));
-        const NAME_BUFFER_SIZE = 256;
-        var name_buffer: [NAME_BUFFER_SIZE]u8 = undefined;
-        inline for (info.Struct.fields) |*f| {
-            // only set the atoms.
-            if (f.type != libx11.Atom) {
-                continue;
-            }
-            if (f.name.len > NAME_BUFFER_SIZE - 1) {
-                @compileError("field name size is bigger than NAME_BUFFER_SIZE\n");
-            }
-            std.mem.copyForwards(u8, &name_buffer, f.name);
-            // since we are using c functions the strings are expected to
-            // be null terminated.
-            name_buffer[f.name.len] = 0;
-            @field(self.ewmh, f.name) = libx11.XInternAtom(
-                self.handles.xdisplay,
-                @ptrCast(&name_buffer),
-                libx11.False,
-            );
-        }
+        self.ewmh.UTF8_STRING =
+            libx11.XInternAtom(self.handles.xdisplay, "UTF8_STRING", libx11.False);
+
+        self.ewmh.XdndAware =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndAware", libx11.False);
+        self.ewmh.XdndEnter =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndEnter", libx11.False);
+        self.ewmh.XdndPosition =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndPosition", libx11.False);
+        self.ewmh.XdndStatus =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndStatus", libx11.False);
+        self.ewmh.XdndActionCopy =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndActionCopy", libx11.False);
+        self.ewmh.XdndDrop =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndDrop", libx11.False);
+        self.ewmh.XdndFinished =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndFinished", libx11.False);
+        self.ewmh.XdndSelection =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndSelection", libx11.False);
+        self.ewmh.XdndTypeList =
+            libx11.XInternAtom(self.handles.xdisplay, "XdndTypeList", libx11.False);
+        self.ewmh.text_uri_list =
+            libx11.XInternAtom(self.handles.xdisplay, "text/uri-list", libx11.False);
+
+        self.ewmh.WM_PROTOCOLS =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_PROTOCOLS", libx11.False);
+        self.ewmh.WM_STATE =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_STATE", libx11.False);
+        self.ewmh.WM_DELETE_WINDOW =
+            libx11.XInternAtom(self.handles.xdisplay, "WM_DELETE_WINDOW", libx11.False);
+        self.ewmh._NET_SUPPORTED =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTED", libx11.False);
+        self.ewmh._NET_SUPPORTING_WM_CHECK =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTING_WM_CHECK", libx11.False);
+        self.ewmh._NET_WM_ICON =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON", libx11.False);
+        self.ewmh._NET_WM_PING =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PING", libx11.False);
+        self.ewmh._NET_WM_PID =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PID", libx11.False);
+        self.ewmh._NET_WM_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_NAME", libx11.False);
+        self.ewmh._NET_WM_ICON_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON_NAME", libx11.False);
+        self.ewmh._NET_WM_BYPASS_COMPOSITOR =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_BYPASS_COMPOSITOR", libx11.False);
+        self.ewmh._NET_WM_WINDOW_OPACITY =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_WINDOW_OPACITY", libx11.False);
+        self.ewmh._MOTIF_WM_HINTS =
+            libx11.XInternAtom(self.handles.xdisplay, "_MOTIF_WM_HINTS", libx11.False);
+        self.ewmh._NET_WM_VISIBLE_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_NAME", libx11.False);
+        self.ewmh._NET_WM_VISIBLE_ICON_NAME =
+            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_ICON_NAME", libx11.False);
+
         self.checkWindowManagerEwmhSupport();
         if (!self.ewmh.is_wm_emwh) {
             return;
@@ -494,18 +574,30 @@ pub const X11Driver = struct {
         };
 
         inline for (REQUIRE_WM_SUPPORT) |atom_name| {
+            const needle = libx11.XInternAtom(
+                self.handles.xdisplay,
+                atom_name,
+                libx11.False,
+            );
+
             @field(self.ewmh, std.mem.span(atom_name)) = atomIfSupported(
                 supported.?,
                 atom_count,
-                @field(self.ewmh, std.mem.span(atom_name)),
+                needle,
             );
         }
+
+        Self.CUSTOM_CLIENT_ERR = libx11.XInternAtom(
+            self.handles.xdisplay,
+            "CUSTOM_CLIENT_ERR",
+            libx11.False,
+        );
     }
 
     fn checkWindowManagerEwmhSupport(self: *Self) void {
 
         // if the _NET_WM_SUPPORTING_WM_CHECK is missing client should
-        // assume a non conforming window manager is present
+        // assume a non ewmh-conforming window manager is present
         var window_ptr: ?*libx11.Window = null;
         _ = utils.x11WindowProperty(
             self.handles.xdisplay,
@@ -521,8 +613,8 @@ pub const X11Driver = struct {
         std.debug.assert(window_ptr != null);
         defer _ = libx11.XFree(window_ptr.?);
 
-        // on success the window_ptr points to the id of the child window created by
-        // the window manager.
+        // on success the window_ptr points to the id of the
+        // child window created by the window manager.
         // this window must also have _NET_WM_SUPPORTING_WM_CHECK property
         // set to the same id(the id of the child window).
 
@@ -635,7 +727,6 @@ pub const X11Driver = struct {
     }
 
     // Enfoce readonly.
-    // TODO: might require refrence counting.
     pub fn singleton() *const Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
@@ -670,7 +761,6 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
             {
                 return 0;
             } else {
-                // TODO: what to do here.
                 return -1;
                 // return X11Driver.last_error_handler.?(display, err);
             }

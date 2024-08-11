@@ -538,11 +538,11 @@ pub const GLContext = struct {
         }
 
         const wdc = gdi.GetDC(window);
-        _ = opengl.wglMakeCurrent(wdc, rc) == win32.TRUE;
+        _ = opengl.wglMakeCurrent(wdc, rc);
 
         const vend = glGetString(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
         const rend = glGetString(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
-        const ver = glGetString(opengl.GL_VERSION) orelse GL_UNKOWN_RENDER;
+        const ver = glGetString(opengl.GL_VERSION) orelse "";
 
         _ = gdi.ReleaseDC(window, wdc);
 

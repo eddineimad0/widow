@@ -34,8 +34,8 @@ pub fn build(b: *std.Build) !void {
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
-        "events_loop",
         "cursor_and_icon",
+        "events_loop",
         "gl_triangle",
     };
 
@@ -161,6 +161,7 @@ fn prepareWidowModule(
 }
 
 fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
+    // Common options
     const log_platform_events = b.option(
         bool,
         "widow_log_platform_events",
@@ -168,6 +169,7 @@ fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
     ) orelse
         false;
 
+    // Win32 options
     const win32_wndclass_name = b.option(
         []const u8,
         "widow_win32_wndclass_name",
@@ -180,10 +182,25 @@ fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
         "Specify the name of the ressource icon to use on windows os",
     );
 
+    // Xorg options
+    const x11_res_name = b.option(
+        []const u8,
+        "widow_x11_res_name",
+        "Specify the x11 application name",
+    ) orelse "WIDOW_APPLICATION";
+
+    const x11_class_name = b.option(
+        []const u8,
+        "widow_x11_class_name",
+        "Specify the x11 application class",
+    ) orelse "WIDOW_CLASS";
+
     const options = b.addOptions();
     options.addOption(bool, "LOG_PLATFORM_EVENTS", log_platform_events);
     options.addOption([]const u8, "WIN32_WNDCLASS_NAME", win32_wndclass_name);
     options.addOption(?[]const u8, "WIN32_ICON_RES_NAME", win32_icon_res_name);
+    options.addOption([]const u8, "X11_CLASS_NAME", x11_class_name);
+    options.addOption([]const u8, "X11_RES_NAME", x11_res_name);
 
     return options;
 }

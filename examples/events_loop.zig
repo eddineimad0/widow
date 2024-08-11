@@ -77,7 +77,7 @@ pub fn main() !void {
                     // symbol the key represents with the current input layout settings.
                     // the action that was done to the key (pressed or released),
                     // and the keymodifiers state during the event pressed(true) or released(false).
-                    std.debug.print("Window #{}\nVirtual code:{}\nScan Code:{}\nState:{}\nmods:{}\n", .{
+                    std.debug.print("Window #{}\nKeycode:{}\nScancode:{}\nState:{}\nmods:{}\n", .{
                         key.window_id,
                         key.keycode,
                         key.scancode,
@@ -100,7 +100,7 @@ pub fn main() !void {
                             );
                         }
                         if (key.keycode == .M) {
-                            mywindow.setClientPosition(0, 0);
+                            mywindow.setClientPosition(0, 540);
                         }
                         if (key.keycode == .C) {
                             mywindow.setClientSize(1024, 640);
@@ -140,6 +140,8 @@ pub fn main() !void {
                             const minimized = mywindow.isMinimized();
                             mywindow.setMinimized(!minimized);
                         }
+
+                        if (key.keycode == .X) {}
                     }
                 },
                 EventType.MouseButton => |*mouse_event| {

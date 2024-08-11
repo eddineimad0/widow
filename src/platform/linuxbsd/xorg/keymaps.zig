@@ -4,11 +4,12 @@ const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const X11Driver = @import("driver.zig").X11Driver;
-const HashMapU32 = std.AutoArrayHashMap(u32, u32);
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 
-pub const KEYCODE_MAP_SIZE = 256;
+const SymHashMap = std.AutoArrayHashMap(u32, u32);
+const KEYCODE_MAP_SIZE = 256;
+const UNICODE_MAP_SIZE = 0x400;
 
 const NameCodePair = std.meta.Tuple(&.{ KeyCode, [*:0]const u8 });
 
@@ -528,16 +529,15 @@ fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
 
 fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     for (KEYNAME_TO_KEYCODE_MAP) |pair| {
-        if (utils.bytesCmp(name.ptr, pair[1], 4)) {
+        if (utils.bytesNCmp(name.ptr, pair[1], 4)) {
             return pair[0];
         }
     }
     return KeyCode.Unknown;
 }
 
-pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Allocator.Error!void {
-    const UNICODE_MAP_SIZE = 0x400;
-    try xkeysym_unicode_mapping.ensureTotalCapacity(UNICODE_MAP_SIZE);
+pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *SymHashMap) void {
+    xkeysym_unicode_mapping.ensureTotalCapacity(UNICODE_MAP_SIZE) catch unreachable;
     // "Taken from godot game enginge, thanks."
     // # Keysym to Unicode map, tables taken from FOX toolkit.
     // no need to worry about allocation errors, capacity has already been reserved.
@@ -1373,7 +1373,7 @@ pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *HashMapU32) std.mem.Al
 
 /// Initialize the keysym to keycode map used when translating
 /// key events to report keycodes.
-pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
+fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
     // insight taken from glfw.
     std.debug.assert(keycode_lookup_table.len >= KEYCODE_MAP_SIZE);
 
@@ -1447,3 +1447,72 @@ pub fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
 pub inline fn keycodeToScancode(code: u8) ScanCode {
     return SCANCODE_LOOKUP_TABLE[code];
 }
+
+pub const KeyMaps = struct {
+    keycode_map: [KEYCODE_MAP_SIZE]KeyCode,
+    unicode_map: SymHashMap,
+    map_mem: [20 * UNICODE_MAP_SIZE]u8,
+    alloc: std.heap.FixedBufferAllocator,
+
+    const Self = @This();
+    var sing_guard: std.Thread.Mutex = std.Thread.Mutex{};
+    var sing_init: bool = false;
+    var globl_instance: Self = .{
+        .keycode_map = undefined,
+        .map_mem = undefined,
+        .alloc = undefined,
+        .unicode_map = undefined,
+    };
+
+    pub fn initSingleton() void {
+        @setCold(true);
+
+        Self.sing_guard.lock();
+        defer sing_guard.unlock();
+        if (!Self.sing_init) {
+            initKeyCodeTable(&globl_instance.keycode_map);
+            globl_instance.alloc = std.heap.FixedBufferAllocator.init(&globl_instance.map_mem);
+            globl_instance.unicode_map = SymHashMap.init(globl_instance.alloc.allocator());
+            initUnicodeKeysymMapping(&globl_instance.unicode_map);
+            Self.sing_init = true;
+        }
+    }
+
+    pub fn deinitSingleton() void {
+        @setCold(true);
+        Self.sing_guard.lock();
+        defer Self.sing_guard.unlock();
+        if (Self.sing_init) {
+            Self.sing_init = false;
+            globl_instance.unicode_map.deinit();
+        }
+    }
+
+    pub fn singleton() *const Self {
+        std.debug.assert(Self.sing_init == true);
+        return &Self.globl_instance;
+    }
+
+    pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
+        return self.keycode_map[xkeycode];
+    }
+
+    pub inline fn lookupKeyCharacter(self: *const Self, xkeysym: libx11.KeySym) ?u32 {
+        // Latin-1
+        if ((xkeysym <= 0xFF and xkeysym >= 0xA0) or (xkeysym >= 0x20 and xkeysym <= 0x7E)) {
+            return @truncate(xkeysym);
+        }
+
+        // Latin-1 from Keypad.
+        if (xkeysym == 0xFFBD or (xkeysym <= 0xFFB9 and xkeysym >= 0xFFAA)) {
+            return @truncate(xkeysym - 0xFF80);
+        }
+
+        // Unicode (may be present).
+        if ((xkeysym & 0xFF000000) == 0x01000000) {
+            return @truncate(xkeysym & 0x00FFFFFF);
+        }
+
+        return self.unicode_map.get(@truncate(xkeysym));
+    }
+};

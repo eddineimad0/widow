@@ -59,7 +59,47 @@ pub fn main() !void {
                             mywindow.queueCloseEvent();
                         }
                     }
+                    std.debug.print("Window #{}\nKeycode:{}\nScancode:{}\nState:{}\nmods:{}\n", .{
+                        key.window_id,
+                        key.keycode,
+                        key.scancode,
+                        key.state,
+                        key.mods,
+                    });
                 },
+                EventType.Character => |*char| {
+                    // This event holds a unicode character codepoint and keymodifers that were pressed
+                    // during the event.
+                    std.debug.print("target window #{},character:'{u}'\nmods:{}\n", .{
+                        char.window_id,
+                        char.codepoint,
+                        char.mods,
+                    });
+                },
+
+                EventType.MouseMove => |*pos| {
+                    std.debug.print("Mouse position (x:{},y:{})\n", .{ pos.x, pos.y });
+                },
+
+                EventType.WindowMove => |*pos| {
+                    std.debug.print("Window position (x:{},y:{})\n", .{ pos.x, pos.y });
+                },
+
+                EventType.WindowResize => |*sz| {
+                    std.debug.print("Window size (w:{},h:{})\n", .{ sz.width, sz.height });
+                },
+
+                EventType.WindowFocus => |foc_ev| {
+                    if (foc_ev.has_focus) {
+                        std.debug.print("Focused on window:{}\n", .{foc_ev.window_id});
+                    } else {
+                        std.debug.print("Lost focus on window:{}\n", .{foc_ev.window_id});
+                    }
+                },
+
+                EventType.MouseEnter => std.debug.print("Mouse Entered window\n", .{}),
+                EventType.MouseExit => std.debug.print("Mouse Left window\n", .{}),
+
                 else => continue,
             }
         }

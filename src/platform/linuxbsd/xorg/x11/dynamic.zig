@@ -90,7 +90,6 @@ const XIconifyWindowProc = *const fn (
     window: types.Window,
     screen_number: c_int,
 ) callconv(.C) types.Status;
-
 // Properties
 const XSetWMProtocolsProc = *const fn (
     display: ?*types.Display,
@@ -193,6 +192,11 @@ const XAllocSizeHintsProc = *const fn () callconv(.C) ?*types.XSizeHints;
 const XSetWMHintsProc = *const fn (
     display: ?*types.Display,
     window: types.Window,
+    hints: ?[*]types.XSizeHints,
+) callconv(.C) void;
+const XSetWMNormalHintsProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
     hints: ?[*]types.XWMHints,
 ) callconv(.C) void;
 const XSetClassHintProc = *const fn (
@@ -223,13 +227,122 @@ const XLookupStringProc = *const fn (
     status_in_out: ?*types.XComposeStatus,
 ) callconv(.C) c_int;
 
+const XQueryPointerProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    root: ?*types.Window,
+    child_ret: ?*types.Window,
+    root_x_ret: ?*c_int,
+    root_y_ret: ?*c_int,
+    win_x_ret: ?*c_int,
+    win_y_ret: ?*c_int,
+    mask_ret: ?*c_uint,
+) callconv(.C) types.Bool;
+
+const XWarpPointerProc = *const fn (
+    display: ?*types.Display,
+    src_w: types.Window,
+    dest_w: types.Window,
+    src_x: c_int,
+    src_y: c_int,
+    src_width: c_uint,
+    src_height: c_uint,
+    dest_x: c_int,
+    dest_y: c_int,
+) callconv(.C) c_int;
+
+const XGetWindowAttributesProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    attribs_return: *types.XWindowAttributes,
+) callconv(.C) types.Status;
+
+const XCreateFontCursorProc = *const fn (
+    display: ?*types.Display,
+    shape: c_uint,
+) callconv(.C) types.Cursor;
+
+const XFreeCursorProc = *const fn (
+    display: ?*types.Display,
+    cursor: types.Cursor,
+) callconv(.C) c_int;
+
+const XDefineCursorProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+    cursor: types.Cursor,
+) callconv(.C) c_int;
+
+const XUndefineCursorProc = *const fn (
+    display: ?*types.Display,
+    w: types.Window,
+) callconv(.C) c_int;
+
+const XGrabPointerProc = *const fn (
+    display: ?*types.Display,
+    grab_window: types.Window,
+    owner_event: types.Bool,
+    event_mask: c_uint,
+    pointer_mode: c_int,
+    keyboard_mode: c_int,
+    confine_to: types.Window,
+    cursor: types.Cursor,
+    time: types.Time,
+) callconv(.C) c_int;
+
+const XUngrabPointerProc = *const fn (
+    display: ?*types.Display,
+    time: types.Time,
+) callconv(.C) void;
+
+const XRaiseWindowProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+) callconv(.C) void;
+
+const XSetInputFocusProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    revert_to: c_int,
+    time: types.Time,
+) callconv(.C) void;
+
+const XGetWMNormalHintsProc = *const fn (
+    display: ?*types.Display,
+    window: types.Window,
+    hints_return: *types.XSizeHints,
+    supplied_return: *c_long,
+) callconv(.C) types.Status;
+
+const XConvertSelectionProc = *const fn (
+    display: ?*types.Display,
+    selection: types.Atom,
+    target: types.Atom,
+    property: types.Atom,
+    requestor: types.Window,
+    time: types.Time,
+) callconv(.C) void;
+
+const XTranslateCoordinatesProc = *const fn (
+    display: ?*types.Display,
+    src_w: types.Window,
+    dest_w: types.Window,
+    src_x: c_int,
+    src_y: c_int,
+    dest_x: *c_int,
+    dest_y: *c_int,
+    child_ret: *types.Window,
+) callconv(.C) types.Bool;
+
 pub const dyn_api = struct {
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
+
     // pub var XInitExtension: XInitExtensionProc = undefined;
     // pub var XAddExtension: XAddExtensionProc = undefined;
     // Multithreading routines.
     pub var XInitThreads: XInitThreadsProc = undefined;
+
     // XLockDisplay: XLockDisplayProc,
     // XUnlockDisplay: XUnlockDisplayProc,
     // Ressource Manager
@@ -239,6 +352,7 @@ pub const dyn_api = struct {
     pub var XrmDestroyDatabase: XrmDestroyDatabaseProc = undefined;
     pub var XrmGetResource: XrmGetResourceProc = undefined;
     pub var XrmUniqueQuark: XrmUniqueQuarkProc = undefined;
+
     // Window Management.
     pub var XCreateSimpleWindow: XCreateSimpleWindowProc = undefined;
     pub var XCreateWindow: XCreateWindowProc = undefined;
@@ -248,10 +362,12 @@ pub const dyn_api = struct {
     pub var XMoveWindow: XMoveWindowProc = undefined;
     pub var XResizeWindow: XResizeWindowProc = undefined;
     pub var XIconifyWindow: XIconifyWindowProc = undefined;
+
     // XUtil
     pub var XSaveContext: XSaveContextProc = undefined;
     pub var XFindContext: XFindContextProc = undefined;
     pub var XDeleteContext: XDeleteContextProc = undefined;
+
     // Events
     pub var XNextEvent: XNextEventProc = undefined;
     pub var XPeekEvent: XPeekEventProc = undefined;
@@ -261,21 +377,27 @@ pub const dyn_api = struct {
     pub var XSync: XSyncProc = undefined;
     pub var XFlush: XFlushProc = undefined;
     pub var XEventsQueued: XEventsQueuedProc = undefined;
+
     // Properties
     pub var XSetWMProtocols: XSetWMProtocolsProc = undefined;
     pub var XChangeProperty: XChangePropertyProc = undefined;
     pub var XDeleteProperty: XDeletePropertyProc = undefined;
     pub var XGetWindowProperty: XGetWindowPropertyProc = undefined;
+    pub var XGetWindowAttributes: XGetWindowAttributesProc = undefined;
     pub var XInternAtom: XInternAtomProc = undefined;
+
     // Errors
     pub var XSetErrorHandler: XSetErrorHandlerProc = undefined;
+
     // Misc
     pub var XFree: XFreeProc = undefined;
     pub var XAllocWMHints: XAllocWMHintsProc = undefined;
     pub var XAllocSizeHints: XAllocSizeHintsProc = undefined;
     pub var XAllocClassHint: XAllocClassHintProc = undefined;
     pub var XSetWMHints: XSetWMHintsProc = undefined;
+    pub var XSetWMNormalHints: XSetWMNormalHintsProc = undefined;
     pub var XSetClassHint: XSetClassHintProc = undefined;
+
     // xkb
     pub var XkbLibraryVersion: xkb.XkbLibraryVersionProc = undefined;
     pub var XkbQueryExtension: xkb.XkbQueryExtensionProc = undefined;
@@ -291,10 +413,28 @@ pub const dyn_api = struct {
     pub var XkbFreeKeyboard: xkb.XkbFreeKeyboardProc = undefined;
     pub var XkbSelectEventDetails: xkb.XkbSelectEventDetailsProc = undefined;
     pub var XkbGetKeyboard: xkb.XkbGetKeyboardProc = undefined;
+
     // keyboard
     pub var XDisplayKeycodes: XDisplayKeycodesProc = undefined;
     pub var XGetKeyboardMapping: XGetKeyboardMappingProc = undefined;
     pub var XLookupString: XLookupStringProc = undefined;
+    pub var XQueryPointer: XQueryPointerProc = undefined;
+    pub var XWarpPointer: XWarpPointerProc = undefined;
+
+    // cursor
+    pub var XCreateFontCursor: XCreateFontCursorProc = undefined;
+    pub var XFreeCursor: XFreeCursorProc = undefined;
+    pub var XDefineCursor: XDefineCursorProc = undefined;
+    pub var XUndefineCursor: XUndefineCursorProc = undefined;
+    pub var XGrabPointer: XGrabPointerProc = undefined;
+    pub var XUngrabPointer: XUngrabPointerProc = undefined;
+
+    pub var XRaiseWindow: XRaiseWindowProc = undefined;
+    pub var XSetInputFocus: XSetInputFocusProc = undefined;
+    pub var XGetWMNormalHints: XGetWMNormalHintsProc = undefined;
+    pub var XConvertSelection: XConvertSelectionProc = undefined;
+
+    pub var XTranslateCoordinates: XTranslateCoordinatesProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;
