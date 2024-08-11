@@ -96,7 +96,7 @@ pub fn main() !void {
                         if (key.keycode == .P) {
                             std.debug.print(
                                 "ClientPosition:{}\n",
-                                .{mywindow.clientPosition()},
+                                .{mywindow.getClientPosition()},
                             );
                         }
                         if (key.keycode == .M) {
@@ -131,9 +131,9 @@ pub fn main() !void {
                         }
                         if (key.keycode == .U) {
                             if (key.mods.shift) {
-                                mywindow.allowDragAndDrop(true);
+                                mywindow.allowDragAndDrop(true, allocator);
                             } else {
-                                mywindow.allowDragAndDrop(false);
+                                mywindow.allowDragAndDrop(false, allocator);
                             }
                         }
                         if (key.keycode == .I) {
@@ -232,7 +232,7 @@ pub fn main() !void {
                 EventType.FileDrop => |window_id| {
 
                     // Get a Slice containing the path(s) to the latest file(s).
-                    const files = mywindow.droppedFiles();
+                    const files = mywindow.getDroppedFilesURI();
                     for (files) |*file| {
                         std.debug.print("File: {s} Dropped on window #{}\n", .{ file.*, window_id });
                     }
@@ -241,7 +241,7 @@ pub fn main() !void {
                     // you may want to manually free it.
                     if (files.len > 5) {
                         std.log.info("Free drop cache\n", .{});
-                        mywindow.freeDroppedFiles();
+                        mywindow.freeDroppedFilesURI();
                     }
                 },
                 EventType.WindowMove => |*new_pos| {

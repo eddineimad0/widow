@@ -74,7 +74,7 @@ pub fn main() !void {
 
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
-    const client_size = mywindow.clientPixelSize();
+    const client_size = mywindow.getClientPixelSize();
     gl.Viewport(0, 0, client_size.width, client_size.height);
 
     const vertx_shader = try loadVertexShader(VERTEX_SHADER_SRC);

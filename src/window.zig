@@ -286,7 +286,7 @@ pub const Window = struct {
     /// portion of it. The virtual desktop's top-left in a single monitor setup
     /// is the same as that monitor's top left-corner, in a multi-monitor setup
     /// it depends on the setup's configuration.
-    pub inline fn clientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
         return self.impl.clientPosition();
     }
 
@@ -308,7 +308,7 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
-    pub inline fn clientSize(self: *const Self) common.geometry.WidowSize {
+    pub inline fn getClientSize(self: *const Self) common.geometry.WidowSize {
         return self.impl.clientSize();
     }
 
@@ -317,7 +317,7 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling the returned
     /// size might be diffrent from the logical size.
-    pub inline fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
+    pub inline fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
         return self.impl.clientPixelSize();
     }
 
@@ -408,7 +408,7 @@ pub const Window = struct {
     /// and is responsible for freeing the memory.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn title(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
+    pub inline fn getTitle(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
         return self.impl.title(allocator);
     }
 
@@ -522,7 +522,7 @@ pub const Window = struct {
     /// the window(client area + decorations) is
     /// with 1 being opaque, and 0 being fully transparent.
     /// A window is always created with an opacity value of 1.
-    pub inline fn opacity(self: *const Self) f32 {
+    pub inline fn getOpacity(self: *const Self) f32 {
         return self.impl.opacity();
     }
 
@@ -600,7 +600,7 @@ pub const Window = struct {
     /// it should drawn with 128 physical pixels for it to appear good.
     /// `EventType.DPIChange` can be tracked to monitor changes in the dpi,
     /// and the scale factor.
-    pub fn contentScale(self: *const Self) f64 {
+    pub fn getContentScale(self: *const Self) f64 {
         var scale: f64 = undefined;
         _ = self.impl.scalingDPI(&scale);
         return scale;
@@ -612,7 +612,7 @@ pub const Window = struct {
     /// The top-left corner of the client area is considered to be
     /// the origin point(0,0), with y axis pointing to the bottom,
     /// and the x axis pointing to the right
-    pub inline fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         return self.impl.cursorPosition();
     }
 
@@ -671,9 +671,10 @@ pub const Window = struct {
     /// by default any window created doesn't allow file to be dragged
     /// and dropped.
     /// # Parameters
-    /// `accepted`: true to allow file dropping, false to block it.
-    pub inline fn allowDragAndDrop(self: *Self, allow: bool) void {
-        self.impl.setDragAndDrop(allow);
+    /// `allow`: true to allow file dropping, false to block it.
+    /// `uri_allocator`: used to allocate memory for dropped files URI/Path.
+    pub inline fn allowDragAndDrop(self: *Self, allow: bool, uri_allocator: std.mem.Allocator) void {
+        self.impl.setDragAndDrop(allow, uri_allocator);
     }
 
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
@@ -684,7 +685,7 @@ pub const Window = struct {
     /// and should instead call `Window.freeDroppedFiles` if they wish
     /// to free the cache. The returned slice may gets invalidated and mutated
     /// during the next file drop event
-    pub inline fn droppedFiles(self: *const Self) [][]const u8 {
+    pub inline fn getDroppedFilesURI(self: *const Self) [][]const u8 {
         return self.impl.droppedFiles();
     }
 
@@ -695,7 +696,7 @@ pub const Window = struct {
     /// and may get resized if more space is needed.
     /// User may want to call this function to manage
     /// that memory as they see fit.
-    pub inline fn freeDroppedFiles(self: *Self) void {
+    pub inline fn freeDroppedFilesURI(self: *Self) void {
         return self.impl.freeDroppedFiles();
     }
 
@@ -779,7 +780,7 @@ pub const Window = struct {
     /// identify the window.
     /// the platform handle can also be used as an id for the window
     /// although the values are unpredicatble.
-    pub inline fn platformHandle(self: *const Self) platform.WindowHandle {
+    pub inline fn getPlatformHandle(self: *const Self) platform.WindowHandle {
         return self.impl.handle;
     }
 

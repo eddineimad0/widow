@@ -1,15 +1,16 @@
 const std = @import("std");
-const mem = std.mem;
-const debug = std.debug;
 const zigwin32 = @import("zigwin32");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
+const gl = @import("gl");
+
+const mem = std.mem;
+const debug = std.debug;
 const opengl = zigwin32.graphics.open_gl;
 const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
-const gl = @import("gl");
 
 const WGLError = error{
     PFDNoMatch,
@@ -487,8 +488,6 @@ fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
 }
 
 pub const GLContext = struct {
-    const GL_UNKOWN_VENDOR = "Vendor_Unknown";
-    const GL_UNKOWN_RENDER = "Renderer_Unknown";
     cfg: gl.GLConfig,
     glrc: opengl.HGLRC,
     owner: win32.HWND,
@@ -516,13 +515,15 @@ pub const GLContext = struct {
         const wdc = gdi.GetDC(window);
         _ = opengl.wglMakeCurrent(wdc, rc);
 
-        var vend: [*:0]const u8 = GL_UNKOWN_VENDOR;
-        var rend: [*:0]const u8 = GL_UNKOWN_RENDER;
-        var ver: [*:0]const u8 = "";
+        var vend: [*:0]const u8 = undefined;
+        var rend: [*:0]const u8 = undefined;
+        var ver: [*:0]const u8 = undefined;
 
         var glGetString: ?*const fn (name: u32) callconv(@import("std").os.windows.WINAPI) ?[*:0]const u8 = null;
         glGetString = @ptrCast(glLoaderFunc("glGetString"));
         if (glGetString) |func| {
+            const GL_UNKOWN_VENDOR = "Vendor_Unknown";
+            const GL_UNKOWN_RENDER = "Renderer_Unknown";
             vend = func(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
             rend = func(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
             ver = func(opengl.GL_VERSION) orelse "";
@@ -588,6 +589,8 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
         const module = lib_loader.LoadLibraryA("opengl32.dll");
         if (module) |m| {
             symbol_ptr = lib_loader.GetProcAddress(m, symbol_name);
+        } else {
+            return null;
         }
     }
     return symbol_ptr;

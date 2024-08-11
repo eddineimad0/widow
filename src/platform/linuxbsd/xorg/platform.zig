@@ -25,24 +25,3 @@ pub fn deinitPlatform() void {
 
 pub const GLContext = @import("glx.zig").GLContext;
 pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
-
-// test "initPlatform Thread safety" {
-//     const builtin = @import("builtin");
-//     if (builtin.single_threaded) {
-//         try initPlatform(.{});
-//         try initPlatform(.{});
-//         deinitPlatform();
-//     } else {
-//         var threads: [10]std.Thread = undefined;
-//         defer for (threads) |handle| handle.join();
-//
-//         for (&threads) |*handle| {
-//             handle.* = try std.Thread.spawn(.{}, struct {
-//                 fn thread_fn() !void {
-//                     try initPlatform(.{});
-//                     defer deinitPlatform();
-//                 }
-//             }.thread_fn, .{});
-//         }
-//     }
-// }

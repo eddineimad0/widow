@@ -13,6 +13,7 @@ pub const WindowFlags = packed struct {
     is_fullscreen: bool, // Is the window in fullscreen mode.
     is_dpi_aware: bool, // Should the window dimensions be scaled by the dpi scale factor
     cursor_in_client: bool, // Is the cursor currently in client area.
+    support_raw_mouse: bool, // true if the window support raw mouse motion
 };
 
 pub const WindowData = struct {

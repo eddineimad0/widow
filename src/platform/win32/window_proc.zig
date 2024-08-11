@@ -198,21 +198,30 @@ pub fn mainWindowProc(
             }
             const new_pos = utils.getMousePosition(lparam);
 
-            const dx = new_pos.x - window.win32.cursor.x;
-            const dy = new_pos.y - window.win32.cursor.y;
+            const dx = new_pos.x - window.win32.cursor.pos.x;
+            const dy = new_pos.y - window.win32.cursor.pos.y;
             if (dx == 0 and dy == 0) {
                 return 0;
             }
 
+            if (window.win32.cursor.mode == .Hidden) {
+                window.win32.cursor.accum_pos.x +%= dx;
+                window.win32.cursor.accum_pos.y +%= dy;
+            } else {
+                window.win32.cursor.accum_pos.x = new_pos.x;
+                window.win32.cursor.accum_pos.y = new_pos.y;
+            }
+
             const event = common.event.createMoveEvent(
                 window.data.id,
-                new_pos.x,
-                new_pos.y,
+                window.win32.cursor.accum_pos.x,
+                window.win32.cursor.accum_pos.y,
                 true,
             );
             window.sendEvent(&event);
-            window.win32.cursor.x = new_pos.x;
-            window.win32.cursor.y = new_pos.y;
+
+            window.win32.cursor.pos.x = new_pos.x;
+            window.win32.cursor.pos.y = new_pos.y;
 
             return 0;
         },

@@ -92,7 +92,7 @@ pub fn main() !void {
                             },
                             else => {
                                 std.debug.print("Cursor Position:{}\n", .{
-                                    mywindow.cursorPosition(),
+                                    mywindow.getCursorPosition(),
                                 });
                             },
                         }
