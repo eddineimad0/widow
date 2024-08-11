@@ -181,7 +181,6 @@ pub const glx_api = struct {
     const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.C) ?*libx11.XVisualInfo;
     const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
     const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
-    const glGetStringProc = *const fn (pname: u32) callconv(.C) ?[*:0]const u8;
 
     var glXGetFBConfigs: glXGetFBConfigsProc = undefined;
     var glXGetFBConfigAttrib: glXGetFBConfigAttribProc = undefined;
@@ -196,9 +195,8 @@ pub const glx_api = struct {
     var glXCreateWindow: glXCreateWindowProc = undefined;
     var glXDestroyWindow: glXDestroyWindowProc = undefined;
     var glXGetVisualFromFBConfig: glXGetVisualFromFBConfigProc = undefined;
-    var glGetString: glGetStringProc = undefined;
-    var glXGetProcAddress: ?glXGetProcAddressProc = undefined;
-    var glXGetProcAddressARB: ?glXGetProcAddressARBProc = undefined;
+    var glXGetProcAddress: ?glXGetProcAddressProc = null;
+    var glXGetProcAddressARB: ?glXGetProcAddressARBProc = null;
 
     var event_base: c_int = 0;
     var error_base: c_int = 0;
@@ -273,8 +271,6 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
         glx_api.glXSwapBuffers = @ptrCast(unix.moduleSymbol(m, "glXSwapBuffers") orelse
             return unix.ModuleError.UndefinedSymbol);
         glx_api.glXGetVisualFromFBConfig = @ptrCast(unix.moduleSymbol(m, "glXGetVisualFromFBConfig") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glGetString = @ptrCast(unix.moduleSymbol(m, "glGetString") orelse
             return unix.ModuleError.UndefinedSymbol);
 
         glx_api.glXGetProcAddress = @ptrCast(unix.moduleSymbol(m, "glXGetProcAddress"));
@@ -429,7 +425,7 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
             }
 
             // The constants reflects the contribuition of each diff to the decision.
-            return std.math.sqrt(24 * color_diff + 16 * accum_diff + 8 * extra_diff);
+            return std.math.sqrt((color_diff << 2) + (accum_diff << 1) + extra_diff);
         }
     };
 
@@ -438,6 +434,9 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
     if (configs == null or configs_count <= 0) {
         return null;
     }
+
+    defer _ = libx11.XFree(@ptrCast(configs.?));
+
     var least_dist: u32 = std.math.maxInt(u32);
     var best_cfg: GLXFBConfig = configs.?[0];
 
@@ -452,7 +451,7 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
             &attrib,
         );
         // filter non RGBA configs.
-        if (ret != libx11.Success or (attrib & GLX_RGBA_BIT) != 0) {
+        if (ret != libx11.Success or (attrib & GLX_RGBA_BIT) == 0) {
             continue;
         }
         ret = glx_api.glXGetFBConfigAttrib(
@@ -462,7 +461,7 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
             &attrib,
         );
         // filter non window configs
-        if (ret != libx11.Success or (attrib & GLX_WINDOW_BIT) != 0) {
+        if (ret != libx11.Success or (attrib & GLX_WINDOW_BIT) == 0) {
             continue;
         }
 
@@ -699,12 +698,19 @@ pub const GLContext = struct {
         const drvr = X11Driver.singleton();
         _ = glx_api.glXMakeCurrent(drvr.handles.xdisplay, glx_wndw, rc.?);
 
-        const GL_VENDOR = 0x1F00;
-        const GL_RENDERER = 0x1F01;
-        const GL_VERSION = 0x1F02;
-        const vend = glx_api.glGetString(GL_VENDOR) orelse GL_UNKOWN_VENDOR;
-        const rend = glx_api.glGetString(GL_RENDERER) orelse GL_UNKOWN_RENDER;
-        const ver = glx_api.glGetString(GL_VERSION) orelse "";
+        var glGetString: ?*const fn (pname: u32) callconv(.C) ?[*:0]const u8 = null;
+        glGetString = @ptrCast(glLoaderFunc("glGetString"));
+        var vend: [*:0]const u8 = undefined;
+        var rend: [*:0]const u8 = undefined;
+        var ver: [*:0]const u8 = undefined;
+        if (glGetString) |func| {
+            const GL_VENDOR = 0x1F00;
+            const GL_RENDERER = 0x1F01;
+            const GL_VERSION = 0x1F02;
+            vend = func(GL_VENDOR) orelse GL_UNKOWN_VENDOR;
+            rend = func(GL_RENDERER) orelse GL_UNKOWN_RENDER;
+            ver = func(GL_VERSION) orelse "";
+        }
 
         return .{
             .cfg = cfg.*,
