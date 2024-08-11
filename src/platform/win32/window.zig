@@ -1264,6 +1264,7 @@ pub const Window = struct {
         pixels: ?[]const u8,
         width: i32,
         height: i32,
+        _: anytype,
     ) WindowError!void {
         const new_icon = icon.createIcon(pixels, width, height) catch |err| {
             return switch (err) {
