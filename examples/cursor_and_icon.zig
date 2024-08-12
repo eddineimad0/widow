@@ -27,7 +27,7 @@ pub fn main() !void {
         return;
     };
 
-    defer mywindow.deinit();
+    defer mywindow.deinit(allocator);
 
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();

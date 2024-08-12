@@ -47,6 +47,7 @@ pub const WindowBuilder = struct {
                     .is_fullscreen = false,
                     .cursor_in_client = false,
                     .is_dpi_aware = false,
+                    .has_raw_mouse = false,
                 },
                 .input = common.keyboard_mouse.InputState.init(),
             },
@@ -59,6 +60,7 @@ pub const WindowBuilder = struct {
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn build(self: *Self, allocator: mem.Allocator, id: u32) !Window {
+        // TODO: allow optional ids.
         // First window has id of 1,
         self.attribs.id = id;
         // The Window should copy the title if needed.
@@ -181,7 +183,6 @@ pub const WindowBuilder = struct {
 
 pub const Window = struct {
     impl: *WindowImpl,
-    allocator: mem.Allocator,
     const Self = @This();
 
     /// Initializes and returns a Window instance.
@@ -201,7 +202,6 @@ pub const Window = struct {
         data: *WindowData,
     ) !Self {
         return .{
-            .allocator = allocator,
             .impl = try WindowImpl.init(
                 allocator,
                 window_title,
@@ -211,8 +211,10 @@ pub const Window = struct {
     }
 
     /// Destroys the window and releases all allocated ressources.
-    pub fn deinit(self: *Self) void {
-        self.impl.deinit(self.allocator);
+    /// # Parameters
+    /// `allocator`: the allocator used when creating the window.
+    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
+        self.impl.deinit(allocator);
         self.impl = undefined;
     }
 
@@ -408,17 +410,19 @@ pub const Window = struct {
     /// and is responsible for freeing the memory.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn getTitle(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
+    pub inline fn getTitle(self: *const Self, allocator: mem.Allocator) ![]u8 {
         return self.impl.title(allocator);
     }
 
     /// Changes the title of the window.
     /// # Parameters
+    /// `allocator`: allocator used on some platforms(windows) when rencoding
+    /// the title string.
     /// `new_title`: utf-8 string of the new title to be set.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn setTitle(self: *Self, new_title: []const u8) !void {
-        return self.impl.setTitle(self.allocator, new_title);
+    pub inline fn setTitle(self: *Self, allocator: mem.Allocator, new_title: []const u8) !void {
+        return self.impl.setTitle(allocator, new_title);
     }
 
     /// Gets the window's current visibility state.
@@ -673,8 +677,8 @@ pub const Window = struct {
     /// # Parameters
     /// `allow`: true to allow file dropping, false to block it.
     /// `uri_allocator`: used to allocate memory for dropped files URI/Path.
-    pub inline fn allowDragAndDrop(self: *Self, allow: bool, uri_allocator: std.mem.Allocator) void {
-        self.impl.setDragAndDrop(allow, uri_allocator);
+    pub inline fn allowDragAndDrop(self: *Self, uri_allocator: mem.Allocator, allow: bool) void {
+        self.impl.setDragAndDrop(uri_allocator, allow);
     }
 
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
@@ -810,6 +814,12 @@ pub const Window = struct {
         btn: common.keyboard_mouse.MouseButton,
     ) common.keyboard_mouse.MouseButtonState {
         return self.impl.data.input.mouse_buttons[@intFromEnum(btn)];
+    }
+
+    /// Activate or deactivate raw mouse input for the window,
+    /// returns true on success.
+    pub inline fn setRawMouseMotion(self: *Self, allocator: mem.Allocator, active: bool) bool {
+        return self.impl.setRawMouseMotion(allocator, active);
     }
 
     // Prints some debug information to stdout.

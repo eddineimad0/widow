@@ -25,7 +25,7 @@ pub fn main() !void {
         return;
     };
 
-    defer mywindow.deinit();
+    defer mywindow.deinit(allocator);
 
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();
@@ -131,9 +131,9 @@ pub fn main() !void {
                         }
                         if (key.keycode == .U) {
                             if (key.mods.shift) {
-                                mywindow.allowDragAndDrop(true, allocator);
+                                mywindow.allowDragAndDrop(allocator, true);
                             } else {
-                                mywindow.allowDragAndDrop(false, allocator);
+                                mywindow.allowDragAndDrop(allocator, false);
                             }
                         }
                         if (key.keycode == .I) {

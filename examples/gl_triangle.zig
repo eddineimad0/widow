@@ -55,7 +55,7 @@ pub fn main() !void {
     };
 
     // closes the window when done.
-    defer mywindow.deinit();
+    defer mywindow.deinit(allocator);
 
     // the window will require an event queue to
     // send events.

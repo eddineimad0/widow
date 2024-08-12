@@ -316,6 +316,7 @@ pub const WindowWin32Data = struct {
     prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     allow_drag_n_drop: bool,
     dropped_files: std.ArrayList([]const u8),
+    // raw_input: std.ArrayList(u8),
     high_surrogate: u16,
     frame_action: bool,
     position_update: bool,
@@ -377,6 +378,11 @@ pub const Window = struct {
                 .items = undefined,
                 .capacity = 0,
             },
+            // .raw_input = .{
+            //     .allocator = undefined,
+            //     .items = undefined,
+            //     .capacity = 0,
+            // },
             .allow_drag_n_drop = false,
             .prev_frame = .{
                 .size = .{ .width = 0, .height = 0 },
@@ -502,6 +508,9 @@ pub const Window = struct {
         _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
+        // if (self.win32.raw_input.capacity != 0) {
+        //     self.win32.raw_input.deinit();
+        // }
         allocator.destroy(self);
     }
 
@@ -712,6 +721,13 @@ pub const Window = struct {
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
         self.win32.cursor.mode = mode;
         applyCursorHints(&self.win32.cursor, self.handle);
+        if (self.data.flags.has_raw_mouse) {
+            if (mode == .Hidden) {
+                _ = enableRawMouseMotion(self.handle);
+            } else {
+                _ = disableRawMouseMotion();
+            }
+        }
     }
 
     /// Notify and flash the taskbar.
@@ -1235,8 +1251,8 @@ pub const Window = struct {
 
     pub inline fn setDragAndDrop(
         self: *Self,
-        accepted: bool,
         allocator: std.mem.Allocator,
+        accepted: bool,
     ) void {
         if (accepted == self.win32.allow_drag_n_drop) {
             return;
@@ -1355,27 +1371,21 @@ pub const Window = struct {
         }
     }
 
-    pub fn setRawMouseMotion(self: *Self, active: bool) bool {
+    pub fn setRawMouseMotion(self: *Self, _: mem.Allocator, active: bool) bool {
         // TODO: finish this.
-        if (self.data.flags.support_raw_mouse == active) {
+        if (self.data.flags.has_raw_mouse == active) {
             return;
         }
 
         // var rid = zigwin32.
-        self.data.flags.support_raw_mouse = active;
-        var rid = input.RAWINPUTDEVICE{
-            .usUsagePage = 0x1,
-            .usUsage = 0x2,
-            .dwFlags = 0,
-            .hwndTarget = null,
-        };
+        self.data.flags.has_raw_mouse = active;
         if (active) {
-            rid.hwndTarget = self.handle;
+            // self.win32.raw_input = std.ArrayList(u8).init(allocator);
+            return enableRawMouseMotion(self.handle);
         } else {
-            rid.dwFlags = input.RIDEV_REMOVE;
+            // self.win32.raw_input.clearAndFree();
+            return disableRawMouseMotion();
         }
-        const ret = input.RegisterRawInputDevices(&rid, 1, @sizeOf(@TypeOf(rid)));
-        return ret == win32.TRUE;
     }
 
     pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!wgl.GLContext {
@@ -1424,3 +1434,25 @@ pub const Window = struct {
         }
     }
 };
+
+pub inline fn enableRawMouseMotion(window: win32.HWND) bool {
+    var rid = input.RAWINPUTDEVICE{
+        .usUsagePage = 0x1,
+        .usUsage = 0x2,
+        .dwFlags = input.RAWINPUTDEVICE_FLAGS{},
+        .hwndTarget = window,
+    };
+    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    return ret == win32.TRUE;
+}
+
+pub inline fn disableRawMouseMotion() bool {
+    var rid = input.RAWINPUTDEVICE{
+        .usUsagePage = 0x1,
+        .usUsage = 0x2,
+        .dwFlags = input.RIDEV_REMOVE,
+        .hwndTarget = null,
+    };
+    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    return ret == win32.TRUE;
+}
