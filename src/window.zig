@@ -818,8 +818,8 @@ pub const Window = struct {
 
     /// Activate or deactivate raw mouse input for the window,
     /// returns true on success.
-    pub inline fn setRawMouseMotion(self: *Self, allocator: mem.Allocator, active: bool) bool {
-        return self.impl.setRawMouseMotion(allocator, active);
+    pub inline fn setRawMouseMotion(self: *Self, active: bool) bool {
+        return self.impl.setRawMouseMotion(active);
     }
 
     // Prints some debug information to stdout.

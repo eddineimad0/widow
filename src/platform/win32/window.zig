@@ -1371,19 +1371,15 @@ pub const Window = struct {
         }
     }
 
-    pub fn setRawMouseMotion(self: *Self, _: mem.Allocator, active: bool) bool {
-        // TODO: finish this.
+    pub fn setRawMouseMotion(self: *Self, active: bool) bool {
         if (self.data.flags.has_raw_mouse == active) {
-            return;
+            return true;
         }
 
-        // var rid = zigwin32.
         self.data.flags.has_raw_mouse = active;
         if (active) {
-            // self.win32.raw_input = std.ArrayList(u8).init(allocator);
             return enableRawMouseMotion(self.handle);
         } else {
-            // self.win32.raw_input.clearAndFree();
             return disableRawMouseMotion();
         }
     }

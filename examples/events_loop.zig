@@ -140,8 +140,6 @@ pub fn main() !void {
                             const minimized = mywindow.isMinimized();
                             mywindow.setMinimized(!minimized);
                         }
-
-                        if (key.keycode == .X) {}
                     }
                 },
                 EventType.MouseButton => |*mouse_event| {
