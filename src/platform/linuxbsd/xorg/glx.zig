@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
 const X11Driver = @import("driver.zig").X11Driver;
-const GLConfig = @import("gl").GLConfig;
+const gl = @import("gl");
 const mem = std.mem;
 const debug = std.debug;
 const unix = common.unix;
@@ -297,7 +297,7 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
 
     glx_ext_api.supported_extensions = mem.span(extensions);
 
-    if (hasExtension("GLX_EXT_swap_control", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_EXT_swap_control", glx_ext_api.supported_extensions)) {
         glx_ext_api.glXSwapIntervalEXT =
             @ptrCast(glLoaderFunc("glXSwapIntervalEXT"));
 
@@ -305,16 +305,16 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
             glx_ext_api.EXT_swap_control = true;
     }
 
-    if (hasExtension("GLX_ARB_multisample", glx_ext_api.supported_extensions))
+    if (gl.glHasExtension("GLX_ARB_multisample", glx_ext_api.supported_extensions))
         glx_ext_api.ARB_multisample = true;
 
-    if (hasExtension("GLX_ARB_framebuffer_sRGB", glx_ext_api.supported_extensions))
+    if (gl.glHasExtension("GLX_ARB_framebuffer_sRGB", glx_ext_api.supported_extensions))
         glx_ext_api.ARB_framebuffer_sRGB = true;
 
-    if (hasExtension("GLX_EXT_framebuffer_sRGB", glx_ext_api.supported_extensions))
+    if (gl.glHasExtension("GLX_EXT_framebuffer_sRGB", glx_ext_api.supported_extensions))
         glx_ext_api.EXT_framebuffer_sRGB = true;
 
-    if (hasExtension("GLX_ARB_create_context", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_ARB_create_context", glx_ext_api.supported_extensions)) {
         glx_ext_api.glXCreateContextAttribsARB =
             @ptrCast(glLoaderFunc("glXCreateContextAttribsARB"));
 
@@ -322,46 +322,28 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
             glx_ext_api.ARB_create_context = true;
     }
 
-    if (hasExtension("GLX_ARB_create_context_robustness", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_ARB_create_context_robustness", glx_ext_api.supported_extensions)) {
         glx_ext_api.ARB_create_context_robustness = true;
     }
 
-    if (hasExtension("GLX_ARB_create_context_profile", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_ARB_create_context_profile", glx_ext_api.supported_extensions)) {
         glx_ext_api.ARB_create_context_profile = true;
     }
 
-    if (hasExtension("GLX_EXT_create_context_es2_profile", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_EXT_create_context_es2_profile", glx_ext_api.supported_extensions)) {
         glx_ext_api.EXT_create_context_es2_profile = true;
     }
 
-    if (hasExtension("GLX_ARB_create_context_no_error", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_ARB_create_context_no_error", glx_ext_api.supported_extensions)) {
         glx_ext_api.ARB_create_context_no_error = true;
     }
 
-    if (hasExtension("GLX_ARB_context_flush_control", glx_ext_api.supported_extensions)) {
+    if (gl.glHasExtension("GLX_ARB_context_flush_control", glx_ext_api.supported_extensions)) {
         glx_ext_api.ARB_context_flush_control = true;
     }
 }
 
-fn hasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
-    var haystack = ext_list;
-    while (true) {
-        const start = mem.indexOf(u8, haystack, mem.span(target));
-        if (start) |s| {
-            const end = s + mem.len(target);
-            if (s == 0 or haystack[s - 1] == ' ') {
-                if (haystack[end] == ' ' or haystack[end] == 0) {
-                    return true;
-                }
-            }
-            haystack = ext_list[end..];
-        } else {
-            return false;
-        }
-    }
-}
-
-fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
+fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
     const drvr = X11Driver.singleton();
     var configs_count: c_int = 0;
     const configs = glx_api.glXGetFBConfigs(
@@ -393,7 +375,7 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
         sRGB: bool,
         stereo: bool,
 
-        pub fn distanceToDesiredConfig(self: *@This(), desired: *const GLConfig) u32 {
+        pub fn distanceToDesiredConfig(self: *@This(), desired: *const gl.GLConfig) u32 {
             if (desired.flags.stereo != self.stereo) {
                 return std.math.maxInt(u32);
             }
@@ -597,7 +579,7 @@ fn chooseFBConfig(cfg: *const GLConfig) ?GLXFBConfig {
     return best_cfg;
 }
 
-fn createGLContext(w: libx11.Window, cfg: *const GLConfig, glx_wndw: *GLXWindow) (GLXError || unix.ModuleError)!?GLXContext {
+fn createGLContext(w: libx11.Window, cfg: *const gl.GLConfig, glx_wndw: *GLXWindow) (GLXError || unix.ModuleError)!?GLXContext {
     try initGLX();
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
@@ -671,7 +653,7 @@ const GLXError = error{
 pub const GLContext = struct {
     const GL_UNKOWN_VENDOR = "Vendor_Unknown";
     const GL_UNKOWN_RENDER = "Renderer_Unknown";
-    cfg: GLConfig,
+    cfg: gl.GLConfig,
     glrc: GLXContext,
     glwndw: GLXWindow,
     owner: libx11.Window,
@@ -682,7 +664,7 @@ pub const GLContext = struct {
     },
     const Self = @This();
 
-    pub fn init(window: libx11.Window, cfg: *const GLConfig) GLXError!Self {
+    pub fn init(window: libx11.Window, cfg: *const gl.GLConfig) GLXError!Self {
         var glx_wndw: GLXWindow = 0;
         const rc = createGLContext(window, cfg, &glx_wndw) catch |err| {
             switch (err) {

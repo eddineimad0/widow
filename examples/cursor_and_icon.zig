@@ -27,7 +27,7 @@ pub fn main() !void {
         return;
     };
 
-    defer mywindow.deinit();
+    defer mywindow.deinit(allocator);
 
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();
@@ -90,9 +90,16 @@ pub fn main() !void {
                                     );
                                 };
                             },
+                            ScanCode.X => {
+                                if (key.mods.shift) {
+                                    _ = mywindow.setRawMouseMotion(true);
+                                } else {
+                                    _ = mywindow.setRawMouseMotion(false);
+                                }
+                            },
                             else => {
                                 std.debug.print("Cursor Position:{}\n", .{
-                                    mywindow.cursorPosition(),
+                                    mywindow.getCursorPosition(),
                                 });
                             },
                         }

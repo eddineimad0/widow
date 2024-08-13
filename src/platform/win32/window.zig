@@ -11,6 +11,7 @@ const Win32Driver = @import("driver.zig").Win32Driver;
 const mem = std.mem;
 const debug = std.debug;
 const window_msg = zigwin32.ui.windows_and_messaging;
+const input = zigwin32.ui.input;
 const foundation = zigwin32.foundation;
 const gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
@@ -312,8 +313,8 @@ fn createPlatformWindow(
 pub const WindowWin32Data = struct {
     icon: Icon,
     cursor: CursorHints,
-    // Used when going fullscreen to save restore coords.
-    prev_frame: common.geometry.WidowArea,
+    prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
+    allow_drag_n_drop: bool,
     dropped_files: std.ArrayList([]const u8),
     high_surrogate: u16,
     frame_action: bool,
@@ -321,11 +322,10 @@ pub const WindowWin32Data = struct {
 };
 
 pub const Window = struct {
+    handle: win32.HWND,
     data: WindowData,
     ev_queue: ?*common.event.EventQueue,
-    // widow: WidowProps,
     win32: WindowWin32Data,
-    handle: win32.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
@@ -334,6 +334,7 @@ pub const Window = struct {
 
     pub fn init(
         allocator: mem.Allocator,
+        id: ?usize,
         window_title: []const u8,
         data: *WindowData,
     ) !*Self {
@@ -347,6 +348,7 @@ pub const Window = struct {
             windowStyles(&data.flags),
             windowExStyles(&data.flags),
         };
+
         self.handle = try createPlatformWindow(
             allocator,
             window_title,
@@ -356,13 +358,14 @@ pub const Window = struct {
         );
 
         // Finish setting up the window.
+        self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
         self.win32 = WindowWin32Data{
             .cursor = CursorHints{
                 .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
                 .sys_owned = false,
-                .x = 0,
-                .y = 0,
+                .pos = .{ .x = 0, .y = 0 },
+                .accum_pos = .{ .x = 0, .y = 0 },
             },
             .icon = Icon{
                 .sm_handle = null,
@@ -371,7 +374,12 @@ pub const Window = struct {
             .high_surrogate = 0,
             .frame_action = false,
             .position_update = false,
-            .dropped_files = std.ArrayList([]const u8).init(allocator),
+            .dropped_files = .{
+                .allocator = undefined,
+                .items = undefined,
+                .capacity = 0,
+            },
+            .allow_drag_n_drop = false,
             .prev_frame = .{
                 .size = .{ .width = 0, .height = 0 },
                 .top_left = .{ .x = 0, .y = 0 },
@@ -492,16 +500,13 @@ pub const Window = struct {
         }
         self.win32.cursor.mode = .Normal;
         applyCursorHints(&self.win32.cursor, self.handle);
-        // if (self.win32.cursor.mode == .Captured) {
-        //     unCaptureCursor();
-        // }
-        // if (self.win32.cursor.mode == .Hidden) {
-        //     enableCursor(&self.win32.cursor);
-        // }
 
         _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
+        // if (self.win32.raw_input.capacity != 0) {
+        //     self.win32.raw_input.deinit();
+        // }
         allocator.destroy(self);
     }
 
@@ -560,15 +565,15 @@ pub const Window = struct {
         // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
         // Recenter hidden cursor.
-        // if (self.win32.cursor.mode == .Hidden) {
-        //     const half_w = @divExact(self.data.client_area.size.width, 2);
-        //     const half_y = @divExact(self.data.client_area.size.height, 2);
-        //     if (self.win32.cursor.x != half_w and
-        //         self.win32.cursor.y != half_y)
-        //     {
-        //         self.setCursorPosition(half_w, half_y);
-        //     }
-        // }
+        if (self.win32.cursor.mode == .Hidden) {
+            const half_w = @divExact(self.data.client_area.size.width, 2);
+            const half_y = @divExact(self.data.client_area.size.height, 2);
+            if (self.win32.cursor.pos.x != half_w or
+                self.win32.cursor.pos.y != half_y)
+            {
+                self.setCursorPosition(half_w, half_y);
+            }
+        }
     }
 
     pub inline fn getEventQueue(self: *Self) ?*common.event.EventQueue {
@@ -637,6 +642,7 @@ pub const Window = struct {
             self.handle,
             window_msg.GWL_EXSTYLE,
         ));
+
         reg_styles &= ~STYLES_MASK;
         reg_ex_styles &= ~EX_STYLES_MASK;
         reg_styles |= windowStyles(&self.data.flags);
@@ -702,11 +708,8 @@ pub const Window = struct {
             .y = y,
         };
         // no event will be reported.
-        self.win32.cursor.x = point.x;
-        self.win32.cursor.y = point.y;
-        if (self.win32.cursor.mode == .Hidden) {
-            return;
-        }
+        self.win32.cursor.pos.x = point.x;
+        self.win32.cursor.pos.y = point.y;
         _ = gdi.ClientToScreen(self.handle, &point);
         _ = window_msg.SetCursorPos(point.x, point.y);
     }
@@ -714,6 +717,13 @@ pub const Window = struct {
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
         self.win32.cursor.mode = mode;
         applyCursorHints(&self.win32.cursor, self.handle);
+        if (self.data.flags.has_raw_mouse) {
+            if (mode == .Hidden) {
+                _ = enableRawMouseMotion(self.handle);
+            } else {
+                _ = disableRawMouseMotion();
+            }
+        }
     }
 
     /// Notify and flash the taskbar.
@@ -1178,13 +1188,12 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
-        const o_display = self.occupiedDisplay() orelse return false;
-
         if (self.data.flags.is_fullscreen != value) {
             self.data.flags.is_fullscreen = value;
             if (value) {
                 // save for when we exit the fullscreen mode
                 self.win32.prev_frame = self.data.client_area;
+                const o_display = self.occupiedDisplay() orelse return false;
                 self.updateStyles(&self.data.client_area);
                 // TODO: for non resizalble window we should change
                 // monitor resoultion
@@ -1236,19 +1245,27 @@ pub const Window = struct {
         return self.win32.dropped_files.items;
     }
 
-    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
-        const accept = if (accepted)
-            win32.TRUE
-        else blk: {
+    pub inline fn setDragAndDrop(
+        self: *Self,
+        allocator: std.mem.Allocator,
+        accepted: bool,
+    ) void {
+        if (accepted == self.win32.allow_drag_n_drop) {
+            return;
+        }
+        self.win32.allow_drag_n_drop = accepted;
+        if (accepted) {
+            self.win32.dropped_files = std.ArrayList([]const u8).init(allocator);
+            DragAcceptFiles(self.handle, win32.TRUE);
+        } else {
+            DragAcceptFiles(self.handle, win32.FALSE);
             self.freeDroppedFiles();
-            break :blk win32.FALSE;
-        };
-        DragAcceptFiles(self.handle, accept);
+        }
     }
 
     /// Frees the allocated memory used to hold the file(s) path(s).
-    pub fn freeDroppedFiles(self: *Self) void {
-        // Avoid double free.
+    pub inline fn freeDroppedFiles(self: *Self) void {
+        // Avoid double free, important since the client can call this directly.
         if (self.win32.dropped_files.capacity == 0) {
             return;
         }
@@ -1264,6 +1281,7 @@ pub const Window = struct {
         pixels: ?[]const u8,
         width: i32,
         height: i32,
+        _: anytype, // unused
     ) WindowError!void {
         const new_icon = icon.createIcon(pixels, width, height) catch |err| {
             return switch (err) {
@@ -1349,6 +1367,19 @@ pub const Window = struct {
         }
     }
 
+    pub fn setRawMouseMotion(self: *Self, active: bool) bool {
+        if (self.data.flags.has_raw_mouse == active) {
+            return true;
+        }
+
+        self.data.flags.has_raw_mouse = active;
+        if (active) {
+            return enableRawMouseMotion(self.handle);
+        } else {
+            return disableRawMouseMotion();
+        }
+    }
+
     pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!wgl.GLContext {
         return wgl.GLContext.init(self.handle, cfg) catch {
             return WindowError.GLError;
@@ -1395,3 +1426,25 @@ pub const Window = struct {
         }
     }
 };
+
+pub inline fn enableRawMouseMotion(window: win32.HWND) bool {
+    var rid = input.RAWINPUTDEVICE{
+        .usUsagePage = 0x1,
+        .usUsage = 0x2,
+        .dwFlags = input.RAWINPUTDEVICE_FLAGS{},
+        .hwndTarget = window,
+    };
+    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    return ret == win32.TRUE;
+}
+
+pub inline fn disableRawMouseMotion() bool {
+    var rid = input.RAWINPUTDEVICE{
+        .usUsagePage = 0x1,
+        .usUsage = 0x2,
+        .dwFlags = input.RIDEV_REMOVE,
+        .hwndTarget = null,
+    };
+    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    return ret == win32.TRUE;
+}

@@ -11,6 +11,7 @@ const Win32Driver = @import("driver.zig").Win32Driver;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
+const input = zigwin32.ui.input;
 
 /// The Window Procedure function.
 pub fn mainWindowProc(
@@ -198,21 +199,34 @@ pub fn mainWindowProc(
             }
             const new_pos = utils.getMousePosition(lparam);
 
-            const dx = new_pos.x - window.win32.cursor.x;
-            const dy = new_pos.y - window.win32.cursor.y;
+            const dx = new_pos.x - window.win32.cursor.pos.x;
+            const dy = new_pos.y - window.win32.cursor.pos.y;
             if (dx == 0 and dy == 0) {
                 return 0;
             }
 
+            if (window.win32.cursor.mode == .Hidden) {
+                if (window.data.flags.has_raw_mouse) {
+                    return 0;
+                }
+
+                window.win32.cursor.accum_pos.x +%= dx;
+                window.win32.cursor.accum_pos.y +%= dy;
+            } else {
+                window.win32.cursor.accum_pos.x = new_pos.x;
+                window.win32.cursor.accum_pos.y = new_pos.y;
+            }
+
             const event = common.event.createMoveEvent(
                 window.data.id,
-                new_pos.x,
-                new_pos.y,
+                window.win32.cursor.accum_pos.x,
+                window.win32.cursor.accum_pos.y,
                 true,
             );
             window.sendEvent(&event);
-            window.win32.cursor.x = new_pos.x;
-            window.win32.cursor.y = new_pos.y;
+
+            window.win32.cursor.pos.x = new_pos.x;
+            window.win32.cursor.pos.y = new_pos.y;
 
             return 0;
         },
@@ -477,6 +491,9 @@ pub fn mainWindowProc(
                 // Don't disable or capture the cursor.
                 // until the frame action is done.
                 wndw.applyCursorHints(&window.win32.cursor, window.handle);
+                if (window.data.flags.has_raw_mouse and window.win32.cursor.mode == .Hidden) {
+                    _ = wndw.enableRawMouseMotion(window.handle);
+                }
             }
             return 0;
         },
@@ -599,6 +616,85 @@ pub fn mainWindowProc(
             msg_handler.dropEventHandler(window, wparam);
             return 0;
         },
+
+        window_msg.WM_INPUT => {
+            if (window.data.flags.has_raw_mouse != true or window.win32.cursor.mode != .Hidden) {
+                return 0;
+            }
+
+            const ulparam: usize = @bitCast(lparam);
+            const raw_input: input.HRAWINPUT = @ptrFromInt(ulparam);
+            var inpt: input.RAWINPUT = undefined;
+            var raw_data_size: c_uint = @sizeOf(input.RAWINPUT);
+
+            // _ = input.GetRawInputData(raw_input, input.RID_INPUT, null, &raw_data_size, @sizeOf(input.RAWINPUTHEADER));
+            // window.win32.raw_input.ensureTotalCapacity(raw_data_size) catch {
+            //     utils.postWindowErrorMsg(
+            //         wndw.WindowError.OutOfMemory,
+            //         window.handle,
+            //     );
+            //     return 0;
+            // };
+
+            const ret = input.GetRawInputData(
+                raw_input,
+                input.RID_INPUT,
+                &inpt,
+                &raw_data_size,
+                @sizeOf(input.RAWINPUTHEADER),
+            );
+
+            if (ret != raw_data_size) {
+                // error.
+                return 0;
+            }
+
+            var dx: i32, var dy: i32 = .{ 0, 0 };
+            if (inpt.data.mouse.usFlags & 0x01 != 0) {
+                var x: i32, var y: i32 = .{ 0, 0 };
+                var width: i32, var height: i32 = .{ 0, 0 };
+
+                if (inpt.data.mouse.usFlags & 0x02 != 0) {
+                    x += window_msg.GetSystemMetrics(window_msg.SM_XVIRTUALSCREEN);
+                    y += window_msg.GetSystemMetrics(window_msg.SM_XVIRTUALSCREEN);
+                    width = window_msg.GetSystemMetrics(window_msg.SM_CXVIRTUALSCREEN);
+                    height = window_msg.GetSystemMetrics(window_msg.SM_CYVIRTUALSCREEN);
+                } else {
+                    width = window_msg.GetSystemMetrics(window_msg.SM_CXSCREEN);
+                    height = window_msg.GetSystemMetrics(window_msg.SM_CYSCREEN);
+                }
+
+                x += @intFromFloat(@as(f64, @floatFromInt(inpt.data.mouse.lLastX)) / @as(f64, 65535) *
+                    @as(f64, @floatFromInt(width)));
+                y += @intFromFloat(@as(f64, @floatFromInt(inpt.data.mouse.lLastY)) / @as(f64, 65535) *
+                    @as(f64, @floatFromInt(height)));
+
+                var cur_pos: zigwin32.foundation.POINT = .{ .x = x, .y = y };
+                _ = zigwin32.graphics.gdi.ScreenToClient(window.handle, &cur_pos);
+
+                dx = cur_pos.x - window.win32.cursor.pos.x;
+                dy = cur_pos.y - window.win32.cursor.pos.y;
+            } else {
+                dx = inpt.data.mouse.lLastX;
+                dy = inpt.data.mouse.lLastY;
+            }
+
+            window.win32.cursor.accum_pos.x +%= dx;
+            window.win32.cursor.accum_pos.y +%= dy;
+
+            const event = common.event.createMoveEvent(
+                window.data.id,
+                window.win32.cursor.accum_pos.x,
+                window.win32.cursor.accum_pos.y,
+                true,
+            );
+            window.sendEvent(&event);
+
+            window.win32.cursor.pos.x += dx;
+            window.win32.cursor.pos.y += dy;
+            return 0;
+        },
+
         else => {},
     }
     return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);

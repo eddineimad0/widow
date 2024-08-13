@@ -49,6 +49,7 @@ pub const Window = struct {
 
     pub fn init(
         allocator: Allocator,
+        id: ?usize,
         window_title: []const u8,
         data: *WindowData,
     ) (Allocator.Error || WindowError)!*Self {
@@ -71,6 +72,7 @@ pub const Window = struct {
 
         const drvr = X11Driver.singleton();
         self.handle = try createPlatformWindow(data, drvr);
+        self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
 
         if (!drvr.addToXContext(self.handle, @ptrCast(self))) {
             return WindowError.CreateFail;
