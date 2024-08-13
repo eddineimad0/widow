@@ -316,18 +316,16 @@ pub const WindowWin32Data = struct {
     prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     allow_drag_n_drop: bool,
     dropped_files: std.ArrayList([]const u8),
-    // raw_input: std.ArrayList(u8),
     high_surrogate: u16,
     frame_action: bool,
     position_update: bool,
 };
 
 pub const Window = struct {
+    handle: win32.HWND,
     data: WindowData,
     ev_queue: ?*common.event.EventQueue,
-    // widow: WidowProps,
     win32: WindowWin32Data,
-    handle: win32.HWND,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
@@ -336,6 +334,7 @@ pub const Window = struct {
 
     pub fn init(
         allocator: mem.Allocator,
+        id: ?usize,
         window_title: []const u8,
         data: *WindowData,
     ) !*Self {
@@ -349,6 +348,7 @@ pub const Window = struct {
             windowStyles(&data.flags),
             windowExStyles(&data.flags),
         };
+
         self.handle = try createPlatformWindow(
             allocator,
             window_title,
@@ -358,6 +358,7 @@ pub const Window = struct {
         );
 
         // Finish setting up the window.
+        self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
         self.win32 = WindowWin32Data{
             .cursor = CursorHints{
                 .icon = null, // uses the default system image
@@ -378,11 +379,6 @@ pub const Window = struct {
                 .items = undefined,
                 .capacity = 0,
             },
-            // .raw_input = .{
-            //     .allocator = undefined,
-            //     .items = undefined,
-            //     .capacity = 0,
-            // },
             .allow_drag_n_drop = false,
             .prev_frame = .{
                 .size = .{ .width = 0, .height = 0 },

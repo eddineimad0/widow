@@ -17,7 +17,7 @@ pub const WindowFlags = packed struct {
 };
 
 pub const WindowData = struct {
-    id: u32,
+    id: usize,
     client_area: geometry.WidowArea, // The Size and position of the client(content) area.
     aspect_ratio: ?geometry.WidowAspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?geometry.WidowSize, // The minimum limits of the window's size.

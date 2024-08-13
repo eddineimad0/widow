@@ -24,7 +24,7 @@ pub fn main() !void {
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, 1) catch |err| {
+        .build(allocator, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };

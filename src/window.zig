@@ -55,17 +55,20 @@ pub const WindowBuilder = struct {
     }
 
     /// Creates and returns the built window instance.
+    /// # Parameters
+    /// `allocator`: used for allocating space for the window implementation,
+    /// the same allocator is required when deinitializing the created window.
+    /// `id`: number used to identify the window, if null is used an identifer
+    /// is generated from the platform window identifer whose value is unpredicatble.
     /// # Notes
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self, allocator: mem.Allocator, id: u32) !Window {
-        // TODO: allow optional ids.
-        // First window has id of 1,
-        self.attribs.id = id;
-        // The Window should copy the title if needed.
+    pub fn build(self: *Self, allocator: mem.Allocator, id: ?usize) !Window {
+        // The Window should copy the title.
         const window = Window.init(
             allocator,
+            id,
             self.title,
             &self.attribs,
         );
@@ -198,12 +201,14 @@ pub const Window = struct {
     /// to a platform error.
     pub fn init(
         allocator: mem.Allocator,
+        id: ?usize,
         window_title: []const u8,
         data: *WindowData,
     ) !Self {
         return .{
             .impl = try WindowImpl.init(
                 allocator,
+                id,
                 window_title,
                 data,
             ),
