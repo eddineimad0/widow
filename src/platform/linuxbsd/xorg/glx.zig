@@ -124,6 +124,12 @@ pub const glx_api = struct {
         screen: c_int,
         nelements: *c_int,
     ) callconv(.C) ?[*]GLXFBConfig;
+    const glXChooseFBConfigProc = *const fn (
+        display: ?*libx11.Display,
+        screen: c_int,
+        attrib_list: [*]const c_int,
+        nelements: *c_int,
+    ) callconv(.C) ?[*]GLXFBConfig;
     const glXGetFBConfigAttribProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
@@ -183,6 +189,7 @@ pub const glx_api = struct {
     const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
 
     var glXGetFBConfigs: glXGetFBConfigsProc = undefined;
+    var glXChooseFBConfig: glXChooseFBConfigProc = undefined;
     var glXGetFBConfigAttrib: glXGetFBConfigAttribProc = undefined;
     var glXGetClientString: glXGetClientStringProc = undefined;
     var glXQueryExtension: glXQueryExtensionProc = undefined;
@@ -247,6 +254,8 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
 
     if (__glx_module) |m| {
         glx_api.glXGetFBConfigs = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigs") orelse
+            return unix.ModuleError.UndefinedSymbol);
+        glx_api.glXChooseFBConfig = @ptrCast(unix.moduleSymbol(m, "glXChooseFBConfig") orelse
             return unix.ModuleError.UndefinedSymbol);
         glx_api.glXGetFBConfigAttrib = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigAttrib") orelse
             return unix.ModuleError.UndefinedSymbol);
@@ -360,242 +369,65 @@ pub fn chooseVisualGLX(fb_cfg: *const common.fb.FBConfig, vis: *?*libx11.Visual,
 
 fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
     const drvr = X11Driver.singleton();
+
+    var attribs: [64]c_int = mem.zeroes([64]c_int);
+    const helper = struct {
+        pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
+            debug.assert(idx.* < list.len);
+            list[idx.*] = attrib;
+            list[idx.* + 1] = val;
+            idx.* += 2;
+        }
+    };
+    var idx: usize = 0;
+    helper.setAttribute(&attribs, &idx, GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR);
+    helper.setAttribute(&attribs, &idx, GLX_RENDER_TYPE, GLX_RGBA_BIT);
+    helper.setAttribute(&attribs, &idx, GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT);
+    helper.setAttribute(&attribs, &idx, GLX_X_RENDERABLE, 1);
+    helper.setAttribute(&attribs, &idx, GLX_RED_SIZE, cfg.color.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_GREEN_SIZE, cfg.color.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_BLUE_SIZE, cfg.color.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ALPHA_SIZE, cfg.color.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_RED_SIZE, cfg.accum.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_GREEN_SIZE, cfg.accum.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_BLUE_SIZE, cfg.accum.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_ALPHA_SIZE, cfg.accum.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_DEPTH_SIZE, cfg.depth_bits);
+    helper.setAttribute(&attribs, &idx, GLX_STENCIL_SIZE, cfg.stencil_bits);
+    if (cfg.flags.double_buffered) {
+        helper.setAttribute(&attribs, &idx, GLX_DOUBLEBUFFER, 1);
+    }
+    if (cfg.flags.stereo) {
+        helper.setAttribute(&attribs, &idx, GLX_STEREO, 1);
+    }
+    if (cfg.flags.sRGB) {
+        helper.setAttribute(&attribs, &idx, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, 1);
+    }
+
     var configs_count: c_int = 0;
-    const configs = glx_api.glXGetFBConfigs(
+    const fb_configs = glx_api.glXChooseFBConfig(
         drvr.handles.xdisplay,
         drvr.handles.default_screen,
+        &attribs,
         &configs_count,
     );
 
-    // TODO: we can probably just use common.fb.FBConfig;
-    const GLFBConfig = struct {
-        color: struct {
-            red_bits: i32,
-            green_bits: i32,
-            blue_bits: i32,
-            alpha_bits: i32,
-        },
-
-        accum: struct {
-            red_bits: i32,
-            green_bits: i32,
-            blue_bits: i32,
-            alpha_bits: i32,
-        },
-
-        extra: struct {
-            depth_bits: i32,
-            stencil_bits: i32,
-        },
-
-        sRGB: bool,
-        stereo: bool,
-
-        pub fn distanceToDesiredConfig(
-            self: *@This(),
-            desired: *const common.fb.FBConfig,
-        ) u32 {
-            // TODO: this algorithm sucks changes it.
-            var color_diff: u32 = 0;
-            color_diff += @intCast((self.color.red_bits - desired.color.red_bits) *
-                (self.color.red_bits - desired.color.red_bits));
-            color_diff += @intCast((self.color.green_bits - desired.color.green_bits) *
-                (self.color.green_bits - desired.color.green_bits));
-            color_diff += @intCast((self.color.blue_bits - desired.color.blue_bits) *
-                (self.color.blue_bits - desired.color.blue_bits));
-
-            var accum_diff: u32 = 0;
-            accum_diff += @intCast((self.accum.red_bits - desired.accum.red_bits) *
-                (self.accum.red_bits - desired.accum.red_bits));
-            accum_diff += @intCast((self.accum.green_bits - desired.accum.green_bits) *
-                (self.accum.green_bits - desired.accum.green_bits));
-            accum_diff += @intCast((self.accum.blue_bits - desired.accum.blue_bits) *
-                (self.accum.blue_bits - desired.accum.blue_bits));
-
-            var extra_diff: u32 = 0;
-            extra_diff += @intCast((self.extra.depth_bits - desired.depth_bits) *
-                (self.extra.depth_bits - desired.depth_bits));
-            extra_diff += @intCast((self.extra.depth_bits - desired.depth_bits) *
-                (self.extra.depth_bits - desired.depth_bits));
-
-            if (desired.flags.sRGB != self.sRGB) {
-                extra_diff += 1;
-            }
-
-            // The constants reflects the contribuition of each diff to the decision.
-            return std.math.sqrt((color_diff << 2) + (accum_diff << 1) + extra_diff);
-        }
-    };
-
-    var fb_cfg: GLFBConfig = undefined;
-
-    if (configs == null or configs_count <= 0) {
-        return null;
-    }
-
-    defer _ = libx11.XFree(@ptrCast(configs.?));
-
-    var least_dist: u32 = std.math.maxInt(u32);
-    var best_cfg: GLXFBConfig = configs.?[0];
-
-    for (0..@intCast(configs_count)) |i| {
-        const config = configs.?[i];
-        var attrib: c_int = 0;
-        var ret: c_int = libx11.Success;
-        ret = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_RENDER_TYPE,
-            &attrib,
-        );
-        // filter non RGBA configs.
-        if (ret != libx11.Success or (attrib & GLX_RGBA_BIT) == 0) {
-            continue;
-        }
-        ret = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_DRAWABLE_TYPE,
-            &attrib,
-        );
-        // filter non window configs
-        if (ret != libx11.Success or (attrib & GLX_WINDOW_BIT) == 0) {
-            continue;
-        }
-
-        ret = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_DOUBLEBUFFER,
-            &attrib,
-        );
-        // filter non double buffered configs
-        if (ret != libx11.Success or attrib != @intFromBool(cfg.flags.double_buffered)) {
-            continue;
-        }
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_RED_SIZE,
-            &attrib,
-        );
-        fb_cfg.color.red_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_GREEN_SIZE,
-            &attrib,
-        );
-        fb_cfg.color.green_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_BLUE_SIZE,
-            &attrib,
-        );
-        fb_cfg.color.blue_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_ALPHA_SIZE,
-            &attrib,
-        );
-        fb_cfg.color.alpha_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_ACCUM_RED_SIZE,
-            &attrib,
-        );
-        fb_cfg.accum.red_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_ACCUM_GREEN_SIZE,
-            &attrib,
-        );
-        fb_cfg.accum.green_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_ACCUM_BLUE_SIZE,
-            &attrib,
-        );
-        fb_cfg.accum.blue_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_ACCUM_ALPHA_SIZE,
-            &attrib,
-        );
-        fb_cfg.accum.alpha_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_DEPTH_SIZE,
-            &attrib,
-        );
-        fb_cfg.extra.depth_bits = attrib;
-
-        attrib = 0;
-        _ = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_STENCIL_SIZE,
-            &attrib,
-        );
-        fb_cfg.extra.stencil_bits = attrib;
-
-        ret = glx_api.glXGetFBConfigAttrib(
-            drvr.handles.xdisplay,
-            config,
-            GLX_STEREO,
-            &attrib,
-        );
-        if (ret == libx11.Success and attrib == 1) {
-            fb_cfg.stereo = true;
-        }
-
-        if (glx_ext_api.ARB_framebuffer_sRGB or glx_ext_api.EXT_framebuffer_sRGB) {
-            ret = glx_api.glXGetFBConfigAttrib(
+    if (fb_configs != null and configs_count > 0) {
+        defer _ = libx11.XFree(@ptrCast(fb_configs.?));
+        for (0..@as(usize, @intCast(configs_count))) |i| {
+            const visual = glx_api.glXGetVisualFromFBConfig(
                 drvr.handles.xdisplay,
-                config,
-                GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB,
-                &attrib,
+                fb_configs.?[i],
             );
-            if (ret == libx11.Success and attrib == 1) {
-                fb_cfg.sRGB = true;
+            if (visual) |vi| {
+                _ = libx11.XFree(vi);
+                return fb_configs.?[i];
+            } else {
+                continue;
             }
         }
-
-        const curr_dist = fb_cfg.distanceToDesiredConfig(cfg);
-        if (curr_dist < least_dist) {
-            std.debug.print("best:{}|least:{}\n", .{ best_cfg, least_dist });
-            std.debug.print("Found:{}|{}\n", .{ config, curr_dist });
-            std.debug.print("detail:{?}\n", .{fb_cfg});
-            least_dist = curr_dist;
-            best_cfg = config;
-        }
     }
-    return best_cfg;
+    return null;
 }
 
 fn createGLContext(
