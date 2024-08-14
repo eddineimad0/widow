@@ -21,7 +21,7 @@ pub inline fn ConnectionNumber(dpy: *types.Display) c_int {
     return priv_dpy.fd;
 }
 
-pub inline fn DefaultVisual(dpy: *types.Display, scr: c_int) ?[*]types.Visual {
+pub inline fn DefaultVisual(dpy: *types.Display, scr: c_int) ?*types.Visual {
     return ScreenOfDisplay(dpy, scr).root_visual;
 }
 

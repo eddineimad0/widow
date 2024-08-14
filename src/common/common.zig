@@ -5,6 +5,7 @@ pub const event = @import("event.zig");
 pub const queue = @import("queue.zig");
 pub const keyboard_mouse = @import("keyboard_mouse.zig");
 pub const cursor = @import("cursor.zig");
+pub const fb = @import("framebuffer.zig");
 
 const builtin = @import("builtin");
 pub const unix = if (builtin.target.os.tag == .windows) {} else @import("unix/unix.zig");

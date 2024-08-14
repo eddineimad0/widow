@@ -64,7 +64,7 @@ pub const Screen = extern struct {
     ndepths: c_int,
     depths: ?[*]Depth,
     root_depth: c_int,
-    root_visual: ?[*]Visual,
+    root_visual: ?*Visual,
     default_gc: GC,
     cmap: Colormap,
     white_pixel: c_ulong,

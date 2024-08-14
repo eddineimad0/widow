@@ -64,9 +64,7 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var ctx = try mywindow.initGLContext(
-        &.{ .ver = .{ .major = 4, .minor = 2 }, .profile = .Core },
-    );
+    var ctx = try mywindow.initGLContext();
     defer ctx.deinit();
     _ = ctx.makeCurrent();
 

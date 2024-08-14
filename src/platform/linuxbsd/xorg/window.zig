@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const glx = @import("glx.zig");
 const gl = @import("gl");
 const utils = @import("utils.zig");
@@ -9,8 +10,10 @@ const event_handler = @import("event_handler.zig");
 const bopts = @import("build-options");
 
 const debug = std.debug;
+const mem = std.mem;
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
+const FBConfig = common.fb.FBConfig;
 const X11Driver = @import("driver.zig").X11Driver;
 const Allocator = std.mem.Allocator;
 
@@ -24,10 +27,12 @@ pub const WindowError = error{
     OutOfMemory,
     BadIcon,
     GLError,
+    VisualNone,
 };
 
 pub const Window = struct {
     data: WindowData,
+    fb_cfg: FBConfig,
     handle: libx11.Window,
     ev_queue: ?*common.event.EventQueue,
     x11: struct {
@@ -52,27 +57,56 @@ pub const Window = struct {
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
+        fb_cfg: *FBConfig,
     ) (Allocator.Error || WindowError)!*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
         self.data = data.*;
+        self.fb_cfg = fb_cfg.*;
         self.ev_queue = null;
         self.x11 = .{ .cursor = .{
             .mode = .Normal,
             .icon = libx11.None,
             .pos = .{ .x = 0, .y = 0 },
+            .accum_pos = .{ .x = 0, .y = 0 },
         }, .xdnd_req = .{
             .src = 0,
             .ver = 0,
             .format = 0,
             .raw_data = null,
-            .paths = std.ArrayList([]const u8).init(allocator),
+            .paths = .{
+                .items = undefined,
+                .allocator = undefined,
+                .capacity = 0,
+            },
         } };
 
+        // X11 won't let us change the visual and depth later so decide now.
         const drvr = X11Driver.singleton();
-        self.handle = try createPlatformWindow(data, drvr);
-        self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
+        var visual: ?*libx11.Visual = null;
+        var depth: c_int = 0;
+        switch (fb_cfg.accel) {
+            .opengl => {
+                glx.initGLX() catch return WindowError.GLError;
+                if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
+                    return WindowError.VisualNone;
+                }
+            },
+            else => {
+                visual = libx11.DefaultVisual(
+                    drvr.handles.xdisplay,
+                    drvr.handles.default_screen,
+                );
+                depth = libx11.DefaultDepth(
+                    drvr.handles.xdisplay,
+                    drvr.handles.default_screen,
+                );
+            },
+        }
+
+        self.handle = try createPlatformWindow(data, visual, depth);
+        self.data.id = if (id) |ident| ident else @intCast(self.handle);
 
         if (!drvr.addToXContext(self.handle, @ptrCast(self))) {
             return WindowError.CreateFail;
@@ -102,10 +136,7 @@ pub const Window = struct {
         _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(drvr.handles.xdisplay, self.handle);
         _ = drvr.removeFromXContext(self.handle);
-        if (self.x11.xdnd_req.raw_data) |rd| {
-            _ = libx11.XFree(@constCast(rd));
-        }
-        self.x11.xdnd_req.paths.deinit();
+        self.freeDroppedFiles();
         self.handle = 0;
         allocator.destroy(self);
     }
@@ -140,6 +171,15 @@ pub const Window = struct {
                     ))));
                 }
                 event_handler.handleWindowEvent(&e, w);
+                if (w.x11.cursor.mode == .Hidden) {
+                    const half_w = @divExact(w.data.client_area.size.width, 2);
+                    const half_y = @divExact(w.data.client_area.size.height, 2);
+                    if (w.x11.cursor.pos.x != half_w or
+                        w.x11.cursor.pos.y != half_y)
+                    {
+                        w.setCursorPosition(half_w, half_y);
+                    }
+                }
             } else {
                 // TODO: what about event not sent for our window
             }
@@ -773,11 +813,12 @@ pub const Window = struct {
         return true;
     }
 
-    pub inline fn setDragAndDrop(self: *Self, accepted: bool) void {
+    pub inline fn setDragAndDrop(self: *Self, allocator: mem.Allocator, accepted: bool) void {
         const version: i32 = libx11.XDND_VER;
         const drvr = X11Driver.singleton();
 
         if (accepted) {
+            self.x11.xdnd_req.paths = std.ArrayList([]const u8).init(allocator);
             libx11.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
@@ -794,6 +835,7 @@ pub const Window = struct {
                 self.handle,
                 drvr.ewmh.XdndAware,
             );
+            self.freeDroppedFiles();
         }
         drvr.flushXRequests();
     }
@@ -809,8 +851,9 @@ pub const Window = struct {
         if (self.x11.xdnd_req.raw_data) |rd| {
             _ = libx11.XFree(@constCast(rd));
         }
-
-        self.x11.xdnd_req.paths.clearAndFree();
+        if (self.x11.xdnd_req.paths.capacity != 0) {
+            self.x11.xdnd_req.paths.clearAndFree();
+        }
     }
 
     pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
@@ -835,7 +878,7 @@ pub const Window = struct {
         return .{ .x = win_x, .y = win_y };
     }
 
-    pub fn setCursorPosition(self: *const Self, x: i32, y: i32) void {
+    pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
         self.x11.cursor.pos = .{ .x = x, .y = y };
         const drvr = X11Driver.singleton();
         _ = libx11.XWarpPointer(
@@ -855,6 +898,13 @@ pub const Window = struct {
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
         self.x11.cursor.mode = mode;
         cursor.applyCursorHints(&self.x11.cursor, self.handle);
+        if (self.data.flags.has_raw_mouse) {
+            if (mode == .Hidden) {
+                _ = enableRawMouseMotion();
+            } else {
+                _ = disableRawMouseMotion();
+            }
+        }
     }
 
     pub fn setCursorIcon(
@@ -1010,10 +1060,31 @@ pub const Window = struct {
         return false;
     }
 
-    pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!glx.GLContext {
-        return glx.GLContext.init(self.handle, cfg) catch {
-            return WindowError.GLError;
-        };
+    pub fn setRawMouseMotion(self: *Self, active: bool) bool {
+        const drvr = X11Driver.singleton();
+        if (!drvr.extensions.xi2.is_v2point0) {
+            return false;
+        }
+
+        if (self.data.flags.has_raw_mouse == active) {
+            return true;
+        }
+
+        self.data.flags.has_raw_mouse = active;
+        if (active) {
+            return enableRawMouseMotion();
+        } else {
+            return disableRawMouseMotion();
+        }
+    }
+
+    pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
+        switch (self.fb_cfg.accel) {
+            .opengl => return glx.GLContext.init(self.handle, &self.fb_cfg) catch {
+                return WindowError.GLError;
+            },
+            else => return WindowError.GLError, // TODO: better error.
+        }
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
@@ -1056,7 +1127,8 @@ pub const Window = struct {
 
 fn createPlatformWindow(
     data: *const WindowData,
-    drvr: *const X11Driver,
+    visual: ?*libx11.Visual,
+    depth: c_int,
 ) WindowError!libx11.Window {
     const EVENT_MASK = libx11.KeyReleaseMask |
         libx11.KeyPressMask |
@@ -1071,20 +1143,18 @@ fn createPlatformWindow(
         libx11.PropertyChangeMask |
         libx11.ExposureMask;
 
-    const visual = libx11.DefaultVisual(
-        drvr.handles.xdisplay,
-        drvr.handles.default_screen,
-    );
-    const depth = libx11.DefaultDepth(
-        drvr.handles.xdisplay,
-        drvr.handles.default_screen,
-    );
-
     var attribs: libx11.XSetWindowAttributes = std.mem.zeroes(
         libx11.XSetWindowAttributes,
     );
 
     attribs.event_mask = EVENT_MASK;
+    const drvr = X11Driver.singleton();
+    attribs.colormap = libx11.XCreateColormap(
+        drvr.handles.xdisplay,
+        drvr.windowManagerId(),
+        visual,
+        libx11.AllocNone,
+    );
 
     var window_size = data.client_area.size;
     if (data.flags.is_dpi_aware) {
@@ -1102,7 +1172,7 @@ fn createPlatformWindow(
         depth,
         libx11.InputOutput,
         visual,
-        libx11.CWEventMask,
+        libx11.CWEventMask | libx11.CWBorderPixel | libx11.CWColormap,
         @ptrCast(&attribs),
     );
 
@@ -1215,4 +1285,40 @@ fn windowFromId(window_id: libx11.Window) ?*Window {
     const drvr = X11Driver.singleton();
     const window = drvr.findInXContext(window_id);
     return @ptrCast(@alignCast(window));
+}
+
+pub inline fn enableRawMouseMotion() bool {
+    const drvr = X11Driver.singleton();
+    const MASK_LEN = comptime x11ext.XIMaskLen(x11ext.XI_RawMotion);
+    var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
+    var ev_mask = x11ext.XIEventMask{
+        .deviceid = x11ext.XIAllMasterDevices,
+        .mask_len = MASK_LEN,
+        .mask = &mask,
+    };
+    x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
+    return drvr.extensions.xi2.XISelectEvents(
+        drvr.handles.xdisplay,
+        drvr.windowManagerId(),
+        @ptrCast(&ev_mask),
+        1,
+    ) == libx11.Success;
+}
+
+pub inline fn disableRawMouseMotion() bool {
+    const drvr = X11Driver.singleton();
+    const MASK_LEN = 1;
+    var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
+    var ev_mask = x11ext.XIEventMask{
+        .deviceid = x11ext.XIAllMasterDevices,
+        .mask_len = MASK_LEN,
+        .mask = &mask,
+    };
+    x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
+    return drvr.extensions.xi2.XISelectEvents(
+        drvr.handles.xdisplay,
+        drvr.windowManagerId(),
+        @ptrCast(&ev_mask),
+        1,
+    ) == libx11.Success;
 }

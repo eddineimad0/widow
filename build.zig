@@ -109,12 +109,15 @@ fn prepareWidowModule(
     display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
-    const common_mod = b.createModule(.{
-        .root_source_file = b.path("src/common/common.zig"),
-    });
-
     const gl_mod = b.createModule(.{
         .root_source_file = b.path("src/opengl/gl.zig"),
+    });
+
+    const common_mod = b.createModule(.{
+        .root_source_file = b.path("src/common/common.zig"),
+        .imports = &.{
+            .{ .name = "opengl", .module = gl_mod },
+        },
     });
 
     const platform_mod: *std.Build.Module = switch (display_target) {
@@ -124,7 +127,7 @@ fn prepareWidowModule(
                 .{
                     .root_source_file = b.path("src/platform/win32/platform.zig"),
                     .imports = &.{
-                        .{ .name = "gl", .module = gl_mod },
+                        .{ .name = "opengl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
                         .{ .name = "zigwin32", .module = zigwin32.module("zigwin32") },
                     },
@@ -136,7 +139,7 @@ fn prepareWidowModule(
                 .root_source_file = b.path("src/platform/linuxbsd/xorg/platform.zig"),
 
                 .imports = &.{
-                    .{ .name = "gl", .module = gl_mod },
+                    .{ .name = "opengl", .module = gl_mod },
                     .{ .name = "common", .module = common_mod },
                 },
             },
@@ -153,7 +156,7 @@ fn prepareWidowModule(
         .imports = &.{
             .{ .name = "common", .module = common_mod },
             .{ .name = "platform", .module = platform_mod },
-            .{ .name = "gl", .module = gl_mod },
+            .{ .name = "opengl", .module = gl_mod },
         },
     });
 

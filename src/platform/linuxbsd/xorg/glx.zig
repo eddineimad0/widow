@@ -2,11 +2,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const X11Driver = @import("driver.zig").X11Driver;
-const gl = @import("gl");
+const gl = @import("opengl");
 const mem = std.mem;
 const debug = std.debug;
 const unix = common.unix;
+const X11Driver = @import("driver.zig").X11Driver;
 
 pub const GLX_SO_NAMES = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{ "libGLX.so.0", "libGL.so.1", "libGL.so" },
@@ -343,7 +343,22 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
     }
 }
 
-fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
+pub fn chooseVisualGLX(fb_cfg: *const common.fb.FBConfig, vis: *?*libx11.Visual, depth: *c_int) bool {
+    const drvr = X11Driver.singleton();
+    const glx_fb_cfg = chooseFBConfig(fb_cfg);
+    if (glx_fb_cfg) |cfg| {
+        const result = glx_api.glXGetVisualFromFBConfig(drvr.handles.xdisplay, cfg);
+        if (result) |r| {
+            defer _ = libx11.XFree(@ptrCast(r));
+            vis.* = r.visual orelse return false;
+            depth.* = r.depth;
+            return true;
+        }
+    }
+    return false;
+}
+
+fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
     const drvr = X11Driver.singleton();
     var configs_count: c_int = 0;
     const configs = glx_api.glXGetFBConfigs(
@@ -352,55 +367,56 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
         &configs_count,
     );
 
+    // TODO: we can probably just use common.fb.FBConfig;
     const GLFBConfig = struct {
         color: struct {
-            red_bits: u32,
-            green_bits: u32,
-            blue_bits: u32,
-            alpha_bits: u32,
+            red_bits: i32,
+            green_bits: i32,
+            blue_bits: i32,
+            alpha_bits: i32,
         },
 
         accum: struct {
-            red_bits: u32,
-            green_bits: u32,
-            blue_bits: u32,
-            alpha_bits: u32,
+            red_bits: i32,
+            green_bits: i32,
+            blue_bits: i32,
+            alpha_bits: i32,
         },
 
         extra: struct {
-            depth_bits: u32,
-            stencil_bits: u32,
+            depth_bits: i32,
+            stencil_bits: i32,
         },
 
         sRGB: bool,
         stereo: bool,
 
-        pub fn distanceToDesiredConfig(self: *@This(), desired: *const gl.GLConfig) u32 {
-            if (desired.flags.stereo != self.stereo) {
-                return std.math.maxInt(u32);
-            }
-
+        pub fn distanceToDesiredConfig(
+            self: *@This(),
+            desired: *const common.fb.FBConfig,
+        ) u32 {
+            // TODO: this algorithm sucks changes it.
             var color_diff: u32 = 0;
-            color_diff += (self.color.red_bits - desired.color.red_bits) *
-                (self.color.red_bits - desired.color.red_bits);
-            color_diff += (self.color.green_bits - desired.color.green_bits) *
-                (self.color.green_bits - desired.color.green_bits);
-            color_diff += (self.color.blue_bits - desired.color.blue_bits) *
-                (self.color.blue_bits - desired.color.blue_bits);
+            color_diff += @intCast((self.color.red_bits - desired.color.red_bits) *
+                (self.color.red_bits - desired.color.red_bits));
+            color_diff += @intCast((self.color.green_bits - desired.color.green_bits) *
+                (self.color.green_bits - desired.color.green_bits));
+            color_diff += @intCast((self.color.blue_bits - desired.color.blue_bits) *
+                (self.color.blue_bits - desired.color.blue_bits));
 
             var accum_diff: u32 = 0;
-            accum_diff += (self.accum.red_bits - desired.accum.red_bits) *
-                (self.accum.red_bits - desired.accum.red_bits);
-            accum_diff += (self.accum.green_bits - desired.accum.green_bits) *
-                (self.accum.green_bits - desired.accum.green_bits);
-            accum_diff += (self.accum.blue_bits - desired.accum.blue_bits) *
-                (self.accum.blue_bits - desired.accum.blue_bits);
+            accum_diff += @intCast((self.accum.red_bits - desired.accum.red_bits) *
+                (self.accum.red_bits - desired.accum.red_bits));
+            accum_diff += @intCast((self.accum.green_bits - desired.accum.green_bits) *
+                (self.accum.green_bits - desired.accum.green_bits));
+            accum_diff += @intCast((self.accum.blue_bits - desired.accum.blue_bits) *
+                (self.accum.blue_bits - desired.accum.blue_bits));
 
             var extra_diff: u32 = 0;
-            extra_diff += (self.extra.depth_bits - desired.depth_bits) *
-                (self.extra.depth_bits - desired.depth_bits);
-            extra_diff += (self.extra.depth_bits - desired.depth_bits) *
-                (self.extra.depth_bits - desired.depth_bits);
+            extra_diff += @intCast((self.extra.depth_bits - desired.depth_bits) *
+                (self.extra.depth_bits - desired.depth_bits));
+            extra_diff += @intCast((self.extra.depth_bits - desired.depth_bits) *
+                (self.extra.depth_bits - desired.depth_bits));
 
             if (desired.flags.sRGB != self.sRGB) {
                 extra_diff += 1;
@@ -465,7 +481,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_RED_SIZE,
             &attrib,
         );
-        fb_cfg.color.red_bits = @intCast(attrib);
+        fb_cfg.color.red_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -474,7 +490,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_GREEN_SIZE,
             &attrib,
         );
-        fb_cfg.color.green_bits = @intCast(attrib);
+        fb_cfg.color.green_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -483,7 +499,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_BLUE_SIZE,
             &attrib,
         );
-        fb_cfg.color.blue_bits = @intCast(attrib);
+        fb_cfg.color.blue_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -492,7 +508,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_ALPHA_SIZE,
             &attrib,
         );
-        fb_cfg.color.alpha_bits = @intCast(attrib);
+        fb_cfg.color.alpha_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -501,7 +517,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_ACCUM_RED_SIZE,
             &attrib,
         );
-        fb_cfg.accum.red_bits = @intCast(attrib);
+        fb_cfg.accum.red_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -510,7 +526,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_ACCUM_GREEN_SIZE,
             &attrib,
         );
-        fb_cfg.accum.green_bits = @intCast(attrib);
+        fb_cfg.accum.green_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -519,7 +535,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_ACCUM_BLUE_SIZE,
             &attrib,
         );
-        fb_cfg.accum.blue_bits = @intCast(attrib);
+        fb_cfg.accum.blue_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -528,7 +544,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_ACCUM_ALPHA_SIZE,
             &attrib,
         );
-        fb_cfg.accum.alpha_bits = @intCast(attrib);
+        fb_cfg.accum.alpha_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -537,7 +553,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_DEPTH_SIZE,
             &attrib,
         );
-        fb_cfg.extra.depth_bits = @intCast(attrib);
+        fb_cfg.extra.depth_bits = attrib;
 
         attrib = 0;
         _ = glx_api.glXGetFBConfigAttrib(
@@ -546,7 +562,7 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
             GLX_STENCIL_SIZE,
             &attrib,
         );
-        fb_cfg.extra.stencil_bits = @intCast(attrib);
+        fb_cfg.extra.stencil_bits = attrib;
 
         ret = glx_api.glXGetFBConfigAttrib(
             drvr.handles.xdisplay,
@@ -572,6 +588,9 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
 
         const curr_dist = fb_cfg.distanceToDesiredConfig(cfg);
         if (curr_dist < least_dist) {
+            std.debug.print("best:{}|least:{}\n", .{ best_cfg, least_dist });
+            std.debug.print("Found:{}|{}\n", .{ config, curr_dist });
+            std.debug.print("detail:{?}\n", .{fb_cfg});
             least_dist = curr_dist;
             best_cfg = config;
         }
@@ -579,8 +598,11 @@ fn chooseFBConfig(cfg: *const gl.GLConfig) ?GLXFBConfig {
     return best_cfg;
 }
 
-fn createGLContext(w: libx11.Window, cfg: *const gl.GLConfig, glx_wndw: *GLXWindow) (GLXError || unix.ModuleError)!?GLXContext {
-    try initGLX();
+fn createGLContext(
+    w: libx11.Window,
+    cfg: *const common.fb.FBConfig,
+    glx_wndw: *GLXWindow,
+) (GLXError || unix.ModuleError)!?GLXContext {
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
 
@@ -591,21 +613,14 @@ fn createGLContext(w: libx11.Window, cfg: *const gl.GLConfig, glx_wndw: *GLXWind
     const drvr = X11Driver.singleton();
 
     if (glx_ext_api.ARB_create_context) {
-        var mask: c_int = 0;
-        if (cfg.profile == .Core) {
-            mask |= GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
-        } else {
-            mask |= GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-        }
-
-        if (cfg.ver.major > 1 or cfg.ver.minor > 0) {
+        if (cfg.accel.opengl.ver.major > 1 or cfg.accel.opengl.ver.minor > 0) {
             gl_attrib_list[0] = GLX_CONTEXT_MAJOR_VERSION_ARB;
-            gl_attrib_list[1] = cfg.ver.major;
+            gl_attrib_list[1] = cfg.accel.opengl.ver.major;
             gl_attrib_list[2] = GLX_CONTEXT_MINOR_VERSION_ARB;
-            gl_attrib_list[3] = cfg.ver.minor;
+            gl_attrib_list[3] = cfg.accel.opengl.ver.minor;
         }
         gl_attrib_list[4] = GLX_CONTEXT_PROFILE_MASK_ARB;
-        gl_attrib_list[5] = if (cfg.profile == .Core)
+        gl_attrib_list[5] = if (cfg.accel.opengl.profile == .Core)
             GLX_CONTEXT_CORE_PROFILE_BIT_ARB
         else
             GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
@@ -653,7 +668,6 @@ const GLXError = error{
 pub const GLContext = struct {
     const GL_UNKOWN_VENDOR = "Vendor_Unknown";
     const GL_UNKOWN_RENDER = "Renderer_Unknown";
-    cfg: gl.GLConfig,
     glrc: GLXContext,
     glwndw: GLXWindow,
     owner: libx11.Window,
@@ -664,7 +678,7 @@ pub const GLContext = struct {
     },
     const Self = @This();
 
-    pub fn init(window: libx11.Window, cfg: *const gl.GLConfig) GLXError!Self {
+    pub fn init(window: libx11.Window, cfg: *const common.fb.FBConfig) GLXError!Self {
         var glx_wndw: GLXWindow = 0;
         const rc = createGLContext(window, cfg, &glx_wndw) catch |err| {
             switch (err) {
@@ -695,7 +709,6 @@ pub const GLContext = struct {
         }
 
         return .{
-            .cfg = cfg.*,
             .glrc = rc.?,
             .glwndw = glx_wndw,
             .owner = window,

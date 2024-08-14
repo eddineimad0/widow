@@ -13,17 +13,17 @@ pub const XConnectionError = error{
 
 const X11Handles = struct {
     xdisplay: *libx11.Display,
-    root_window: libx11.Window,
-    default_screen: c_int,
-    xcontext: libx11.XContext,
     xrandr: ?*anyopaque,
     xinerama: ?*anyopaque,
     xcursor: ?*anyopaque,
+    xi2: ?*anyopaque,
+    root_window: libx11.Window,
+    default_screen: c_int,
+    xcontext: libx11.XContext,
     hidden_cursor: libx11.Cursor,
 };
 
 const XRRInterface = struct {
-    is_v1point3: bool,
     XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
     XRRGetScreenResources: x11ext.XRRGetScreenResourcesProc,
     XRRFreeScreenResources: x11ext.XRRFreeScreenResourcesProc,
@@ -38,18 +38,19 @@ const XRRInterface = struct {
     XRRSelectInput: x11ext.XRRSelectInputProc,
     XRRUpdateConfiguration: x11ext.XRRUpdateConfigurationProc,
     event_code: c_int,
+    is_v1point3: bool,
 };
 
 const XrmInterface = struct {
-    is_active: bool,
     IsActive: x11ext.XineramaIsActiveProc,
     QueryScreens: x11ext.XineramaQueryScreens,
+    is_active: bool,
 };
 
 const XkbInterface = struct {
+    event_code: c_int,
     is_available: bool,
     is_auto_repeat_detectable: bool,
-    event_code: c_int,
 };
 
 const XcursorInterface = struct {
@@ -61,18 +62,26 @@ const XcursorInterface = struct {
     XcursorImageLoadCursor: x11ext.XcursorImageLoadCursorProc,
 };
 
+const Xi2Interface = struct {
+    XIQueryVersion: x11ext.XIQueryVersionProc,
+    XISelectEvents: x11ext.XISelectEventsProc,
+    maj_opcode: c_int,
+    event_base: c_int,
+    error_base: c_int,
+    is_v2point0: bool,
+};
+
 const X11Extensions = struct {
     xrandr: XRRInterface,
     xinerama: XrmInterface,
-    xkb: XkbInterface,
     xcursor: XcursorInterface,
+    xi2: Xi2Interface,
+    xkb: XkbInterface,
 };
 
 /// holds the value of various hints a window manager can have.
 /// https://specifications.freedesktop.org/wm-spec/wm-spce-1.3.html
 const X11EWMH = struct {
-    // true if the window manager is ewmh compliant.
-    is_wm_emwh: bool,
 
     //############ Client messages ###############
     _NET_WM_STATE: libx11.Atom,
@@ -126,6 +135,9 @@ const X11EWMH = struct {
     XdndSelection: libx11.Atom,
     XdndTypeList: libx11.Atom,
     text_uri_list: libx11.Atom,
+
+    // true if the window manager is ewmh compliant.
+    is_wm_emwh: bool,
 };
 
 pub const X11Driver = struct {
@@ -139,7 +151,6 @@ pub const X11Driver = struct {
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
     pub var CUSTOM_CLIENT_ERR: libx11.Atom = 0;
-    // var last_error_handler: ?*const libx11.XErrorHandlerFunc = null;
 
     var globl_instance: X11Driver = X11Driver{
         .handles = X11Handles{
@@ -150,45 +161,48 @@ pub const X11Driver = struct {
             .xrandr = null,
             .xinerama = null,
             .xcursor = null,
+            .xi2 = null,
             .hidden_cursor = 0,
         },
-        .extensions = X11Extensions{
-            .xrandr = XRRInterface{
-                .is_v1point3 = false,
-                .XRRGetCrtcInfo = undefined,
-                .XRRFreeCrtcInfo = undefined,
-                .XRRGetOutputInfo = undefined,
-                .XRRFreeOutputInfo = undefined,
-                .XRRGetOutputPrimary = undefined,
-                .XRRGetScreenResourcesCurrent = undefined,
-                .XRRGetScreenResources = undefined,
-                .XRRFreeScreenResources = undefined,
-                .XRRQueryVersion = undefined,
-                .XRRSetCrtcConfig = undefined,
-                .XRRUpdateConfiguration = undefined,
-                .XRRSelectInput = undefined,
-                .XRRQueryExtension = undefined,
-                .event_code = 0,
-            },
-            .xinerama = XrmInterface{
-                .is_active = false,
-                .IsActive = undefined,
-                .QueryScreens = undefined,
-            },
-            .xkb = XkbInterface{
-                .is_available = false,
-                .is_auto_repeat_detectable = false,
-                .event_code = 0,
-            },
-            .xcursor = .{
-                .XcursorImageCreate = undefined,
-                .XcursorImageDestroy = undefined,
-                .XcursorGetTheme = undefined,
-                .XcursorGetDefaultSize = undefined,
-                .XcursorLibraryLoadImage = undefined,
-                .XcursorImageLoadCursor = undefined,
-            },
-        },
+        .extensions = X11Extensions{ .xrandr = XRRInterface{
+            .is_v1point3 = false,
+            .XRRGetCrtcInfo = undefined,
+            .XRRFreeCrtcInfo = undefined,
+            .XRRGetOutputInfo = undefined,
+            .XRRFreeOutputInfo = undefined,
+            .XRRGetOutputPrimary = undefined,
+            .XRRGetScreenResourcesCurrent = undefined,
+            .XRRGetScreenResources = undefined,
+            .XRRFreeScreenResources = undefined,
+            .XRRQueryVersion = undefined,
+            .XRRSetCrtcConfig = undefined,
+            .XRRUpdateConfiguration = undefined,
+            .XRRSelectInput = undefined,
+            .XRRQueryExtension = undefined,
+            .event_code = 0,
+        }, .xinerama = XrmInterface{
+            .is_active = false,
+            .IsActive = undefined,
+            .QueryScreens = undefined,
+        }, .xkb = XkbInterface{
+            .is_available = false,
+            .is_auto_repeat_detectable = false,
+            .event_code = 0,
+        }, .xcursor = .{
+            .XcursorImageCreate = undefined,
+            .XcursorImageDestroy = undefined,
+            .XcursorGetTheme = undefined,
+            .XcursorGetDefaultSize = undefined,
+            .XcursorLibraryLoadImage = undefined,
+            .XcursorImageLoadCursor = undefined,
+        }, .xi2 = .{
+            .XIQueryVersion = undefined,
+            .XISelectEvents = undefined,
+            .maj_opcode = 0,
+            .event_base = 0,
+            .error_base = 0,
+            .is_v2point0 = false,
+        } },
         .ewmh = undefined,
         .pid = undefined,
         .g_dpi = 0.0,
@@ -270,7 +284,7 @@ pub const X11Driver = struct {
         var base_event_code: c_int = undefined;
         var base_error_code: c_int = undefined;
         self.handles.xrandr = unix.loadPosixModule(
-            libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_NAME_INDEX],
+            libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_SONAME_INDEX],
         );
 
         if (self.handles.xrandr) |handle| {
@@ -340,7 +354,7 @@ pub const X11Driver = struct {
         }
 
         self.handles.xinerama = unix.loadPosixModule(
-            libx11.XORG_LIBS_NAME[libx11.LIB_XINERAMA_NAME_INDEX],
+            libx11.XORG_LIBS_NAME[libx11.LIB_XINERAMA_SONAME_INDEX],
         );
         if (self.handles.xinerama) |handle| {
             self.extensions.xinerama.IsActive = @ptrCast(
@@ -393,7 +407,7 @@ pub const X11Driver = struct {
         }
 
         self.handles.xcursor = unix.loadPosixModule(
-            libx11.XORG_LIBS_NAME[libx11.LIB_XCURSOR_NAME_INDEX],
+            libx11.XORG_LIBS_NAME[libx11.LIB_XCURSOR_SONAME_INDEX],
         );
 
         if (self.handles.xcursor) |h| {
@@ -415,6 +429,33 @@ pub const X11Driver = struct {
             self.extensions.xcursor.XcursorImageLoadCursor = @ptrCast(
                 unix.moduleSymbol(h, "XcursorImageLoadCursor").?,
             );
+        }
+
+        self.handles.xi2 = unix.loadPosixModule(
+            libx11.XORG_LIBS_NAME[libx11.LIB_XINPUT2_SONAME_INDEX],
+        );
+
+        if (self.handles.xi2) |h| {
+            self.extensions.xi2.XIQueryVersion = @ptrCast(
+                unix.moduleSymbol(h, "XIQueryVersion").?,
+            );
+            self.extensions.xi2.XISelectEvents = @ptrCast(
+                unix.moduleSymbol(h, "XISelectEvents").?,
+            );
+
+            const active = libx11.XQueryExtension(
+                self.handles.xdisplay,
+                "XInputExtension",
+                &self.extensions.xi2.maj_opcode,
+                &self.extensions.xi2.event_base,
+                &self.extensions.xi2.error_base,
+            ) == libx11.True;
+
+            var ver_maj: c_int, var ver_min: c_int = .{ 2, 0 };
+            const ret = self.extensions.xi2.XIQueryVersion(self.handles.xdisplay, &ver_maj, &ver_min);
+            if (ret == libx11.Success) {
+                self.extensions.xi2.is_v2point0 = active and true;
+            }
         }
     }
 

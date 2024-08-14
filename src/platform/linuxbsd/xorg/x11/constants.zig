@@ -698,17 +698,17 @@ pub const XDND_VER = 5;
 pub const XORG_LIBS_NAME = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{
         "libX11.so.6", "libXrandr.so.2", "libXinerama.so.1", "libXcursor.so.1",
+        "libXi.so.6",
     },
     .freebsd, .netbsd, .openbsd => [_][*:0]const u8{
-        "libX11.so",
-        "libXrandr.so",
-        "libXinerama.so",
-        "libXcursor.so",
+        "libX11.so", "libXrandr.so", "libXinerama.so", "libXcursor.so",
+        "libXi.so",
     },
     else => @compileError("Unsupported Unix Platform"),
 };
 
-pub const LIB_X11_NAME_INDEX = 0;
-pub const LIB_XRANDR_NAME_INDEX = 1;
-pub const LIB_XINERAMA_NAME_INDEX = 2;
-pub const LIB_XCURSOR_NAME_INDEX = 3;
+pub const LIB_X11_SONAME_INDEX = 0;
+pub const LIB_XRANDR_SONAME_INDEX = 1;
+pub const LIB_XINERAMA_SONAME_INDEX = 2;
+pub const LIB_XCURSOR_SONAME_INDEX = 3;
+pub const LIB_XINPUT2_SONAME_INDEX = 4;

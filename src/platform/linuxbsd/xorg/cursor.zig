@@ -16,6 +16,8 @@ pub const CursorHints = struct {
     mode: common.cursor.CursorMode,
     // Track the cursor coordinates in respect to top left corner.
     pos: common.geometry.WidowPoint2D,
+    // Accumulate the mouse movement
+    accum_pos: common.geometry.WidowPoint2D,
 };
 
 pub fn createX11Cursor(
@@ -117,6 +119,7 @@ pub fn createNativeCursor(
         .icon = cursor_handle,
         .mode = common.cursor.CursorMode.Normal,
         .pos = .{ .x = 0, .y = 0 },
+        .accum_pos = .{ .x = 0, .y = 0 },
     };
 }
 
@@ -147,6 +150,7 @@ pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
 
     switch (cursor.mode) {
         .Normal => unCaptureCursor(),
+        .Hidden => hideCursor(window),
         else => captureCursor(window),
     }
 
@@ -171,6 +175,10 @@ pub fn unCaptureCursor() void {
         drvr.handles.xdisplay,
         libx11.CurrentTime,
     );
+}
+
+pub fn hideCursor(w: libx11.Window) void {
+    captureCursor(w);
 }
 
 pub fn captureCursor(w: libx11.Window) void {
