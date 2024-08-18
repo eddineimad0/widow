@@ -7,8 +7,8 @@
 
     .dependencies = .{
         .zigwin32 = .{
-            .url = "https://github.com/marlersoft/zigwin32/archive/refs/heads/main.zip",
-            .hash = "12208465354ed9d0caff19f2cd87ea9f629ca02e7230a360202c19b7918231aec3cb",
+            .url = "https://github.com/marlersoft/zigwin32/archive/c425babf298e22256c17ffe76662b7363d6413b8.zip",
+            .hash = "1220cc9c9028e20f4ec2ece1155ae3479acc1cc509f9ab93acb74e8f5bbf8eefd2a9",
         },
     },
     .paths = .{

@@ -9,6 +9,7 @@ const EventQueue = common.event.EventQueue;
 
 pub const WindowBuilder = struct {
     attribs: common.window_data.WindowData,
+    fbcfg: common.fb.FBConfig,
     title: []const u8,
     const Self = @This();
 
@@ -51,6 +52,7 @@ pub const WindowBuilder = struct {
                 },
                 .input = common.keyboard_mouse.InputState.init(),
             },
+            .fbcfg = .{},
         };
     }
 
@@ -71,6 +73,7 @@ pub const WindowBuilder = struct {
             id,
             self.title,
             &self.attribs,
+            &self.fbcfg,
         );
         return window;
     }
@@ -182,6 +185,14 @@ pub const WindowBuilder = struct {
         self.attribs.flags.is_dpi_aware = value;
         return self;
     }
+
+    /// Specify the frame buffer configuration for the window.
+    /// # Parameters
+    /// `cfg`: a pointer to a FBConfig struct.
+    pub fn withFrameBuffer(self: *Self, cfg: *const common.fb.FBConfig) *Self {
+        self.fbcfg = cfg.*;
+        return self;
+    }
 };
 
 pub const Window = struct {
@@ -195,6 +206,7 @@ pub const Window = struct {
     /// allocations(title,...).
     /// `title` : the window's title.
     /// `data` : a refrence to a WindowData structure.
+    /// `fb_cfg`: a pointer to a FBConfig struct.
     /// # Errors
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due
@@ -204,6 +216,7 @@ pub const Window = struct {
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
+        fb_cfg: *common.fb.FBConfig,
     ) !Self {
         return .{
             .impl = try WindowImpl.init(
@@ -211,6 +224,7 @@ pub const Window = struct {
                 id,
                 window_title,
                 data,
+                fb_cfg,
             ),
         };
     }
@@ -689,7 +703,7 @@ pub const Window = struct {
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
     /// # Note
     /// User should only call this function when receiving a
-    /// `EventType.FileDrop` event.
+    /// `EventType.FileDrop` event, otherwise it returns undefined data.
     /// Caller shouldn't attempt to free or modify the returned slice
     /// and should instead call `Window.freeDroppedFiles` if they wish
     /// to free the cache. The returned slice may gets invalidated and mutated
@@ -797,9 +811,8 @@ pub const Window = struct {
     /// it. the context creation can be customized through the `cfg` struct
     pub inline fn initGLContext(
         self: *Self,
-        cfg: *const gl.GLConfig,
     ) !platform.GLContext {
-        return self.impl.initGL(cfg);
+        return self.impl.getGLContext();
     }
 
     /// Returns the state of the `key` for the current window.

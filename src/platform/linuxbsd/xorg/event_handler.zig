@@ -5,12 +5,15 @@ const cursor = @import("cursor.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const utils = @import("utils.zig");
 const keymaps = @import("keymaps.zig");
+const wndw = @import("window.zig");
 const opts = @import("build-options");
-const kbd_mouse = common.keyboard_mouse;
-const X11Driver = @import("driver.zig").X11Driver;
-const Window = @import("window.zig").Window;
 
-fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
+const kbd_mouse = common.keyboard_mouse;
+
+const X11Driver = @import("driver.zig").X11Driver;
+const Window = wndw.Window;
+
+inline fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
     if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonRelease\n", .{window.data.id});
     }
@@ -42,7 +45,7 @@ fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
     window.sendEvent(&ev);
 }
 
-fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void {
+inline fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void {
     if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info("window: #{} recieved ButtonPress\n", .{window.data.id});
     }
@@ -106,14 +109,14 @@ fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void {
 }
 
 /// handles ICCCM messages.
-fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
+inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
     const drvr = X11Driver.singleton();
     if (e.message_type == drvr.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == drvr.ewmh.WM_DELETE_WINDOW) {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info(
                     "window: #{} recieved ClientMessage:WM_DELETE_WINDOW\n",
-                    .{w.handle},
+                    .{w.data.id},
                 );
             }
             const event = common.event.createCloseEvent(w.data.id);
@@ -123,7 +126,7 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info(
                     "window: #{} recieved ClientMessage:_NET_WM_PING\n",
-                    .{w.handle},
+                    .{w.data.id},
                 );
             }
             // ping from the wm to ensure application responsivity.
@@ -137,90 +140,94 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
         if (opts.LOG_PLATFORM_EVENTS) {
             std.log.info(
                 "window: #{} recieved ClientMessage:XdndEnter\n",
-                .{w.handle},
+                .{w.data.id},
             );
         }
         w.x11.xdnd_req.src = e.data.l[0];
-        w.x11.xdnd_req.ver = e.data.l[1] >> 24;
-        w.x11.xdnd_req.format = 0;
+        w.x11.xdnd_req.version = e.data.l[1] >> 24;
+        w.x11.xdnd_req.format = libx11.None;
+        const support_extra_types = e.data.l[1] & 1;
 
-        var extra_formats_count: u32 = 0;
-        var extra_formats: [*]const libx11.Atom = undefined;
-        const extra_types = e.data.l[0] & 1;
-        if (extra_types != 0) {
-            extra_formats_count = utils.x11WindowProperty(
+        var extra_types_count: u32 = 0;
+        var extra_types: [*]const libx11.Atom = undefined;
+        if (support_extra_types != 0) {
+            extra_types_count = utils.x11WindowProperty(
                 drvr.handles.xdisplay,
                 @bitCast(w.x11.xdnd_req.src),
                 drvr.ewmh.XdndTypeList,
                 libx11.XA_ATOM,
-                @ptrCast(&extra_formats),
+                @ptrCast(&extra_types),
             ) catch err: {
-                extra_formats = @ptrCast(&e.data.l[2]);
+                extra_types = @ptrCast(&e.data.l[2]);
                 break :err 3;
             };
         } else {
-            extra_formats_count = 3;
-            extra_formats = @ptrCast(&e.data.l[2]);
+            extra_types_count = 3;
+            extra_types = @ptrCast(&e.data.l[2]);
         }
 
-        std.debug.assert(extra_formats_count != 0);
+        std.debug.assert(extra_types_count != 0);
 
-        for (0..extra_formats_count) |i| {
-            if (extra_formats[i] == drvr.ewmh.text_uri_list) {
+        for (0..extra_types_count) |i| {
+            if (extra_types[i] == drvr.ewmh.text_uri_list) {
                 w.x11.xdnd_req.format = @intCast(drvr.ewmh.text_uri_list);
                 break;
             }
         }
 
-        if (extra_types != 0 and @intFromPtr(extra_formats) != @intFromPtr(&e.data.l[2])) {
-            _ = libx11.XFree(@constCast(extra_formats));
-        }
-    } else if (e.message_type == drvr.ewmh.XdndDrop) {
-        if (opts.LOG_PLATFORM_EVENTS) {
-            std.log.info(
-                "window: #{} recieved ClientMessage:XdndDrop\n",
-                .{w.handle},
-            );
-        }
-        if (w.x11.xdnd_req.format != 0) {
-            libx11.XConvertSelection(
-                drvr.handles.xdisplay,
-                drvr.ewmh.XdndSelection,
-                @intCast(w.x11.xdnd_req.format),
-                drvr.ewmh.XdndSelection,
-                w.handle,
-                @intCast(e.data.l[2]),
-            );
-        } else {
-            var event = libx11.XEvent{
-                .xclient = libx11.XClientMessageEvent{
-                    .type = libx11.ClientMessage,
-                    .display = drvr.handles.xdisplay,
-                    .window = @intCast(w.x11.xdnd_req.src),
-                    .message_type = drvr.ewmh.XdndFinished,
-                    .format = 32,
-                    .serial = 0,
-                    .send_event = libx11.True,
-                    .data = .{ .l = [5]c_long{
-                        @intCast(w.handle),
-                        0,
-                        0,
-                        0,
-                        0,
-                    } },
-                },
-            };
-            drvr.sendXEvent(&event, @intCast(w.x11.xdnd_req.src));
-            drvr.flushXRequests();
+        if (support_extra_types != 0 and
+            @intFromPtr(extra_types) != @intFromPtr(&e.data.l[2]))
+        {
+            _ = libx11.XFree(@constCast(extra_types));
+            if (w.x11.xdnd_req.format == libx11.None) {
+                // check the request atoms.
+                extra_types_count = 3;
+                extra_types = @ptrCast(&e.data.l[2]);
+                for (0..extra_types_count) |i| {
+                    if (extra_types[i] == drvr.ewmh.text_uri_list) {
+                        w.x11.xdnd_req.format = @intCast(drvr.ewmh.text_uri_list);
+                        break;
+                    }
+                }
+            }
         }
     } else if (e.message_type == drvr.ewmh.XdndPosition) {
         if (opts.LOG_PLATFORM_EVENTS) {
             std.log.info(
                 "window: #{} recieved ClientMessage:XdndPosition\n",
-                .{w.handle},
+                .{w.data.id},
             );
         }
-        const x_root, const y_root = .{ (e.data.l[2] >> 16) & 0xffff, e.data.l[2] & 0xffff };
+
+        std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
+        var reply = libx11.XEvent{
+            .xclient = libx11.XClientMessageEvent{
+                .type = libx11.ClientMessage,
+                .display = drvr.handles.xdisplay,
+                .window = @intCast(e.data.l[0]),
+                .message_type = drvr.ewmh.XdndStatus,
+                .format = 32,
+                .serial = 0,
+                .send_event = 0,
+                .data = .{ .l = [5]c_long{
+                    @intCast(w.handle),
+                    if (w.x11.xdnd_req.format != libx11.None) 1 else 0,
+                    0,
+                    0,
+                    @intCast(drvr.ewmh.XdndActionCopy),
+                } },
+            },
+        };
+        _ = libx11.XSendEvent(
+            drvr.handles.xdisplay,
+            @intCast(e.data.l[0]),
+            libx11.False,
+            libx11.NoEventMask,
+            &reply,
+        );
+        drvr.flushXRequests();
+
+        const x_root, const y_root = .{ (e.data.l[2] >> 16), e.data.l[2] & 0xffff };
         var x: c_int, var y: c_int = .{ 0, 0 };
         var child: libx11.Window = 0;
 
@@ -241,31 +248,50 @@ fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
             true,
         );
         w.sendEvent(&event);
-
-        var reply = libx11.XEvent{
-            .xclient = libx11.XClientMessageEvent{
-                .type = libx11.ClientMessage,
-                .display = drvr.handles.xdisplay,
-                .window = @intCast(w.x11.xdnd_req.src),
-                .message_type = drvr.ewmh.XdndStatus,
-                .format = 32,
-                .serial = 0,
-                .send_event = libx11.True,
-                .data = .{ .l = [5]c_long{
-                    @intCast(w.handle),
-                    1,
-                    0,
-                    0,
-                    @intCast(drvr.ewmh.XdndActionCopy),
-                } },
-            },
-        };
-        drvr.sendXEvent(&reply, @intCast(w.x11.xdnd_req.src));
-        drvr.flushXRequests();
+    } else if (e.message_type == drvr.ewmh.XdndDrop) {
+        if (opts.LOG_PLATFORM_EVENTS) {
+            std.log.info(
+                "window: #{} recieved ClientMessage:XdndDrop\n",
+                .{w.data.id},
+            );
+        }
+        std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
+        if (w.x11.xdnd_req.format != libx11.None) {
+            libx11.XConvertSelection(
+                drvr.handles.xdisplay,
+                drvr.ewmh.XdndSelection,
+                @intCast(w.x11.xdnd_req.format),
+                drvr.ewmh.XdndSelection,
+                w.handle,
+                if (w.x11.xdnd_req.version >= 1) @intCast(e.data.l[2]) else libx11.CurrentTime,
+            );
+        } else {
+            // no uri list finish the drop
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
+                    .window = @intCast(e.data.l[0]),
+                    .message_type = drvr.ewmh.XdndFinished,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = 0,
+                    .data = .{ .l = [5]c_long{
+                        @intCast(w.handle),
+                        0,
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
+            drvr.sendXEvent(&event, @intCast(w.x11.xdnd_req.src));
+            drvr.flushXRequests();
+        }
     }
 }
 
-fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
+inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
     const km = keymaps.KeyMaps.singleton();
     switch (ev.type) {
         libx11.KeyPress => {
@@ -348,7 +374,14 @@ fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
     }
 }
 
-fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
+inline fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
+    if (opts.LOG_PLATFORM_EVENTS) {
+        std.log.info(
+            "window: #{} recieved SelectionNotify\n",
+            .{window.data.id},
+        );
+    }
+
     const drvr = X11Driver.singleton();
     if (e.property != drvr.ewmh.XdndSelection) {
         return;
@@ -359,15 +392,17 @@ fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
     var dropped_data: ?[*]u8 = null;
     const ret = utils.x11WindowProperty(
         drvr.handles.xdisplay,
-        e.requestor,
+        // e.requestor,
+        window.handle,
         e.property,
-        e.target,
+        // e.target,
+        drvr.ewmh.text_uri_list,
         @ptrCast(&dropped_data),
     ) catch 0;
 
     if (dropped_data) |data| {
         if (window.x11.xdnd_req.raw_data) |rd| {
-            // free old file uri list.
+            // free old file URI list.
             _ = libx11.XFree(@constCast(rd));
         }
         window.x11.xdnd_req.raw_data = data;
@@ -400,14 +435,17 @@ fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
             .message_type = drvr.ewmh.XdndFinished,
             .format = 32,
             .serial = 0,
-            .send_event = libx11.True,
-            .data = .{ .l = [5]c_long{
-                @intCast(window.handle),
-                success,
-                @intCast(drvr.ewmh.XdndActionCopy),
-                0,
-                0,
-            } },
+            .send_event = 0,
+            .data = .{
+                .l = [5]c_long{
+                    @intCast(window.handle),
+                    success,
+                    // @intCast(drvr.ewmh.XdndActionCopy),
+                    0,
+                    0,
+                    0,
+                },
+            },
         },
     };
 
@@ -422,7 +460,7 @@ fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) void {
     }
 }
 
-fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
+inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
     if (opts.LOG_PLATFORM_EVENTS) {
         std.log.info(
             "window: #{} recieved PropertyNotify\n",
@@ -485,6 +523,44 @@ fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
     }
 }
 
+inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, window: *Window) void {
+    std.debug.print("Got generic data\n", .{});
+    const drvr = X11Driver.singleton();
+    if (window.data.flags.has_raw_mouse and
+        drvr.extensions.xi2.is_v2point0 and
+        libx11.XGetEventData(drvr.handles.xdisplay, ev) == libx11.True and
+        ev.extension == drvr.extensions.xi2.maj_opcode and
+        ev.evtype == x11ext.XI_RawMotion)
+    {
+        std.debug.print("Got Raw data\n", .{});
+        defer libx11.XFreeEventData(drvr.handles.xdisplay, ev);
+        const raw_ev: *x11ext.XIRawEvent = @ptrCast(@alignCast(ev.data));
+        if (raw_ev.valuators.mask_len != 0) {
+            var read_indx: u32 = 0;
+            var dx: f64, var dy: f64 = .{ 0.0, 0.0 };
+            if (x11ext.XIMaskIsSet(raw_ev.valuators.mask, 0)) {
+                dx += raw_ev.raw_values[read_indx];
+                read_indx += 1;
+            }
+            if (x11ext.XIMaskIsSet(raw_ev.valuators.mask, 1)) {
+                dy += raw_ev.raw_values[read_indx];
+            }
+
+            window.x11.cursor.accum_pos.x +%= @as(i32, @intFromFloat(dx));
+            window.x11.cursor.accum_pos.y +%= @as(i32, @intFromFloat(dy));
+            const event = common.event.createMoveEvent(
+                window.data.id,
+                window.x11.cursor.accum_pos.x,
+                window.x11.cursor.accum_pos.y,
+                true,
+            );
+            window.sendEvent(&event);
+            window.x11.cursor.pos.x += @as(i32, @intFromFloat(dx));
+            window.x11.cursor.pos.y += @as(i32, @intFromFloat(dy));
+        }
+    }
+}
+
 // fn handleXkbEvent(ev: *const x11ext.XkbEvent, helper_data: *HelperData) void {
 //     _ = helper_data;
 //     if (opts.LOG_PLATFORM_EVENTS) {
@@ -522,7 +598,7 @@ fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window) void {
 //     }
 // }
 
-pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
+pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
     switch (ev.type) {
         libx11.ButtonPress => handleButtonPress(&ev.xbutton, window),
         libx11.ButtonRelease => handleButtonRelease(&ev.xbutton, window),
@@ -538,6 +614,9 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
             const x, const y = .{ ev.xcrossing.x, ev.xcrossing.y };
             window.x11.cursor.pos = .{ .x = x, .y = y };
             cursor.applyCursorHints(&window.x11.cursor, window.handle);
+            if (window.data.flags.has_raw_mouse and window.x11.cursor.mode == .Hidden) {
+                _ = wndw.enableRawMouseMotion();
+            }
             const enter_event = common.event.createMouseEnterEvent(
                 window.data.id,
             );
@@ -560,6 +639,10 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                 );
             }
             window.data.flags.cursor_in_client = false;
+            // TODO: Remove cursor hints.
+            if (window.data.flags.has_raw_mouse and window.x11.cursor.mode == .Hidden) {
+                _ = wndw.disableRawMouseMotion();
+            }
             const event = common.event.createMouseExitEvent(window.data.id);
             window.sendEvent(&event);
         },
@@ -598,10 +681,26 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
                 );
             }
             const x, const y = .{ ev.xmotion.x, ev.xmotion.y };
-            if (x != window.x11.cursor.pos.x or y != window.x11.cursor.pos.y) {
-                window.x11.cursor.pos = .{ .x = x, .y = y };
-                const event = common.event.createMoveEvent(window.data.id, x, y, true);
+            const dx = x - window.x11.cursor.pos.x;
+            const dy = y - window.x11.cursor.pos.y;
+            if (dx != 0 or dy != 0) {
+                if (window.x11.cursor.mode == .Hidden) {
+                    if (window.data.flags.has_raw_mouse) {
+                        return;
+                    }
+                    window.x11.cursor.accum_pos.x +%= dx;
+                    window.x11.cursor.accum_pos.y +%= dy;
+                } else {
+                    window.x11.cursor.accum_pos = .{ .x = x, .y = y };
+                }
+                const event = common.event.createMoveEvent(
+                    window.data.id,
+                    window.x11.cursor.accum_pos.x,
+                    window.x11.cursor.accum_pos.y,
+                    true,
+                );
                 window.sendEvent(&event);
+                window.x11.cursor.pos = .{ .x = x, .y = y };
             }
         },
 
@@ -659,6 +758,10 @@ pub fn handleWindowEvent(ev: *const libx11.XEvent, window: *Window) void {
         libx11.PropertyNotify => handlePropertyNotify(&ev.xproperty, window),
 
         libx11.SelectionNotify => handleXSelection(&ev.xselection, window),
+
+        // FIXME: only the Root window can recieve Raw mouse motion (x11 sucks)
+        // we will need to somehow get the window with the hidden mouse.
+        libx11.GenericEvent => handleGenericEvent(&ev.xcookie, window),
 
         else => {},
     }

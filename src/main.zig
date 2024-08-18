@@ -1,6 +1,6 @@
 const common = @import("common");
 const window = @import("window.zig");
-const gl = @import("gl");
+const gl = @import("opengl");
 const platform = @import("platform");
 
 // Exports

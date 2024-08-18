@@ -64,9 +64,7 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var ctx = try mywindow.initGLContext(
-        &.{ .ver = .{ .major = 4, .minor = 2 }, .profile = .Core },
-    );
+    var ctx = try mywindow.initGLContext();
     defer ctx.deinit();
     _ = ctx.makeCurrent();
 
@@ -100,6 +98,12 @@ pub fn main() !void {
                             // let's request closing the window on
                             // pressing Q key
                             mywindow.queueCloseEvent();
+                        }
+                        if (key.keycode == KeyCode.E) {
+                            _ = mywindow.setFullscreen(true);
+                        }
+                        if (key.keycode == KeyCode.Escape) {
+                            _ = mywindow.setFullscreen(false);
                         }
                     }
                 },

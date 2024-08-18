@@ -22,6 +22,6 @@ pub const WindowData = struct {
     aspect_ratio: ?geometry.WidowAspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?geometry.WidowSize, // The minimum limits of the window's size.
     max_size: ?geometry.WidowSize, // The maximum limits of the window's size.
-    flags: WindowFlags,
     input: InputState, // Both the keyboard and mouse buttons states.
+    flags: WindowFlags,
 };

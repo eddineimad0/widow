@@ -505,6 +505,9 @@ pub fn mainWindowProc(
             }
 
             wndw.restoreCursor(&window.win32.cursor);
+            if (window.data.flags.has_raw_mouse and window.win32.cursor.mode == .Hidden) {
+                _ = wndw.disableRawMouseMotion();
+            }
 
             const event = common.event.createFocusEvent(window.data.id, false);
             window.sendEvent(&event);
@@ -626,15 +629,6 @@ pub fn mainWindowProc(
             const raw_input: input.HRAWINPUT = @ptrFromInt(ulparam);
             var inpt: input.RAWINPUT = undefined;
             var raw_data_size: c_uint = @sizeOf(input.RAWINPUT);
-
-            // _ = input.GetRawInputData(raw_input, input.RID_INPUT, null, &raw_data_size, @sizeOf(input.RAWINPUTHEADER));
-            // window.win32.raw_input.ensureTotalCapacity(raw_data_size) catch {
-            //     utils.postWindowErrorMsg(
-            //         wndw.WindowError.OutOfMemory,
-            //         window.handle,
-            //     );
-            //     return 0;
-            // };
 
             const ret = input.GetRawInputData(
                 raw_input,
