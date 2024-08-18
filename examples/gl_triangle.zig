@@ -99,6 +99,12 @@ pub fn main() !void {
                             // pressing Q key
                             mywindow.queueCloseEvent();
                         }
+                        if (key.keycode == KeyCode.E) {
+                            _ = mywindow.setFullscreen(true);
+                        }
+                        if (key.keycode == KeyCode.Escape) {
+                            _ = mywindow.setFullscreen(false);
+                        }
                     }
                 },
                 EventType.WindowResize => |*new_size| {

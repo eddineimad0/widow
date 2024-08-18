@@ -100,7 +100,7 @@ pub fn main() !void {
                             );
                         }
                         if (key.keycode == .M) {
-                            mywindow.setClientPosition(0, 540);
+                            mywindow.setClientPosition(0, 0);
                         }
                         if (key.keycode == .C) {
                             mywindow.setClientSize(1024, 640);

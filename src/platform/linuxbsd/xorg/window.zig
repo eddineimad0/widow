@@ -31,20 +31,21 @@ pub const WindowError = error{
 };
 
 pub const Window = struct {
-    data: WindowData,
-    fb_cfg: FBConfig,
-    handle: libx11.Window,
     ev_queue: ?*common.event.EventQueue,
+    data: WindowData,
+    handle: libx11.Window,
     x11: struct {
-        cursor: cursor.CursorHints,
         xdnd_req: struct {
-            src: c_long,
-            ver: c_long,
-            format: c_long,
             raw_data: ?[*]const u8,
             paths: std.ArrayList([]const u8),
+            version: c_long,
+            src: c_long,
+            format: c_long,
         },
+        cursor: cursor.CursorHints,
+        xdnd_allow: bool,
     },
+    fb_cfg: FBConfig,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = 0,
@@ -65,22 +66,26 @@ pub const Window = struct {
         self.data = data.*;
         self.fb_cfg = fb_cfg.*;
         self.ev_queue = null;
-        self.x11 = .{ .cursor = .{
-            .mode = .Normal,
-            .icon = libx11.None,
-            .pos = .{ .x = 0, .y = 0 },
-            .accum_pos = .{ .x = 0, .y = 0 },
-        }, .xdnd_req = .{
-            .src = 0,
-            .ver = 0,
-            .format = 0,
-            .raw_data = null,
-            .paths = .{
-                .items = undefined,
-                .allocator = undefined,
-                .capacity = 0,
+        self.x11 = .{
+            .cursor = .{
+                .mode = .Normal,
+                .icon = libx11.None,
+                .pos = .{ .x = 0, .y = 0 },
+                .accum_pos = .{ .x = 0, .y = 0 },
             },
-        } };
+            .xdnd_req = .{
+                .src = 0,
+                .version = 0,
+                .format = 0,
+                .raw_data = null,
+                .paths = .{
+                    .items = undefined,
+                    .allocator = undefined,
+                    .capacity = 0,
+                },
+            },
+            .xdnd_allow = false,
+        };
 
         // X11 won't let us change the visual and depth later so decide now.
         const drvr = X11Driver.singleton();
@@ -154,13 +159,16 @@ pub const Window = struct {
         return self.ev_queue;
     }
 
-    pub fn processEvents(self: *const Self) WindowError!void {
-        _ = self;
+    pub fn processEvents(self: *Self) WindowError!void {
         var e: libx11.XEvent = undefined;
         const drvr = X11Driver.singleton();
         drvr.flushXRequests();
         while (drvr.nextXEvent(&e)) {
-            const window = windowFromId(e.xany.window);
+            const window: ?*Window = if (self.handle == e.xany.window)
+                self
+            else
+                windowFromId(e.xany.window);
+
             if (window) |w| {
                 if (e.type == libx11.ClientMessage and
                     e.xclient.message_type == X11Driver.CUSTOM_CLIENT_ERR)
@@ -337,7 +345,7 @@ pub const Window = struct {
                 .message_type = drvr.ewmh._NET_WM_STATE,
                 .format = 32,
                 .serial = 0,
-                .send_event = libx11.True,
+                .send_event = 0,
                 .data = .{ .l = [5]c_long{
                     _NET_WM_STATE_ADD,
                     @intCast(drvr.ewmh._NET_WM_STATE_DEMANDS_ATTENTION),
@@ -362,7 +370,7 @@ pub const Window = struct {
                     .window = self.handle,
                     .format = 32,
                     .serial = 0,
-                    .send_event = libx11.True,
+                    .send_event = 0,
                     .message_type = drvr.ewmh._NET_ACTIVE_WINDOW,
                     .data = .{
                         .l = .{
@@ -597,7 +605,7 @@ pub const Window = struct {
                     .window = self.handle,
                     .format = 32,
                     .serial = 0,
-                    .send_event = libx11.True,
+                    .send_event = 0,
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
@@ -640,7 +648,7 @@ pub const Window = struct {
                     .window = self.handle,
                     .format = 32,
                     .serial = 0,
-                    .send_event = libx11.True,
+                    .send_event = 0,
                     .message_type = drvr.ewmh._NET_WM_STATE,
                     .data = .{
                         .l = .{
@@ -695,7 +703,7 @@ pub const Window = struct {
     }
 
     /// Returns the title of the window.
-    pub inline fn title(
+    pub fn title(
         self: *const Self,
         allocator: std.mem.Allocator,
     ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
@@ -797,7 +805,7 @@ pub const Window = struct {
                 .message_type = drvr.ewmh._NET_WM_STATE,
                 .format = 32,
                 .serial = 0,
-                .send_event = libx11.True,
+                .send_event = 0,
                 .data = .{ .l = [5]c_long{
                     if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
                     @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
@@ -813,9 +821,18 @@ pub const Window = struct {
         return true;
     }
 
-    pub inline fn setDragAndDrop(self: *Self, allocator: mem.Allocator, accepted: bool) void {
+    pub fn setDragAndDrop(
+        self: *Self,
+        allocator: mem.Allocator,
+        accepted: bool,
+    ) void {
         const version: i32 = libx11.XDND_VER;
         const drvr = X11Driver.singleton();
+
+        if (accepted == self.x11.xdnd_allow) {
+            return;
+        }
+        self.x11.xdnd_allow = accepted;
 
         if (accepted) {
             self.x11.xdnd_req.paths = std.ArrayList([]const u8).init(allocator);
@@ -1018,7 +1035,7 @@ pub const Window = struct {
                 .window = self.handle,
                 .format = 32,
                 .serial = 0,
-                .send_event = libx11.True,
+                .send_event = 0,
                 .message_type = drvr.ewmh._NET_REQUEST_FRAME_EXTENTS,
                 .data = .{
                     .l = .{

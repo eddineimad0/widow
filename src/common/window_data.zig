@@ -22,34 +22,6 @@ pub const WindowData = struct {
     aspect_ratio: ?geometry.WidowAspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?geometry.WidowSize, // The minimum limits of the window's size.
     max_size: ?geometry.WidowSize, // The maximum limits of the window's size.
-    flags: WindowFlags,
     input: InputState, // Both the keyboard and mouse buttons states.
-};
-
-pub const FBAccelration = enum {
-    None,
-    OpenGL,
-};
-
-pub const FBConfig = struct {
-    color: struct {
-        red_bits: u4 = 8,
-        green_bits: u4 = 8,
-        blue_bits: u4 = 8,
-        alpha_bits: u4 = 8,
-    } = .{},
-    accum: struct {
-        red_bits: u4 = 8,
-        green_bits: u4 = 8,
-        blue_bits: u4 = 8,
-        alpha_bits: u4 = 8,
-    } = .{},
-    depth_bits: u8 = 24,
-    stencil_bits: u8 = 8,
-
-    flags: struct {
-        double_buffered: bool = true,
-        sRGB: bool = true,
-        stereo: bool = false,
-    } = .{},
+    flags: WindowFlags,
 };

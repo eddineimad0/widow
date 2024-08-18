@@ -1,6 +1,6 @@
 const gl = @import("opengl");
 
-pub const FBAccelrationTag = enum {
+pub const FBAccelrationTag = enum(u8) {
     none,
     opengl,
 };
