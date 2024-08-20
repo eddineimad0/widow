@@ -4,7 +4,7 @@ const mem = std.mem;
 const DisplayProtocol = enum {
     Win32,
     Xorg,
-    Wayland,
+    Wayland, // yeah this isn't supported yet
 };
 
 pub fn build(b: *std.Build) !void {
