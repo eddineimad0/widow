@@ -1,8 +1,9 @@
 const std = @import("std");
 const zigwin32 = @import("zigwin32");
+const common = @import("common");
 const win32 = @import("win32_defs.zig");
 const utils = @import("utils.zig");
-const gl = @import("gl");
+const gl = @import("opengl");
 
 const mem = std.mem;
 const debug = std.debug;
@@ -11,6 +12,7 @@ const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
+const FBConfig = common.fb.FBConfig;
 
 const WGLError = error{
     PFDNoMatch,
@@ -130,7 +132,7 @@ const wgl_ext = struct {
     var loaded: bool = false;
 };
 
-fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const gl.GLConfig) void {
+fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void {
     pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
     pfd.dwFlags = opengl.PFD_FLAGS{
@@ -282,7 +284,7 @@ fn loadGLExtensions() bool {
     return true;
 }
 
-fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
+fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?opengl.HGLRC {
     var pfd_attrib_list: [48]c_int = undefined;
     var gl_attrib_list: [16]c_int = undefined;
     var pfd_fattrib_list = [1]f32{0};
@@ -375,15 +377,13 @@ fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
             cfg.accum.alpha_bits,
         );
 
-        if (cfg.flags.accelerated) {
-            // Support for hardware acceleration.
-            helper.setAttribute(
-                &pfd_attrib_list,
-                &index,
-                WGL_ACCELERATION_ARB,
-                WGL_FULL_ACCELERATION_ARB,
-            );
-        }
+        // Support for hardware acceleration.
+        helper.setAttribute(
+            &pfd_attrib_list,
+            &index,
+            WGL_ACCELERATION_ARB,
+            WGL_FULL_ACCELERATION_ARB,
+        );
 
         if (cfg.flags.double_buffered) {
             // Support for double buffer.
@@ -465,19 +465,19 @@ fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
         return null;
     }
 
-    if (cfg.ver.major < 3 or !wgl_ext.ARB_create_context) {
+    if (cfg.accel.opengl.ver.major < 3 or !wgl_ext.ARB_create_context) {
         return opengl.wglCreateContext(dc);
     }
 
     // Set the version of OpenGL in the attribute list.
     gl_attrib_list[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
-    gl_attrib_list[1] = cfg.ver.major;
+    gl_attrib_list[1] = cfg.accel.opengl.ver.major;
     gl_attrib_list[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
-    gl_attrib_list[3] = cfg.ver.minor;
+    gl_attrib_list[3] = cfg.accel.opengl.ver.minor;
     gl_attrib_list[4] = WGL_CONTEXT_PROFILE_MASK_ARB;
 
     // Set the OpenGL profile.
-    gl_attrib_list[5] = if (cfg.profile == .Core)
+    gl_attrib_list[5] = if (cfg.accel.opengl.profile == .Core)
         WGL_CONTEXT_CORE_PROFILE_BIT_ARB
     else
         WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
@@ -488,7 +488,6 @@ fn createGLContext(window: win32.HWND, cfg: *const gl.GLConfig) ?opengl.HGLRC {
 }
 
 pub const GLContext = struct {
-    cfg: gl.GLConfig,
     glrc: opengl.HGLRC,
     owner: win32.HWND,
     driver: struct {
@@ -498,7 +497,7 @@ pub const GLContext = struct {
     },
     const Self = @This();
 
-    pub fn init(window: win32.HWND, cfg: *const gl.GLConfig) WGLError!Self {
+    pub fn init(window: win32.HWND, cfg: *const FBConfig) WGLError!Self {
         const prev_dc = opengl.wglGetCurrentDC();
         const prev_glc = opengl.wglGetCurrentContext();
         defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
@@ -532,7 +531,6 @@ pub const GLContext = struct {
         _ = gdi.ReleaseDC(window, wdc);
 
         return .{
-            .cfg = cfg.*,
             .glrc = rc.?,
             .owner = window,
             .driver = .{

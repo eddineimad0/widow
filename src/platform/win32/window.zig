@@ -18,6 +18,7 @@ const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
 const CursorHints = icon.CursorHints;
 const Icon = icon.Icon;
+const FBConfig = common.fb.FBConfig;
 const WindowData = common.window_data.WindowData;
 const WindowFlags = common.window_data.WindowFlags;
 
@@ -313,19 +314,20 @@ fn createPlatformWindow(
 pub const WindowWin32Data = struct {
     icon: Icon,
     cursor: CursorHints,
-    prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
-    allow_drag_n_drop: bool,
     dropped_files: std.ArrayList([]const u8),
+    prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
     position_update: bool,
+    allow_drag_n_drop: bool,
 };
 
 pub const Window = struct {
+    ev_queue: ?*common.event.EventQueue,
     handle: win32.HWND,
     data: WindowData,
-    ev_queue: ?*common.event.EventQueue,
     win32: WindowWin32Data,
+    fb_cfg: FBConfig,
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
@@ -337,12 +339,14 @@ pub const Window = struct {
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
+        fb_cfg: *FBConfig,
     ) !*Self {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
         self.ev_queue = null;
         self.data = data.*;
+        self.fb_cfg = fb_cfg.*;
 
         const style, const ex_style = .{
             windowStyles(&data.flags),
@@ -487,6 +491,17 @@ pub const Window = struct {
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
             // try self.setFullscreen(true, null);
+        }
+
+        // Framebuffer configuration
+        switch (fb_cfg.accel) {
+            .opengl => {
+                // glx.initGLX() catch return WindowError.GLError;
+                // if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
+                //     return WindowError.VisualNone;
+                // }
+            },
+            else => {},
         }
 
         return self;
@@ -1380,10 +1395,13 @@ pub const Window = struct {
         }
     }
 
-    pub fn initGL(self: *const Self, cfg: *const gl.GLConfig) WindowError!wgl.GLContext {
-        return wgl.GLContext.init(self.handle, cfg) catch {
-            return WindowError.GLError;
-        };
+    pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
+        switch (self.fb_cfg.accel) {
+            .opengl => return wgl.GLContext.init(self.handle, &self.fb_cfg) catch {
+                return WindowError.GLError;
+            },
+            else => return WindowError.GLError,
+        }
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
