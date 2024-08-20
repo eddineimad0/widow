@@ -12,25 +12,25 @@ pub const FBAccelrationConfig = union(FBAccelrationTag) {
 
 pub const FBConfig = struct {
     color: struct {
-        red_bits: u4 = 8,
-        green_bits: u4 = 8,
-        blue_bits: u4 = 8,
-        alpha_bits: u4 = 8,
-    } = .{},
+        red_bits: u4,
+        green_bits: u4,
+        blue_bits: u4,
+        alpha_bits: u4,
+    },
     accum: struct {
-        red_bits: u4 = 8,
-        green_bits: u4 = 8,
-        blue_bits: u4 = 8,
-        alpha_bits: u4 = 8,
-    } = .{},
-    depth_bits: u8 = 24,
-    stencil_bits: u8 = 8,
+        red_bits: u4,
+        green_bits: u4,
+        blue_bits: u4,
+        alpha_bits: u4,
+    },
+    depth_bits: u8,
+    stencil_bits: u8,
 
     flags: struct {
-        double_buffered: bool = true,
-        sRGB: bool = true,
-        stereo: bool = false,
-    } = .{},
+        double_buffered: bool,
+        sRGB: bool,
+        stereo: bool,
+    },
 
-    accel: FBAccelrationConfig = .{ .opengl = .{} },
+    accel: FBAccelrationConfig,
 };
