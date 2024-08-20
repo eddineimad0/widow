@@ -4,7 +4,7 @@ const mem = std.mem;
 const DisplayProtocol = enum {
     Win32,
     Xorg,
-    Wayland,
+    Wayland, // yeah this isn't supported yet
 };
 
 pub fn build(b: *std.Build) !void {
@@ -152,7 +152,7 @@ fn prepareWidowModule(
     platform_mod.addOptions("build-options", opts);
 
     const widow = b.addModule("widow", .{
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("src/root.zig"),
         .imports = &.{
             .{ .name = "common", .module = common_mod },
             .{ .name = "platform", .module = platform_mod },

@@ -80,12 +80,12 @@ fn createWin32Icon(
 
 pub const CursorHints = struct {
     icon: ?window_msg.HCURSOR,
-    sys_owned: bool, // As to avoid deleting system owned cursor images.
-    mode: common.cursor.CursorMode,
     // Track the cursor coordinates in respect to top left corner.
     pos: common.geometry.WidowPoint2D,
     // Accumulate the mouse movement
     accum_pos: common.geometry.WidowPoint2D,
+    mode: common.cursor.CursorMode,
+    sys_owned: bool, // As to avoid deleting system owned cursor images.
 };
 
 pub fn destroyCursorIcon(cursor: *CursorHints) void {

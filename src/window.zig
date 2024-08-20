@@ -52,7 +52,29 @@ pub const WindowBuilder = struct {
                 },
                 .input = common.keyboard_mouse.InputState.init(),
             },
-            .fbcfg = .{},
+            .fbcfg = .{
+                .color = .{
+                    .red_bits = 8,
+                    .green_bits = 8,
+                    .blue_bits = 8,
+                    .alpha_bits = 8,
+                },
+                .accum = .{
+                    .red_bits = 8,
+                    .green_bits = 8,
+                    .blue_bits = 8,
+                    .alpha_bits = 8,
+                },
+                .depth_bits = 24,
+                .stencil_bits = 8,
+
+                .flags = .{
+                    .double_buffered = true,
+                    .sRGB = true,
+                    .stereo = false,
+                },
+                .accel = .{ .opengl = .{} },
+            },
         };
     }
 
