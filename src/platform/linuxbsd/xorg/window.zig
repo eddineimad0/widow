@@ -405,7 +405,6 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         const drvr = X11Driver.singleton();
-        //BUG: for some reason the window is moved to the wrong position.
         _ = libx11.XMoveWindow(
             drvr.handles.xdisplay,
             self.handle,

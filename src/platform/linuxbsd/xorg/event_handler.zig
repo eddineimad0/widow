@@ -639,7 +639,6 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
                 );
             }
             window.data.flags.cursor_in_client = false;
-            // TODO: Remove cursor hints.
             if (window.data.flags.has_raw_mouse and window.x11.cursor.mode == .Hidden) {
                 _ = wndw.disableRawMouseMotion();
             }
