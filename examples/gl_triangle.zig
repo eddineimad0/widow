@@ -8,6 +8,11 @@ var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 var gl_procs: gl.ProcTable = undefined;
 
+// exporting these 2 symbols forces window to use dedicated gpu when creating
+// opengl context.
+export const NvOptimusEnablement: c_int = 1;
+export const AmdPowerXpressRequestHighPerformance: c_int = 1;
+
 const VERTEX_SHADER_SRC =
     \\#version 420 core
     \\layout (location = 0) in vec3 aPos;
@@ -56,6 +61,7 @@ pub fn main() !void {
 
     // closes the window when done.
     defer mywindow.deinit(allocator);
+    mywindow.focus();
 
     // the window will require an event queue to
     // send events.
