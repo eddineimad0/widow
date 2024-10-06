@@ -308,7 +308,7 @@ pub const Window = struct {
     /// is the same as that monitor's top left-corner, in a multi-monitor setup
     /// it depends on the setup's configuration.
     pub inline fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
-        return self.impl.clientPosition();
+        return self.impl.getClientPosition();
     }
 
     /// Change the position of the window's top-left corner,
@@ -330,7 +330,7 @@ pub const Window = struct {
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
     pub inline fn getClientSize(self: *const Self) common.geometry.WidowSize {
-        return self.impl.clientSize();
+        return self.impl.getClientSize();
     }
 
     /// Returns the size in physical pixels of the window's client area.
@@ -339,7 +339,7 @@ pub const Window = struct {
     /// bar and borders. If the window allows dpi scaling the returned
     /// size might be diffrent from the logical size.
     pub inline fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
-        return self.impl.clientPixelSize();
+        return self.impl.getClientPixelSize();
     }
 
     /// Changes the client size of the window.
@@ -430,7 +430,7 @@ pub const Window = struct {
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub inline fn getTitle(self: *const Self, allocator: mem.Allocator) ![]u8 {
-        return self.impl.title(allocator);
+        return self.impl.getTitle(allocator);
     }
 
     /// Changes the title of the window.
@@ -546,7 +546,7 @@ pub const Window = struct {
     /// with 1 being opaque, and 0 being fully transparent.
     /// A window is always created with an opacity value of 1.
     pub inline fn getOpacity(self: *const Self) f32 {
-        return self.impl.opacity();
+        return self.impl.getOpacity();
     }
 
     /// Changes the opacity value of the window(client area + decorations).
@@ -625,7 +625,7 @@ pub const Window = struct {
     /// and the scale factor.
     pub fn getContentScale(self: *const Self) f64 {
         var scale: f64 = undefined;
-        _ = self.impl.scalingDPI(&scale);
+        _ = self.impl.getScalingDPI(&scale);
         return scale;
     }
 
@@ -636,7 +636,7 @@ pub const Window = struct {
     /// the origin point(0,0), with y axis pointing to the bottom,
     /// and the x axis pointing to the right
     pub inline fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
-        return self.impl.cursorPosition();
+        return self.impl.getCursorPosition();
     }
 
     /// Returns true if the cursor is hovering on the window,
@@ -709,7 +709,7 @@ pub const Window = struct {
     /// to free the cache. The returned slice may gets invalidated and mutated
     /// during the next file drop event
     pub inline fn getDroppedFilesURI(self: *const Self) [][]const u8 {
-        return self.impl.droppedFiles();
+        return self.impl.getDroppedFiles();
     }
 
     /// Frees the memory used to hold the dropped file(s) path(s).

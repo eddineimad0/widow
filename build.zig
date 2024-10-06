@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) !void {
             }));
         }
         example.linkLibC();
-        if (mem.eql(u8, example_name, "gl_triangle")) {
+        if (mem.eql(u8, example_name, "gl_triangle") and target.result.os.tag == .windows) {
             example.dll_export_fns = true;
         }
         const install_step = b.addInstallArtifact(example, .{});

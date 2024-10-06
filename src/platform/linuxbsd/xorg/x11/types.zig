@@ -148,7 +148,7 @@ pub const XSetWindowAttributes = extern struct {
     cursor: Cursor,
 };
 
-pub const XWindowAttributes = struct {
+pub const XWindowAttributes = extern struct {
     x: c_int,
     y: c_int, // location of window
     width: c_int,

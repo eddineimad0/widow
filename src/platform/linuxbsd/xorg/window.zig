@@ -397,7 +397,7 @@ pub const Window = struct {
     }
 
     /// Returns the position of the top left corner of the client area.
-    pub fn clientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
         return self.data.client_area.top_left;
     }
 
@@ -405,7 +405,6 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         const drvr = X11Driver.singleton();
-        //BUG: for some reason the window is moved to the wrong position.
         _ = libx11.XMoveWindow(
             drvr.handles.xdisplay,
             self.handle,
@@ -416,7 +415,7 @@ pub const Window = struct {
     }
 
     /// Returns the Physical size of the window's client area
-    pub fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
+    pub fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
         return .{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
@@ -424,7 +423,7 @@ pub const Window = struct {
     }
 
     /// Returns the logical size of the window's client area
-    pub fn clientSize(self: *const Self) common.geometry.WidowSize {
+    pub fn getClientSize(self: *const Self) common.geometry.WidowSize {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = X11Driver.singleton();
         _ = libx11.XGetWindowAttributes(
@@ -703,7 +702,7 @@ pub const Window = struct {
     }
 
     /// Returns the title of the window.
-    pub fn title(
+    pub fn getTitle(
         self: *const Self,
         allocator: std.mem.Allocator,
     ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
@@ -734,7 +733,7 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn opacity(self: *const Self) f64 {
+    pub fn getOpacity(self: *const Self) f64 {
         const drvr = X11Driver.singleton();
         var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
         const OPAQUE = @as(u32, 0xFFFFFFFF);
@@ -858,7 +857,7 @@ pub const Window = struct {
     }
 
     // /// Returns a cached slice that contains the path(s) to the last dropped file(s).
-    pub fn droppedFiles(self: *const Self) [][]const u8 {
+    pub fn getDroppedFiles(self: *const Self) [][]const u8 {
         return self.x11.xdnd_req.paths.items;
     }
 
@@ -873,7 +872,7 @@ pub const Window = struct {
         }
     }
 
-    pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         const drvr = X11Driver.singleton();
         var root: libx11.Window = undefined;
         var child: libx11.Window = undefined;
@@ -922,6 +921,15 @@ pub const Window = struct {
                 _ = disableRawMouseMotion();
             }
         }
+    }
+
+    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
+        _ = self;
+        const drvr = X11Driver.singleton();
+        if (scaler) |s| {
+            s.* = drvr.g_screen_scale;
+        }
+        return @intFromFloat(drvr.g_dpi);
     }
 
     pub fn setCursorIcon(
@@ -1109,7 +1117,7 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const cs = self.clientSize();
+                const cs = self.getClientSize();
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
                     .{
