@@ -203,7 +203,7 @@ pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void
 
         var dpi: ?u32 = null;
         if (window.data.flags.is_dpi_aware) {
-            dpi = window.scalingDPI(null);
+            dpi = window.getScalingDPI(null);
         }
 
         wndw.adjustWindowRect(
@@ -255,7 +255,7 @@ pub inline fn dpiScaledSizeHandler(
     const new_dpi = utils.loWord(wparam);
     const ulparam: usize = @bitCast(lparam);
     const size: *foundation.SIZE = @ptrFromInt(ulparam);
-    const old_dpi = window.scalingDPI(null);
+    const old_dpi = window.getScalingDPI(null);
 
     var old_nc_size = win32.RECT{
         .left = 0,
