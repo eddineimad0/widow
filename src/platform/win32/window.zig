@@ -409,7 +409,7 @@ pub const Window = struct {
                 .bottom = self.data.client_area.size.height,
             };
             var dpi_scale: f64 = undefined;
-            const dpi = self.scalingDPI(&dpi_scale);
+            const dpi = self.getScalingDPI(&dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
             const fwidth: f64 = @floatFromInt(client_rect.right);
             const fheight: f64 = @floatFromInt(client_rect.bottom);
@@ -538,7 +538,7 @@ pub const Window = struct {
         _ = SetFocus(self.handle);
     }
 
-    pub fn scalingDPI(self: *const Self, scaler: ?*f64) u32 {
+    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
         const drvr = Win32Driver.singleton();
         var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         null_exit: {
@@ -682,7 +682,7 @@ pub const Window = struct {
         rect.bottom = new_area.size.height + rect.top;
 
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
-            self.scalingDPI(null)
+            self.getScalingDPI(null)
         else
             null;
 
@@ -709,7 +709,7 @@ pub const Window = struct {
         );
     }
 
-    pub fn cursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
         var cursor_pos: foundation.POINT = undefined;
         _ = window_msg.GetCursorPos(&cursor_pos);
         _ = gdi.ScreenToClient(self.handle, &cursor_pos);
@@ -754,7 +754,7 @@ pub const Window = struct {
     }
 
     /// Returns the position of the top left corner of the client area.
-    pub inline fn clientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
         return self.data.client_area.top_left;
     }
 
@@ -781,7 +781,7 @@ pub const Window = struct {
             .bottom = self.data.client_area.size.height,
         };
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.scalingDPI(null) else null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.getScalingDPI(null) else null;
 
         adjustWindowRect(
             &rect,
@@ -810,7 +810,7 @@ pub const Window = struct {
     }
 
     /// Returns the Pixel size of the window's client area
-    pub inline fn clientPixelSize(self: *const Self) common.geometry.WidowSize {
+    pub inline fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
         return common.geometry.WidowSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
@@ -818,13 +818,13 @@ pub const Window = struct {
     }
 
     /// Returns the logical size of the window's client area
-    pub fn clientSize(self: *const Self) common.geometry.WidowSize {
+    pub fn getClientSize(self: *const Self) common.geometry.WidowSize {
         var client_size = common.geometry.WidowSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
-            const dpi: f64 = @floatFromInt(self.scalingDPI(null));
+            const dpi: f64 = @floatFromInt(self.getScalingDPI(null));
             const r_scaler = (win32.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
@@ -837,7 +837,7 @@ pub const Window = struct {
             var dpi: ?u32 = null;
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                dpi = self.scalingDPI(&scaler);
+                dpi = self.getScalingDPI(&scaler);
                 size.scaleBy(scaler);
             }
 
@@ -908,7 +908,7 @@ pub const Window = struct {
 
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.scalingDPI(&scaler);
+                _ = self.getScalingDPI(&scaler);
                 size.scaleBy(scaler);
             }
 
@@ -966,7 +966,7 @@ pub const Window = struct {
             }
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.scalingDPI(&scaler);
+                _ = self.getScalingDPI(&scaler);
                 size.scaleBy(scaler);
             }
             self.data.max_size = size;
@@ -1045,7 +1045,7 @@ pub const Window = struct {
     }
 
     /// Returns the title of the window.
-    pub inline fn title(
+    pub inline fn getTitle(
         self: *const Self,
         allocator: mem.Allocator,
     ) (WindowError || mem.Allocator.Error)![]u8 {
@@ -1079,7 +1079,7 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn opacity(self: *const Self) f32 {
+    pub fn getOpacity(self: *const Self) f32 {
         const ex_styles = window_msg.GetWindowLongPtrW(
             self.handle,
             window_msg.GWL_EXSTYLE,
@@ -1168,7 +1168,7 @@ pub const Window = struct {
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
-            self.scalingDPI(null),
+            self.getScalingDPI(null),
         );
 
         switch (edge) {
@@ -1256,7 +1256,7 @@ pub const Window = struct {
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
-    pub fn droppedFiles(self: *const Self) [][]const u8 {
+    pub fn getDroppedFiles(self: *const Self) [][]const u8 {
         return self.win32.dropped_files.items;
     }
 
@@ -1409,8 +1409,8 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const ls = self.clientSize();
-                const ps = self.clientPixelSize();
+                const ls = self.getClientSize();
+                const ps = self.getClientPixelSize();
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
                     .{
