@@ -26,6 +26,7 @@ pub const WindowError = error{
     BadTitle,
     OutOfMemory,
     BadIcon,
+    UnsupportedRenderBackend,
     GLError,
     VisualNone,
 };
@@ -189,6 +190,7 @@ pub const Window = struct {
                     }
                 }
             } else {
+                std.debug.print("Unknow window({}) is root={}\n", .{e.xany.window,e.xany.window == drvr.windowManagerId()});
                 // TODO: what about event not sent for our window
             }
         }
@@ -912,8 +914,13 @@ pub const Window = struct {
     }
 
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
+        if(!self.data.flags.cursor_in_client){
+            return;
+        }
+
         self.x11.cursor.mode = mode;
         cursor.applyCursorHints(&self.x11.cursor, self.handle);
+
         if (self.data.flags.has_raw_mouse) {
             if (mode == .Hidden) {
                 _ = enableRawMouseMotion();
@@ -1096,11 +1103,8 @@ pub const Window = struct {
         }
 
         self.data.flags.has_raw_mouse = active;
-        if (active) {
-            return enableRawMouseMotion();
-        } else {
-            return disableRawMouseMotion();
-        }
+
+        self.setCursorMode(self.x11.cursor.mode);
     }
 
     pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
@@ -1108,7 +1112,7 @@ pub const Window = struct {
             .opengl => return glx.GLContext.init(self.handle, &self.fb_cfg) catch {
                 return WindowError.GLError;
             },
-            else => return WindowError.GLError, // TODO: better error.
+            else => return WindowError.UnsupportedRenderBackend,
         }
     }
 

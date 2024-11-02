@@ -722,6 +722,7 @@ pub const X11Driver = struct {
         );
     }
 
+    /// context management functions
     pub inline fn addToXContext(
         self: *const Self,
         window_id: libx11.Window,
@@ -746,10 +747,6 @@ pub const X11Driver = struct {
         ) == 0);
     }
 
-    pub inline fn windowManagerId(self: *const Self) libx11.Window {
-        return self.handles.root_window;
-    }
-
     pub inline fn findInXContext(
         self: *const Self,
         window_id: libx11.Window,
@@ -767,10 +764,14 @@ pub const X11Driver = struct {
         return data_return;
     }
 
-    // Enfoce readonly.
-    pub fn singleton() *const Self {
+    // Enfoce readonly access to the singleton.
+    pub inline fn singleton() *const Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
+    }
+
+    pub inline fn windowManagerId(self: *const Self) libx11.Window {
+        return self.handles.root_window;
     }
 };
 
@@ -803,7 +804,6 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
                 return 0;
             } else {
                 return -1;
-                // return X11Driver.last_error_handler.?(display, err);
             }
         }
     };
