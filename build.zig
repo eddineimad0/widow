@@ -147,6 +147,16 @@ fn prepareWidowModule(
                 },
             },
         ),
+        .Wayland => b.createModule(
+            .{
+                .root_source_file = b.path("src/platform/linuxbsd/wayland/platform.zig"),
+
+                .imports = &.{
+                    .{ .name = "opengl", .module = gl_mod },
+                    .{ .name = "common", .module = common_mod },
+                },
+            },
+        ),
         else => {
             @panic("Unsupported platform");
         },

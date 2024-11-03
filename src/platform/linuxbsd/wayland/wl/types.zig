@@ -47,7 +47,7 @@ pub fn wl_fixed_from_int(i: i32) wl_fixed_t {
 
 // must be the appropriate size
 // can contain i32, u32 and pointers
-pub const wl_argument = union {
+pub const wl_argument = extern union {
     i: i32,
     u: u32,
     f: wl_fixed_t,
@@ -66,8 +66,15 @@ pub const wl_dispatcher_func_t = *const fn(
     *const wl_argument,
 ) callconv(.C) c_int;
 
+pub const wl_registry_listener = extern struct {
+// TODO: finish
+global:*const fn(data:*anyopaque,registry:*wl_registry,name:c_uint,iface:*anyopaque,ver:c_uint) callconv(.C) void
+};
+
+// TODO: use in funcs.zig
 pub const wl_log_func_t = *const fn(*const u8, *const anyopaque) callconv(.C) void;
 
 pub const wl_proxy = opaque{};
 pub const wl_display = opaque{};
-pub const wl_event_queue = opaque{};
+// pub const wl_event_queue = opaque{};
+pub const wl_registry = opaque{};
