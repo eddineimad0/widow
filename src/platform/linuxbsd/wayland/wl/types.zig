@@ -1,13 +1,13 @@
 const std = @import("std");
 const posix = std.posix;
 
-pub const wl_message = struct{
+pub const wl_message = extern struct{
     name: [*:0]const u8,
     signature: [*:0]const u8,
-    types: *const *const wl_interface,
+    types: ?*const *const wl_interface,
 };
 
-pub const wl_interface = struct {
+pub const wl_interface = extern struct {
     name: [*:0]const u8,
     version: c_int,
     request_count: c_int,
@@ -16,12 +16,12 @@ pub const wl_interface = struct {
     events: [*]const wl_message,
 };
 
-pub const wl_list = struct {
+pub const wl_list = extern struct {
     prev: *wl_list,
     next: *wl_list,
 };
 
-pub const wl_array = struct {
+pub const wl_array = extern struct {
     size: usize,
     alloc: usize,
     data: [*] anyopaque,
@@ -67,14 +67,16 @@ pub const wl_dispatcher_func_t = *const fn(
 ) callconv(.C) c_int;
 
 pub const wl_registry_listener = extern struct {
-// TODO: finish
-global:*const fn(data:*anyopaque,registry:*wl_registry,name:c_uint,iface:*anyopaque,ver:c_uint) callconv(.C) void
+    global:*const fn(data:*anyopaque,registry:*wl_registry,name:u32,interface:[*:0]const u8,ver:u32) callconv(.C) void,
+    global_remove:*const fn(data:*anyopaque,registry:*wl_registry,name:u32) callconv(.C) void
 };
 
-// TODO: use in funcs.zig
-pub const wl_log_func_t = *const fn(*const u8, *const anyopaque) callconv(.C) void;
+pub const wl_log_func_t = *const fn([*:0]const u8, *const anyopaque) callconv(.C) void;
 
-pub const wl_proxy = opaque{};
 pub const wl_display = opaque{};
-// pub const wl_event_queue = opaque{};
+pub const wl_proxy = opaque{};
+pub const wl_event_queue = opaque{};
 pub const wl_registry = opaque{};
+pub const wl_surface = opaque{};
+pub const wl_compositor = opaque{};
+pub const wl_visual = opaque{};

@@ -157,9 +157,6 @@ fn prepareWidowModule(
                 },
             },
         ),
-        else => {
-            @panic("Unsupported platform");
-        },
     };
 
     platform_mod.addOptions("build-options", opts);

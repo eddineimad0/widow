@@ -1,16 +1,24 @@
 const std = @import("std");
-const log = std.log;
-const dyn_wl = @import("wl/func.zig");
+const dyn_wl = @import("wl/funcs.zig");
+const drvr = @import("driver.zig");
 const unix = @import("common").unix;
+const log = std.log;
 
 pub fn initPlatform() !void {
     dyn_wl.initDynamicApi() catch |e| {
-        log.err("[X11] {s}\n", .{unix.moduleErrorMsg()});
+        log.err("[Wayland] {s}\n", .{unix.moduleErrorMsg()});
         return e;
     };
 
+    try drvr.WlDriver.initSingleton();
 }
 
 pub fn deinitPlatform() void {
 }
 
+
+
+
+test "temp" {
+    try initPlatform();
+}

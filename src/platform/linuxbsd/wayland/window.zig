@@ -22,7 +22,7 @@ pub const WindowError = error{
 pub const Window = struct {
     ev_queue: ?*common.event.EventQueue,
     data: WindowData,
-    // handle: libwayland.wl,
+    handle: libwayland.wl_surface,
     // x11: struct {
     //     xdnd_req: struct {
     //         raw_data: ?[*]const u8,
@@ -40,6 +40,7 @@ pub const Window = struct {
         .x = 0,
         .y = 0,
     };
+
     const Self = @This();
 
     pub fn init(
@@ -226,200 +227,8 @@ pub const Window = struct {
     }
 };
 
-// fn createPlatformWindow(
-//     data: *const WindowData,
-//     visual: ?*libx11.Visual,
-//     depth: c_int,
-// ) WindowError!libx11.Window {
-//     const EVENT_MASK = libx11.KeyReleaseMask |
-//         libx11.KeyPressMask |
-//         libx11.ButtonPressMask |
-//         libx11.ButtonReleaseMask |
-//         libx11.EnterWindowMask |
-//         libx11.LeaveWindowMask |
-//         libx11.FocusChangeMask |
-//         libx11.VisibilityChangeMask |
-//         libx11.PointerMotionMask |
-//         libx11.StructureNotifyMask |
-//         libx11.PropertyChangeMask |
-//         libx11.ExposureMask;
-//
-//     var attribs: libx11.XSetWindowAttributes = std.mem.zeroes(
-//         libx11.XSetWindowAttributes,
-//     );
-//
-//     attribs.event_mask = EVENT_MASK;
-//     const drvr = X11Driver.singleton();
-//     attribs.colormap = libx11.XCreateColormap(
-//         drvr.handles.xdisplay,
-//         drvr.windowManagerId(),
-//         visual,
-//         libx11.AllocNone,
-//     );
-//
-//     var window_size = data.client_area.size;
-//     if (data.flags.is_dpi_aware) {
-//         window_size.scaleBy(drvr.g_screen_scale);
-//     }
-//
-//     const handle = libx11.XCreateWindow(
-//         drvr.handles.xdisplay,
-//         drvr.windowManagerId(),
-//         data.client_area.top_left.x,
-//         data.client_area.top_left.y,
-//         @intCast(window_size.width),
-//         @intCast(window_size.height),
-//         0,
-//         depth,
-//         libx11.InputOutput,
-//         visual,
-//         libx11.CWEventMask | libx11.CWBorderPixel | libx11.CWColormap,
-//         @ptrCast(&attribs),
-//     );
-//
-//     if (handle == 0) {
-//         return WindowError.CreateFail;
-//     }
-//
-//     // TODO: handle non is_fullscreen = true,
-//
-//     return handle;
-// }
-//
-// fn setInitialWindowPropeties(
-//     window: libx11.Window,
-//     data: *const WindowData,
-// ) WindowError!void {
-//     // communication protocols
-//     const drvr = X11Driver.singleton();
-//     var protocols = [2]libx11.Atom{
-//         // this allows us to recieve close request from the window manager.
-//         // instead of it closing the socket and crashing our app
-//         drvr.ewmh.WM_DELETE_WINDOW,
-//         // this allows the window manager to check if a window is still alive and responding
-//         drvr.ewmh._NET_WM_PING,
-//     };
-//     _ = libx11.XSetWMProtocols(
-//         drvr.handles.xdisplay,
-//         window,
-//         &protocols,
-//         protocols.len,
-//     );
-//
-//     libx11.XChangeProperty(
-//         drvr.handles.xdisplay,
-//         window,
-//         drvr.ewmh._NET_WM_PID,
-//         libx11.XA_CARDINAL,
-//         32,
-//         libx11.PropModeReplace,
-//         @ptrCast(&drvr.pid),
-//         1,
-//     );
-//
-//     // if supported declare window type.
-//     if (drvr.ewmh._NET_WM_WINDOW_TYPE != 0 and
-//         drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
-//     {
-//         libx11.XChangeProperty(
-//             drvr.handles.xdisplay,
-//             window,
-//             drvr.ewmh._NET_WM_WINDOW_TYPE,
-//             libx11.XA_ATOM,
-//             32,
-//             libx11.PropModeReplace,
-//             @ptrCast(&drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
-//             1,
-//         );
-//     }
-//
-//     // WMHints.
-//
-//     var hints = libx11.XAllocWMHints() orelse return WindowError.CreateFail;
-//     defer _ = libx11.XFree(hints);
-//     hints.flags = libx11.StateHint;
-//     hints.initial_state = libx11.NormalState;
-//     _ = libx11.XSetWMHints(drvr.handles.xdisplay, window, @ptrCast(hints));
-//
-//     // resizablitity
-//     var size_hints = libx11.XAllocSizeHints() orelse
-//         return WindowError.CreateFail;
-//
-//     defer _ = libx11.XFree(size_hints);
-//     size_hints.flags |= libx11.PWinGravity;
-//     size_hints.win_gravity = libx11.StaticGravity;
-//
-//     var window_size = data.client_area.size;
-//     if (data.flags.is_dpi_aware) {
-//         window_size.scaleBy(drvr.g_screen_scale);
-//     }
-//
-//     if (!data.flags.is_resizable) {
-//         size_hints.flags |= (libx11.PMinSize | libx11.PMaxSize);
-//         size_hints.max_width = window_size.width;
-//         size_hints.min_width = window_size.width;
-//         size_hints.max_height = window_size.height;
-//         size_hints.min_height = window_size.height;
-//     }
-//
-//     _ = libx11.XSetWMNormalHints(
-//         drvr.handles.xdisplay,
-//         window,
-//         @ptrCast(size_hints),
-//     );
-//
-//     // WMClassHints
-//     var class_hints = libx11.XAllocClassHint() orelse
-//         return WindowError.CreateFail;
-//     defer _ = libx11.XFree(class_hints);
-//     class_hints.res_name = bopts.X11_RES_NAME.ptr;
-//     class_hints.res_class = bopts.X11_CLASS_NAME.ptr;
-//
-//     _ = libx11.XSetClassHint(
-//         drvr.handles.xdisplay,
-//         window,
-//         @ptrCast(class_hints),
-//     );
-// }
-//
-// fn windowFromId(window_id: libx11.Window) ?*Window {
-//     const drvr = X11Driver.singleton();
-//     const window = drvr.findInXContext(window_id);
-//     return @ptrCast(@alignCast(window));
-// }
-//
-// pub inline fn enableRawMouseMotion() bool {
-//     const drvr = X11Driver.singleton();
-//     const MASK_LEN = comptime x11ext.XIMaskLen(x11ext.XI_RawMotion);
-//     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
-//     var ev_mask = x11ext.XIEventMask{
-//         .deviceid = x11ext.XIAllMasterDevices,
-//         .mask_len = MASK_LEN,
-//         .mask = &mask,
-//     };
-//     x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
-//     return drvr.extensions.xi2.XISelectEvents(
-//         drvr.handles.xdisplay,
-//         drvr.windowManagerId(),
-//         @ptrCast(&ev_mask),
-//         1,
-//     ) == libx11.Success;
-// }
-//
-// pub inline fn disableRawMouseMotion() bool {
-//     const drvr = X11Driver.singleton();
-//     const MASK_LEN = 1;
-//     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
-//     var ev_mask = x11ext.XIEventMask{
-//         .deviceid = x11ext.XIAllMasterDevices,
-//         .mask_len = MASK_LEN,
-//         .mask = &mask,
-//     };
-//     x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
-//     return drvr.extensions.xi2.XISelectEvents(
-//         drvr.handles.xdisplay,
-//         drvr.windowManagerId(),
-//         @ptrCast(&ev_mask),
-//         1,
-//     ) == libx11.Success;
-// }
+fn createPlatformWindow(
+    _: *const WindowData,
+) WindowError!libwayland.wl_surface{
+    // TODO: handle non is_fullscreen = true,
+}
