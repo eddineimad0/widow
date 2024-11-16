@@ -3,16 +3,23 @@ const common = @import("common");
 const libwayland = @import("wl/wl.zig");
 const unix = common.unix;
 const debug = std.debug;
+const mem = std.mem;
 
 
 const WlDriverError = error{
     DisplayConnectionFailed,
+    RegistryNotFound
 };
 
 fn handleRegistryGlobal(data:*anyopaque,registry:*libwayland.wl_registry,name:u32,interface:[*:0]const u8,ver:u32,) callconv(.C) void {
     _ = data;
     _ = registry;
+    const r = WlRegistry.acquireSingleton();
+    defer WlRegistry.releaseSingleton(r);
     debug.print("[+] Inteface: {s}, Version: {}, name: {}\n", .{interface,ver,name});
+    // if(mem.orderZ(u8, interface, "wl_compositor") == .eq){
+    //     r.compositor = @ptrCast(libwayland.wl_registry_bind(registry, name, &libwayland.wl_compositor_interface, ver));
+    // }
 }
 
 fn handleRegistryGlobalRemove(data:*anyopaque,registry:*libwayland.wl_registry,name:u32,) callconv(.C) void{
@@ -24,6 +31,24 @@ fn handleRegistryGlobalRemove(data:*anyopaque,registry:*libwayland.wl_registry,n
 const registry_listener = libwayland.wl_registry_listener{
     .global = handleRegistryGlobal,
     .global_remove = handleRegistryGlobalRemove,
+};
+
+pub const WlRegistry = struct {
+    compositor:?*libwayland.wl_compositor,
+
+    const Self = @This();
+    var registry_guard: std.Thread.Mutex = std.Thread.Mutex{};
+    var g_instance: Self = undefined;
+
+    pub inline fn acquireSingleton()*Self{
+        Self.registry_guard.lock();
+        return &Self.g_instance;
+    }
+
+    pub inline fn releaseSingleton(s:*Self) void {
+        _ = s;
+        Self.registry_guard.unlock();
+    }
 };
 
 pub const WlDriver = struct {
@@ -48,7 +73,8 @@ pub const WlDriver = struct {
             Self.g_instance.handles.display = libwayland.wl_display_connect(null) orelse
                 return WlDriverError.DisplayConnectionFailed;
 
-            Self.g_instance.handles.registry = libwayland.wl_display_get_registry(Self.g_instance.handles.display);
+            Self.g_instance.handles.registry = libwayland.wl_display_get_registry(Self.g_instance.handles.display) orelse 
+                return WlDriverError.RegistryNotFound;
 
             _ = libwayland.wl_registry_add_listener(Self.g_instance.handles.registry, &registry_listener, null);
 

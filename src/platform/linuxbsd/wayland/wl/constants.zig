@@ -159,21 +159,3 @@ pub const WL_SURFACE_ERROR_INVALID_TRANSFORM: wl_surface_error = 1;
 pub const WL_DISPLAY_SYNC:u32 = 0;
 pub const WL_DISPLAY_GET_REGISTRY:u32 = 1;
 
-// TODO: Types.
-const wl_registry_requests = [_]types.wl_message{
-	.{.name = "bind", .signature = "usun",.types=null},
-};
-const wl_registry_events = [_]types.wl_message{
-	.{ .name="global", .signature="usu", .types=null },
-	.{ .name="global_remove", .signature="u", .types=null },
-};
-
-pub const wl_registry_interface: types.wl_interface = .{
-    .name = "wl_registry",
-    .version = 1,
-    .request_count = wl_registry_requests.len,
-    .requests = &wl_registry_requests,
-    .event_count = wl_registry_events.len,
-    .events = &wl_registry_events,
-};
-

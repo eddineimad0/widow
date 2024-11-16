@@ -4,16 +4,16 @@ const posix = std.posix;
 pub const wl_message = extern struct{
     name: [*:0]const u8,
     signature: [*:0]const u8,
-    types: ?*const *const wl_interface,
+    types: *const ?*const wl_interface,
 };
 
 pub const wl_interface = extern struct {
     name: [*:0]const u8,
     version: c_int,
     request_count: c_int,
-    requests: [*]const wl_message,
+    requests: ?[*]const wl_message,
     event_count: c_int,
-    events: [*]const wl_message,
+    events: ?[*]const wl_message,
 };
 
 pub const wl_list = extern struct {
@@ -73,10 +73,28 @@ pub const wl_registry_listener = extern struct {
 
 pub const wl_log_func_t = *const fn([*:0]const u8, *const anyopaque) callconv(.C) void;
 
-pub const wl_display = opaque{};
-pub const wl_proxy = opaque{};
-pub const wl_event_queue = opaque{};
-pub const wl_registry = opaque{};
-pub const wl_surface = opaque{};
+pub const wl_buffer = opaque{};
+pub const wl_callback = opaque{};
 pub const wl_compositor = opaque{};
+pub const wl_data_device = opaque{};
+pub const wl_data_device_manager = opaque{};
+pub const wl_data_offer = opaque{};
+pub const wl_data_source = opaque{};
+pub const wl_display = opaque{};
+pub const wl_event_queue = opaque{};
+pub const wl_keyboard = opaque{};
+pub const wl_output = opaque{};
+pub const wl_pointer = opaque{};
+pub const wl_proxy = opaque{};
+pub const wl_region = opaque{};
+pub const wl_registry = opaque{};
+pub const wl_seat = opaque{};
+pub const wl_shell = opaque{};
+pub const wl_shell_surface = opaque{};
+pub const wl_shm = opaque{};
+pub const wl_shm_pool = opaque{};
+pub const wl_subcompositor = opaque{};
+pub const wl_subsurface = opaque{};
+pub const wl_surface = opaque{};
+pub const wl_touch = opaque{};
 pub const wl_visual = opaque{};
