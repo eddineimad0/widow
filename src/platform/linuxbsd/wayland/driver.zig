@@ -11,15 +11,18 @@ const WlDriverError = error{
     RegistryNotFound
 };
 
+const WlRegistryError = error{
+    BadState,
+};
+
 fn handleRegistryGlobal(data:*anyopaque,registry:*libwayland.wl_registry,name:u32,interface:[*:0]const u8,ver:u32,) callconv(.C) void {
     _ = data;
-    _ = registry;
     const r = WlRegistry.acquireSingleton();
     defer WlRegistry.releaseSingleton(r);
     debug.print("[+] Inteface: {s}, Version: {}, name: {}\n", .{interface,ver,name});
-    // if(mem.orderZ(u8, interface, "wl_compositor") == .eq){
-    //     r.compositor = @ptrCast(libwayland.wl_registry_bind(registry, name, &libwayland.wl_compositor_interface, ver));
-    // }
+    if(mem.orderZ(u8, interface, libwayland.wl_compositor_interface.name) == .eq){
+        r.compositor = @ptrCast(libwayland.wl_registry_bind(registry, name, libwayland.wl_compositor_interface, ver));
+    }
 }
 
 fn handleRegistryGlobalRemove(data:*anyopaque,registry:*libwayland.wl_registry,name:u32,) callconv(.C) void{
@@ -38,7 +41,7 @@ pub const WlRegistry = struct {
 
     const Self = @This();
     var registry_guard: std.Thread.Mutex = std.Thread.Mutex{};
-    var g_instance: Self = undefined;
+    var g_instance: Self = .{ .compositor = null };
 
     pub inline fn acquireSingleton()*Self{
         Self.registry_guard.lock();
@@ -49,6 +52,14 @@ pub const WlRegistry = struct {
         _ = s;
         Self.registry_guard.unlock();
     }
+
+    /// Checks for bad registry state.
+    pub fn assertState(s:*const Self) WlRegistryError!void{
+        if(s.compositor == null){
+            // compositor can't be null;
+            return WlRegistryError.BadState;
+        }
+    }
 };
 
 pub const WlDriver = struct {
@@ -56,15 +67,17 @@ pub const WlDriver = struct {
         display:*libwayland.wl_display,
         registry:*libwayland.wl_registry,
      },
+    wl_tag:[*:0] const u8,
 
     const Self = @This();
     var driver_guard: std.Thread.Mutex = std.Thread.Mutex{};
     var g_init: bool = false;
     var g_instance: Self = .{
         .handles = undefined,
+        .wl_tag = "WIDOW_WAYLAND_TAG",
     };
 
-    pub fn initSingleton() WlDriverError!void {
+    pub fn initSingleton() (WlDriverError || WlRegistryError)!void {
         @setCold(true);
 
         Self.driver_guard.lock();
@@ -79,6 +92,15 @@ pub const WlDriver = struct {
             _ = libwayland.wl_registry_add_listener(Self.g_instance.handles.registry, &registry_listener, null);
 
             _ = libwayland.wl_display_roundtrip(Self.g_instance.handles.display);
+
+
+            const r = WlRegistry.acquireSingleton();
+            defer WlRegistry.releaseSingleton(r);
+            try r.assertState();
         }
+    }
+
+    pub inline fn getSingleton() *const Self {
+        return &Self.g_instance;
     }
 };

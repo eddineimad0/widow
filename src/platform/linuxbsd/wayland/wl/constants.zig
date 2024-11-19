@@ -159,3 +159,19 @@ pub const WL_SURFACE_ERROR_INVALID_TRANSFORM: wl_surface_error = 1;
 pub const WL_DISPLAY_SYNC:u32 = 0;
 pub const WL_DISPLAY_GET_REGISTRY:u32 = 1;
 
+// OPCODES
+pub const WL_COMPOSITOR_CREATE_SURFACE:c_uint = 0;
+pub const WL_COMPOSITOR_CREATE_REGION :c_uint = 1;
+
+pub const WL_SURFACE_DESTROY:c_uint = 0;
+pub const WL_SURFACE_ATTACH:c_uint = 1;
+pub const WL_SURFACE_DAMAGE:c_uint = 2;
+pub const WL_SURFACE_FRAME:c_uint = 3;
+pub const WL_SURFACE_SET_OPAQUE_REGION:c_uint = 4;
+pub const WL_SURFACE_SET_INPUT_REGION:c_uint = 5;
+pub const WL_SURFACE_COMMIT:c_uint = 6;
+pub const WL_SURFACE_SET_BUFFER_TRANSFORM:c_uint = 7;
+pub const WL_SURFACE_SET_BUFFER_SCALE:c_uint = 8;
+pub const WL_SURFACE_DAMAGE_BUFFER:c_uint = 9;
+
+pub const WL_MARSHAL_FLAG_DESTROY:c_uint = (1 << 0);

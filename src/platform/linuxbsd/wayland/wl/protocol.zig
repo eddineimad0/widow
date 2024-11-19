@@ -2,7 +2,7 @@ const std = @import("std");
 const types = @import("types.zig");
 const funcs = @import("funcs.zig");
 const cst = @import("constants.zig");
-const iface = @import("interfaces.zig");
+const iface = @import("ifaces.zig").ifaces;
 
 const NULL = @as(c_int,0);
 
@@ -11,7 +11,8 @@ pub fn wl_display_get_registry(display:*types.wl_display) ?*types.wl_registry {
     r = funcs.libwayland_client_api.wl_proxy_marshal_constructor(
         @ptrCast(display),
         cst.WL_DISPLAY_GET_REGISTRY,
-        &iface.wl_registry_interface, NULL);
+        iface.wl_registry_interface,
+        NULL,);
     return @ptrCast(r);
 } 
 
@@ -40,6 +41,28 @@ pub inline fn wl_registry_bind(
         name,
         interface.name,
         version,
-        NULL);
+        NULL,);
     return @ptrCast(id);
+}
+
+pub inline fn wl_compositor_create_surface(compositor:*types.wl_compositor) ?*types.wl_surface {
+    var id:?*types.wl_proxy = undefined;
+    id = funcs.libwayland_client_api.wl_proxy_marshal_constructor(
+        @ptrCast(compositor),
+        cst.WL_COMPOSITOR_CREATE_SURFACE,
+        iface.wl_surface_interface,
+        NULL,);
+    return @ptrCast(id);
+
+}
+
+pub inline fn wl_surface_destroy(surface:*types.wl_surface) void {
+    funcs.libwayland_client_api.wl_proxy_marshal(@ptrCast(surface),cst.WL_SURFACE_DESTROY);
+    funcs.libwayland_client_api.wl_proxy_destroy(@ptrCast(surface));
+    // funcs.libwayland_client_api.wl_proxy_marshal_flags(
+    //     @ptrCast(surface),
+    //     cst.WL_SURFACE_DESTROY,
+    //     null,
+    //     funcs.libwayland_client_api.wl_proxy_get_version(@ptrCast(surface)),
+    //     cst.WL_MARSHAL_FLAG_DESTROY);
 }

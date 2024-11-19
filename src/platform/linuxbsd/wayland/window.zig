@@ -2,13 +2,15 @@ const std = @import("std");
 const common = @import("common");
 const libwayland = @import("wl/wl.zig");
 const bopts = @import("build-options");
+const WlDriver = @import("driver.zig").WlDriver;
+const WlRegistry = @import("driver.zig").WlRegistry;
 
 const debug = std.debug;
 const mem = std.mem;
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
 const FBConfig = common.fb.FBConfig;
-const Allocator = std.mem.Allocator;
+const Allocator = mem.Allocator;
 
 pub const WindowError = error{
     CreateFail,
@@ -22,17 +24,9 @@ pub const WindowError = error{
 pub const Window = struct {
     ev_queue: ?*common.event.EventQueue,
     data: WindowData,
-    handle: libwayland.wl_surface,
-    // x11: struct {
-    //     xdnd_req: struct {
-    //         raw_data: ?[*]const u8,
-    //         paths: std.ArrayList([]const u8),
-    //         version: c_long,
-    //         src: c_long,
-    //         format: c_long,
-    //     },
+    handle: *libwayland.wl_surface,
+    // wl: struct {
     //     cursor: cursor.CursorHints,
-    //     xdnd_allow: bool,
     // },
     fb_cfg: FBConfig,
 
@@ -57,64 +51,15 @@ pub const Window = struct {
         self.fb_cfg = fb_cfg.*;
         self.ev_queue = null;
         _ = window_title;
-        _ = id;
-
-        // X11 won't let us change the visual and depth later so decide now.
-        // const drvr = X11Driver.singleton();
-        // var visual: ?*libx11.Visual = null;
-        // var depth: c_int = 0;
-        // switch (fb_cfg.accel) {
-        //     .opengl => {
-        //         glx.initGLX() catch return WindowError.GLError;
-        //         if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
-        //             return WindowError.VisualNone;
-        //         }
-        //     },
-        //     else => {
-        //         visual = libx11.DefaultVisual(
-        //             drvr.handles.xdisplay,
-        //             drvr.handles.default_screen,
-        //         );
-        //         depth = libx11.DefaultDepth(
-        //             drvr.handles.xdisplay,
-        //             drvr.handles.default_screen,
-        //         );
-        //     },
-        // }
-        //
-        // self.handle = try createPlatformWindow(data, visual, depth);
-        // self.data.id = if (id) |ident| ident else @intCast(self.handle);
-        //
-        // if (!drvr.addToXContext(self.handle, @ptrCast(self))) {
-        //     return WindowError.CreateFail;
-        // }
-        //
-        // try setInitialWindowPropeties(self.handle, data);
-        //
-        // self.setTitle(window_title);
-        // if (!self.data.flags.is_decorated) {
-        //     self.setDecorated(false);
-        // }
-        //
-        // if (self.data.flags.is_visible) {
-        //     self.show();
-        //     if (self.data.flags.is_focused) {
-        //         self.focus();
-        //     }
-        // }
+        self.handle = try createPlatformWindow();
+        self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
 
         return self;
     }
 
     /// Destroy the window
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-        std.debug.assert(self.handle != 0);
-        // const drvr = X11Driver.singleton();
-        // _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
-        // _ = libx11.XDestroyWindow(drvr.handles.xdisplay, self.handle);
-        // _ = drvr.removeFromXContext(self.handle);
-        // self.freeDroppedFiles();
-        // self.handle = 0;
+        libwayland.wl_surface_destroy(self.handle);
         allocator.destroy(self);
     }
 
@@ -225,10 +170,23 @@ pub const Window = struct {
         // drvr.flushXRequests();
         // self.data.flags.is_visible = false;
     }
+
+    pub fn sendEvent(self:*Self,event:*const common.event.Event) void {
+        if(self.ev_queue)|q|{
+            q.queueEvent(event) catch  {
+                // TODO:
+            };
+        }
+    }
 };
 
 fn createPlatformWindow(
-    _: *const WindowData,
-) WindowError!libwayland.wl_surface{
-    // TODO: handle non is_fullscreen = true,
+) WindowError!*libwayland.wl_surface{
+    const drvr = WlDriver.getSingleton();
+    const reg = WlRegistry.acquireSingleton();
+    defer WlRegistry.releaseSingleton(reg);
+
+    const handle = libwayland.wl_compositor_create_surface(reg.compositor.?) orelse return WindowError.CreateFail; 
+    libwayland.wl_proxy_set_tag(@ptrCast(handle), &drvr.wl_tag);
+    return handle;
 }

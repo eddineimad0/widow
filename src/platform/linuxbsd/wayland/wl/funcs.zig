@@ -36,13 +36,13 @@ pub const libwayland_client_api = struct {
     pub var wl_proxy_marshal_constructor: *const fn (
         proxy: *types.wl_proxy,
         opcode: u32,
-        interface: *const types.wl_interface,
+        interface: ?*const types.wl_interface,
         ...
     ) callconv(.C) ?*types.wl_proxy = undefined;
     pub var wl_proxy_marshal_constructor_versioned: *const fn (
         proxy: *types.wl_proxy,
         opcode: u32,
-        interface: *const types.wl_interface,
+        interface: ?*const types.wl_interface,
         version: u32,
         ...
     ) callconv(.C) *types.wl_proxy = undefined;
@@ -50,7 +50,7 @@ pub const libwayland_client_api = struct {
     pub var wl_proxy_marshal_flags: *const fn (
         proxy: *types.wl_proxy,
         opcode: u32,
-        interface: *const types.wl_interface,
+        interface: ?*const types.wl_interface,
         version: u32,
         flags: u32,
         ...
