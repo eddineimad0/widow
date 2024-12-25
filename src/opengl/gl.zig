@@ -17,7 +17,7 @@ pub const GLConfig = struct {
 };
 
 /// Returns true if the `target` extension is in the `ext_list` string
-pub fn glHasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
+pub fn glHasExtension(noalias target: [*:0]const u8, noalias ext_list: [:0]const u8) bool {
     var haystack = ext_list;
     while (true) {
         const start = mem.indexOf(u8, haystack, mem.span(target));
