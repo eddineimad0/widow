@@ -7,7 +7,7 @@ const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
 const wndw = @import("window.zig");
 const display = @import("display.zig");
-const Win32Driver = @import("driver.zig").Win32Driver;
+// const Win32Driver = @import("driver.zig").Win32Driver;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
@@ -29,11 +29,12 @@ pub fn mainWindowProc(
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
             const struct_ptr: *window_msg.CREATESTRUCTW = @ptrFromInt(ulparam);
-            const window_data: ?*const common.window_data.WindowData = @ptrCast(
+            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
                 @alignCast(struct_ptr.*.lpCreateParams),
             );
-            if (window_data) |data| {
-                const drvr = Win32Driver.singleton();
+            if (create_lparam) |param| {
+                const drvr = param.*[1];
+                const data = param.*[0];
                 if (data.flags.is_dpi_aware and drvr.hints.is_win10b1607_or_above) {
                     _ = drvr.opt_func.EnableNonClientDpiScaling.?(hwnd);
                 }
@@ -292,7 +293,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a GETDPISCALEDSIZE event\n", .{window.data.id});
             }
-            const drvr = Win32Driver.singleton();
+            const drvr = window.ctx.driver;
             // there is no need to process this message for a dpi aware window
             // for a non dpi aware window processing this messsage is necessary
             // to adjust it's decorations(titlebar,edges...).

@@ -1,11 +1,11 @@
 const std = @import("std");
 const common = @import("common");
 const platform = @import("platform");
-const gl = @import("gl");
 const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
 const EventQueue = common.event.EventQueue;
+const WidowContext = platform.WidowContext;
 
 pub const WindowBuilder = struct {
     attribs: common.window_data.WindowData,
@@ -60,22 +60,24 @@ pub const WindowBuilder = struct {
     /// # Parameters
     /// `allocator`: used for allocating space for the window implementation,
     /// the same allocator is required when deinitializing the created window.
+    /// `ctx`: a pointer to a valid WindowContext
     /// `id`: number used to identify the window, if null is used an identifer
     /// is generated from the platform window identifer whose value is unpredicatble.
     /// # Notes
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self, allocator: mem.Allocator, id: ?usize) !Window {
+    pub fn build(self: *Self, allocator: mem.Allocator, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
-        const window = Window.init(
+        const w = Window.init(
             allocator,
+            ctx,
             id,
             self.title,
             &self.attribs,
             &self.fbcfg,
         );
-        return window;
+        return w;
     }
 
     /// Set the window title.
@@ -213,6 +215,7 @@ pub const Window = struct {
     /// to a platform error.
     pub fn init(
         allocator: mem.Allocator,
+        ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
@@ -221,6 +224,7 @@ pub const Window = struct {
         return .{
             .impl = try WindowImpl.init(
                 allocator,
+                ctx,
                 id,
                 window_title,
                 data,

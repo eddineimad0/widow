@@ -207,6 +207,7 @@ pub inline fn minMaxInfoHandler(window: *wndw.Window, lparam: win32.LPARAM) void
         }
 
         wndw.adjustWindowRect(
+            window.ctx.driver,
             &rect,
             styles,
             ex_styles,
@@ -272,6 +273,7 @@ pub inline fn dpiScaledSizeHandler(
     };
 
     wndw.adjustWindowRect(
+        window.ctx.driver,
         &old_nc_size,
         styles,
         ex_styles,
@@ -279,6 +281,7 @@ pub inline fn dpiScaledSizeHandler(
     );
 
     wndw.adjustWindowRect(
+        window.ctx.driver,
         &new_nc_size,
         styles,
         ex_styles,

@@ -1,7 +1,9 @@
+const std = @import("std");
 const common = @import("common");
-const window = @import("window.zig");
 const gl = @import("opengl");
 const platform = @import("platform");
+
+const mem = std.mem;
 
 // Exports
 pub const geometry = common.geometry;
@@ -34,6 +36,7 @@ pub const opengl = struct {
 };
 
 pub const VideoMode = common.video_mode.VideoMode;
-pub const WindowBuilder = window.WindowBuilder;
-pub const initWidowPlatform = platform.initPlatform;
-pub const deinitWidowPlatform = platform.deinitPlatform;
+
+pub const WidowContext = platform.WidowContext;
+
+pub const WindowBuilder = @import("window.zig").WindowBuilder;

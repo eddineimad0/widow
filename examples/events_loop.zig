@@ -9,18 +9,22 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    try widow.initWidowPlatform();
-    defer widow.deinitWidowPlatform();
+    // TODO: between the 2 calls ctx is undefined fix that
+    // and enforce that the ctx address can't change.
+    const ctx = try allocator.create(widow.WidowContext);
+    defer allocator.destroy(ctx);
+    ctx.* = try widow.WidowContext.init();
 
+    // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
-
-    var mywindow = builder.withTitle("Event Loop")
+    // customize the window.
+    var mywindow = builder.withTitle("Simple Window")
         .withSize(1024, 800)
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, 1) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };

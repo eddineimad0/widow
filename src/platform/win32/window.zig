@@ -7,7 +7,6 @@ const gl = @import("gl");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
-const Win32Driver = @import("driver.zig").Win32Driver;
 const mem = std.mem;
 const debug = std.debug;
 const window_msg = zigwin32.ui.windows_and_messaging;
@@ -16,6 +15,8 @@ const foundation = zigwin32.foundation;
 const gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
+const Win32Driver = @import("driver.zig").Win32Driver;
+const WidowContext = @import("platform.zig").WidowContext;
 const CursorHints = icon.CursorHints;
 const Icon = icon.Icon;
 const FBConfig = common.fb.FBConfig;
@@ -29,6 +30,9 @@ pub const WindowError = error{
     BadIcon,
     GLError,
 };
+
+/// We'll use this type to pass data to the `CreateWindowExW` function.
+pub const CreationLparamTuple = std.meta.Tuple(&.{ *const WindowData, *const Win32Driver });
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
@@ -120,12 +124,12 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
 /// areas.
 /// if `dpi` is null it will use the default platform dpi (96)
 pub fn adjustWindowRect(
+    drvr: *const Win32Driver,
     rect: *win32.RECT,
     styles: u32,
     ex_styles: u32,
     dpi: ?u32,
 ) void {
-    const drvr = Win32Driver.singleton();
     if (drvr.opt_func.AdjustWindowRectExForDpi) |func| {
         _ = func(
             rect,
@@ -241,6 +245,7 @@ fn setWindowPositionIntern(
 
 fn createPlatformWindow(
     allocator: mem.Allocator,
+    driver: *const Win32Driver,
     title: []const u8,
     data: *const WindowData,
     style: u32,
@@ -259,7 +264,7 @@ fn createPlatformWindow(
     // query the system for the targted monitor(the one that intersect
     // the window frame rectangle)'s dpi value and adjust for it now
     // or do it after window creation, we will leave it for after creation.
-    adjustWindowRect(&window_rect, style, ex_style, null);
+    adjustWindowRect(driver, &window_rect, style, ex_style, null);
 
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
@@ -286,13 +291,12 @@ fn createPlatformWindow(
     const window_title = try utils.utf8ToWideZ(allocator, title);
     defer allocator.free(window_title);
 
-    const creation_lparm = data;
-    const drvr = Win32Driver.singleton();
+    const creation_lparm: CreationLparamTuple = .{ data, driver };
 
     // Create the window.
     const window_handle = window_msg.CreateWindowExW(
         @bitCast(ex_style), // dwExStyles
-        utils.MAKEINTATOM(drvr.handles.wnd_class),
+        utils.MAKEINTATOM(driver.handles.wnd_class),
         window_title, // Window Name
         @bitCast(style), // dwStyles
         frame[0], // X
@@ -301,8 +305,8 @@ fn createPlatformWindow(
         frame[3], // height
         null, // Parent Hwnd
         null, // hMenu
-        drvr.handles.hinstance, // hInstance
-        @ptrCast(@constCast(creation_lparm)), // CREATESTRUCT lparam
+        driver.handles.hinstance, // hInstance
+        @ptrCast(@constCast(&creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
         return WindowError.CreateFailed;
     };
@@ -313,8 +317,8 @@ fn createPlatformWindow(
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: Icon,
-    cursor: CursorHints,
     dropped_files: std.ArrayList([]const u8),
+    cursor: CursorHints,
     prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
@@ -323,11 +327,13 @@ pub const WindowWin32Data = struct {
 };
 
 pub const Window = struct {
+    ctx: *WidowContext,
     ev_queue: ?*common.event.EventQueue,
     handle: win32.HWND,
     data: WindowData,
     win32: WindowWin32Data,
     fb_cfg: FBConfig,
+
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
@@ -336,6 +342,7 @@ pub const Window = struct {
 
     pub fn init(
         allocator: mem.Allocator,
+        ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
@@ -344,6 +351,7 @@ pub const Window = struct {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
+        self.ctx = ctx;
         self.ev_queue = null;
         self.data = data.*;
         self.fb_cfg = fb_cfg.*;
@@ -355,6 +363,7 @@ pub const Window = struct {
 
         self.handle = try createPlatformWindow(
             allocator,
+            self.ctx.driver,
             window_title,
             data,
             style,
@@ -417,6 +426,7 @@ pub const Window = struct {
             client_rect.bottom = @intFromFloat(fheight * dpi_scale);
 
             adjustWindowRect(
+                self.ctx.driver,
                 &client_rect,
                 style,
                 ex_style,
@@ -456,7 +466,7 @@ pub const Window = struct {
         }
 
         // Allow Drag & Drop messages.
-        if (Win32Driver.singleton().hints.is_win7_or_above) {
+        if (self.ctx.driver.hints.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
@@ -491,17 +501,6 @@ pub const Window = struct {
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
             // try self.setFullscreen(true, null);
-        }
-
-        // Framebuffer configuration
-        switch (fb_cfg.accel) {
-            .opengl => {
-                // glx.initGLX() catch return WindowError.GLError;
-                // if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
-                //     return WindowError.VisualNone;
-                // }
-            },
-            else => {},
         }
 
         return self;
@@ -539,18 +538,17 @@ pub const Window = struct {
     }
 
     pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        const drvr = Win32Driver.singleton();
         var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         null_exit: {
-            if (drvr.opt_func.GetDpiForWindow) |func| {
+            if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
                 // let's query the monitor's dpi.
-                const monitor_handle = gdi.MonitorFromWindow(
+                _ = gdi.MonitorFromWindow(
                     self.handle,
                     gdi.MONITOR_DEFAULTTONEAREST,
                 ) orelse break :null_exit;
-                dpi = display.displayDPI(monitor_handle);
+                dpi = 0; // TODO: fix display.displayDPI(monitor_handle);
             }
         }
         if (scaler) |s| {
@@ -687,6 +685,7 @@ pub const Window = struct {
             null;
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             @truncate(reg_styles),
             @truncate(reg_ex_styles),
@@ -784,6 +783,7 @@ pub const Window = struct {
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.getScalingDPI(null) else null;
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
@@ -849,6 +849,7 @@ pub const Window = struct {
             };
 
             adjustWindowRect(
+                self.ctx.driver,
                 &new_client_rect,
                 windowStyles(&self.data.flags),
                 windowExStyles(&self.data.flags),
@@ -1165,6 +1166,7 @@ pub const Window = struct {
         };
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
@@ -1397,7 +1399,7 @@ pub const Window = struct {
 
     pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
         switch (self.fb_cfg.accel) {
-            .opengl => return wgl.GLContext.init(self.handle, &self.fb_cfg) catch {
+            .opengl => return wgl.GLContext.init(self.handle, self.ctx.driver, &self.fb_cfg) catch {
                 return WindowError.GLError;
             },
             else => return WindowError.GLError,

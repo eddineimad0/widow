@@ -39,22 +39,22 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    // first we need to preform some platform specific initialization.
-    try widow.initWidowPlatform();
-    // clean up code to be called, when done using the library.
-    // or don't let the os figure it's stuff.
-    defer widow.deinitWidowPlatform();
+    // TODO: between the 2 calls ctx is undefined fix that
+    // and enforce that the ctx address can't change.
+    const ctx = try allocator.create(widow.WidowContext);
+    defer allocator.destroy(ctx);
+    ctx.* = try widow.WidowContext.init();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
-    var mywindow = builder.withTitle("Hello OpenGL triangle")
-        .withResize(false)
+    var mywindow = builder.withTitle("Simple Window")
+        .withSize(1024, 800)
+        .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
-        .withSize(800, 600)
         .withDecoration(true)
-        .build(allocator, 1) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -70,9 +70,9 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var ctx = try mywindow.initGLContext();
-    defer ctx.deinit();
-    _ = ctx.makeCurrent();
+    var gl_ctx = try mywindow.initGLContext();
+    defer gl_ctx.deinit();
+    _ = gl_ctx.makeCurrent();
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
@@ -123,7 +123,7 @@ pub fn main() !void {
         gl.ClearColor(0.2, 0.3, 0.3, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
         try drawTriangle();
-        _ = ctx.swapBuffers();
+        _ = gl_ctx.swapBuffers();
     }
 }
 

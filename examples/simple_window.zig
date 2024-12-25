@@ -10,21 +10,23 @@ pub fn main() !void {
     const allocator = gpa_allocator.allocator();
 
     // first we need to preform some platform specific initialization.
-    try widow.initWidowPlatform();
-    // clean up code to be called, when done using the library.
-    // or don't let the os figure it's stuff.
-    defer widow.deinitWidowPlatform();
+    // and build a context for the current platform.
+    // TODO: between the 2 calls ctx is undefined fix that
+    // and enforce that the ctx address can't change.
+    const ctx = try allocator.create(widow.WidowContext);
+    defer allocator.destroy(ctx);
+    ctx.* = try widow.WidowContext.init();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
-        .withSize(1024, 800)
+        .withSize(800, 600)
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, null) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -40,7 +42,7 @@ pub fn main() !void {
     _ = mywindow.setEventQueue(&ev_queue);
 
     event_loop: while (true) {
-        // sleeps until an event is postd.
+        // sleeps until an event is posted.
         try mywindow.waitEvent();
 
         var event: widow.event.Event = undefined;

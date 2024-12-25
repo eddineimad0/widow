@@ -4,13 +4,15 @@ const zigwin32 = @import("zigwin32");
 const mod = @import("module.zig");
 const utils = @import("utils.zig");
 const opts = @import("build-options");
-const helperWindowProc = @import("window_proc.zig").helperWindowProc;
-const mainWindowProc = @import("window_proc.zig").mainWindowProc;
+
 const unicode = std.unicode;
 const sysinfo = zigwin32.system.system_information;
 const window_msg = zigwin32.ui.windows_and_messaging;
 
-const DriverError = error{
+const helperWindowProc = @import("window_proc.zig").helperWindowProc;
+const mainWindowProc = @import("window_proc.zig").mainWindowProc;
+
+pub const Win32DriverError = error{
     NtdllNotFound,
     DupWNDClass,
     DupHELPClass,
@@ -87,7 +89,7 @@ pub const Win32Driver = struct {
 
     const Self = @This();
 
-    pub fn initSingleton() !void {
+    pub fn initSingleton() Win32DriverError!*const Self {
         @setCold(true);
 
         Self.sing_guard.lock();
@@ -97,7 +99,7 @@ pub const Win32Driver = struct {
             if (mod.getProcessHandle()) |hinstance| {
                 globl_instance.handles.hinstance = hinstance;
             } else {
-                return DriverError.NoProcessHandle;
+                return Win32DriverError.NoProcessHandle;
             }
 
             globl_instance.handles.wnd_class = try registerMainClass(
@@ -144,9 +146,10 @@ pub const Win32Driver = struct {
 
             Self.g_init = true;
         }
+        return &Self.globl_instance;
     }
 
-    fn loadLibraries(self: *Self) DriverError!void {
+    fn loadLibraries(self: *Self) Win32DriverError!void {
         self.handles.ntdll = mod.loadWin32Module("ntdll.dll");
         if (self.handles.ntdll) |*ntdll| {
             self.opt_func.RtlVerifyVersionInfo = @ptrCast(
@@ -158,7 +161,7 @@ pub const Win32Driver = struct {
             // what windows version the system is runing
             // said version is used later to dynamically
             // select which code we run in certain sections.
-            return DriverError.NtdllNotFound;
+            return Win32DriverError.NtdllNotFound;
         }
         self.handles.user32 = mod.loadWin32Module("user32.dll");
         if (self.handles.user32) |*user32| {
@@ -219,15 +222,10 @@ pub const Win32Driver = struct {
         return Self.WINDOW_CLASS_NAME;
     }
 
-    // Enfoce readonly.
-    pub fn singleton() *const Self {
-        std.debug.assert(g_init == true);
-        return &Self.globl_instance;
-    }
-
     /// !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
-    /// that hasn't been destroyed yet !!!.
-    pub fn deinitSingleton() void {
+    /// that hasn't been destroyed yet.
+    /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
+    fn deinitSingleton() void {
         @setCold(true);
         if (Self.g_init) {
             Self.g_init = false;
@@ -327,7 +325,7 @@ fn isWin10BuildMinimum(func: win32.RtlVerifyVersionInfoProc, build: u32) bool {
 
 fn registerMainClass(
     hinstance: win32.HINSTANCE,
-) DriverError!u16 {
+) Win32DriverError!u16 {
     var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
     window_class.style = window_msg.WNDCLASS_STYLES{
@@ -368,12 +366,12 @@ fn registerMainClass(
 
     const class = window_msg.RegisterClassExW(&window_class);
     if (class == 0) {
-        return DriverError.DupWNDClass;
+        return Win32DriverError.DupWNDClass;
     }
     return class;
 }
 
 test "Win32Driver init" {
-    try Win32Driver.initSingleton("Test class", null);
+    try Win32Driver.initSingleton();
     defer Win32Driver.deinitSingleton();
 }

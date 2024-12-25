@@ -11,7 +11,7 @@ const sys_power = zigwin32.system.power;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const gdi = zigwin32.graphics.gdi;
 const WidowArea = common.geometry.WidowArea;
-const Win32Driver = @import("driver.zig").Win32Driver;
+//const Win32Driver = @import("driver.zig").Win32Driver;
 const Window = wndw.Window;
 const ArrayList = std.ArrayList;
 
@@ -244,23 +244,23 @@ pub inline fn displayFullArea(handle: win32.HMONITOR, area: *WidowArea) void {
 /// # Note
 /// This function is a last resort to get the dpi value for a window.
 pub fn displayDPI(
-    display_handle: win32.HMONITOR,
+    //display_handle: win32.HMONITOR,
 ) u32 {
     var dpi_x: u32 = undefined;
-    var dpi_y: u32 = undefined;
-    const drv = Win32Driver.singleton();
-    if (drv.opt_func.GetDpiForMonitor) |func| {
-        // [win32 docs]
-        // This API is not DPI aware and should not be used if
-        // the calling thread is per-monitor DPI aware.
-        if (func(display_handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
-            return win32.USER_DEFAULT_SCREEN_DPI;
-        }
-    } else {
-        const device_cntxt = gdi.GetDC(null);
-        dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
-        _ = gdi.ReleaseDC(null, device_cntxt);
-    }
+    //var dpi_y: u32 = undefined;
+    //const drv = Win32Driver.singleton();
+    //if (drv.opt_func.GetDpiForMonitor) |func| {
+    //    // [win32 docs]
+    //    // This API is not DPI aware and should not be used if
+    //    // the calling thread is per-monitor DPI aware.
+    //    if (func(display_handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
+    //        return win32.USER_DEFAULT_SCREEN_DPI;
+    //    }
+    //} else {
+    const device_cntxt = gdi.GetDC(null);
+    dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
+    _ = gdi.ReleaseDC(null, device_cntxt);
+    //}
     // [Win32 docs]
     // The values of *dpiX and *dpiY are identical.
     // You only need to record one of the values to
