@@ -37,6 +37,7 @@ pub const opengl = struct {
 
 pub const VideoMode = common.video_mode.VideoMode;
 
-pub const WidowContext = platform.WidowContext;
-
+// TODO: Document
+pub const createWidowContext = platform.createWidowContext;
+pub const destroyWidowContext = platform.destroyWidowContext;
 pub const WindowBuilder = @import("window.zig").WindowBuilder;

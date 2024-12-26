@@ -1,5 +1,6 @@
 [] General
-    [] Widow Context init need to be easier and more
+    [x] Widow Context init need to be easier and more
     secure (less error prone)
 [] Win32
-    [] Finish the display wrapper.
+    [x] Finish the display wrapper.
+    [] display wrapper need to be updated through hidden window events

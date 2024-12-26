@@ -500,7 +500,8 @@ pub const Window = struct {
             self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            // try self.setFullscreen(true, null);
+            // TODO: Should we fail because of fullscreen
+            _ = self.setFullscreen(true);
         }
 
         return self;
@@ -543,12 +544,8 @@ pub const Window = struct {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
-                // let's query the monitor's dpi.
-                _ = gdi.MonitorFromWindow(
-                    self.handle,
-                    gdi.MONITOR_DEFAULTTONEAREST,
-                ) orelse break :null_exit;
-                dpi = 0; // TODO: fix display.displayDPI(monitor_handle);
+                const disp = self.ctx.display_mgr.findWindowDisplay(self.handle) catch break :null_exit;
+                dpi = disp.displayDPI(self.ctx.driver);
             }
         }
         if (scaler) |s| {
@@ -1206,29 +1203,37 @@ pub const Window = struct {
         value: bool,
     ) bool {
         if (self.data.flags.is_fullscreen != value) {
-            self.data.flags.is_fullscreen = value;
+            const d = self.ctx.display_mgr.findWindowDisplay(self.handle) catch
+                return false;
             if (value) {
                 // save for when we exit the fullscreen mode
-                self.win32.prev_frame = self.data.client_area;
-                const o_display = self.occupiedDisplay() orelse return false;
-                self.updateStyles(&self.data.client_area);
-                // TODO: for non resizalble window we should change
+                // For non resizalble window we change
                 // monitor resoultion
-                self.acquireDisplay(o_display);
+                if (!self.data.flags.is_resizable) {
+                    self.ctx.display_mgr.setDisplayVideoMode(d, &.{
+                        .width = self.data.client_area.size.width,
+                        .height = self.data.client_area.size.height,
+                        // INFO: These 2 are hardcoded for now
+                        .frequency = 60,
+                        .color_depth = 32,
+                    }) catch return false;
+                }
+                self.win32.prev_frame = self.data.client_area;
+                self.updateStyles(&self.data.client_area);
+                self.acquireDisplay(d);
             } else {
+                d.setWindow(null);
                 self.updateStyles(&self.win32.prev_frame);
             }
+            self.data.flags.is_fullscreen = value;
         }
         return true;
     }
 
-    pub fn acquireDisplay(self: *Self, display_handle: win32.HMONITOR) void {
+    pub fn acquireDisplay(self: *Self, d: *display.Display) void {
         var area: common.geometry.WidowArea = undefined;
 
-        display.displayFullArea(
-            display_handle,
-            &area,
-        );
+        d.getFullArea(&area);
 
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .NOZORDER = 1,
@@ -1250,11 +1255,12 @@ pub const Window = struct {
             area.size.width,
             area.size.height,
         );
+
+        d.setWindow(self);
     }
 
-    /// returns a platform handler to the display the window currently appears on
-    pub inline fn occupiedDisplay(self: *const Self) ?win32.HMONITOR {
-        return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST);
+    pub fn restoreSizeAndPosition(self: *Self) void {
+        self.updateStyles(&self.win32.prev_frame);
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).

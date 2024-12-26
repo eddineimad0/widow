@@ -11,11 +11,8 @@ pub fn main() !void {
 
     // first we need to preform some platform specific initialization.
     // and build a context for the current platform.
-    // TODO: between the 2 calls ctx is undefined fix that
-    // and enforce that the ctx address can't change.
-    const ctx = try allocator.create(widow.WidowContext);
-    defer allocator.destroy(ctx);
-    ctx.* = try widow.WidowContext.init();
+    const ctx = try widow.createWidowContext(allocator);
+    defer widow.destroyWidowContext(allocator, ctx);
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
