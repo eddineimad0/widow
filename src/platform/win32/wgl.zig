@@ -10,7 +10,6 @@ const debug = std.debug;
 const opengl = zigwin32.graphics.open_gl;
 const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
-const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const FBConfig = common.fb.FBConfig;
 
@@ -203,13 +202,12 @@ fn createTempContext(
     return glc.?;
 }
 
-fn loadGLExtensions() bool {
-    const drvr = Win32Driver.singleton();
+fn loadGLExtensions(driver: *const Win32Driver) bool {
 
     // Create a temp window
     const tmp_wndw = window_msg.CreateWindowExW(
         window_msg.WINDOW_EX_STYLE{},
-        utils.MAKEINTATOM(drvr.handles.wnd_class),
+        utils.MAKEINTATOM(driver.handles.wnd_class),
         &[_:0]u16{ 0x00, 0x00 },
         window_msg.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
         0,
@@ -218,7 +216,7 @@ fn loadGLExtensions() bool {
         16,
         null,
         null,
-        drvr.handles.hinstance,
+        driver.handles.hinstance,
         null,
     );
 
@@ -497,13 +495,13 @@ pub const GLContext = struct {
     },
     const Self = @This();
 
-    pub fn init(window: win32.HWND, cfg: *const FBConfig) WGLError!Self {
+    pub fn init(window: win32.HWND, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
         const prev_dc = opengl.wglGetCurrentDC();
         const prev_glc = opengl.wglGetCurrentContext();
         defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
 
         if (!wgl_ext.loaded) {
-            wgl_ext.loaded = loadGLExtensions();
+            wgl_ext.loaded = loadGLExtensions(driver);
         }
 
         const rc = createGLContext(window, cfg);

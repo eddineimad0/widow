@@ -21,6 +21,9 @@ pub const DisplayError = error{
     NotFound,
 };
 
+// Define helper window property name
+pub const HELPER_DISPLAY_PROP = std.unicode.utf8ToUtf16LeStringLiteral("DISPLAY_REF");
+
 /// We'll use this type to pass data to the `enumMonitorProc` function.
 const LparamTuple = std.meta.Tuple(&.{ ?gdi.HMONITOR, []const u16 });
 
@@ -219,54 +222,9 @@ fn pollVideoModes(
     return modes;
 }
 
-/// Populate the given MonitorInfo struct with the corresponding monitor informations.
-inline fn queryDisplayInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
-    mi.cbSize = @sizeOf(gdi.MONITORINFO);
-    _ = gdi.GetMonitorInfoW(
-        handle,
-        mi,
-    );
-}
-
-/// Populate the `area` with the monitor's full area.
-pub inline fn displayFullArea(handle: win32.HMONITOR, area: *WidowArea) void {
-    var mi: gdi.MONITORINFO = undefined;
-    queryDisplayInfo(handle, &mi);
-    area.* = WidowArea.init(
-        mi.rcMonitor.left,
-        mi.rcMonitor.top,
-        mi.rcMonitor.right - mi.rcMonitor.left,
-        mi.rcMonitor.bottom - mi.rcMonitor.top,
-    );
-}
-
-/// Returns the dpi value for the given display.
-/// # Note
-/// This function is a last resort to get the dpi value for a window.
-pub fn displayDPI(
-    display_handle: win32.HMONITOR,
-) u32 {
-    var dpi_x: u32 = undefined;
-    var dpi_y: u32 = undefined;
-    const drv = Win32Driver.singleton();
-    if (drv.opt_func.GetDpiForMonitor) |func| {
-        // [win32 docs]
-        // This API is not DPI aware and should not be used if
-        // the calling thread is per-monitor DPI aware.
-        if (func(display_handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
-            return win32.USER_DEFAULT_SCREEN_DPI;
-        }
-    } else {
-        const device_cntxt = gdi.GetDC(null);
-        dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
-        _ = gdi.ReleaseDC(null, device_cntxt);
-    }
-    // [Win32 docs]
-    // The values of *dpiX and *dpiY are identical.
-    // You only need to record one of the values to
-    // determine the DPI and respond appropriately.
-    return dpi_x;
-}
+///// Populate the given MonitorInfo struct with the corresponding monitor informations.
+//inline fn queryDisplayInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
+//}
 
 /// Encapsulate the necessary infos for a display(monitor).
 pub const Display = struct {
@@ -336,69 +294,112 @@ pub const Display = struct {
     /// with the requested `video_mode`.
     /// # Note
     /// if `video_mode` is null the monitor's registry video mode is restored.
-    pub fn setVideoMode(self: *Self, video_mode: ?*const VideoMode) DisplayError!void {
-        if (video_mode) |mode| {
-            const possible_mode: usize = if (self.isVideoModeCompatible(mode)) |idx|
-                idx
-            else
-                mode.selectBestMatch(self.modes.items);
+    fn setVideoMode(self: *Self, mode: *const VideoMode) DisplayError!void {
+        const possible_mode: usize = if (self.isVideoModeCompatible(mode)) |idx|
+            idx
+        else
+            mode.selectBestMatch(self.modes.items);
 
-            if (possible_mode == self.curr_video) {
-                // the desired mode is already current.
+        if (possible_mode == self.curr_video) {
+            // the desired mode is already current.
+            return;
+        }
+
+        const choosen_mode = &self.modes.items[possible_mode];
+        var dm: gdi.DEVMODEW = undefined;
+        dm.dmSize = @sizeOf(gdi.DEVMODEW);
+        dm.dmDriverExtra = 0;
+        dm.dmFields = gdi.DM_PELSWIDTH |
+            gdi.DM_PELSHEIGHT |
+            gdi.DM_BITSPERPEL |
+            gdi.DM_DISPLAYFREQUENCY;
+        dm.dmPelsWidth = @intCast(choosen_mode.width);
+        dm.dmPelsHeight = @intCast(choosen_mode.height);
+        dm.dmBitsPerPel = @intCast(choosen_mode.color_depth);
+        dm.dmDisplayFrequency = @intCast(choosen_mode.frequency);
+        const result = gdi.ChangeDisplaySettingsExW(
+            @ptrCast(&self.adapter),
+            &dm,
+            null,
+            gdi.CDS_FULLSCREEN,
+            null,
+        );
+
+        switch (result) {
+            gdi.DISP_CHANGE_SUCCESSFUL => {
+                self.curr_video = possible_mode;
                 return;
-            }
-
-            const choosen_mode = &self.modes.items[possible_mode];
-            var dm: gdi.DEVMODEW = undefined;
-            dm.dmSize = @sizeOf(gdi.DEVMODEW);
-            dm.dmDriverExtra = 0;
-            dm.dmFields = gdi.DM_PELSWIDTH |
-                gdi.DM_PELSHEIGHT |
-                gdi.DM_BITSPERPEL |
-                gdi.DM_DISPLAYFREQUENCY;
-            dm.dmPelsWidth = @intCast(choosen_mode.width);
-            dm.dmPelsHeight = @intCast(choosen_mode.height);
-            dm.dmBitsPerPel = @intCast(choosen_mode.color_depth);
-            dm.dmDisplayFrequency = @intCast(choosen_mode.frequency);
-            const result = gdi.ChangeDisplaySettingsExW(
-                @ptrCast(&self.adapter),
-                &dm,
-                null,
-                gdi.CDS_FULLSCREEN,
-                null,
-            );
-
-            switch (result) {
-                gdi.DISP_CHANGE_SUCCESSFUL => {
-                    self.curr_video = possible_mode;
-                    return;
-                },
-                else => return DisplayError.BadVideoMode,
-            }
-        } else {
-            self.restoreRegistryMode();
+            },
+            else => return DisplayError.BadVideoMode,
         }
     }
 
     /// Restores the original video mode stored in the registry.
+    /// if it has changed.
     fn restoreRegistryMode(self: *Self) void {
         // Passing NULL for the lpDevMode parameter
         // and 0 for the dwFlags parameter
         // is the easiest way to switch to the registry
         // video mode after a dynamic mode change.
-        _ = gdi.ChangeDisplaySettingsExW(
-            @ptrCast(&self.adapter),
-            null,
-            null,
-            gdi.CDS_FULLSCREEN,
-            null,
-        );
-        self.curr_video = REGISTRY_VIDEOMODE_INDEX;
+        if (self.curr_video != REGISTRY_VIDEOMODE_INDEX) {
+            _ = gdi.ChangeDisplaySettingsExW(
+                @ptrCast(&self.adapter),
+                null,
+                null,
+                gdi.CDS_FULLSCREEN,
+                null,
+            );
+            self.curr_video = REGISTRY_VIDEOMODE_INDEX;
+        }
     }
 
     /// Set the window Handle field
     pub inline fn setWindow(self: *Self, window: ?*Window) void {
+        if (self.window) |w| {
+            _ = w.setFullscreen(false);
+        }
         self.window = window;
+    }
+
+    /// Returns the dpi value for the given display.
+    /// # Note
+    /// This function is a last resort to get the dpi value for a window.
+    pub fn displayDPI(self: *const Self, driver: *const Win32Driver) u32 {
+        var dpi_x: u32 = undefined;
+        var dpi_y: u32 = undefined;
+        if (driver.opt_func.GetDpiForMonitor) |func| {
+            // [win32 docs]
+            // This API is not DPI aware and should not be used if
+            // the calling thread is per-monitor DPI aware.
+            if (func(self.handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
+                return win32.USER_DEFAULT_SCREEN_DPI;
+            }
+        } else {
+            const device_cntxt = gdi.GetDC(null);
+            dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
+            _ = gdi.ReleaseDC(null, device_cntxt);
+        }
+        // [Win32 docs]
+        // The values of *dpiX and *dpiY are identical.
+        // You only need to record one of the values to
+        // determine the DPI and respond appropriately.
+        return dpi_x;
+    }
+
+    /// Populate the `area` with the monitor's full area.
+    pub fn getFullArea(self: *const Self, area: *WidowArea) void {
+        var mi: gdi.MONITORINFO = undefined;
+        mi.cbSize = @sizeOf(gdi.MONITORINFO);
+        _ = gdi.GetMonitorInfoW(
+            self.handle,
+            &mi,
+        );
+        area.* = WidowArea.init(
+            mi.rcMonitor.left,
+            mi.rcMonitor.top,
+            mi.rcMonitor.right - mi.rcMonitor.left,
+            mi.rcMonitor.bottom - mi.rcMonitor.top,
+        );
     }
 
     pub fn debugInfos(self: *Self, print_video_modes: bool) void {
@@ -422,54 +423,33 @@ pub const Display = struct {
 };
 
 pub const DisplayManager = struct {
-    // TODO: finish this.
     displays: std.ArrayList(Display),
-    occupied_count: u8,
-    expected_video_change: bool, // For skipping unnecessary updates.
-    helper: ?win32.HWND,
     prev_exec_state: sys_power.EXECUTION_STATE,
+    occupied_count: u8, // keeps track of how many monitor is occupied by a full window
+    expected_video_change: bool, // For skipping unnecessary updates.
+
     const Self = @This();
     pub const WINDOW_PROP = std.unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
 
-    pub fn init(allocator: mem.Allocator) Self {
+    pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
         return .{
             .occupied_count = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
-            .displays = std.ArrayList(Display).init(allocator),
-            .helper = null,
+            .displays = try pollDisplays(allocator),
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.expected_video_change = true;
-        for (self.displays) |*d| {
-            // if (monitor.window) |*window| {
-            //     window.*.requestRestore();
-            // }
+        for (self.displays.items) |*d| {
+            if (d.window) |w| {
+                _ = w.setFullscreen(false);
+            }
             // free allocated data.
             d.deinit();
         }
         self.displays.deinit();
-        _ = window_msg.SetPropW(
-            self.helper,
-            WINDOW_PROP,
-            null, // self shouldn't point to stack memory
-        );
-        _ = window_msg.DestroyWindow(self.helper);
-    }
-
-    pub fn initDisplays(self: *Self) !void {
-        // poll for connected displays
-        self.displays = try pollDisplays(self.displays.allocator);
-        // create a helper window that keeps checking for hardware
-        // change.
-        self.helper = try wndw.createHiddenWindow(WINDOW_PROP);
-        _ = window_msg.SetPropW(
-            self.helper,
-            WINDOW_PROP,
-            @ptrCast(self), // self shouldn't point to stack memory
-        );
     }
 
     /// Updates the displays array by removing all disconnected displays
@@ -489,11 +469,13 @@ pub const DisplayManager = struct {
                 }
             }
 
-            if (disconnected) {}
-
-            // avoids changing the video mode when deinit is called.
-            // as it's a useless call to the OS.
-            display.curr_video = 0;
+            if (disconnected) {
+                // TODO: need to test what will happen to the window
+            } else {
+                // avoids changing the video mode when deinit is called.
+                // as it's a useless call to the OS.
+                display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
+            }
             display.deinit();
         }
 
@@ -502,12 +484,13 @@ pub const DisplayManager = struct {
         self.displays = new_displays;
     }
 
-    /// Returns a refrence to the requested Monitor.
-    pub fn findDisplay(self: *Self, dispaly_handle: win32.HMONITOR) !*Display {
+    /// Returns a refrence to the Monitor occupied by the window.
+    pub fn findWindowDisplay(self: *Self, window_handle: win32.HWND) !*Display {
+        const display_handle = gdi.MonitorFromWindow(window_handle, gdi.MONITOR_DEFAULTTONEAREST);
         // Find the monitor.
         var target: ?*Display = null;
         for (self.displays.items) |*d| {
-            if (d.handle == dispaly_handle) {
+            if (d.handle == display_handle) {
                 target = d;
                 break;
             }
@@ -515,8 +498,8 @@ pub const DisplayManager = struct {
 
         const display = target orelse {
             std.log.err(
-                "[DisplayManager]: monitor not found, handle={*}",
-                .{dispaly_handle},
+                "[DisplayManager]: monitor not found, requested handle={*}",
+                .{display_handle},
             );
             return DisplayError.NotFound;
         };
@@ -524,27 +507,21 @@ pub const DisplayManager = struct {
         return display;
     }
 
+    /// If the mode is null the function must not fail or return an error.
     pub fn setDisplayVideoMode(
         self: *Self,
-        display_handle: win32.HMONITOR,
-        mode: ?*common.video_mode.VideoMode,
-    ) !void {
-        const display = try self.findMonitor(display_handle);
+        display: *Display,
+        mode: ?*const VideoMode,
+    ) DisplayError!void {
         // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
         // We Set this here to avoid wastefully updating the monitors map.
         self.expected_video_change = true;
-        defer self.expected_video_change = false;
-
-        try display.setVideoMode(mode);
-    }
-
-    pub fn getDisplayVideoMode(
-        self: *const Self,
-        display_handle: win32.HMONITOR,
-        output: *common.video_mode.VideoMode,
-    ) !void {
-        const display = try self.findMonitor(display_handle);
-        display.queryCurrentMode(output);
+        if (mode) |m| {
+            try display.setVideoMode(m);
+        } else {
+            display.restoreRegistryMode();
+        }
+        self.expected_video_change = false;
     }
 };
 

@@ -7,7 +7,6 @@ const gl = @import("gl");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
-const Win32Driver = @import("driver.zig").Win32Driver;
 const mem = std.mem;
 const debug = std.debug;
 const window_msg = zigwin32.ui.windows_and_messaging;
@@ -16,6 +15,8 @@ const foundation = zigwin32.foundation;
 const gdi = zigwin32.graphics.gdi;
 const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
 const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
+const Win32Driver = @import("driver.zig").Win32Driver;
+const WidowContext = @import("platform.zig").WidowContext;
 const CursorHints = icon.CursorHints;
 const Icon = icon.Icon;
 const FBConfig = common.fb.FBConfig;
@@ -29,6 +30,9 @@ pub const WindowError = error{
     BadIcon,
     GLError,
 };
+
+/// We'll use this type to pass data to the `CreateWindowExW` function.
+pub const CreationLparamTuple = std.meta.Tuple(&.{ *const WindowData, *const Win32Driver });
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
@@ -76,6 +80,31 @@ pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 // Define window property name
 pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
 
+pub fn createHiddenWindow(
+    title: [:0]const u16,
+    driver: *const Win32Driver,
+) WindowError!win32.HWND {
+    const helper_window = window_msg.CreateWindowExW(
+        @bitCast(@as(u32, 0)),
+        utils.MAKEINTATOM(driver.handles.helper_class),
+        title,
+        @bitCast(@as(u32, 0)),
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        null,
+        null,
+        driver.handles.hinstance,
+        null,
+    ) orelse {
+        return WindowError.CreateFailed;
+    };
+
+    _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
+    return helper_window;
+}
+
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
 
@@ -120,12 +149,12 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
 /// areas.
 /// if `dpi` is null it will use the default platform dpi (96)
 pub fn adjustWindowRect(
+    drvr: *const Win32Driver,
     rect: *win32.RECT,
     styles: u32,
     ex_styles: u32,
     dpi: ?u32,
 ) void {
-    const drvr = Win32Driver.singleton();
     if (drvr.opt_func.AdjustWindowRectExForDpi) |func| {
         _ = func(
             rect,
@@ -241,6 +270,7 @@ fn setWindowPositionIntern(
 
 fn createPlatformWindow(
     allocator: mem.Allocator,
+    driver: *const Win32Driver,
     title: []const u8,
     data: *const WindowData,
     style: u32,
@@ -259,7 +289,7 @@ fn createPlatformWindow(
     // query the system for the targted monitor(the one that intersect
     // the window frame rectangle)'s dpi value and adjust for it now
     // or do it after window creation, we will leave it for after creation.
-    adjustWindowRect(&window_rect, style, ex_style, null);
+    adjustWindowRect(driver, &window_rect, style, ex_style, null);
 
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
@@ -286,13 +316,12 @@ fn createPlatformWindow(
     const window_title = try utils.utf8ToWideZ(allocator, title);
     defer allocator.free(window_title);
 
-    const creation_lparm = data;
-    const drvr = Win32Driver.singleton();
+    const creation_lparm: CreationLparamTuple = .{ data, driver };
 
     // Create the window.
     const window_handle = window_msg.CreateWindowExW(
         @bitCast(ex_style), // dwExStyles
-        utils.MAKEINTATOM(drvr.handles.wnd_class),
+        utils.MAKEINTATOM(driver.handles.wnd_class),
         window_title, // Window Name
         @bitCast(style), // dwStyles
         frame[0], // X
@@ -301,8 +330,8 @@ fn createPlatformWindow(
         frame[3], // height
         null, // Parent Hwnd
         null, // hMenu
-        drvr.handles.hinstance, // hInstance
-        @ptrCast(@constCast(creation_lparm)), // CREATESTRUCT lparam
+        driver.handles.hinstance, // hInstance
+        @ptrCast(@constCast(&creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
         return WindowError.CreateFailed;
     };
@@ -313,8 +342,8 @@ fn createPlatformWindow(
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: Icon,
-    cursor: CursorHints,
     dropped_files: std.ArrayList([]const u8),
+    cursor: CursorHints,
     prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
@@ -323,11 +352,13 @@ pub const WindowWin32Data = struct {
 };
 
 pub const Window = struct {
+    ctx: *WidowContext,
     ev_queue: ?*common.event.EventQueue,
     handle: win32.HWND,
     data: WindowData,
     win32: WindowWin32Data,
     fb_cfg: FBConfig,
+
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
@@ -336,6 +367,7 @@ pub const Window = struct {
 
     pub fn init(
         allocator: mem.Allocator,
+        ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
@@ -344,6 +376,7 @@ pub const Window = struct {
         var self = try allocator.create(Self);
         errdefer allocator.destroy(self);
 
+        self.ctx = ctx;
         self.ev_queue = null;
         self.data = data.*;
         self.fb_cfg = fb_cfg.*;
@@ -355,14 +388,17 @@ pub const Window = struct {
 
         self.handle = try createPlatformWindow(
             allocator,
+            self.ctx.driver,
             window_title,
             data,
             style,
             ex_style,
         );
+        errdefer _ = window_msg.DestroyWindow(self.handle);
 
         // Finish setting up the window.
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
+
         self.win32 = WindowWin32Data{
             .cursor = CursorHints{
                 .icon = null, // uses the default system image
@@ -399,6 +435,11 @@ pub const Window = struct {
             WINDOW_REF_PROP,
             @ptrCast(self),
         );
+        errdefer _ = window_msg.SetPropW(
+            self.handle,
+            WINDOW_REF_PROP,
+            null,
+        );
 
         // handle DPI adjustments.
         if (self.data.flags.is_dpi_aware) {
@@ -417,6 +458,7 @@ pub const Window = struct {
             client_rect.bottom = @intFromFloat(fheight * dpi_scale);
 
             adjustWindowRect(
+                self.ctx.driver,
                 &client_rect,
                 style,
                 ex_style,
@@ -456,7 +498,7 @@ pub const Window = struct {
         }
 
         // Allow Drag & Drop messages.
-        if (Win32Driver.singleton().hints.is_win7_or_above) {
+        if (self.ctx.driver.hints.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
             _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
@@ -490,28 +532,20 @@ pub const Window = struct {
             self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            // try self.setFullscreen(true, null);
-        }
-
-        // Framebuffer configuration
-        switch (fb_cfg.accel) {
-            .opengl => {
-                // glx.initGLX() catch return WindowError.GLError;
-                // if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
-                //     return WindowError.VisualNone;
-                // }
-            },
-            else => {},
+            if (!self.setFullscreen(true)) {
+                return WindowError.CreateFailed;
+            }
         }
 
         return self;
     }
 
     pub fn deinit(self: *Self, allocator: mem.Allocator) void {
+        self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
-            // self.setFullscreen(false, null) catch unreachable;
+            _ = self.setFullscreen(false);
         }
         self.win32.cursor.mode = .Normal;
         applyCursorHints(&self.win32.cursor, self.handle);
@@ -519,9 +553,6 @@ pub const Window = struct {
         _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
-        // if (self.win32.raw_input.capacity != 0) {
-        //     self.win32.raw_input.deinit();
-        // }
         allocator.destroy(self);
     }
 
@@ -539,18 +570,13 @@ pub const Window = struct {
     }
 
     pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        const drvr = Win32Driver.singleton();
         var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
         null_exit: {
-            if (drvr.opt_func.GetDpiForWindow) |func| {
+            if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
-                // let's query the monitor's dpi.
-                const monitor_handle = gdi.MonitorFromWindow(
-                    self.handle,
-                    gdi.MONITOR_DEFAULTTONEAREST,
-                ) orelse break :null_exit;
-                dpi = display.displayDPI(monitor_handle);
+                const disp = self.ctx.display_mgr.findWindowDisplay(self.handle) catch break :null_exit;
+                dpi = disp.displayDPI(self.ctx.driver);
             }
         }
         if (scaler) |s| {
@@ -687,6 +713,7 @@ pub const Window = struct {
             null;
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             @truncate(reg_styles),
             @truncate(reg_ex_styles),
@@ -784,6 +811,7 @@ pub const Window = struct {
         const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.getScalingDPI(null) else null;
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
@@ -849,6 +877,7 @@ pub const Window = struct {
             };
 
             adjustWindowRect(
+                self.ctx.driver,
                 &new_client_rect,
                 windowStyles(&self.data.flags),
                 windowExStyles(&self.data.flags),
@@ -1165,6 +1194,7 @@ pub const Window = struct {
         };
 
         adjustWindowRect(
+            self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
@@ -1204,29 +1234,45 @@ pub const Window = struct {
         value: bool,
     ) bool {
         if (self.data.flags.is_fullscreen != value) {
+            // WARN: the fullscreen flag should be updated before updating
+            // the window style or the visuals will be buggy
             self.data.flags.is_fullscreen = value;
+            const d = self.ctx.display_mgr.findWindowDisplay(self.handle) catch {
+                self.data.flags.is_fullscreen = !value;
+                return false;
+            };
             if (value) {
                 // save for when we exit the fullscreen mode
-                self.win32.prev_frame = self.data.client_area;
-                const o_display = self.occupiedDisplay() orelse return false;
-                self.updateStyles(&self.data.client_area);
-                // TODO: for non resizalble window we should change
+                // For non resizalble window we change
                 // monitor resoultion
-                self.acquireDisplay(o_display);
+                if (!self.data.flags.is_resizable) {
+                    self.ctx.display_mgr.setDisplayVideoMode(d, &.{
+                        .width = self.data.client_area.size.width,
+                        .height = self.data.client_area.size.height,
+                        // INFO: These 2 are hardcoded for now
+                        .frequency = 60,
+                        .color_depth = 32,
+                    }) catch return {
+                        self.data.flags.is_fullscreen = !value;
+                        return false;
+                    };
+                }
+                self.win32.prev_frame = self.data.client_area;
+                self.updateStyles(&self.data.client_area);
+                self.acquireDisplay(d);
             } else {
+                self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
+                d.setWindow(null);
                 self.updateStyles(&self.win32.prev_frame);
             }
         }
         return true;
     }
 
-    pub fn acquireDisplay(self: *Self, display_handle: win32.HMONITOR) void {
+    pub fn acquireDisplay(self: *Self, d: *display.Display) void {
         var area: common.geometry.WidowArea = undefined;
 
-        display.displayFullArea(
-            display_handle,
-            &area,
-        );
+        d.getFullArea(&area);
 
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .NOZORDER = 1,
@@ -1248,11 +1294,8 @@ pub const Window = struct {
             area.size.width,
             area.size.height,
         );
-    }
 
-    /// returns a platform handler to the display the window currently appears on
-    pub inline fn occupiedDisplay(self: *const Self) ?win32.HMONITOR {
-        return gdi.MonitorFromWindow(self.handle, gdi.MONITOR_DEFAULTTONEAREST);
+        d.setWindow(self);
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
@@ -1397,7 +1440,7 @@ pub const Window = struct {
 
     pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
         switch (self.fb_cfg.accel) {
-            .opengl => return wgl.GLContext.init(self.handle, &self.fb_cfg) catch {
+            .opengl => return wgl.GLContext.init(self.handle, self.ctx.driver, &self.fb_cfg) catch {
                 return WindowError.GLError;
             },
             else => return WindowError.GLError,

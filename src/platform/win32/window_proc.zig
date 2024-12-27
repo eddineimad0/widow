@@ -7,11 +7,54 @@ const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
 const wndw = @import("window.zig");
 const display = @import("display.zig");
-const Win32Driver = @import("driver.zig").Win32Driver;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
 const input = zigwin32.ui.input;
+
+/// The procedure function for the helper window
+pub fn helperWindowProc(
+    hwnd: win32.HWND,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) callconv(win32.WINAPI) isize {
+    switch (msg) {
+        window_msg.WM_DISPLAYCHANGE => {
+            // Monitor the window_msg.WM_DISPLAYCHANGE notification
+            // to detect when settings change or when a
+            // display is added or removed.
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: hidden recieved a DISPLAYCHANGE event\n",
+                    .{},
+                );
+            }
+            const display_mgr_ref = window_msg.GetPropW(
+                hwnd,
+                display.HELPER_DISPLAY_PROP,
+            );
+            if (display_mgr_ref) |ref| {
+                const display_mgr: *display.DisplayManager = @ptrCast(@alignCast(ref));
+                if (!display_mgr.expected_video_change) {
+                    display_mgr.updateDisplays() catch |err| {
+                        // updateDisplays should only fail if we ran out of memory
+                        // which is very unlikely on 64 bit systems
+                        // but if it does happen the library should panic.
+                        std.log.err(
+                            "[Display Manager]: Failed to refresh Displays, error={}\n",
+                            .{err},
+                        );
+                        @panic("[Widow]: Ran out of memory, can't update display data");
+                    };
+                }
+            }
+        },
+
+        else => {},
+    }
+    return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+}
 
 /// The Window Procedure function.
 pub fn mainWindowProc(
@@ -29,11 +72,12 @@ pub fn mainWindowProc(
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
             const struct_ptr: *window_msg.CREATESTRUCTW = @ptrFromInt(ulparam);
-            const window_data: ?*const common.window_data.WindowData = @ptrCast(
+            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
                 @alignCast(struct_ptr.*.lpCreateParams),
             );
-            if (window_data) |data| {
-                const drvr = Win32Driver.singleton();
+            if (create_lparam) |param| {
+                const drvr = param.*[1];
+                const data = param.*[0];
                 if (data.flags.is_dpi_aware and drvr.hints.is_win10b1607_or_above) {
                     _ = drvr.opt_func.EnableNonClientDpiScaling.?(hwnd);
                 }
@@ -292,7 +336,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a GETDPISCALEDSIZE event\n", .{window.data.id});
             }
-            const drvr = Win32Driver.singleton();
+            const drvr = window.ctx.driver;
             // there is no need to process this message for a dpi aware window
             // for a non dpi aware window processing this messsage is necessary
             // to adjust it's decorations(titlebar,edges...).
@@ -382,6 +426,12 @@ pub fn mainWindowProc(
                     window.data.id,
                 );
                 window.sendEvent(&event);
+
+                if (window.data.flags.is_fullscreen) {
+                    _ = window.setFullscreen(false);
+                    // undo the flag change, for when we restore the window.
+                    window.data.flags.is_fullscreen = true;
+                }
             }
 
             const restored = (wparam == window_msg.SIZE_RESTORED and
@@ -391,6 +441,14 @@ pub fn mainWindowProc(
                     window.data.id,
                 );
                 window.sendEvent(&event);
+
+                if (window.data.flags.is_fullscreen) {
+                    // clear the flag so that we can call setFullscreen.
+                    window.data.flags.is_fullscreen = false;
+                    // if we fail then just leave the window not in fullscreen
+                    // maybe post a window error message
+                    _ = window.setFullscreen(true);
+                }
             }
 
             window.data.flags.is_maximized = maximized;

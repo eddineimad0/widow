@@ -3,7 +3,7 @@ const widow = @import("widow");
 const gl = @import("gl");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const KeyCode = widow.keyboard.KeyCode;
+const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 var gl_procs: gl.ProcTable = undefined;
@@ -39,22 +39,24 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    // first we need to preform some platform specific initialization.
-    try widow.initWidowPlatform();
-    // clean up code to be called, when done using the library.
-    // or don't let the os figure it's stuff.
-    defer widow.deinitWidowPlatform();
+    const ctx = try widow.createWidowContext(allocator);
+    defer widow.destroyWidowContext(allocator, ctx);
+
+    // the window will require an event queue to
+    // send events.
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
-    var mywindow = builder.withTitle("Hello OpenGL triangle")
-        .withResize(false)
+    var mywindow = builder.withTitle("Simple Window")
+        .withSize(800, 600)
+        .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
-        .withSize(800, 600)
         .withDecoration(true)
-        .build(allocator, 1) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -63,16 +65,11 @@ pub fn main() !void {
     defer mywindow.deinit(allocator);
     mywindow.focus();
 
-    // the window will require an event queue to
-    // send events.
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
-
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var ctx = try mywindow.initGLContext();
-    defer ctx.deinit();
-    _ = ctx.makeCurrent();
+    var gl_ctx = try mywindow.initGLContext();
+    defer gl_ctx.deinit();
+    _ = gl_ctx.makeCurrent();
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
@@ -123,7 +120,7 @@ pub fn main() !void {
         gl.ClearColor(0.2, 0.3, 0.3, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
         try drawTriangle();
-        _ = ctx.swapBuffers();
+        _ = gl_ctx.swapBuffers();
     }
 }
 
