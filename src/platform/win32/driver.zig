@@ -105,6 +105,9 @@ pub const Win32Driver = struct {
             globl_instance.handles.wnd_class = try registerMainClass(
                 globl_instance.handles.hinstance,
             );
+            globl_instance.handles.helper_class = try registerHelperClass(
+                globl_instance.handles.hinstance,
+            );
 
             // Load the required libraries.
             try globl_instance.loadLibraries();
@@ -363,6 +366,24 @@ fn registerMainClass(
             @bitCast(window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
+
+    const class = window_msg.RegisterClassExW(&window_class);
+    if (class == 0) {
+        return Win32DriverError.DupWNDClass;
+    }
+    return class;
+}
+
+fn registerHelperClass(
+    hinstance: win32.HINSTANCE,
+) Win32DriverError!u16 {
+    var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
+    window_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
+    window_class.lpfnWndProc = helperWindowProc;
+    window_class.hInstance = hinstance;
+    window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
+        opts.WIN32_WNDCLASS_NAME ++ "_HELPER",
+    );
 
     const class = window_msg.RegisterClassExW(&window_class);
     if (class == 0) {

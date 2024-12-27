@@ -21,6 +21,9 @@ pub const DisplayError = error{
     NotFound,
 };
 
+// Define helper window property name
+pub const HELPER_DISPLAY_PROP = std.unicode.utf8ToUtf16LeStringLiteral("DISPLAY_REF");
+
 /// We'll use this type to pass data to the `enumMonitorProc` function.
 const LparamTuple = std.meta.Tuple(&.{ ?gdi.HMONITOR, []const u16 });
 
@@ -349,11 +352,11 @@ pub const Display = struct {
 
     /// Set the window Handle field
     pub inline fn setWindow(self: *Self, window: ?*Window) void {
-        self.window = window;
-        if (window == null and self.curr_video != REGISTRY_VIDEOMODE_INDEX) {
-            // undo any video mode changes made by the previous window
-            self.restoreRegistryMode();
+        if (self.window) |w| {
+            // TODO: Test switching 2 windows
+            _ = w.setFullscreen(false);
         }
+        self.window = window;
     }
 
     /// Returns the dpi value for the given display.
@@ -419,10 +422,10 @@ pub const Display = struct {
 
 pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
+    prev_exec_state: sys_power.EXECUTION_STATE,
     occupied_count: u8, // keeps track of how many monitor is occupied by a full window
     expected_video_change: bool, // For skipping unnecessary updates.
-    helper: ?win32.HWND,
-    prev_exec_state: sys_power.EXECUTION_STATE,
+
     const Self = @This();
     pub const WINDOW_PROP = std.unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
 
@@ -431,8 +434,7 @@ pub const DisplayManager = struct {
             .occupied_count = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
-            .displays = try pollDisplays(allocator), // std.ArrayList(Display).init(allocator),
-            .helper = null,
+            .displays = try pollDisplays(allocator),
         };
     }
 
@@ -440,38 +442,18 @@ pub const DisplayManager = struct {
         self.expected_video_change = true;
         for (self.displays.items) |*d| {
             if (d.window) |w| {
-                w.restoreSizeAndPosition();
+                _ = w.setFullscreen(false);
             }
             // free allocated data.
             d.deinit();
         }
         self.displays.deinit();
-
-        //self.displays.deinit();
-        //_ = window_msg.SetPropW(
-        //    self.helper,
-        //    WINDOW_PROP,
-        //    null, // self shouldn't point to stack memory
-        //);
-        //_ = window_msg.DestroyWindow(self.helper);
     }
-
-    //pub fn Displays(self: *Self) !void {
-    //    // poll for connected displays
-    //    self.displays = try pollDisplays(self.displays.allocator);
-    //    // create a helper window that keeps checking for hardware
-    //    // change.
-    //    //self.helper = try wndw.createHiddenWindow(WINDOW_PROP);
-    //    //_ = window_msg.SetPropW(
-    //    //    self.helper,
-    //    //    WINDOW_PROP,
-    //    //    @ptrCast(self), // self shouldn't point to stack memory
-    //    //);
-    //}
 
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
     pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+        // TODO: review.
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
@@ -522,15 +504,22 @@ pub const DisplayManager = struct {
         return display;
     }
 
+    /// If the mode is null the function must not fail or return an error.
     pub fn setDisplayVideoMode(
         self: *Self,
         display: *Display,
-        mode: *const VideoMode,
+        mode: ?*const VideoMode,
     ) DisplayError!void {
         // ChangeDisplaySettigns sends a WM_DISPLAYCHANGED message
         // We Set this here to avoid wastefully updating the monitors map.
         self.expected_video_change = true;
-        try display.setVideoMode(mode);
+        if (mode) |m| {
+            try display.setVideoMode(m);
+        } else {
+            if (display.curr_video != Display.REGISTRY_VIDEOMODE_INDEX) {
+                display.restoreRegistryMode();
+            }
+        }
         self.expected_video_change = false;
     }
 };

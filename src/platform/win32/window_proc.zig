@@ -13,6 +13,47 @@ const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
 const input = zigwin32.ui.input;
 
+/// The procedure function for the helper window
+pub fn helperWindowProc(
+    hwnd: win32.HWND,
+    msg: win32.DWORD,
+    wparam: win32.WPARAM,
+    lparam: win32.LPARAM,
+) callconv(win32.WINAPI) isize {
+    switch (msg) {
+        window_msg.WM_DISPLAYCHANGE => {
+            // Monitor the window_msg.WM_DISPLAYCHANGE notification
+            // to detect when settings change or when a
+            // display is added or removed.
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: hidden recieved a DISPLAYCHANGE event\n",
+                    .{},
+                );
+            }
+            const display_mgr_ref = window_msg.GetPropW(
+                hwnd,
+                display.HELPER_DISPLAY_PROP,
+            );
+            if (display_mgr_ref) |ref| {
+                const display_mgr: *display.DisplayManager = @ptrCast(@alignCast(ref));
+                if (!display_mgr.expected_video_change) {
+                    display_mgr.updateDisplays() catch |err| {
+                        // TODO: how to deal with this error.
+                        std.log.err(
+                            "[Display Manager]: Failed to refresh Displays,{}\n",
+                            .{err},
+                        );
+                    };
+                }
+            }
+        },
+
+        else => {},
+    }
+    return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+}
+
 /// The Window Procedure function.
 pub fn mainWindowProc(
     hwnd: win32.HWND,
@@ -383,6 +424,12 @@ pub fn mainWindowProc(
                     window.data.id,
                 );
                 window.sendEvent(&event);
+
+                if (window.data.flags.is_fullscreen) {
+                    _ = window.setFullscreen(false);
+                    // undo the flag change, for when we restore the window.
+                    window.data.flags.is_fullscreen = true;
+                }
             }
 
             const restored = (wparam == window_msg.SIZE_RESTORED and
@@ -392,6 +439,14 @@ pub fn mainWindowProc(
                     window.data.id,
                 );
                 window.sendEvent(&event);
+
+                if (window.data.flags.is_fullscreen) {
+                    // clear the flag so that we can call setFullscreen.
+                    window.data.flags.is_fullscreen = false;
+                    // if we fail then just leave the window not in fullscreen
+                    // maybe post a window error message
+                    _ = window.setFullscreen(true);
+                }
             }
 
             window.data.flags.is_maximized = maximized;

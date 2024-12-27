@@ -1,6 +1,9 @@
 [] General
     [x] Widow Context init need to be easier and more
     secure (less error prone)
+    [] should the event queue be moved to the context
 [] Win32
     [x] Finish the display wrapper.
-    [] display wrapper need to be updated through hidden window events
+    [-] display wrapper need to be updated through hidden window events
+    [x] fix: memory leak when quitting in fullscreen mode.
+    [] fix: the closest videomode choice isn't accurate.

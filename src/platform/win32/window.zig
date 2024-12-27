@@ -80,6 +80,31 @@ pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
 // Define window property name
 pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
 
+pub fn createHiddenWindow(
+    title: [:0]const u16,
+    driver: *const Win32Driver,
+) WindowError!win32.HWND {
+    const helper_window = window_msg.CreateWindowExW(
+        @bitCast(@as(u32, 0)),
+        utils.MAKEINTATOM(driver.handles.helper_class),
+        title,
+        @bitCast(@as(u32, 0)),
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        win32.CW_USEDEFAULT,
+        null,
+        null,
+        driver.handles.hinstance,
+        null,
+    ) orelse {
+        return WindowError.CreateFailed;
+    };
+
+    _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
+    return helper_window;
+}
+
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
 
@@ -508,10 +533,11 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self, allocator: mem.Allocator) void {
+        self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
-            // self.setFullscreen(false, null) catch unreachable;
+            _ = self.setFullscreen(false);
         }
         self.win32.cursor.mode = .Normal;
         applyCursorHints(&self.win32.cursor, self.handle);
@@ -519,9 +545,6 @@ pub const Window = struct {
         _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = window_msg.DestroyWindow(self.handle);
         self.freeDroppedFiles();
-        // if (self.win32.raw_input.capacity != 0) {
-        //     self.win32.raw_input.deinit();
-        // }
         allocator.destroy(self);
     }
 
@@ -1203,8 +1226,13 @@ pub const Window = struct {
         value: bool,
     ) bool {
         if (self.data.flags.is_fullscreen != value) {
-            const d = self.ctx.display_mgr.findWindowDisplay(self.handle) catch
+            // WARN: the fullscreen flag should be updated before updating
+            // the window style or the visuals will be buggy
+            self.data.flags.is_fullscreen = value;
+            const d = self.ctx.display_mgr.findWindowDisplay(self.handle) catch {
+                self.data.flags.is_fullscreen = !value;
                 return false;
+            };
             if (value) {
                 // save for when we exit the fullscreen mode
                 // For non resizalble window we change
@@ -1216,16 +1244,19 @@ pub const Window = struct {
                         // INFO: These 2 are hardcoded for now
                         .frequency = 60,
                         .color_depth = 32,
-                    }) catch return false;
+                    }) catch return {
+                        self.data.flags.is_fullscreen = !value;
+                        return false;
+                    };
                 }
                 self.win32.prev_frame = self.data.client_area;
                 self.updateStyles(&self.data.client_area);
                 self.acquireDisplay(d);
             } else {
+                self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
                 d.setWindow(null);
                 self.updateStyles(&self.win32.prev_frame);
             }
-            self.data.flags.is_fullscreen = value;
         }
         return true;
     }
@@ -1257,10 +1288,6 @@ pub const Window = struct {
         );
 
         d.setWindow(self);
-    }
-
-    pub fn restoreSizeAndPosition(self: *Self) void {
-        self.updateStyles(&self.win32.prev_frame);
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).

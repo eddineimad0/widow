@@ -10,7 +10,6 @@ const debug = std.debug;
 const opengl = zigwin32.graphics.open_gl;
 const gdi = zigwin32.graphics.gdi;
 const window_msg = zigwin32.ui.windows_and_messaging;
-const Window = @import("window.zig").Window;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const FBConfig = common.fb.FBConfig;
 
