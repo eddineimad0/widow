@@ -7,7 +7,6 @@ const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
 const wndw = @import("window.zig");
 const display = @import("display.zig");
-// const Win32Driver = @import("driver.zig").Win32Driver;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
 const sys_service = zigwin32.system.system_services;
@@ -39,11 +38,14 @@ pub fn helperWindowProc(
                 const display_mgr: *display.DisplayManager = @ptrCast(@alignCast(ref));
                 if (!display_mgr.expected_video_change) {
                     display_mgr.updateDisplays() catch |err| {
-                        // TODO: how to deal with this error.
+                        // updateDisplays should only fail if we ran out of memory
+                        // which is very unlikely on 64 bit systems
+                        // but if it does happen the library should panic.
                         std.log.err(
-                            "[Display Manager]: Failed to refresh Displays,{}\n",
+                            "[Display Manager]: Failed to refresh Displays, error={}\n",
                             .{err},
                         );
+                        @panic("[Widow]: Ran out of memory, can't update display data");
                     };
                 }
             }

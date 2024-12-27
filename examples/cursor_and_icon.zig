@@ -2,7 +2,7 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const ScanCode = widow.keyboard.ScanCode;
+const ScanCode = widow.input.keyboard.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
 const CursorShape = widow.cursor.NativeCursorShape;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
@@ -13,6 +13,9 @@ pub fn main() !void {
 
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
+
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
@@ -29,9 +32,6 @@ pub fn main() !void {
     };
 
     defer mywindow.deinit(allocator);
-
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
 

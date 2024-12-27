@@ -2,23 +2,23 @@ const std = @import("std");
 const common = @import("common");
 const gl = @import("opengl");
 const platform = @import("platform");
-
 const mem = std.mem;
 
 // Exports
 pub const geometry = common.geometry;
 pub const cursor = common.cursor;
 
-pub const keyboard = struct {
-    pub const KeyCode = common.keyboard_mouse.KeyCode;
-    pub const ScanCode = common.keyboard_mouse.ScanCode;
-    pub const KeyState = common.keyboard_mouse.KeyState;
-    pub const KeyModifiers = common.keyboard_mouse.KeyModifiers;
-};
-
-pub const mouse = struct {
-    pub const MouseButton = common.keyboard_mouse.MouseButton;
-    pub const MouseButtonState = common.keyboard_mouse.MouseButtonState;
+pub const input = struct {
+    pub const keyboard = struct {
+        pub const KeyCode = common.keyboard_mouse.KeyCode;
+        pub const ScanCode = common.keyboard_mouse.ScanCode;
+        pub const KeyState = common.keyboard_mouse.KeyState;
+        pub const KeyModifiers = common.keyboard_mouse.KeyModifiers;
+    };
+    pub const mouse = struct {
+        pub const MouseButton = common.keyboard_mouse.MouseButton;
+        pub const MouseButtonState = common.keyboard_mouse.MouseButtonState;
+    };
 };
 
 pub const event = struct {
@@ -35,9 +35,16 @@ pub const opengl = struct {
     pub const GLconfig = gl.GLConfig;
 };
 
-pub const VideoMode = common.video_mode.VideoMode;
-
-// TODO: Document
-pub const createWidowContext = platform.createWidowContext;
-pub const destroyWidowContext = platform.destroyWidowContext;
 pub const WindowBuilder = @import("window.zig").WindowBuilder;
+pub const Window = @import("window.zig").Window;
+
+/// initialize a platform context.
+/// this should be the first function you call before
+/// using the library.
+pub const createWidowContext = platform.createWidowContext;
+/// destroys and frees the resources used by the platform context.
+/// calling this function invalidates the context, therfore it should
+/// only be called after destroying all the other widow objects, otherwise it will cause
+/// undefined behaviour, alternatively you could not call it and let the os clean up
+/// the resources.
+pub const destroyWidowContext = platform.destroyWidowContext;

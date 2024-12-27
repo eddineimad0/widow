@@ -394,9 +394,11 @@ pub const Window = struct {
             style,
             ex_style,
         );
+        errdefer _ = window_msg.DestroyWindow(self.handle);
 
         // Finish setting up the window.
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
+
         self.win32 = WindowWin32Data{
             .cursor = CursorHints{
                 .icon = null, // uses the default system image
@@ -432,6 +434,11 @@ pub const Window = struct {
             self.handle,
             WINDOW_REF_PROP,
             @ptrCast(self),
+        );
+        errdefer _ = window_msg.SetPropW(
+            self.handle,
+            WINDOW_REF_PROP,
+            null,
         );
 
         // handle DPI adjustments.
@@ -525,8 +532,9 @@ pub const Window = struct {
             self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            // TODO: Should we fail because of fullscreen
-            _ = self.setFullscreen(true);
+            if (!self.setFullscreen(true)) {
+                return WindowError.CreateFailed;
+            }
         }
 
         return self;

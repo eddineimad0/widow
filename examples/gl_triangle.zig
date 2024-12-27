@@ -3,7 +3,7 @@ const widow = @import("widow");
 const gl = @import("gl");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const KeyCode = widow.keyboard.KeyCode;
+const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 var gl_procs: gl.ProcTable = undefined;
@@ -42,6 +42,11 @@ pub fn main() !void {
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
 
+    // the window will require an event queue to
+    // send events.
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
+
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
@@ -59,11 +64,6 @@ pub fn main() !void {
     // closes the window when done.
     defer mywindow.deinit(allocator);
     mywindow.focus();
-
-    // the window will require an event queue to
-    // send events.
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
 

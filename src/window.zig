@@ -188,6 +188,14 @@ pub const WindowBuilder = struct {
         return self;
     }
 
+    /// Specify whether the window should be fullscreen on creation.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withFullScreen(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_fullscreen = value;
+        return self;
+    }
+
     /// Specify the frame buffer configuration for the window.
     /// # Parameters
     /// `cfg`: a pointer to a FBConfig struct.
@@ -213,7 +221,7 @@ pub const Window = struct {
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
-    pub fn init(
+    fn init(
         allocator: mem.Allocator,
         ctx: *WidowContext,
         id: ?usize,

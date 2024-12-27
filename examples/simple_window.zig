@@ -2,7 +2,7 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const KeyCode = widow.keyboard.KeyCode;
+const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
@@ -13,6 +13,11 @@ pub fn main() !void {
     // and build a context for the current platform.
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
+
+    // the window will require an event queue to
+    // send events.
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
@@ -30,11 +35,6 @@ pub fn main() !void {
 
     // closes the window when done.
     defer mywindow.deinit(allocator);
-
-    // the window will require an event queue to
-    // send events.
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
 

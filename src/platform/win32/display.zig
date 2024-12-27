@@ -335,25 +335,27 @@ pub const Display = struct {
     }
 
     /// Restores the original video mode stored in the registry.
+    /// if it has changed.
     fn restoreRegistryMode(self: *Self) void {
         // Passing NULL for the lpDevMode parameter
         // and 0 for the dwFlags parameter
         // is the easiest way to switch to the registry
         // video mode after a dynamic mode change.
-        _ = gdi.ChangeDisplaySettingsExW(
-            @ptrCast(&self.adapter),
-            null,
-            null,
-            gdi.CDS_FULLSCREEN,
-            null,
-        );
-        self.curr_video = REGISTRY_VIDEOMODE_INDEX;
+        if (self.curr_video != REGISTRY_VIDEOMODE_INDEX) {
+            _ = gdi.ChangeDisplaySettingsExW(
+                @ptrCast(&self.adapter),
+                null,
+                null,
+                gdi.CDS_FULLSCREEN,
+                null,
+            );
+            self.curr_video = REGISTRY_VIDEOMODE_INDEX;
+        }
     }
 
     /// Set the window Handle field
     pub inline fn setWindow(self: *Self, window: ?*Window) void {
         if (self.window) |w| {
-            // TODO: Test switching 2 windows
             _ = w.setFullscreen(false);
         }
         self.window = window;
@@ -453,7 +455,6 @@ pub const DisplayManager = struct {
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
     pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
-        // TODO: review.
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
@@ -468,11 +469,13 @@ pub const DisplayManager = struct {
                 }
             }
 
-            if (disconnected) {}
-
-            // avoids changing the video mode when deinit is called.
-            // as it's a useless call to the OS.
-            display.curr_video = 0;
+            if (disconnected) {
+                // TODO: need to test what will happen to the window
+            } else {
+                // avoids changing the video mode when deinit is called.
+                // as it's a useless call to the OS.
+                display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
+            }
             display.deinit();
         }
 
@@ -516,9 +519,7 @@ pub const DisplayManager = struct {
         if (mode) |m| {
             try display.setVideoMode(m);
         } else {
-            if (display.curr_video != Display.REGISTRY_VIDEOMODE_INDEX) {
-                display.restoreRegistryMode();
-            }
+            display.restoreRegistryMode();
         }
         self.expected_video_change = false;
     }

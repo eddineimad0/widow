@@ -2,8 +2,10 @@
     [x] Widow Context init need to be easier and more
     secure (less error prone)
     [] should the event queue be moved to the context
+    [] builder api should not accept bools for flags
 [] Win32
     [x] Finish the display wrapper.
     [-] display wrapper need to be updated through hidden window events
     [x] fix: memory leak when quitting in fullscreen mode.
-    [] fix: the closest videomode choice isn't accurate.
+    [-] fix: the closest videomode choice isn't accurate.
+        + this is because of the screen DPI should the videomode be influenced by the dpi ?
