@@ -400,12 +400,18 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     }
 
     var configs_count: c_int = 0;
+    // BUG: why doesn't this work.
+    std.debug.print("XDIPSLAY={}|DEF_SCREEN={}\n", .{ driver.handles.xdisplay, driver.handles.default_screen });
     const fb_configs = glx_api.glXChooseFBConfig(
         driver.handles.xdisplay,
         driver.handles.default_screen,
         &attribs,
         &configs_count,
     );
+    std.debug.print("fb_cfg={?*}|cfg_count={}\n", .{
+        fb_configs,
+        configs_count,
+    });
 
     if (fb_configs != null and configs_count > 0) {
         defer _ = libx11.XFree(@ptrCast(fb_configs.?));

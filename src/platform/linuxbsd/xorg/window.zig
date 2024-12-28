@@ -94,16 +94,16 @@ pub const Window = struct {
         self.ctx = ctx;
 
         // X11 won't let us change the visual and depth later so decide now.
-        //const drvr = self.ctx.driver;
         var visual: ?*libx11.Visual = null;
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
-            .opengl => {
-                glx.initGLX(ctx.driver) catch return WindowError.GLError;
-                if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
-                    return WindowError.VisualNone;
-                }
-            },
+            // TODO: Fix this code path.
+            //.opengl => {
+            //    glx.initGLX(ctx.driver) catch return WindowError.GLError;
+            //    if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
+            //        return WindowError.VisualNone;
+            //    }
+            //},
             else => {
                 visual = libx11.DefaultVisual(
                     ctx.driver.handles.xdisplay,
@@ -924,13 +924,13 @@ pub const Window = struct {
         }
 
         self.x11.cursor.mode = mode;
-        cursor.applyCursorHints(&self.x11.cursor, self.handle);
+        cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
 
         if (self.data.flags.has_raw_mouse) {
             if (mode == .Hidden) {
-                _ = enableRawMouseMotion();
+                _ = enableRawMouseMotion(self.ctx.driver);
             } else {
-                _ = disableRawMouseMotion();
+                _ = disableRawMouseMotion(self.ctx.driver);
             }
         }
     }
@@ -954,6 +954,7 @@ pub const Window = struct {
         var new_cursor: libx11.Cursor = 0;
         if (pixels) |p| {
             new_cursor = cursor.createX11Cursor(
+                self.ctx.driver,
                 p,
                 width,
                 height,
@@ -966,10 +967,10 @@ pub const Window = struct {
                 };
             };
         }
-        cursor.destroyCursorIcon(&self.x11.cursor);
+        cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor;
         if (self.data.flags.cursor_in_client) {
-            cursor.applyCursorHints(&self.x11.cursor, self.handle);
+            cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
         }
     }
 
@@ -977,14 +978,14 @@ pub const Window = struct {
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
     ) WindowError!void {
-        const new_cursor = cursor.createNativeCursor(cursor_shape) catch {
+        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape) catch {
             return WindowError.OutOfMemory;
         };
-        cursor.destroyCursorIcon(&self.x11.cursor);
+        cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
         if (self.data.flags.cursor_in_client) {
-            cursor.applyCursorHints(&self.x11.cursor, self.handle);
+            cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
         }
     }
 
@@ -1102,13 +1103,13 @@ pub const Window = struct {
             return false;
         }
 
-        if (self.data.flags.has_raw_mouse == active) {
-            return true;
+        if (self.data.flags.has_raw_mouse != active) {
+            self.data.flags.has_raw_mouse = active;
+
+            self.setCursorMode(self.x11.cursor.mode);
         }
 
-        self.data.flags.has_raw_mouse = active;
-
-        self.setCursorMode(self.x11.cursor.mode);
+        return true;
     }
 
     pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
