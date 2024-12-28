@@ -9,3 +9,5 @@
     [x] fix: memory leak when quitting in fullscreen mode.
     [-] fix: the closest videomode choice isn't accurate.
         + this is because of the screen DPI should the videomode be influenced by the dpi ?
+[] X11
+    [] finish display wrapper.

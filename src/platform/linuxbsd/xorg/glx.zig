@@ -240,7 +240,7 @@ pub const glx_ext_api = struct {
     ) callconv(.C) ?GLXContext = null;
 };
 
-pub fn initGLX() (unix.ModuleError || GLXError)!void {
+pub fn initGLX(driver: *const X11Driver) (unix.ModuleError || GLXError)!void {
     if (__glx_module != null) {
         return;
     }
@@ -288,13 +288,11 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
         return GLXError.ModuleNotFound;
     }
 
-    const drvr = X11Driver.singleton();
-
-    if (glx_api.glXQueryExtension(drvr.handles.xdisplay, &glx_api.error_base, &glx_api.event_base) != libx11.True) {
+    if (glx_api.glXQueryExtension(driver.handles.xdisplay, &glx_api.error_base, &glx_api.event_base) != libx11.True) {
         return GLXError.ServerNoSupport;
     }
 
-    if (glx_api.glXQueryVersion(drvr.handles.xdisplay, &glx_api.ver_maj, &glx_api.ver_min) != libx11.True) {
+    if (glx_api.glXQueryVersion(driver.handles.xdisplay, &glx_api.ver_maj, &glx_api.ver_min) != libx11.True) {
         return GLXError.UnsupportedVersion;
     }
 
@@ -302,7 +300,7 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
         return GLXError.UnsupportedVersion;
     }
 
-    const extensions = glx_api.glXQueryExtensionsString(drvr.handles.xdisplay, drvr.handles.default_screen);
+    const extensions = glx_api.glXQueryExtensionsString(driver.handles.xdisplay, driver.handles.default_screen);
 
     glx_ext_api.supported_extensions = mem.span(extensions);
 
@@ -352,11 +350,10 @@ pub fn initGLX() (unix.ModuleError || GLXError)!void {
     }
 }
 
-pub fn chooseVisualGLX(fb_cfg: *const common.fb.FBConfig, vis: *?*libx11.Visual, depth: *c_int) bool {
-    const drvr = X11Driver.singleton();
-    const glx_fb_cfg = chooseFBConfig(fb_cfg);
+pub fn chooseVisualGLX(driver: *const X11Driver, fb_cfg: *const common.fb.FBConfig, vis: *?*libx11.Visual, depth: *c_int) bool {
+    const glx_fb_cfg = chooseFBConfig(driver, fb_cfg);
     if (glx_fb_cfg) |cfg| {
-        const result = glx_api.glXGetVisualFromFBConfig(drvr.handles.xdisplay, cfg);
+        const result = glx_api.glXGetVisualFromFBConfig(driver.handles.xdisplay, cfg);
         if (result) |r| {
             defer _ = libx11.XFree(@ptrCast(r));
             vis.* = r.visual orelse return false;
@@ -367,9 +364,7 @@ pub fn chooseVisualGLX(fb_cfg: *const common.fb.FBConfig, vis: *?*libx11.Visual,
     return false;
 }
 
-fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
-    const drvr = X11Driver.singleton();
-
+fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLXFBConfig {
     var attribs: [64]c_int = mem.zeroes([64]c_int);
     const helper = struct {
         pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
@@ -406,8 +401,8 @@ fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
 
     var configs_count: c_int = 0;
     const fb_configs = glx_api.glXChooseFBConfig(
-        drvr.handles.xdisplay,
-        drvr.handles.default_screen,
+        driver.handles.xdisplay,
+        driver.handles.default_screen,
         &attribs,
         &configs_count,
     );
@@ -416,7 +411,7 @@ fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
         defer _ = libx11.XFree(@ptrCast(fb_configs.?));
         for (0..@as(usize, @intCast(configs_count))) |i| {
             const visual = glx_api.glXGetVisualFromFBConfig(
-                drvr.handles.xdisplay,
+                driver.handles.xdisplay,
                 fb_configs.?[i],
             );
             if (visual) |vi| {
@@ -431,6 +426,7 @@ fn chooseFBConfig(cfg: *const common.fb.FBConfig) ?GLXFBConfig {
 }
 
 fn createGLContext(
+    driver: *const X11Driver,
     w: libx11.Window,
     cfg: *const common.fb.FBConfig,
     glx_wndw: *GLXWindow,
@@ -441,8 +437,6 @@ fn createGLContext(
     const fb_cfg = chooseFBConfig(cfg) orelse {
         return GLXError.UnsupportedFBConfig;
     };
-
-    const drvr = X11Driver.singleton();
 
     if (glx_ext_api.ARB_create_context) {
         if (cfg.accel.opengl.ver.major > 1 or cfg.accel.opengl.ver.minor > 0) {
@@ -461,7 +455,7 @@ fn createGLContext(
         gl_attrib_list[7] = 0;
 
         glx_rc = glx_ext_api.glXCreateContextAttribsARB.?(
-            drvr.handles.xdisplay,
+            driver.handles.xdisplay,
             fb_cfg,
             null,
             libx11.True,
@@ -469,7 +463,7 @@ fn createGLContext(
         );
     } else {
         glx_rc = glx_api.glXCreateNewContext(
-            drvr.handles.xdisplay,
+            driver.handles.xdisplay,
             fb_cfg,
             GLX_RGBA_TYPE,
             null,
@@ -477,7 +471,7 @@ fn createGLContext(
         );
     }
 
-    const wndw = glx_api.glXCreateWindow(drvr.handles.xdisplay, fb_cfg, w, null);
+    const wndw = glx_api.glXCreateWindow(driver.handles.xdisplay, fb_cfg, w, null);
 
     if (wndw == 0) {
         return GLXError.NullWindow;
@@ -508,11 +502,12 @@ pub const GLContext = struct {
         vendor: [*:0]const u8,
         version: [*:0]const u8,
     },
+    x_display: *libx11.Display,
     const Self = @This();
 
-    pub fn init(window: libx11.Window, cfg: *const common.fb.FBConfig) GLXError!Self {
+    pub fn init(driver: *const X11Driver, window: libx11.Window, cfg: *const common.fb.FBConfig) GLXError!Self {
         var glx_wndw: GLXWindow = 0;
-        const rc = createGLContext(window, cfg, &glx_wndw) catch |err| {
+        const rc = createGLContext(driver, window, cfg, &glx_wndw) catch |err| {
             switch (err) {
                 unix.ModuleError.NotFound, unix.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
                 else => return @as(GLXError, @errorCast(err)),
@@ -523,8 +518,7 @@ pub const GLContext = struct {
             return GLXError.NullContext;
         }
 
-        const drvr = X11Driver.singleton();
-        _ = glx_api.glXMakeCurrent(drvr.handles.xdisplay, glx_wndw, rc.?);
+        _ = glx_api.glXMakeCurrent(driver.handles.xdisplay, glx_wndw, rc.?);
 
         var glGetString: ?*const fn (pname: u32) callconv(.C) ?[*:0]const u8 = null;
         glGetString = @ptrCast(glLoaderFunc("glGetString"));
@@ -549,34 +543,31 @@ pub const GLContext = struct {
                 .vendor = vend,
                 .version = ver,
             },
+            .x_display = driver.handles.xdisplay,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        const drvr = X11Driver.singleton();
-        glx_api.glXDestroyWindow(drvr.handles.xdisplay, self.glwndw);
+        glx_api.glXDestroyWindow(self.x_display, self.glwndw);
         self.glwndw = undefined;
-        glx_api.glXDestroyContext(drvr.handles.xdisplay, self.glrc);
+        glx_api.glXDestroyContext(self.x_display, self.glrc);
         self.glrc = undefined;
     }
 
     pub fn makeCurrent(self: *const Self) bool {
-        const drvr = X11Driver.singleton();
-        const ret = glx_api.glXMakeCurrent(drvr.handles.xdisplay, self.glwndw, self.glrc);
+        const ret = glx_api.glXMakeCurrent(self.x_display, self.glwndw, self.glrc);
         return ret == libx11.True;
     }
 
     pub fn swapBuffers(self: *const Self) bool {
-        const drvr = X11Driver.singleton();
-        glx_api.glXSwapBuffers(drvr.handles.xdisplay, self.glwndw);
+        glx_api.glXSwapBuffers(self.x_display, self.glwndw);
         return true;
     }
 
     pub fn setSwapIntervals(self: *const Self, intrvl: i32) bool {
-        const drvr = X11Driver.singleton();
         if (glx_ext_api.EXT_swap_control) {
             glx_ext_api.glXSwapIntervalEXT(
-                drvr.handles.xdisplay,
+                self.x_display,
                 self.glwndw,
                 @intCast(intrvl),
             );

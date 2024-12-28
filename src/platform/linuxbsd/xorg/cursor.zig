@@ -21,23 +21,23 @@ pub const CursorHints = struct {
 };
 
 pub fn createX11Cursor(
+    driver: *const X11Driver,
     pixels: []const u8,
     width: i32,
     height: i32,
     xhot: u32,
     yhot: u32,
 ) IconError!libx11.Cursor {
-    const drvr = X11Driver.singleton();
-    if (drvr.handles.xcursor == null) {
+    if (driver.handles.xcursor == null) {
         return IconError.UnsupportedAction;
     }
 
-    var curs_img = drvr.extensions.xcursor.XcursorImageCreate(
+    var curs_img = driver.extensions.xcursor.XcursorImageCreate(
         @intCast(width),
         @intCast(height),
     ) orelse return IconError.OutOfMemory;
 
-    defer drvr.extensions.xcursor.XcursorImageDestroy(curs_img);
+    defer driver.extensions.xcursor.XcursorImageDestroy(curs_img);
 
     curs_img.xhot = @intCast(xhot);
     curs_img.yhot = @intCast(yhot);
@@ -51,22 +51,22 @@ pub fn createX11Cursor(
             @as(u32, pixels[(4 * i) + 2]));
     }
 
-    return drvr.extensions.xcursor.XcursorImageLoadCursor(
-        drvr.handles.xdisplay,
+    return driver.extensions.xcursor.XcursorImageLoadCursor(
+        driver.handles.xdisplay,
         curs_img,
     );
 }
 
 /// Returns a handle to a shared(standard) platform cursor.
 pub fn createNativeCursor(
+    driver: *const X11Driver,
     shape: common.cursor.NativeCursorShape,
 ) IconError!CursorHints {
-    const drvr = X11Driver.singleton();
     const CursorShape = common.cursor.NativeCursorShape;
     var cursor_handle: libx11.Cursor = 0;
-    if (drvr.handles.xcursor) |_| {
-        const theme = drvr.extensions.xcursor.XcursorGetTheme(
-            drvr.handles.xdisplay,
+    if (driver.handles.xcursor) |_| {
+        const theme = driver.extensions.xcursor.XcursorGetTheme(
+            driver.handles.xdisplay,
         ) orelse "default";
 
         const cursor_name: [*:0]const u8 = switch (shape) {
@@ -80,12 +80,12 @@ pub fn createNativeCursor(
             CursorShape.Move => "all-scroll",
             CursorShape.Default => "default",
         };
-        const size = drvr.extensions.xcursor.XcursorGetDefaultSize(drvr.handles.xdisplay);
-        const image = drvr.extensions.xcursor.XcursorLibraryLoadImage(cursor_name, theme, size);
+        const size = driver.extensions.xcursor.XcursorGetDefaultSize(driver.handles.xdisplay);
+        const image = driver.extensions.xcursor.XcursorLibraryLoadImage(cursor_name, theme, size);
         if (image) |img| {
-            defer drvr.extensions.xcursor.XcursorImageDestroy(img);
-            cursor_handle = drvr.extensions.xcursor.XcursorImageLoadCursor(
-                drvr.handles.xdisplay,
+            defer driver.extensions.xcursor.XcursorImageDestroy(img);
+            cursor_handle = driver.extensions.xcursor.XcursorImageLoadCursor(
+                driver.handles.xdisplay,
                 img,
             );
         }
@@ -105,7 +105,7 @@ pub fn createNativeCursor(
         };
 
         cursor_handle = libx11.XCreateFontCursor(
-            drvr.handles.xdisplay,
+            driver.handles.xdisplay,
             cursor_shape,
         );
     }
@@ -123,39 +123,34 @@ pub fn createNativeCursor(
     };
 }
 
-pub fn destroyCursorIcon(cursor: *CursorHints) void {
-    const drvr = X11Driver.singleton();
+pub fn destroyCursorIcon(x_display: *libx11.Display, cursor: *CursorHints) void {
     if (cursor.icon != 0) {
-        _ = libx11.XFreeCursor(drvr.handles.xdisplay, cursor.icon);
+        _ = libx11.XFreeCursor(x_display, cursor.icon);
         cursor.icon = 0;
     }
 }
 
-pub fn undoCursorHints(cursor: *CursorHints, window: libx11.Window) void {
-    const drvr = X11Driver.singleton();
-
+pub fn undoCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: libx11.Window) void {
     switch (cursor.mode) {
         .Captured, .Hidden => {
-            unCaptureCursor();
-            _ = libx11.XUndefineCursor(drvr.handles.xdisplay, window);
+            unCaptureCursor(driver.handles.xdisplay);
+            _ = libx11.XUndefineCursor(driver.handles.xdisplay, window);
         },
         else => {},
     }
 
-    drvr.flushXRequests();
+    driver.flushXRequests();
 }
 
-pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
-    const drvr = X11Driver.singleton();
-
+pub fn applyCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: libx11.Window) void {
     switch (cursor.mode) {
-        .Normal => unCaptureCursor(),
-        .Hidden => hideCursor(window),
-        else => captureCursor(window),
+        .Normal => unCaptureCursor(driver.handles.xdisplay),
+        .Hidden => hideCursor(driver.handles.xdisplay, window),
+        else => captureCursor(driver.handles.xdisplay, window),
     }
 
     const cursor_icon = switch (cursor.mode) {
-        .Hidden => drvr.handles.hidden_cursor,
+        .Hidden => driver.handles.hidden_cursor,
 
         else => img: {
             break :img if (cursor.icon != 0)
@@ -165,26 +160,26 @@ pub fn applyCursorHints(cursor: *CursorHints, window: libx11.Window) void {
         },
     };
 
-    _ = libx11.XDefineCursor(drvr.handles.xdisplay, window, cursor_icon);
-    drvr.flushXRequests();
+    _ = libx11.XDefineCursor(driver.handles.xdisplay, window, cursor_icon);
+    driver.flushXRequests();
 }
 
-pub fn unCaptureCursor() void {
-    const drvr = X11Driver.singleton();
+pub fn unCaptureCursor(
+    x_display: *libx11.Display,
+) void {
     libx11.XUngrabPointer(
-        drvr.handles.xdisplay,
+        x_display,
         libx11.CurrentTime,
     );
 }
 
-pub fn hideCursor(w: libx11.Window) void {
-    captureCursor(w);
+pub fn hideCursor(x_display: *libx11.Display, w: libx11.Window) void {
+    captureCursor(x_display, w);
 }
 
-pub fn captureCursor(w: libx11.Window) void {
-    const drvr = X11Driver.singleton();
+pub fn captureCursor(x_display: *libx11.Display, w: libx11.Window) void {
     const retv = libx11.XGrabPointer(
-        drvr.handles.xdisplay,
+        x_display,
         w,
         libx11.True,
         libx11.ButtonPressMask | libx11.ButtonReleaseMask | libx11.PointerMotionMask,

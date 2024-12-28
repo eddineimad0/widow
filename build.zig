@@ -34,9 +34,9 @@ pub fn build(b: *std.Build) !void {
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
-        "cursor_and_icon",
-        "events_loop",
-        "gl_triangle",
+        //"cursor_and_icon",
+        //"events_loop",
+        //"gl_triangle",
     };
 
     for (examples) |example_name| {

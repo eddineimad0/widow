@@ -1,4 +1,5 @@
 //! This file contains helper function to use on the linux platforms
+
 const std = @import("std");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
