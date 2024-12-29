@@ -98,12 +98,12 @@ pub const Window = struct {
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
             // TODO: Fix this code path.
-            //.opengl => {
-            //    glx.initGLX(ctx.driver) catch return WindowError.GLError;
-            //    if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
-            //        return WindowError.VisualNone;
-            //    }
-            //},
+            .opengl => {
+                glx.initGLX(ctx.driver) catch return WindowError.GLError;
+                if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
+                    return WindowError.VisualNone;
+                }
+            },
             else => {
                 visual = libx11.DefaultVisual(
                     ctx.driver.handles.xdisplay,
@@ -1114,7 +1114,7 @@ pub const Window = struct {
 
     pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
         switch (self.fb_cfg.accel) {
-            .opengl => return glx.GLContext.init(self.handle, &self.fb_cfg) catch {
+            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
                 return WindowError.GLError;
             },
             else => return WindowError.UnsupportedRenderBackend,

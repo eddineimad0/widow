@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) !void {
         "simple_window",
         "cursor_and_icon",
         "events_loop",
-        //"gl_triangle",
+        "gl_triangle",
     };
 
     for (examples) |example_name| {

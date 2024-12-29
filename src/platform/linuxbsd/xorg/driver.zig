@@ -220,11 +220,9 @@ pub const X11Driver = struct {
             const g_instance = &Self.globl_instance;
             _ = libx11.XInitThreads();
             // Open a connection to the X server.
-            std.debug.print("xdisplay={?*}\n", .{g_instance.handles.xdisplay});
             g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
                 return XConnectionError.ConnectionFailed;
             };
-            std.debug.print("xdisplay={?*}\n", .{g_instance.handles.xdisplay});
             // Grab the default screen(monitor) and the root window on it.
             g_instance.handles.default_screen = libx11.DefaultScreen(
                 g_instance.handles.xdisplay,
