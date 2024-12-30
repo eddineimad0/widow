@@ -425,7 +425,6 @@ pub const Display = struct {
 pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
     prev_exec_state: sys_power.EXECUTION_STATE,
-    occupied_count: u8, // keeps track of how many monitor is occupied by a full window
     expected_video_change: bool, // For skipping unnecessary updates.
 
     const Self = @This();
@@ -433,7 +432,6 @@ pub const DisplayManager = struct {
 
     pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
         return .{
-            .occupied_count = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .displays = try pollDisplays(allocator),
