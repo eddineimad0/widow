@@ -2,20 +2,20 @@ const std = @import("std");
 const libx11 = @import("x11/xlib.zig");
 const common = @import("common");
 
+const debug = std.debug;
+
 const X11Driver = @import("driver.zig").X11Driver;
 
 pub const IconError = error{
-    NotFound, // requested icon resource was not found.
+    NotFound, // requested icon resource not found.
     BadIcon, // Couldn't create the icon.
     UnsupportedAction,
     OutOfMemory,
 };
 
 pub const CursorHints = struct {
-    // Track the cursor coordinates in respect to top left corner.
-    pos: common.geometry.WidowPoint2D,
-    // Accumulate the mouse movement
-    accum_pos: common.geometry.WidowPoint2D,
+    pos: common.geometry.WidowPoint2D, // Track the cursor coordinates in respect to top left corner.
+    accum_pos: common.geometry.WidowPoint2D, // Accumulate the mouse movement
     icon: libx11.Cursor,
     mode: common.cursor.CursorMode,
 };
@@ -145,7 +145,7 @@ pub fn undoCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: l
 pub fn applyCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: libx11.Window) void {
     switch (cursor.mode) {
         .Normal => unCaptureCursor(driver.handles.xdisplay),
-        .Hidden => hideCursor(driver.handles.xdisplay, window),
+        //.Hidden => hideCursor(driver.handles.xdisplay, window),
         else => captureCursor(driver.handles.xdisplay, window),
     }
 
@@ -173,10 +173,6 @@ pub fn unCaptureCursor(
     );
 }
 
-pub fn hideCursor(x_display: *libx11.Display, w: libx11.Window) void {
-    captureCursor(x_display, w);
-}
-
 pub fn captureCursor(x_display: *libx11.Display, w: libx11.Window) void {
     const retv = libx11.XGrabPointer(
         x_display,
@@ -189,5 +185,5 @@ pub fn captureCursor(x_display: *libx11.Display, w: libx11.Window) void {
         libx11.None,
         libx11.CurrentTime,
     );
-    std.debug.assert(retv == libx11.GrabSuccess);
+    debug.assert(retv == libx11.GrabSuccess);
 }

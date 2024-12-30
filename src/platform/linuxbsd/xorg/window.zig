@@ -97,7 +97,6 @@ pub const Window = struct {
         var visual: ?*libx11.Visual = null;
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
-            // TODO: Fix this code path.
             .opengl => {
                 glx.initGLX(ctx.driver) catch return WindowError.GLError;
                 if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
@@ -201,7 +200,7 @@ pub const Window = struct {
                     e.xany.window,
                     e.xany.window == self.ctx.driver.windowManagerId(),
                 });
-                // TODO: what about event not sent for our window
+                event_handler.handleNonWindowEvent(&e, self.ctx);
             }
         }
     }
@@ -929,8 +928,10 @@ pub const Window = struct {
         if (self.data.flags.has_raw_mouse) {
             if (mode == .Hidden) {
                 _ = enableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = self.handle;
             } else {
                 _ = disableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = null;
             }
         }
     }
@@ -1316,7 +1317,7 @@ fn setInitialWindowPropeties(
     );
 }
 
-fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
+pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
     const window = driver.findInXContext(window_id);
     return @ptrCast(@alignCast(window));
 }

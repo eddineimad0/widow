@@ -848,6 +848,9 @@ pub const Window = struct {
 
     /// Activate or deactivate raw mouse input for the window,
     /// returns true on success.
+    ///# Note
+    /// raw mouse inputs will only be delivered when
+    /// the cursor need to be set to hidden mode.
     pub inline fn setRawMouseMotion(self: *Self, active: bool) bool {
         return self.impl.setRawMouseMotion(active);
     }

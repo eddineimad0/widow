@@ -3,10 +3,10 @@ const common = @import("common");
 const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
-const X11Driver = @import("driver.zig").X11Driver;
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 
+const X11Driver = @import("driver.zig").X11Driver;
 const SymHashMap = std.AutoArrayHashMap(u32, u32);
 const KEYCODE_MAP_SIZE = 256;
 const UNICODE_MAP_SIZE = 0x400;
@@ -1478,7 +1478,7 @@ pub const KeyMaps = struct {
         return &Self.globl_instance;
     }
 
-    pub fn deinitSingleton() void {
+    fn deinitSingleton() void {
         @setCold(true);
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
@@ -1487,11 +1487,6 @@ pub const KeyMaps = struct {
             globl_instance.unicode_map.deinit();
         }
     }
-
-    //pub fn singleton() *const Self {
-    //    std.debug.assert(Self.sing_init == true);
-    //    return &Self.globl_instance;
-    //}
 
     pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {
         return self.keycode_map[xkeycode];

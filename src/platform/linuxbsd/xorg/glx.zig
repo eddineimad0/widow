@@ -400,7 +400,6 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     }
 
     var configs_count: c_int = 0;
-    // BUG: Can't use ask for a visual with accum bits not set to 0.
     const fb_configs = glx_api.glXChooseFBConfig(
         driver.handles.xdisplay,
         driver.handles.default_screen,
