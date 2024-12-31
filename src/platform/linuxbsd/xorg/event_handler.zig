@@ -525,13 +525,11 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
 }
 
 inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, ctx: *const WidowContext) void {
-    std.debug.print("Got generic data\n", .{});
     if (ctx.driver.extensions.xi2.is_v2point0 and
         libx11.XGetEventData(ctx.driver.handles.xdisplay, ev) == libx11.True and
         ev.extension == ctx.driver.extensions.xi2.maj_opcode and
         ev.evtype == x11ext.XI_RawMotion)
     {
-        std.debug.print("Got Raw data\n", .{});
         defer libx11.XFreeEventData(ctx.driver.handles.xdisplay, ev);
 
         const raw_ev: *x11ext.XIRawEvent = @ptrCast(@alignCast(ev.data));
@@ -547,6 +545,13 @@ inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, ctx: *const WidowC
             }
 
             const window = wndw.windowFromId(ctx.driver, ctx.raw_mouse_motion_window.?) orelse unreachable;
+            std.debug.assert(window.data.flags.has_raw_mouse);
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved GenericEvent(RawMouseMotion)\n",
+                    .{window.data.id},
+                );
+            }
             window.x11.cursor.accum_pos.x +%= @as(i32, @intFromFloat(dx));
             window.x11.cursor.accum_pos.y +%= @as(i32, @intFromFloat(dy));
             const event = common.event.createMoveEvent(

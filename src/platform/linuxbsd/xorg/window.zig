@@ -146,6 +146,7 @@ pub const Window = struct {
         std.debug.assert(self.handle != 0);
         self.ev_queue = null;
         // TODO: if full screen exit
+        self.setCursorMode(.Normal);
         _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(self.ctx.driver.handles.xdisplay, self.handle);
         _ = self.ctx.driver.removeFromXContext(self.handle);
@@ -196,10 +197,6 @@ pub const Window = struct {
                     }
                 }
             } else {
-                std.debug.print("Unknow window({}) is root={}\n", .{
-                    e.xany.window,
-                    e.xany.window == self.ctx.driver.windowManagerId(),
-                });
                 event_handler.handleNonWindowEvent(&e, self.ctx);
             }
         }
@@ -927,10 +924,8 @@ pub const Window = struct {
 
         if (self.data.flags.has_raw_mouse) {
             if (mode == .Hidden) {
-                _ = enableRawMouseMotion(self.ctx.driver);
                 self.ctx.raw_mouse_motion_window = self.handle;
             } else {
-                _ = disableRawMouseMotion(self.ctx.driver);
                 self.ctx.raw_mouse_motion_window = null;
             }
         }
@@ -1104,13 +1099,20 @@ pub const Window = struct {
             return false;
         }
 
+        var success = true;
         if (self.data.flags.has_raw_mouse != active) {
             self.data.flags.has_raw_mouse = active;
-
+            if (active) {
+                success = enableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = self.handle;
+            } else {
+                success = disableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = null;
+            }
             self.setCursorMode(self.x11.cursor.mode);
         }
 
-        return true;
+        return success;
     }
 
     pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
