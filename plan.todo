@@ -1,9 +1,9 @@
 [] General
     [x] Widow Context init need to be easier and more
     secure (less error prone)
-    [] should the event queue be moved to the context
+    [] should the event queue be moved to the context ?
     [] builder api should not accept bools for flags
-    [] can singleton (driver,keymap) be thread-local
+    [] can singletons (driver, keymap, ...) be thread-local ?
     [] redo the tests.
 [] Win32
     [x] Finish the display wrapper.
@@ -14,4 +14,4 @@
 [] X11
     [] finish display wrapper.
     [] implement fullscreen for windows.
-    [] finish raw motion input.
+    [x] finish raw motion input.
