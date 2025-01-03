@@ -54,5 +54,5 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
 }
 
 test "Platform" {
-    @import("std").testing.refAllDecls(@import("display.zig"));
+    @import("std").testing.refAllDecls(@import("utils.zig"));
 }

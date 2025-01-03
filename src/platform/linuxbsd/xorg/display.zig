@@ -16,6 +16,7 @@ const dbg = @import("builtin").mode == .Debug;
 
 pub const DisplayError = error{
     VideoModeChangeFailed,
+    NotFound,
 };
 
 /// Calculates and return the monitor frequency
@@ -264,7 +265,7 @@ pub const Display = struct {
 
     /// Populate the output with the current VideoMode of the monitor.
     pub fn queryCurrentMode(self: *const Self, driver: *const X11Driver, output: *VideoMode) void {
-        const res = getScreenRessources();
+        const res = getScreenRessources(driver);
         defer driver.extensions.xrandr.XRRFreeScreenResources(res);
         const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
             driver.handles.xdisplay,
@@ -283,6 +284,7 @@ pub const Display = struct {
         }
         if (mode_info) |mi| {
             _ = videoModeFromRRMode(
+                driver,
                 mi,
                 (ci.rotation == x11ext.RR_Rotate_90 or
                     ci.rotation == x11ext.RR_Rotate_270),
@@ -297,7 +299,7 @@ pub const Display = struct {
         area: *common.geometry.WidowArea,
         driver: *const X11Driver,
     ) void {
-        const sr = getScreenRessources();
+        const sr = getScreenRessources(driver);
         defer driver.extensions.xrandr.XRRFreeScreenResources(sr);
         const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
             driver.handles.xdisplay,
@@ -338,16 +340,16 @@ pub const Display = struct {
         driver: *const X11Driver,
     ) DisplayError!void {
         var mode_index: usize = undefined;
-        if (self.isModePossible(video_mode, &mode_index) == false) {
+        if (self.isVideoModePossible(video_mode, &mode_index) == false) {
             mode_index = video_mode.selectBestMatch(self.modes.items);
         }
         var current_mode: VideoMode = undefined;
-        self.queryCurrentMode(&current_mode);
+        self.queryCurrentMode(driver, &current_mode);
         if (self.modes.items[mode_index].equals(&current_mode)) {
             // The desired mode is already current.
             return;
         }
-        const sr = getScreenRessources();
+        const sr = getScreenRessources(driver);
         defer driver.extensions.xrandr.XRRFreeScreenResources(sr);
         const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
             driver.handles.xdisplay,
@@ -489,27 +491,32 @@ pub const DisplayManager = struct {
     }
 
     /// Returns a refrence to the Monitor occupied by the window.
-    //pub fn findWindowDisplay(self: *Self, window_handle: anytype) !*Display {
-    //    const display_handle = gdi.MonitorFromWindow(window_handle, gdi.MONITOR_DEFAULTTONEAREST);
-    //    // Find the monitor.
-    //    var target: ?*Display = null;
-    //    for (self.displays.items) |*d| {
-    //        if (d.handle == display_handle) {
-    //            target = d;
-    //            break;
-    //        }
-    //    }
-    //
-    //    const display = target orelse {
-    //        std.log.err(
-    //            "[DisplayManager]: monitor not found, requested handle={*}",
-    //            .{display_handle},
-    //        );
-    //        return DisplayError.NotFound;
-    //    };
-    //
-    //    return display;
-    //}
+    pub fn findWindowDisplay(self: *Self, w: *const Window) !*Display {
+        const w_area = w.data.client_area;
+        std.debug.print("Window={}, Area={any}\n", .{ w.data.id, w_area });
+        var d_area: common.geometry.WidowArea = undefined;
+        var max_intersect: f32 = 0.0;
+        var target: ?*Display = null;
+        for (self.displays.items) |*d| {
+            d.getFullArea(&d_area, self.driver);
+            const intersect_percent = utils.getDisplayOverlapRatio(&d_area, &w_area);
+            if (intersect_percent > max_intersect) {
+                target = d;
+                max_intersect = intersect_percent;
+            }
+        }
+
+        const display = target orelse {
+            std.log.err(
+                "[DisplayManager]: monitor not found, for window_handle=@{}",
+                .{w.handle},
+            );
+            return DisplayError.NotFound;
+        };
+
+        std.debug.print("Matching display={s}\n", .{display.name});
+        return display;
+    }
 
     /// If the mode is null the function must not fail or return an error.
     pub fn setDisplayVideoMode(

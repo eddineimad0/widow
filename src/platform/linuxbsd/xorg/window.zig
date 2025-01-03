@@ -791,6 +791,7 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
+        //BUG: doesn't work correctly.
         const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_STATE_FULLSCREEN == 0 or
             drvr.ewmh._NET_WM_STATE == 0)
@@ -799,27 +800,47 @@ pub const Window = struct {
             return false;
         }
 
-        var event = libx11.XEvent{
-            .xclient = libx11.XClientMessageEvent{
-                .type = libx11.ClientMessage,
-                .display = drvr.handles.xdisplay,
-                .window = self.handle,
-                .message_type = drvr.ewmh._NET_WM_STATE,
-                .format = 32,
-                .serial = 0,
-                .send_event = 0,
-                .data = .{ .l = [5]c_long{
-                    if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
-                    @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
-                    0,
-                    0,
-                    0,
-                } },
-            },
-        };
+        if (self.data.flags.is_fullscreen != value) {
+            const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
+            if (value) {
+                if (!self.data.flags.is_resizable) {
+                    self.ctx.display_mgr.setDisplayVideoMode(d, &.{
+                        .width = self.data.client_area.size.width,
+                        .height = self.data.client_area.size.height,
+                        // INFO: These 2 are hardcoded for now
+                        .frequency = 60,
+                        .color_depth = 32,
+                    }) catch return false;
+                }
+                d.setWindow(self);
+            } else {
+                self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
+                d.setWindow(null);
+            }
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
+                    .window = self.handle,
+                    .message_type = drvr.ewmh._NET_WM_STATE,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = 0,
+                    .data = .{ .l = [5]c_long{
+                        if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                        @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
 
-        drvr.sendXEvent(&event, drvr.windowManagerId());
-        drvr.flushXRequests();
+            drvr.sendXEvent(&event, drvr.windowManagerId());
+            drvr.flushXRequests();
+            self.data.flags.is_fullscreen = value;
+        }
+
         return true;
     }
 
