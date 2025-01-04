@@ -812,10 +812,10 @@ pub const Window = struct {
                         .color_depth = 32,
                     }) catch return false;
                 }
-                d.setWindow(self);
+                //d.setWindow(self);
             } else {
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
-                d.setWindow(null);
+                //d.setWindow(null);
             }
             var event = libx11.XEvent{
                 .xclient = libx11.XClientMessageEvent{

@@ -209,9 +209,9 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             .output = screens_res.outputs[i],
             .xinerama_index = xinerama_index,
             .orig_mode = x11ext.RRMode_None,
-            .window = null,
             .modes = ArrayList(VideoMode).init(allocator),
             .modes_ids = ArrayList(x11ext.RRMode).init(allocator),
+            .window = null,
         };
         errdefer d.deinit(driver);
 
@@ -240,14 +240,14 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
 
 /// Encapsulate the necessary infos for a monitor.
 pub const Display = struct {
-    adapter: x11ext.RRCrtc,
-    name: []u8,
-    output: x11ext.RROutput,
-    xinerama_index: ?i32,
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
     modes_ids: ArrayList(x11ext.RRMode),
-    orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
+    name: []u8,
     window: ?*Window, // A pointer to the window occupying(fullscreen)
+    xinerama_index: ?i32,
+    adapter: x11ext.RRCrtc,
+    output: x11ext.RROutput,
+    orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
 
     const Self = @This();
 
@@ -412,6 +412,9 @@ pub const Display = struct {
 
     /// Set the window Handle.
     pub inline fn setWindow(self: *Self, window: ?*Window) void {
+        if (self.window == window) {
+            return;
+        }
         if (self.window) |w| {
             _ = w.setFullscreen(false);
         }
@@ -435,8 +438,8 @@ pub const Display = struct {
 };
 
 pub const DisplayManager = struct {
-    driver: *const X11Driver,
     displays: std.ArrayList(Display),
+    driver: *const X11Driver,
 
     const Self = @This();
 
@@ -493,7 +496,6 @@ pub const DisplayManager = struct {
     /// Returns a refrence to the Monitor occupied by the window.
     pub fn findWindowDisplay(self: *Self, w: *const Window) !*Display {
         const w_area = w.data.client_area;
-        std.debug.print("Window={}, Area={any}\n", .{ w.data.id, w_area });
         var d_area: common.geometry.WidowArea = undefined;
         var max_intersect: f32 = 0.0;
         var target: ?*Display = null;
@@ -508,13 +510,12 @@ pub const DisplayManager = struct {
 
         const display = target orelse {
             std.log.err(
-                "[DisplayManager]: monitor not found, for window_handle=@{}",
-                .{w.handle},
+                "[DisplayManager]: Display not found, requesting window={d}",
+                .{w.data.id},
             );
             return DisplayError.NotFound;
         };
 
-        std.debug.print("Matching display={s}\n", .{display.name});
         return display;
     }
 
