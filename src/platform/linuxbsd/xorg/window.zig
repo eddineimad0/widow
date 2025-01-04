@@ -14,7 +14,9 @@ const mem = std.mem;
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
 const FBConfig = common.fb.FBConfig;
+
 const X11Driver = @import("driver.zig").X11Driver;
+const WidowContext = @import("platform.zig").WidowContext;
 const Allocator = std.mem.Allocator;
 
 const _NET_WM_STATE_REMOVE = 0;
@@ -33,8 +35,10 @@ pub const WindowError = error{
 
 pub const Window = struct {
     ev_queue: ?*common.event.EventQueue,
-    data: WindowData,
+    ctx: *WidowContext,
     handle: libx11.Window,
+    data: WindowData,
+    fb_cfg: FBConfig,
     x11: struct {
         xdnd_req: struct {
             raw_data: ?[*]const u8,
@@ -46,7 +50,6 @@ pub const Window = struct {
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
     },
-    fb_cfg: FBConfig,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
         .x = 0,
@@ -55,7 +58,8 @@ pub const Window = struct {
     const Self = @This();
 
     pub fn init(
-        allocator: Allocator,
+        allocator: mem.Allocator,
+        ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
@@ -87,38 +91,38 @@ pub const Window = struct {
             },
             .xdnd_allow = false,
         };
+        self.ctx = ctx;
 
         // X11 won't let us change the visual and depth later so decide now.
-        const drvr = X11Driver.singleton();
         var visual: ?*libx11.Visual = null;
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
             .opengl => {
-                glx.initGLX() catch return WindowError.GLError;
-                if (!glx.chooseVisualGLX(fb_cfg, &visual, &depth)) {
+                glx.initGLX(ctx.driver) catch return WindowError.GLError;
+                if (!glx.chooseVisualGLX(ctx.driver, fb_cfg, &visual, &depth)) {
                     return WindowError.VisualNone;
                 }
             },
             else => {
                 visual = libx11.DefaultVisual(
-                    drvr.handles.xdisplay,
-                    drvr.handles.default_screen,
+                    ctx.driver.handles.xdisplay,
+                    ctx.driver.handles.default_screen,
                 );
                 depth = libx11.DefaultDepth(
-                    drvr.handles.xdisplay,
-                    drvr.handles.default_screen,
+                    ctx.driver.handles.xdisplay,
+                    ctx.driver.handles.default_screen,
                 );
             },
         }
 
-        self.handle = try createPlatformWindow(data, visual, depth);
+        self.handle = try createPlatformWindow(ctx.driver, data, visual, depth);
         self.data.id = if (id) |ident| ident else @intCast(self.handle);
 
-        if (!drvr.addToXContext(self.handle, @ptrCast(self))) {
+        if (!ctx.driver.addToXContext(self.handle, @ptrCast(self))) {
             return WindowError.CreateFail;
         }
 
-        try setInitialWindowPropeties(self.handle, data);
+        try setInitialWindowPropeties(ctx.driver, self.handle, data);
 
         self.setTitle(window_title);
         if (!self.data.flags.is_decorated) {
@@ -132,16 +136,20 @@ pub const Window = struct {
             }
         }
 
+        // TODO: fullscreen
+
         return self;
     }
 
     /// Destroy the window
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
-        const drvr = X11Driver.singleton();
-        _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
-        _ = libx11.XDestroyWindow(drvr.handles.xdisplay, self.handle);
-        _ = drvr.removeFromXContext(self.handle);
+        self.ev_queue = null;
+        // TODO: if full screen exit
+        self.setCursorMode(.Normal);
+        _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = libx11.XDestroyWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = self.ctx.driver.removeFromXContext(self.handle);
         self.freeDroppedFiles();
         self.handle = 0;
         allocator.destroy(self);
@@ -162,13 +170,12 @@ pub const Window = struct {
 
     pub fn processEvents(self: *Self) WindowError!void {
         var e: libx11.XEvent = undefined;
-        const drvr = X11Driver.singleton();
-        drvr.flushXRequests();
-        while (drvr.nextXEvent(&e)) {
+        self.ctx.driver.flushXRequests();
+        while (self.ctx.driver.nextXEvent(&e)) {
             const window: ?*Window = if (self.handle == e.xany.window)
                 self
             else
-                windowFromId(e.xany.window);
+                windowFromId(self.ctx.driver, e.xany.window);
 
             if (window) |w| {
                 if (e.type == libx11.ClientMessage and
@@ -190,20 +197,18 @@ pub const Window = struct {
                     }
                 }
             } else {
-                std.debug.print("Unknow window({}) is root={}\n", .{e.xany.window,e.xany.window == drvr.windowManagerId()});
-                // TODO: what about event not sent for our window
+                event_handler.handleNonWindowEvent(&e, self.ctx);
             }
         }
     }
 
     pub fn waitEvent(self: *Self) WindowError!void {
         // Indefinetly wait for event
-        const drvr = X11Driver.singleton();
         var ready: u32 = 0;
         // start by flushing and checking for available events.
-        while (libx11.XPending(drvr.handles.xdisplay) == 0) {
+        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
             _ = unix.poll(
-                libx11.ConnectionNumber(drvr.handles.xdisplay),
+                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
                 unix.PollFlag.IORead,
                 -1,
                 &ready,
@@ -215,12 +220,11 @@ pub const Window = struct {
     /// Waits for an event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
         const timeout_ns = timeout * std.time.ns_per_ms;
-        const drvr = X11Driver.singleton();
         var ready: u32 = 0;
         // start by flushing and checking for available events.
-        while (libx11.XPending(drvr.handles.xdisplay) == 0) {
+        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
             if (unix.poll(
-                libx11.ConnectionNumber(drvr.handles.xdisplay),
+                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
                 unix.PollFlag.IORead,
                 timeout_ns,
                 &ready,
@@ -236,8 +240,8 @@ pub const Window = struct {
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         std.debug.assert(self.handle != 0);
-        const drvr = X11Driver.singleton();
-        _ = libx11.XMapWindow(drvr.handles.xdisplay, self.handle);
+        const drvr = self.ctx.driver;
+        _ = libx11.XMapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         drvr.flushXRequests();
         self.data.flags.is_visible = true;
     }
@@ -245,8 +249,8 @@ pub const Window = struct {
     /// Hide the window.
     pub fn hide(self: *Self) void {
         std.debug.assert(self.handle != 0);
-        const drvr = X11Driver.singleton();
-        _ = libx11.XUnmapWindow(drvr.handles.xdisplay, self.handle);
+        const drvr = self.ctx.driver;
+        _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         drvr.flushXRequests();
         self.data.flags.is_visible = false;
     }
@@ -258,7 +262,6 @@ pub const Window = struct {
     ) void {
         if (self.ev_queue) |q| {
             q.queueEvent(event) catch |err| {
-                const drvr = X11Driver.singleton();
                 var ev: libx11.XEvent = undefined;
                 ev.type = libx11.ClientMessage;
                 ev.xclient.window = self.handle;
@@ -266,7 +269,7 @@ pub const Window = struct {
                 ev.xclient.format = 32;
                 ev.xclient.data.l[0] = @intFromError(err);
                 std.debug.assert(ev.xclient.message_type != 0);
-                drvr.sendXEvent(&ev, self.handle);
+                self.ctx.driver.sendXEvent(&ev, self.handle);
             };
         }
     }
@@ -282,10 +285,9 @@ pub const Window = struct {
         }
         const size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
-            const drvr = X11Driver.singleton();
             var supplied: c_long = 0;
             _ = libx11.XGetWMNormalHints(
-                drvr.handles.xdisplay,
+                self.ctx.driver.handles.xdisplay,
                 self.handle,
                 hints,
                 &supplied,
@@ -319,7 +321,7 @@ pub const Window = struct {
                 hints.max_height = self.data.client_area.size.height;
             }
             _ = libx11.XSetWMNormalHints(
-                drvr.handles.xdisplay,
+                self.ctx.driver.handles.xdisplay,
                 self.handle,
                 @ptrCast(hints),
             );
@@ -331,9 +333,8 @@ pub const Window = struct {
     /// Requires window manager support.
     /// returns true on success.
     pub fn flash(self: *const Self) bool {
-        const drvr = X11Driver.singleton();
-        if (drvr.ewmh._NET_WM_STATE_DEMANDS_ATTENTION == 0 or
-            drvr.ewmh._NET_WM_STATE == 0)
+        if (self.ctx.driver.ewmh._NET_WM_STATE_DEMANDS_ATTENTION == 0 or
+            self.ctx.driver.ewmh._NET_WM_STATE == 0)
         {
             // unsupported by the current window manager.
             return false;
@@ -342,28 +343,28 @@ pub const Window = struct {
         var event = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
                 .type = libx11.ClientMessage,
-                .display = drvr.handles.xdisplay,
+                .display = self.ctx.driver.handles.xdisplay,
                 .window = self.handle,
-                .message_type = drvr.ewmh._NET_WM_STATE,
+                .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
                 .format = 32,
                 .serial = 0,
                 .send_event = 0,
                 .data = .{ .l = [5]c_long{
                     _NET_WM_STATE_ADD,
-                    @intCast(drvr.ewmh._NET_WM_STATE_DEMANDS_ATTENTION),
+                    @intCast(self.ctx.driver.ewmh._NET_WM_STATE_DEMANDS_ATTENTION),
                     0,
                     1,
                     0,
                 } },
             },
         };
-        drvr.sendXEvent(&event, drvr.windowManagerId());
-        drvr.flushXRequests();
+        self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
+        self.ctx.driver.flushXRequests();
         return true;
     }
 
     pub fn focus(self: *Self) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_ACTIVE_WINDOW != 0) {
             var ev = libx11.XEvent{
                 .xclient = libx11.XClientMessageEvent{
@@ -406,7 +407,7 @@ pub const Window = struct {
     /// Moves the client's top left corner
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         _ = libx11.XMoveWindow(
             drvr.handles.xdisplay,
             self.handle,
@@ -427,7 +428,7 @@ pub const Window = struct {
     /// Returns the logical size of the window's client area
     pub fn getClientSize(self: *const Self) common.geometry.WidowSize {
         var attribs: libx11.XWindowAttributes = undefined;
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         _ = libx11.XGetWindowAttributes(
             drvr.handles.xdisplay,
             self.handle,
@@ -449,11 +450,11 @@ pub const Window = struct {
 
         self.data.client_area.size = size.*;
         if (self.data.flags.is_dpi_aware) {
-            const drvr = X11Driver.singleton();
+            const drvr = self.ctx.driver;
             self.data.client_area.size.scaleBy(drvr.g_screen_scale);
         }
 
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (!self.data.flags.is_resizable) {
             // we need to update the maxwidth and maxheight
             // size hints.
@@ -499,7 +500,7 @@ pub const Window = struct {
             }
 
             if (self.data.flags.is_dpi_aware) {
-                const drvr = X11Driver.singleton();
+                const drvr = self.ctx.driver;
                 size.scaleBy(drvr.g_screen_scale);
             }
 
@@ -540,7 +541,7 @@ pub const Window = struct {
                 }
             }
             if (self.data.flags.is_dpi_aware) {
-                const drvr = X11Driver.singleton();
+                const drvr = self.ctx.driver;
                 size.scaleBy(drvr.g_screen_scale);
             }
             self.data.max_size = size;
@@ -567,7 +568,7 @@ pub const Window = struct {
         const MWM_HINTS_DECORATIONS = 1 << 1;
         const MWM_DECOR_ALL = 1 << 0;
         const PROP_MOTIF_WM_HINTS_ELEMENTS = 5;
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         self.data.flags.is_decorated = value;
         var motif_hints: extern struct {
             flags: c_ulong,
@@ -594,7 +595,7 @@ pub const Window = struct {
 
     /// Maximize the window.
     pub fn maximize(self: *const Self) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_STATE != 0 and
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT != 0 and
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
@@ -625,7 +626,7 @@ pub const Window = struct {
 
     /// Minimizes the window.
     pub fn minimize(self: *Self) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         _ = libx11.XIconifyWindow(
             drvr.handles.xdisplay,
             self.handle,
@@ -637,7 +638,7 @@ pub const Window = struct {
 
     /// Restores the minimized or maximized window to a normal window.
     pub fn restore(self: *const Self) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_STATE != 0 and
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT != 0 and
             drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ != 0)
@@ -669,7 +670,7 @@ pub const Window = struct {
 
     /// Changes the title of the window.
     pub fn setTitle(self: *Self, new_title: []const u8) void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         const name_atom = if (drvr.ewmh._NET_WM_NAME != 0)
             drvr.ewmh._NET_WM_NAME
         else
@@ -708,7 +709,7 @@ pub const Window = struct {
         self: *const Self,
         allocator: std.mem.Allocator,
     ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         const name_atom = if (drvr.ewmh._NET_WM_NAME != 0)
             drvr.ewmh._NET_WM_NAME
         else
@@ -736,7 +737,7 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn getOpacity(self: *const Self) f64 {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
         const OPAQUE = @as(u32, 0xFFFFFFFF);
         _ = utils.x11WindowProperty(
@@ -756,7 +757,7 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f64) bool {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_WINDOW_OPACITY == 0) {
             return false;
         }
@@ -790,7 +791,8 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
-        const drvr = X11Driver.singleton();
+        //BUG: doesn't work correctly.
+        const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_STATE_FULLSCREEN == 0 or
             drvr.ewmh._NET_WM_STATE == 0)
         {
@@ -798,27 +800,47 @@ pub const Window = struct {
             return false;
         }
 
-        var event = libx11.XEvent{
-            .xclient = libx11.XClientMessageEvent{
-                .type = libx11.ClientMessage,
-                .display = drvr.handles.xdisplay,
-                .window = self.handle,
-                .message_type = drvr.ewmh._NET_WM_STATE,
-                .format = 32,
-                .serial = 0,
-                .send_event = 0,
-                .data = .{ .l = [5]c_long{
-                    if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
-                    @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
-                    0,
-                    0,
-                    0,
-                } },
-            },
-        };
+        if (self.data.flags.is_fullscreen != value) {
+            const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
+            if (value) {
+                if (!self.data.flags.is_resizable) {
+                    self.ctx.display_mgr.setDisplayVideoMode(d, &.{
+                        .width = self.data.client_area.size.width,
+                        .height = self.data.client_area.size.height,
+                        // INFO: These 2 are hardcoded for now
+                        .frequency = 60,
+                        .color_depth = 32,
+                    }) catch return false;
+                }
+                //d.setWindow(self);
+            } else {
+                self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
+                //d.setWindow(null);
+            }
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = drvr.handles.xdisplay,
+                    .window = self.handle,
+                    .message_type = drvr.ewmh._NET_WM_STATE,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = 0,
+                    .data = .{ .l = [5]c_long{
+                        if (value) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                        @intCast(drvr.ewmh._NET_WM_STATE_FULLSCREEN),
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
 
-        drvr.sendXEvent(&event, drvr.windowManagerId());
-        drvr.flushXRequests();
+            drvr.sendXEvent(&event, drvr.windowManagerId());
+            drvr.flushXRequests();
+            self.data.flags.is_fullscreen = value;
+        }
+
         return true;
     }
 
@@ -828,7 +850,7 @@ pub const Window = struct {
         accepted: bool,
     ) void {
         const version: i32 = libx11.XDND_VER;
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
 
         if (accepted == self.x11.xdnd_allow) {
             return;
@@ -875,7 +897,7 @@ pub const Window = struct {
     }
 
     pub fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         var root: libx11.Window = undefined;
         var child: libx11.Window = undefined;
         var root_x: c_int, var root_y: c_int = .{ undefined, undefined };
@@ -898,7 +920,7 @@ pub const Window = struct {
 
     pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
         self.x11.cursor.pos = .{ .x = x, .y = y };
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         _ = libx11.XWarpPointer(
             drvr.handles.xdisplay,
             libx11.None,
@@ -914,25 +936,24 @@ pub const Window = struct {
     }
 
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
-        if(!self.data.flags.cursor_in_client){
+        if (!self.data.flags.cursor_in_client) {
             return;
         }
 
         self.x11.cursor.mode = mode;
-        cursor.applyCursorHints(&self.x11.cursor, self.handle);
+        cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
 
         if (self.data.flags.has_raw_mouse) {
             if (mode == .Hidden) {
-                _ = enableRawMouseMotion();
+                self.ctx.raw_mouse_motion_window = self.handle;
             } else {
-                _ = disableRawMouseMotion();
+                self.ctx.raw_mouse_motion_window = null;
             }
         }
     }
 
     pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        _ = self;
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (scaler) |s| {
             s.* = drvr.g_screen_scale;
         }
@@ -950,6 +971,7 @@ pub const Window = struct {
         var new_cursor: libx11.Cursor = 0;
         if (pixels) |p| {
             new_cursor = cursor.createX11Cursor(
+                self.ctx.driver,
                 p,
                 width,
                 height,
@@ -962,10 +984,10 @@ pub const Window = struct {
                 };
             };
         }
-        cursor.destroyCursorIcon(&self.x11.cursor);
+        cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor;
         if (self.data.flags.cursor_in_client) {
-            cursor.applyCursorHints(&self.x11.cursor, self.handle);
+            cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
         }
     }
 
@@ -973,14 +995,14 @@ pub const Window = struct {
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
     ) WindowError!void {
-        const new_cursor = cursor.createNativeCursor(cursor_shape) catch {
+        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape) catch {
             return WindowError.OutOfMemory;
         };
-        cursor.destroyCursorIcon(&self.x11.cursor);
+        cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
         if (self.data.flags.cursor_in_client) {
-            cursor.applyCursorHints(&self.x11.cursor, self.handle);
+            cursor.applyCursorHints(self.ctx.driver, &self.x11.cursor, self.handle);
         }
     }
 
@@ -991,7 +1013,7 @@ pub const Window = struct {
         height: i32,
         allocator: std.mem.Allocator,
     ) WindowError!void {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (pixels) |p| {
             const pixl_data_size = width * height;
             var icon_buffer = try allocator.alloc(c_long, 2 + @as(usize, @intCast(pixl_data_size)));
@@ -1031,7 +1053,7 @@ pub const Window = struct {
         right: *i32,
         bottom: *i32,
     ) bool {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (self.data.flags.is_fullscreen or
             !self.data.flags.is_decorated or
             drvr.ewmh._NET_REQUEST_FRAME_EXTENTS == 0)
@@ -1093,23 +1115,30 @@ pub const Window = struct {
     }
 
     pub fn setRawMouseMotion(self: *Self, active: bool) bool {
-        const drvr = X11Driver.singleton();
+        const drvr = self.ctx.driver;
         if (!drvr.extensions.xi2.is_v2point0) {
             return false;
         }
 
-        if (self.data.flags.has_raw_mouse == active) {
-            return true;
+        var success = true;
+        if (self.data.flags.has_raw_mouse != active) {
+            self.data.flags.has_raw_mouse = active;
+            if (active) {
+                success = enableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = self.handle;
+            } else {
+                success = disableRawMouseMotion(self.ctx.driver);
+                self.ctx.raw_mouse_motion_window = null;
+            }
+            self.setCursorMode(self.x11.cursor.mode);
         }
 
-        self.data.flags.has_raw_mouse = active;
-
-        self.setCursorMode(self.x11.cursor.mode);
+        return success;
     }
 
     pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
         switch (self.fb_cfg.accel) {
-            .opengl => return glx.GLContext.init(self.handle, &self.fb_cfg) catch {
+            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
                 return WindowError.GLError;
             },
             else => return WindowError.UnsupportedRenderBackend,
@@ -1155,6 +1184,7 @@ pub const Window = struct {
 };
 
 fn createPlatformWindow(
+    driver: *const X11Driver,
     data: *const WindowData,
     visual: ?*libx11.Visual,
     depth: c_int,
@@ -1177,22 +1207,21 @@ fn createPlatformWindow(
     );
 
     attribs.event_mask = EVENT_MASK;
-    const drvr = X11Driver.singleton();
     attribs.colormap = libx11.XCreateColormap(
-        drvr.handles.xdisplay,
-        drvr.windowManagerId(),
+        driver.handles.xdisplay,
+        driver.windowManagerId(),
         visual,
         libx11.AllocNone,
     );
 
     var window_size = data.client_area.size;
     if (data.flags.is_dpi_aware) {
-        window_size.scaleBy(drvr.g_screen_scale);
+        window_size.scaleBy(driver.g_screen_scale);
     }
 
     const handle = libx11.XCreateWindow(
-        drvr.handles.xdisplay,
-        drvr.windowManagerId(),
+        driver.handles.xdisplay,
+        driver.windowManagerId(),
         data.client_area.top_left.x,
         data.client_area.top_left.y,
         @intCast(window_size.width),
@@ -1215,48 +1244,49 @@ fn createPlatformWindow(
 }
 
 fn setInitialWindowPropeties(
+    driver: *const X11Driver,
     window: libx11.Window,
     data: *const WindowData,
 ) WindowError!void {
     // communication protocols
-    const drvr = X11Driver.singleton();
+
     var protocols = [2]libx11.Atom{
         // this allows us to recieve close request from the window manager.
         // instead of it closing the socket and crashing our app
-        drvr.ewmh.WM_DELETE_WINDOW,
+        driver.ewmh.WM_DELETE_WINDOW,
         // this allows the window manager to check if a window is still alive and responding
-        drvr.ewmh._NET_WM_PING,
+        driver.ewmh._NET_WM_PING,
     };
     _ = libx11.XSetWMProtocols(
-        drvr.handles.xdisplay,
+        driver.handles.xdisplay,
         window,
         &protocols,
         protocols.len,
     );
 
     libx11.XChangeProperty(
-        drvr.handles.xdisplay,
+        driver.handles.xdisplay,
         window,
-        drvr.ewmh._NET_WM_PID,
+        driver.ewmh._NET_WM_PID,
         libx11.XA_CARDINAL,
         32,
         libx11.PropModeReplace,
-        @ptrCast(&drvr.pid),
+        @ptrCast(&driver.pid),
         1,
     );
 
     // if supported declare window type.
-    if (drvr.ewmh._NET_WM_WINDOW_TYPE != 0 and
-        drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
+    if (driver.ewmh._NET_WM_WINDOW_TYPE != 0 and
+        driver.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
     {
         libx11.XChangeProperty(
-            drvr.handles.xdisplay,
+            driver.handles.xdisplay,
             window,
-            drvr.ewmh._NET_WM_WINDOW_TYPE,
+            driver.ewmh._NET_WM_WINDOW_TYPE,
             libx11.XA_ATOM,
             32,
             libx11.PropModeReplace,
-            @ptrCast(&drvr.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
+            @ptrCast(&driver.ewmh._NET_WM_WINDOW_TYPE_NORMAL),
             1,
         );
     }
@@ -1267,7 +1297,7 @@ fn setInitialWindowPropeties(
     defer _ = libx11.XFree(hints);
     hints.flags = libx11.StateHint;
     hints.initial_state = libx11.NormalState;
-    _ = libx11.XSetWMHints(drvr.handles.xdisplay, window, @ptrCast(hints));
+    _ = libx11.XSetWMHints(driver.handles.xdisplay, window, @ptrCast(hints));
 
     // resizablitity
     var size_hints = libx11.XAllocSizeHints() orelse
@@ -1279,7 +1309,7 @@ fn setInitialWindowPropeties(
 
     var window_size = data.client_area.size;
     if (data.flags.is_dpi_aware) {
-        window_size.scaleBy(drvr.g_screen_scale);
+        window_size.scaleBy(driver.g_screen_scale);
     }
 
     if (!data.flags.is_resizable) {
@@ -1291,7 +1321,7 @@ fn setInitialWindowPropeties(
     }
 
     _ = libx11.XSetWMNormalHints(
-        drvr.handles.xdisplay,
+        driver.handles.xdisplay,
         window,
         @ptrCast(size_hints),
     );
@@ -1304,20 +1334,18 @@ fn setInitialWindowPropeties(
     class_hints.res_class = bopts.X11_CLASS_NAME.ptr;
 
     _ = libx11.XSetClassHint(
-        drvr.handles.xdisplay,
+        driver.handles.xdisplay,
         window,
         @ptrCast(class_hints),
     );
 }
 
-fn windowFromId(window_id: libx11.Window) ?*Window {
-    const drvr = X11Driver.singleton();
-    const window = drvr.findInXContext(window_id);
+pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
+    const window = driver.findInXContext(window_id);
     return @ptrCast(@alignCast(window));
 }
 
-pub inline fn enableRawMouseMotion() bool {
-    const drvr = X11Driver.singleton();
+pub inline fn enableRawMouseMotion(driver: *const X11Driver) bool {
     const MASK_LEN = comptime x11ext.XIMaskLen(x11ext.XI_RawMotion);
     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
     var ev_mask = x11ext.XIEventMask{
@@ -1326,16 +1354,15 @@ pub inline fn enableRawMouseMotion() bool {
         .mask = &mask,
     };
     x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
-    return drvr.extensions.xi2.XISelectEvents(
-        drvr.handles.xdisplay,
-        drvr.windowManagerId(),
+    return driver.extensions.xi2.XISelectEvents(
+        driver.handles.xdisplay,
+        driver.windowManagerId(),
         @ptrCast(&ev_mask),
         1,
     ) == libx11.Success;
 }
 
-pub inline fn disableRawMouseMotion() bool {
-    const drvr = X11Driver.singleton();
+pub inline fn disableRawMouseMotion(driver: *const X11Driver) bool {
     const MASK_LEN = 1;
     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
     var ev_mask = x11ext.XIEventMask{
@@ -1344,9 +1371,9 @@ pub inline fn disableRawMouseMotion() bool {
         .mask = &mask,
     };
     x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
-    return drvr.extensions.xi2.XISelectEvents(
-        drvr.handles.xdisplay,
-        drvr.windowManagerId(),
+    return driver.extensions.xi2.XISelectEvents(
+        driver.handles.xdisplay,
+        driver.windowManagerId(),
         @ptrCast(&ev_mask),
         1,
     ) == libx11.Success;

@@ -11,6 +11,7 @@ const opts = @import("build-options");
 const kbd_mouse = common.keyboard_mouse;
 
 const X11Driver = @import("driver.zig").X11Driver;
+const WidowContext = @import("platform.zig").WidowContext;
 const Window = wndw.Window;
 
 inline fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) void {
@@ -110,7 +111,7 @@ inline fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void
 
 /// handles ICCCM messages.
 inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) void {
-    const drvr = X11Driver.singleton();
+    const drvr = w.ctx.driver;
     if (e.message_type == drvr.ewmh.WM_PROTOCOLS) {
         if (@as(libx11.Atom, @intCast(e.data.l[0])) == drvr.ewmh.WM_DELETE_WINDOW) {
             if (opts.LOG_PLATFORM_EVENTS) {
@@ -292,7 +293,7 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
 }
 
 inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
-    const km = keymaps.KeyMaps.singleton();
+    const km = window.ctx.key_map;
     switch (ev.type) {
         libx11.KeyPress => {
             if (opts.LOG_PLATFORM_EVENTS) {
@@ -333,8 +334,8 @@ inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
             if (opts.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: #{} recieved KeyPress:code {}\n", .{ window.data.id, ev.keycode });
             }
-            const x11driver = X11Driver.singleton();
-            if (!x11driver.extensions.xkb.is_auto_repeat_detectable) {
+            const driver = window.ctx.driver;
+            if (!driver.extensions.xkb.is_auto_repeat_detectable) {
                 // INFO:
                 // hack from glfw
                 // if if we couldn't enable key autorepeat through Xkeyboard
@@ -342,11 +343,11 @@ inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
                 // and setting an autorepeat threshold for wich we can ignore key release
                 // events.
                 if (libx11.XEventsQueued(
-                    x11driver.handles.xdisplay,
+                    driver.handles.xdisplay,
                     libx11.QueuedAfterReading,
                 ) != 0) {
                     var next_xevent: libx11.XEvent = undefined;
-                    _ = libx11.XPeekEvent(x11driver.handles.xdisplay, &next_xevent);
+                    _ = libx11.XPeekEvent(driver.handles.xdisplay, &next_xevent);
                     if (next_xevent.type == libx11.KeyPress and
                         next_xevent.xkey.window == ev.window and
                         next_xevent.xkey.keycode == ev.keycode and
@@ -382,7 +383,7 @@ inline fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) vo
         );
     }
 
-    const drvr = X11Driver.singleton();
+    const drvr = window.ctx.driver;
     if (e.property != drvr.ewmh.XdndSelection) {
         return;
     }
@@ -467,7 +468,7 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
             .{window.data.id},
         );
     }
-    const drvr = X11Driver.singleton();
+    const drvr = window.ctx.driver;
     if (e.state != libx11.PropertyNewValue) {
         return;
     }
@@ -523,19 +524,16 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
     }
 }
 
-inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, window: *Window) void {
-    std.debug.print("Got generic data\n", .{});
-    const drvr = X11Driver.singleton();
-    if (window.data.flags.has_raw_mouse and
-        drvr.extensions.xi2.is_v2point0 and
-        libx11.XGetEventData(drvr.handles.xdisplay, ev) == libx11.True and
-        ev.extension == drvr.extensions.xi2.maj_opcode and
+inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, ctx: *const WidowContext) void {
+    if (ctx.driver.extensions.xi2.is_v2point0 and
+        libx11.XGetEventData(ctx.driver.handles.xdisplay, ev) == libx11.True and
+        ev.extension == ctx.driver.extensions.xi2.maj_opcode and
         ev.evtype == x11ext.XI_RawMotion)
     {
-        std.debug.print("Got Raw data\n", .{});
-        defer libx11.XFreeEventData(drvr.handles.xdisplay, ev);
+        defer libx11.XFreeEventData(ctx.driver.handles.xdisplay, ev);
+
         const raw_ev: *x11ext.XIRawEvent = @ptrCast(@alignCast(ev.data));
-        if (raw_ev.valuators.mask_len != 0) {
+        if (raw_ev.valuators.mask_len != 0 and ctx.raw_mouse_motion_window != null) {
             var read_indx: u32 = 0;
             var dx: f64, var dy: f64 = .{ 0.0, 0.0 };
             if (x11ext.XIMaskIsSet(raw_ev.valuators.mask, 0)) {
@@ -546,6 +544,14 @@ inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, window: *Window) v
                 dy += raw_ev.raw_values[read_indx];
             }
 
+            const window = wndw.windowFromId(ctx.driver, ctx.raw_mouse_motion_window.?) orelse unreachable;
+            std.debug.assert(window.data.flags.has_raw_mouse);
+            if (opts.LOG_PLATFORM_EVENTS) {
+                std.log.info(
+                    "window: #{} recieved GenericEvent(RawMouseMotion)\n",
+                    .{window.data.id},
+                );
+            }
             window.x11.cursor.accum_pos.x +%= @as(i32, @intFromFloat(dx));
             window.x11.cursor.accum_pos.y +%= @as(i32, @intFromFloat(dy));
             const event = common.event.createMoveEvent(
@@ -583,20 +589,12 @@ inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, window: *Window) v
 //     _ = x11driver.extensions.xrandr.XRRUpdateConfiguration(@constCast(ev));
 // }
 
-// pub fn handleHelperEvent(ev: *const libx11.XEvent, helper_window: libx11.Window) void {
-//     const x11driver = X11Driver.singleton();
-//     const context_ptr = x11driver.findInXContext(helper_window);
-//     if (context_ptr == null) {
-//         std.log.err("helper window has no corresponding data in Xcontext, this shouldn't happen.\n", .{});
-//         @panic("Unexpected null pointer.");
-//     }
-//     const helper_data: *HelperData = @ptrCast(@alignCast(context_ptr.?));
-//     if (ev.type == x11driver.extensions.xrandr.event_code + x11ext.RRScreenChangeNotify) {
-//         handleXrandrScreenChange(ev, helper_data);
-//     } else if (x11driver.extensions.xkb.is_available and ev.type == x11driver.extensions.xkb.event_code) {
-//         handleXkbEvent(@ptrCast(ev), helper_data);
-//     }
-// }
+pub fn handleNonWindowEvent(ev: *libx11.XEvent, ctx: *const WidowContext) void {
+    switch (ev.type) {
+        libx11.GenericEvent => handleGenericEvent(&ev.xcookie, ctx),
+        else => {},
+    }
+}
 
 pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
     switch (ev.type) {
@@ -613,9 +611,9 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
             }
             const x, const y = .{ ev.xcrossing.x, ev.xcrossing.y };
             window.x11.cursor.pos = .{ .x = x, .y = y };
-            cursor.applyCursorHints(&window.x11.cursor, window.handle);
+            cursor.applyCursorHints(window.ctx.driver, &window.x11.cursor, window.handle);
             if (window.data.flags.has_raw_mouse and window.x11.cursor.mode == .Hidden) {
-                _ = wndw.enableRawMouseMotion();
+                _ = wndw.enableRawMouseMotion(window.ctx.driver);
             }
             const enter_event = common.event.createMouseEnterEvent(
                 window.data.id,
@@ -640,7 +638,7 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
             }
             window.data.flags.cursor_in_client = false;
             if (window.data.flags.has_raw_mouse and window.x11.cursor.mode == .Hidden) {
-                _ = wndw.disableRawMouseMotion();
+                _ = wndw.disableRawMouseMotion(window.ctx.driver);
             }
             const event = common.event.createMouseExitEvent(window.data.id);
             window.sendEvent(&event);
@@ -655,7 +653,7 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            cursor.applyCursorHints(&window.x11.cursor, window.handle);
+            cursor.applyCursorHints(window.ctx.driver, &window.x11.cursor, window.handle);
             const event = common.event.createFocusEvent(window.data.id, true);
             window.sendEvent(&event);
         },
@@ -667,7 +665,7 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            cursor.undoCursorHints(&window.x11.cursor, window.handle);
+            cursor.undoCursorHints(window.ctx.driver, &window.x11.cursor, window.handle);
             const event = common.event.createFocusEvent(window.data.id, false);
             window.sendEvent(&event);
         },
@@ -757,10 +755,6 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
         libx11.PropertyNotify => handlePropertyNotify(&ev.xproperty, window),
 
         libx11.SelectionNotify => handleXSelection(&ev.xselection, window),
-
-        // FIXME: only the Root window can recieve Raw mouse motion (x11 sucks)
-        // we will need to somehow get the window with the hidden mouse.
-        libx11.GenericEvent => handleGenericEvent(&ev.xcookie, window),
 
         else => {},
     }

@@ -3,10 +3,10 @@ const common = @import("common");
 const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
-const X11Driver = @import("driver.zig").X11Driver;
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 
+const X11Driver = @import("driver.zig").X11Driver;
 const SymHashMap = std.AutoArrayHashMap(u32, u32);
 const KEYCODE_MAP_SIZE = 256;
 const UNICODE_MAP_SIZE = 0x400;
@@ -1373,24 +1373,23 @@ pub fn initUnicodeKeysymMapping(xkeysym_unicode_mapping: *SymHashMap) void {
 
 /// Initialize the keysym to keycode map used when translating
 /// key events to report keycodes.
-fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
+fn initKeyCodeTable(driver: *const X11Driver, keycode_lookup_table: []KeyCode) void {
     // insight taken from glfw.
     std.debug.assert(keycode_lookup_table.len >= KEYCODE_MAP_SIZE);
 
     @memset(keycode_lookup_table, KeyCode.Unknown);
-    const x11driver = X11Driver.singleton();
     var min_scancode: c_int = 0;
     var max_scancode: c_int = 0;
-    if (x11driver.extensions.xkb.is_available) {
+    if (driver.extensions.xkb.is_available) {
         const kbd_desc = libx11.XkbGetMap(
-            x11driver.handles.xdisplay,
+            driver.handles.xdisplay,
             0,
             x11ext.XkbUseCoreKbd,
         );
         if (kbd_desc) |desc| {
             defer libx11.XkbFreeKeyboard(desc, 0, libx11.True);
             _ = libx11.XkbGetNames(
-                x11driver.handles.xdisplay,
+                driver.handles.xdisplay,
                 x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
                 desc,
             );
@@ -1409,14 +1408,14 @@ fn initKeyCodeTable(keycode_lookup_table: []KeyCode) void {
         }
     } else {
         _ = libx11.XDisplayKeycodes(
-            x11driver.handles.xdisplay,
+            driver.handles.xdisplay,
             &min_scancode,
             &max_scancode,
         );
     }
     var keysym_size: c_int = 0;
     const keysym_array = libx11.XGetKeyboardMapping(
-        x11driver.handles.xdisplay,
+        driver.handles.xdisplay,
         @intCast(min_scancode),
         max_scancode - min_scancode + 1,
         &keysym_size,
@@ -1464,21 +1463,22 @@ pub const KeyMaps = struct {
         .unicode_map = undefined,
     };
 
-    pub fn initSingleton() void {
+    pub fn initSingleton(driver: *const X11Driver) *const Self {
         @setCold(true);
 
         Self.sing_guard.lock();
         defer sing_guard.unlock();
         if (!Self.sing_init) {
-            initKeyCodeTable(&globl_instance.keycode_map);
+            initKeyCodeTable(driver, &globl_instance.keycode_map);
             globl_instance.alloc = std.heap.FixedBufferAllocator.init(&globl_instance.map_mem);
             globl_instance.unicode_map = SymHashMap.init(globl_instance.alloc.allocator());
             initUnicodeKeysymMapping(&globl_instance.unicode_map);
             Self.sing_init = true;
         }
+        return &Self.globl_instance;
     }
 
-    pub fn deinitSingleton() void {
+    fn deinitSingleton() void {
         @setCold(true);
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
@@ -1486,11 +1486,6 @@ pub const KeyMaps = struct {
             Self.sing_init = false;
             globl_instance.unicode_map.deinit();
         }
-    }
-
-    pub fn singleton() *const Self {
-        std.debug.assert(Self.sing_init == true);
-        return &Self.globl_instance;
     }
 
     pub inline fn lookupKeyCode(self: *const Self, xkeycode: u8) KeyCode {

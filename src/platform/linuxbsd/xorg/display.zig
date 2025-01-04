@@ -3,22 +3,27 @@ const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const common = @import("common");
 const utils = @import("utils.zig");
-const dbg = @import("builtin").mode == .Debug;
+
+const VideoMode = common.video_mode.VideoMode;
+const mem = std.mem;
+
 const X11Driver = @import("driver.zig").X11Driver;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
-const VideoMode = common.video_mode.VideoMode;
 const Window = @import("window.zig").Window;
 
-pub const MonitorError = error{
-    ModeChangeFailed,
+const dbg = @import("builtin").mode == .Debug;
+
+pub const DisplayError = error{
+    VideoModeChangeFailed,
+    NotFound,
 };
 
 /// Calculates and return the monitor frequency
 /// from the video mode infos
 /// Note:
 /// if the a frequency value can't be calcluated it returns 0;
-inline fn calculateMonitorFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
+inline fn calculateDisplayFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
     // If the dot clock is zero, then all of the timing
     // parameters and flags are not used,
     if (mode_info.dotClock == 0) {
@@ -33,6 +38,7 @@ inline fn calculateMonitorFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
 
 /// Fills the output parameters from the video mode info
 fn videoModeFromRRMode(
+    driver: *const X11Driver,
     mode: *const x11ext.XRRModeInfo,
     rotated: bool,
     output: *VideoMode,
@@ -40,7 +46,6 @@ fn videoModeFromRRMode(
     if (mode.modeFlags & x11ext.RR_Interlace != 0) {
         return false;
     }
-    const x11cntxt = X11Driver.singleton();
     if (rotated) {
         output.width = @intCast(mode.height);
         output.height = @intCast(mode.width);
@@ -48,11 +53,11 @@ fn videoModeFromRRMode(
         output.width = @intCast(mode.width);
         output.height = @intCast(mode.height);
     }
-    output.frequency = calculateMonitorFrequency(mode);
+    output.frequency = calculateDisplayFrequency(mode);
     std.debug.assert(output.frequency != 0);
     output.color_depth = @intCast(libx11.DefaultDepth(
-        x11cntxt.handles.xdisplay,
-        x11cntxt.handles.default_screen,
+        driver.handles.xdisplay,
+        driver.handles.default_screen,
     ));
     return true;
 }
@@ -60,8 +65,9 @@ fn videoModeFromRRMode(
 /// Fills the `modes_arry` and `ids_arry` with all possible
 /// video modes for the specified `output`
 fn pollVideoModes(
-    screens_res: *x11ext.XRRScreenResources,
-    output_info: *x11ext.XRROutputInfo,
+    driver: *const X11Driver,
+    screens_res: *const x11ext.XRRScreenResources,
+    output_info: *const x11ext.XRROutputInfo,
     rotated: bool,
     modes_arry: *ArrayList(VideoMode),
     ids_arry: *ArrayList(x11ext.RRMode),
@@ -84,7 +90,7 @@ fn pollVideoModes(
         }
 
         if (modes_info) |info| {
-            if (!videoModeFromRRMode(info, rotated, &videomode)) {
+            if (!videoModeFromRRMode(driver, info, rotated, &videomode)) {
                 continue;
             }
             // skip duplicate modes
@@ -110,45 +116,43 @@ fn pollVideoModes(
 }
 
 /// Querys the x server for the current connected screens.
-fn getScreenRessources() *x11ext.XRRScreenResources {
-    const x11cntxt = X11Driver.singleton();
-    return if (x11cntxt.extensions.xrandr.is_v1point3)
+fn getScreenRessources(driver: *const X11Driver) *x11ext.XRRScreenResources {
+    return if (driver.extensions.xrandr.is_v1point3)
         // Faster than XRRGetScreenResources.
-        x11cntxt.extensions.xrandr.XRRGetScreenResourcesCurrent(
-            x11cntxt.handles.xdisplay,
-            x11cntxt.handles.root_window,
+        driver.extensions.xrandr.XRRGetScreenResourcesCurrent(
+            driver.handles.xdisplay,
+            driver.handles.root_window,
         )
     else
         // This request explicitly asks the server to ensure that the
         // configuration data is up-to-date
-        x11cntxt.extensions.xrandr.XRRGetScreenResources(
-            x11cntxt.handles.xdisplay,
-            x11cntxt.handles.root_window,
+        driver.extensions.xrandr.XRRGetScreenResources(
+            driver.handles.xdisplay,
+            driver.handles.root_window,
         );
 }
 
-/// Construct a Vector with all currently connected monitors.
-pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl) {
-    const screens_res = getScreenRessources();
-    const x11cntxt = X11Driver.singleton();
+/// Construct a Vector with all currently connected displays.
+pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Error!ArrayList(Display) {
+    const screens_res = getScreenRessources(driver);
     // the number of crtcs match the number of video devices(GPUs) which matches the number
-    // of possible monitors.
-    var monitors = try ArrayList(MonitorImpl).initCapacity(
+    // of possible displays.
+    var displays = try ArrayList(Display).initCapacity(
         allocator,
         @intCast(screens_res.ncrtc),
     );
     errdefer {
-        for (monitors.items) |*monitor| {
-            monitor.deinit();
+        for (displays.items) |*d| {
+            d.deinit(driver);
         }
-        monitors.deinit();
+        displays.deinit();
     }
 
     var screens: ?[*]x11ext.XineramaScreenInfo = null;
     var n_screens: i32 = 0;
-    if (x11cntxt.extensions.xinerama.is_active) {
-        screens = x11cntxt.extensions.xinerama.QueryScreens(
-            x11cntxt.handles.xdisplay,
+    if (driver.extensions.xinerama.is_active) {
+        screens = driver.extensions.xinerama.QueryScreens(
+            driver.handles.xdisplay,
             &n_screens,
         );
     }
@@ -156,8 +160,8 @@ pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl)
     // the number of outputs matches the number of available
     // video ports(HDMI,VGA,...etc)
     for (0..@intCast(screens_res.noutput)) |i| {
-        const output_info = x11cntxt.extensions.xrandr.XRRGetOutputInfo(
-            x11cntxt.handles.xdisplay,
+        const output_info = driver.extensions.xrandr.XRRGetOutputInfo(
+            driver.handles.xdisplay,
             screens_res,
             screens_res.outputs[i],
         );
@@ -166,19 +170,19 @@ pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl)
         {
             // Skip if the output isn't connected or isn't drawing
             // from any video buffer(crtc);
-            x11cntxt.extensions.xrandr.XRRFreeOutputInfo(output_info);
+            driver.extensions.xrandr.XRRFreeOutputInfo(output_info);
             continue;
         }
 
         // Grab the video buffer infos.
-        const crtc_info = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
-            x11cntxt.handles.xdisplay,
+        const crtc_info = driver.extensions.xrandr.XRRGetCrtcInfo(
+            driver.handles.xdisplay,
             screens_res,
             output_info.crtc,
         );
 
         // Figure out the xinerama index
-        // in a multi-monitor setup.
+        // in a multi-display setup.
         var xinerama_index: ?i32 = null;
         if (screens) |scrns| {
             for (0..@intCast(n_screens)) |j| {
@@ -193,82 +197,82 @@ pub fn pollMonitors(allocator: Allocator) Allocator.Error!ArrayList(MonitorImpl)
             }
         }
 
-        // Copy the monitor name.
+        // Copy the display name.
+        // in case of an error the dislay 'deinit' should free the name.
         const name_len = utils.strZLen(output_info.name);
         const name = try allocator.alloc(u8, name_len);
         utils.strNCpy(name.ptr, output_info.name, name_len);
 
-        var monitor = MonitorImpl{
+        var d = Display{
             .adapter = output_info.crtc,
             .name = name,
             .output = screens_res.outputs[i],
             .xinerama_index = xinerama_index,
             .orig_mode = x11ext.RRMode_None,
-            .window = null,
             .modes = ArrayList(VideoMode).init(allocator),
             .modes_ids = ArrayList(x11ext.RRMode).init(allocator),
+            .window = null,
         };
+        errdefer d.deinit(driver);
 
         try pollVideoModes(
+            driver,
             screens_res,
             output_info,
             (crtc_info.rotation == x11ext.RR_Rotate_90 or
                 crtc_info.rotation == x11ext.RR_Rotate_270),
-            &monitor.modes,
-            &monitor.modes_ids,
+            &d.modes,
+            &d.modes_ids,
         );
-        errdefer monitor.deinit();
 
-        try monitors.append(monitor);
-        x11cntxt.extensions.xrandr.XRRFreeOutputInfo(output_info);
-        x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(crtc_info);
+        try displays.append(d);
+        driver.extensions.xrandr.XRRFreeOutputInfo(output_info);
+        driver.extensions.xrandr.XRRFreeCrtcInfo(crtc_info);
     }
-    x11cntxt.extensions.xrandr.XRRFreeScreenResources(screens_res);
+    driver.extensions.xrandr.XRRFreeScreenResources(screens_res);
     if (screens) |scrns| {
         _ = libx11.XFree(scrns);
     }
     // Shrink and free.
-    monitors.shrinkAndFree(monitors.items.len);
-    return monitors;
+    displays.shrinkAndFree(displays.items.len);
+    return displays;
 }
 
 /// Encapsulate the necessary infos for a monitor.
-pub const MonitorImpl = struct {
-    adapter: x11ext.RRCrtc,
-    name: []u8,
-    output: x11ext.RROutput,
-    xinerama_index: ?i32,
+pub const Display = struct {
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
     modes_ids: ArrayList(x11ext.RRMode),
-    orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
+    name: []u8,
     window: ?*Window, // A pointer to the window occupying(fullscreen)
-    // the monitor.
+    xinerama_index: ?i32,
+    adapter: x11ext.RRCrtc,
+    output: x11ext.RROutput,
+    orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
 
     const Self = @This();
 
-    pub fn deinit(self: *Self) void {
-        self.restoreOrignalVideo();
+    pub fn deinit(self: *Self, driver: *const X11Driver) void {
+        self.restoreOrignalVideoMode(driver);
         self.modes.allocator.free(self.name);
         self.modes.deinit();
         self.modes_ids.deinit();
     }
 
-    /// Check of if the 2 monitors are equals.
+    /// Check of if the 2 displays are equals.
     pub fn equals(self: *const Self, other: *const Self) bool {
         self.adapter = other.adapter;
     }
 
     /// Populate the output with the current VideoMode of the monitor.
-    pub fn queryCurrentMode(self: *const Self, output: *VideoMode) void {
-        const x11cntxt = X11Driver.singleton();
-        const res = getScreenRessources();
-        defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(res);
-        const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
-            x11cntxt.handles.xdisplay,
+    pub fn queryCurrentMode(self: *const Self, driver: *const X11Driver, output: *VideoMode) void {
+        const res = getScreenRessources(driver);
+        defer driver.extensions.xrandr.XRRFreeScreenResources(res);
+        const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
+            driver.handles.xdisplay,
             res,
             self.adapter,
         );
-        defer x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(ci);
+        defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
         var mode_info: ?*x11ext.XRRModeInfo = null;
         // Find the mode infos.
@@ -280,6 +284,7 @@ pub const MonitorImpl = struct {
         }
         if (mode_info) |mi| {
             _ = videoModeFromRRMode(
+                driver,
                 mi,
                 (ci.rotation == x11ext.RR_Rotate_90 or
                     ci.rotation == x11ext.RR_Rotate_270),
@@ -289,19 +294,19 @@ pub const MonitorImpl = struct {
     }
 
     /// Populate the `area` with the monitor's full area.
-    pub inline fn monitorFullArea(
+    pub inline fn getFullArea(
         self: *const Self,
         area: *common.geometry.WidowArea,
+        driver: *const X11Driver,
     ) void {
-        const x11cntxt = X11Driver.singleton();
-        const sr = getScreenRessources();
-        defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
-        const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
-            x11cntxt.handles.xdisplay,
+        const sr = getScreenRessources(driver);
+        defer driver.extensions.xrandr.XRRFreeScreenResources(sr);
+        const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
+            driver.handles.xdisplay,
             sr,
             self.adapter,
         );
-        defer x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(ci);
+        defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
         area.top_left.x = ci.x;
         area.top_left.y = ci.y;
         area.size.width = @intCast(ci.width);
@@ -310,7 +315,7 @@ pub const MonitorImpl = struct {
 
     /// Determines if the desired VideoMode `mode` is possible with
     /// the current display.
-    inline fn isModePossible(
+    inline fn isVideoModePossible(
         self: *const Self,
         mode: *const VideoMode,
         index: *usize,
@@ -331,70 +336,67 @@ pub const MonitorImpl = struct {
     /// if `mode` is null the monitor's original video mode is restored.
     pub fn setVideoMode(
         self: *Self,
-        video_mode: ?*const VideoMode,
-    ) MonitorError!void {
-        if (video_mode) |mode| {
-            var mode_index: usize = undefined;
-            if (self.isModePossible(mode, &mode_index) == false) {
-                mode_index = mode.selectBestMatch(self.modes.items);
-            }
-            var current_mode: VideoMode = undefined;
-            self.queryCurrentMode(&current_mode);
-            if (self.modes.items[mode_index].equals(&current_mode)) {
-                // The desired mode is already current.
-                return;
-            }
-            const x11cntxt = X11Driver.singleton();
-            const sr = getScreenRessources();
-            defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
-            const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
-                x11cntxt.handles.xdisplay,
-                sr,
-                self.adapter,
-            );
-            defer x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(ci);
+        video_mode: *const VideoMode,
+        driver: *const X11Driver,
+    ) DisplayError!void {
+        var mode_index: usize = undefined;
+        if (self.isVideoModePossible(video_mode, &mode_index) == false) {
+            mode_index = video_mode.selectBestMatch(self.modes.items);
+        }
+        var current_mode: VideoMode = undefined;
+        self.queryCurrentMode(driver, &current_mode);
+        if (self.modes.items[mode_index].equals(&current_mode)) {
+            // The desired mode is already current.
+            return;
+        }
+        const sr = getScreenRessources(driver);
+        defer driver.extensions.xrandr.XRRFreeScreenResources(sr);
+        const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
+            driver.handles.xdisplay,
+            sr,
+            self.adapter,
+        );
+        defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
-            if (self.orig_mode == x11ext.RRMode_None) {
-                self.orig_mode = ci.mode;
-            }
+        if (self.orig_mode == x11ext.RRMode_None) {
+            self.orig_mode = ci.mode;
+        }
 
-            const result = x11cntxt.extensions.xrandr.XRRSetCrtcConfig(
-                x11cntxt.handles.xdisplay,
-                sr,
-                self.adapter,
-                libx11.CurrentTime,
-                ci.x,
-                ci.y,
-                self.modes_ids.items[mode_index],
-                ci.rotation,
-                ci.outputs,
-                ci.noutput,
-            );
-            if (result != x11ext.RRSetConfigSuccess) {
-                return MonitorError.ModeChangeFailed;
-            }
-        } else {
-            self.restoreOrignalVideo();
+        const result = driver.extensions.xrandr.XRRSetCrtcConfig(
+            driver.handles.xdisplay,
+            sr,
+            self.adapter,
+            libx11.CurrentTime,
+            ci.x,
+            ci.y,
+            self.modes_ids.items[mode_index],
+            ci.rotation,
+            ci.outputs,
+            ci.noutput,
+        );
+        if (result != x11ext.RRSetConfigSuccess) {
+            return DisplayError.VideoModeChangeFailed;
         }
     }
 
     /// Restores the original video mode.
-    fn restoreOrignalVideo(self: *Self) void {
+    fn restoreOrignalVideoMode(self: *Self, driver: *const X11Driver) void {
+        // TODO: check
         if (self.orig_mode == x11ext.RRMode_None) {
             return;
         }
-        const x11cntxt = X11Driver.singleton();
-        const sr = getScreenRessources();
-        defer x11cntxt.extensions.xrandr.XRRFreeScreenResources(sr);
-        const ci = x11cntxt.extensions.xrandr.XRRGetCrtcInfo(
-            x11cntxt.handles.xdisplay,
+        const sr = getScreenRessources(driver);
+        defer driver.extensions.xrandr.XRRFreeScreenResources(sr);
+
+        const ci = driver.extensions.xrandr.XRRGetCrtcInfo(
+            driver.handles.xdisplay,
             sr,
             self.adapter,
         );
-        defer x11cntxt.extensions.xrandr.XRRFreeCrtcInfo(ci);
+        defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
-        _ = x11cntxt.extensions.xrandr.XRRSetCrtcConfig(
-            x11cntxt.handles.xdisplay,
+        _ = driver.extensions.xrandr.XRRSetCrtcConfig(
+            driver.handles.xdisplay,
             sr,
             self.adapter,
             libx11.CurrentTime,
@@ -410,12 +412,18 @@ pub const MonitorImpl = struct {
 
     /// Set the window Handle.
     pub inline fn setWindow(self: *Self, window: ?*Window) void {
+        if (self.window == window) {
+            return;
+        }
+        if (self.window) |w| {
+            _ = w.setFullscreen(false);
+        }
         self.window = window;
     }
 
     pub fn debugInfos(self: *const Self, print_video_modes: bool) void {
         if (dbg) {
-            std.debug.print("\nMonitor:{s}\n", .{self.name});
+            std.debug.print("\nDisplay:{s}\n", .{self.name});
             std.debug.print("\nAdapter:{d}\n", .{self.adapter});
             std.debug.print("\noutput:{d}\n", .{self.output});
             std.debug.print("\nindex:{?}\n", .{self.xinerama_index});
@@ -429,32 +437,126 @@ pub const MonitorImpl = struct {
     }
 };
 
-test "poll_monitors" {
-    const dyn = @import("x11/dynamic.zig");
-    try dyn.initDynamicApi();
-    try X11Driver.initSingleton("", "");
-    defer X11Driver.deinitSingleton();
-    const mons = try pollMonitors(std.testing.allocator);
-    defer {
-        for (mons.items) |*mon| {
-            mon.deinit();
-        }
-        mons.deinit();
+pub const DisplayManager = struct {
+    displays: std.ArrayList(Display),
+    driver: *const X11Driver,
+
+    const Self = @This();
+
+    pub fn init(
+        allocator: mem.Allocator,
+        driver: *const X11Driver,
+    ) (mem.Allocator.Error || DisplayError)!Self {
+        return .{
+            .displays = try pollDisplays(allocator, driver),
+            .driver = driver,
+        };
     }
 
-    for (mons.items) |mon| {
-        mon.debugInfos(true);
-        var vm: VideoMode = undefined;
-        mon.queryCurrentMode(&vm);
-        std.debug.print("\n[+] Current Mode {any}\n", .{vm});
-        var area: common.geometry.WidowArea = undefined;
-        mon.monitorFullArea(&area);
-        std.debug.print("\n[+] Current Full Area {any}\n", .{area});
+    pub fn deinit(self: *Self) void {
+        for (self.displays.items) |*d| {
+            if (d.window) |w| {
+                _ = w.setFullscreen(false);
+            }
+            d.deinit(self.driver);
+        }
+        self.displays.deinit();
     }
-    // width = 1280, .height = 800, .frequency = 60, .color_depth = 24
-    const nvm = VideoMode.init(1280, 800, 60, 24);
-    const mon = &mons.items[0];
-    try mon.setVideoMode(&nvm);
-    std.time.sleep(3 * std.time.ns_per_s);
-    try mon.setVideoMode(null);
-}
+
+    /// Updates the displays array by removing all disconnected displays
+    /// and adding new connected ones.
+    pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+        const new_displays = try pollDisplays(self.displays.allocator, self.driver);
+
+        for (self.displays.items) |*display| {
+            var disconnected = true;
+            for (new_displays.items) |*new_display| {
+                if (display.equals(new_display)) {
+                    disconnected = false;
+                    break;
+                }
+            }
+
+            if (disconnected) {
+                // TODO: need to test what will happen to the window
+            } else {
+                // avoids changing the video mode when deinit is called.
+                // as it's a useless call to the OS.
+                // TODO: need to test what will happen to the window
+                //display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
+            }
+            display.deinit(self.driver);
+        }
+
+        self.displays.deinit();
+
+        self.displays = new_displays;
+    }
+
+    /// Returns a refrence to the Monitor occupied by the window.
+    pub fn findWindowDisplay(self: *Self, w: *const Window) !*Display {
+        const w_area = w.data.client_area;
+        var d_area: common.geometry.WidowArea = undefined;
+        var max_intersect: f32 = 0.0;
+        var target: ?*Display = null;
+        for (self.displays.items) |*d| {
+            d.getFullArea(&d_area, self.driver);
+            const intersect_percent = utils.getDisplayOverlapRatio(&d_area, &w_area);
+            if (intersect_percent > max_intersect) {
+                target = d;
+                max_intersect = intersect_percent;
+            }
+        }
+
+        const display = target orelse {
+            std.log.err(
+                "[DisplayManager]: Display not found, requesting window={d}",
+                .{w.data.id},
+            );
+            return DisplayError.NotFound;
+        };
+
+        return display;
+    }
+
+    /// If the mode is null the function must not fail or return an error.
+    pub fn setDisplayVideoMode(
+        self: *Self,
+        display: *Display,
+        mode: ?*const VideoMode,
+    ) DisplayError!void {
+        if (mode) |m| {
+            try display.setVideoMode(m, self.driver);
+        } else {
+            display.restoreOrignalVideoMode(self.driver);
+        }
+    }
+};
+
+//test "poll_displays" {
+//    const dyn = @import("x11/dynamic.zig");
+//    try dyn.initDynamicApi();
+//    const mons = try pollDisplays(std.testing.allocator);
+//    defer {
+//        for (mons.items) |*mon| {
+//            mon.deinit();
+//        }
+//        mons.deinit();
+//    }
+//
+//    for (mons.items) |mon| {
+//        mon.debugInfos(true);
+//        var vm: VideoMode = undefined;
+//        mon.queryCurrentMode(&vm);
+//        std.debug.print("\n[+] Current Mode {any}\n", .{vm});
+//        var area: common.geometry.WidowArea = undefined;
+//        mon.monitorFullArea(&area);
+//        std.debug.print("\n[+] Current Full Area {any}\n", .{area});
+//    }
+//    // width = 1280, .height = 800, .frequency = 60, .color_depth = 24
+//    const nvm = VideoMode.init(1280, 800, 60, 24);
+//    const mon = &mons.items[0];
+//    try mon.setVideoMode(&nvm);
+//    std.time.sleep(3 * std.time.ns_per_s);
+//    try mon.setVideoMode(null);
+//}

@@ -21,10 +21,10 @@ pub const FBConfig = struct {
         alpha_bits: u4 = 8,
     } = .{},
     accum: struct {
-        red_bits: u4 = 8,
-        green_bits: u4 = 8,
-        blue_bits: u4 = 8,
-        alpha_bits: u4 = 8,
+        red_bits: u4 = 0,
+        green_bits: u4 = 0,
+        blue_bits: u4 = 0,
+        alpha_bits: u4 = 0,
     } = .{},
     flags: struct {
         double_buffered: bool = true,
