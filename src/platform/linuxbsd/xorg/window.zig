@@ -131,12 +131,15 @@ pub const Window = struct {
 
         if (self.data.flags.is_visible) {
             self.show();
+
             if (self.data.flags.is_focused) {
                 self.focus();
             }
         }
-
-        // TODO: fullscreen
+        if (self.data.flags.is_fullscreen) {
+            // BUG: This doesn't work
+            if (!self.setFullscreen(true)) return WindowError.CreateFail;
+        }
 
         return self;
     }
@@ -145,7 +148,7 @@ pub const Window = struct {
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         std.debug.assert(self.handle != 0);
         self.ev_queue = null;
-        // TODO: if full screen exit
+        if (self.data.flags.is_fullscreen) _ = self.setFullscreen(false);
         self.setCursorMode(.Normal);
         _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         _ = libx11.XDestroyWindow(self.ctx.driver.handles.xdisplay, self.handle);
@@ -283,8 +286,10 @@ pub const Window = struct {
         if (self.data.flags.is_fullscreen) {
             return;
         }
+
         const size_hints = libx11.XAllocSizeHints();
         if (size_hints) |hints| {
+            defer _ = libx11.XFree(hints);
             var supplied: c_long = 0;
             _ = libx11.XGetWMNormalHints(
                 self.ctx.driver.handles.xdisplay,
@@ -325,7 +330,6 @@ pub const Window = struct {
                 self.handle,
                 @ptrCast(hints),
             );
-            _ = libx11.XFree(hints);
         }
     }
 
@@ -848,7 +852,6 @@ pub const Window = struct {
         self: *Self,
         value: bool,
     ) bool {
-        //BUG: doesn't work correctly.
         const drvr = self.ctx.driver;
         var display_area: common.geometry.WidowArea = undefined;
 
@@ -858,9 +861,12 @@ pub const Window = struct {
             if (!self.updateStyles()) return false;
 
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
+            d.getFullArea(&display_area, drvr);
 
             if (value) {
                 if (!self.data.flags.is_resizable) {
+                    //BUG: the window decoration isn't removed.
+                    self.updateSizeHints();
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = self.data.client_area.size.width,
                         .height = self.data.client_area.size.height,
@@ -890,7 +896,6 @@ pub const Window = struct {
                     };
                     self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
                 }
-                d.getFullArea(&display_area, drvr);
 
                 _ = libx11.XMoveResizeWindow(
                     drvr.handles.xdisplay,
@@ -1312,8 +1317,6 @@ fn createPlatformWindow(
     if (handle == 0) {
         return WindowError.CreateFail;
     }
-
-    // TODO: handle non is_fullscreen = true,
 
     return handle;
 }
