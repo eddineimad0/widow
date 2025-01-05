@@ -93,6 +93,14 @@ pub const dyn_api = struct {
         width: c_uint,
         height: c_uint,
     ) callconv(.C) c_int;
+    const XMoveResizeWindowProc = *const fn (
+        display: ?*types.Display,
+        window: types.Window,
+        x: c_int,
+        y: c_int,
+        width: c_uint,
+        height: c_uint,
+    ) callconv(.C) c_int;
     const XIconifyWindowProc = *const fn (
         display: ?*types.Display,
         window: types.Window,
@@ -158,6 +166,20 @@ pub const dyn_api = struct {
         display: ?*types.Display,
         rid: types.XID,
         context: types.XContext,
+    ) callconv(.C) c_int;
+    const XGetScreenSaverProc = *const fn (
+        display: ?*types.Display,
+        timout: *c_int,
+        interval: *c_int,
+        prefer_blanking: *c_int,
+        allow_exposures: *c_int,
+    ) callconv(.C) c_int;
+    const XSetScreenSaverProc = *const fn (
+        display: ?*types.Display,
+        timout: c_int,
+        interval: c_int,
+        prefer_blanking: c_int,
+        allow_exposures: c_int,
     ) callconv(.C) c_int;
 
     // Events
@@ -375,6 +397,7 @@ pub const dyn_api = struct {
     pub var XMapWindow: XMapWindowProc = undefined;
     pub var XUnmapWindow: XUnmapWindowProc = undefined;
     pub var XMoveWindow: XMoveWindowProc = undefined;
+    pub var XMoveResizeWindow: XMoveResizeWindowProc = undefined;
     pub var XResizeWindow: XResizeWindowProc = undefined;
     pub var XIconifyWindow: XIconifyWindowProc = undefined;
 
@@ -382,6 +405,8 @@ pub const dyn_api = struct {
     pub var XSaveContext: XSaveContextProc = undefined;
     pub var XFindContext: XFindContextProc = undefined;
     pub var XDeleteContext: XDeleteContextProc = undefined;
+    pub var XGetScreenSaver: XGetScreenSaverProc = undefined;
+    pub var XSetScreenSaver: XSetScreenSaverProc = undefined;
 
     // Events
     pub var XNextEvent: XNextEventProc = undefined;
