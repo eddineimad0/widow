@@ -6,6 +6,7 @@ const utils = @import("utils.zig");
 
 const VideoMode = common.video_mode.VideoMode;
 const mem = std.mem;
+const debug = std.debug;
 
 const X11Driver = @import("driver.zig").X11Driver;
 const ArrayList = std.ArrayList;
@@ -183,7 +184,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
 
         // Figure out the xinerama index
         // in a multi-display setup.
-        var xinerama_index: ?i32 = null;
+        var xinerama_index: i32 = -1;
         if (screens) |scrns| {
             for (0..@intCast(n_screens)) |j| {
                 if (scrns[j].x_org == crtc_info.x and
@@ -195,6 +196,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
                     break;
                 }
             }
+            debug.assert(xinerama_index > -1);
         }
 
         // Copy the display name.
@@ -207,11 +209,11 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             .adapter = output_info.crtc,
             .name = name,
             .output = screens_res.outputs[i],
+            .window = null,
             .xinerama_index = xinerama_index,
-            .orig_mode = x11ext.RRMode_None,
+            .orig_video_mode = x11ext.RRMode_None,
             .modes = ArrayList(VideoMode).init(allocator),
             .modes_ids = ArrayList(x11ext.RRMode).init(allocator),
-            .window = null,
         };
         errdefer d.deinit(driver);
 
@@ -243,11 +245,11 @@ pub const Display = struct {
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
     modes_ids: ArrayList(x11ext.RRMode),
     name: []u8,
-    window: ?*Window, // A pointer to the window occupying(fullscreen)
-    xinerama_index: ?i32,
+    window: ?*const Window,
+    xinerama_index: i32,
     adapter: x11ext.RRCrtc,
     output: x11ext.RROutput,
-    orig_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
+    orig_video_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
 
     const Self = @This();
 
@@ -358,8 +360,8 @@ pub const Display = struct {
         );
         defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
-        if (self.orig_mode == x11ext.RRMode_None) {
-            self.orig_mode = ci.mode;
+        if (self.orig_video_mode == x11ext.RRMode_None) {
+            self.orig_video_mode = ci.mode;
         }
 
         const result = driver.extensions.xrandr.XRRSetCrtcConfig(
@@ -381,8 +383,7 @@ pub const Display = struct {
 
     /// Restores the original video mode.
     fn restoreOrignalVideoMode(self: *Self, driver: *const X11Driver) void {
-        // TODO: check
-        if (self.orig_mode == x11ext.RRMode_None) {
+        if (self.orig_video_mode == x11ext.RRMode_None) {
             return;
         }
         const sr = getScreenRessources(driver);
@@ -402,23 +403,12 @@ pub const Display = struct {
             libx11.CurrentTime,
             ci.x,
             ci.y,
-            self.orig_mode,
+            self.orig_video_mode,
             ci.rotation,
             ci.outputs,
             ci.noutput,
         );
-        self.orig_mode = x11ext.RRMode_None;
-    }
-
-    /// Set the window Handle.
-    pub inline fn setWindow(self: *Self, window: ?*Window) void {
-        if (self.window == window) {
-            return;
-        }
-        if (self.window) |w| {
-            _ = w.setFullscreen(false);
-        }
-        self.window = window;
+        self.orig_video_mode = x11ext.RRMode_None;
     }
 
     pub fn debugInfos(self: *const Self, print_video_modes: bool) void {
@@ -440,6 +430,13 @@ pub const Display = struct {
 pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
     driver: *const X11Driver,
+    screen_saver_profile: struct {
+        timout: c_int,
+        interval: c_int,
+        prefer_blanking: c_int,
+        allow_exposures: c_int,
+    },
+    fullscreen_count: u32,
 
     const Self = @This();
 
@@ -450,43 +447,22 @@ pub const DisplayManager = struct {
         return .{
             .displays = try pollDisplays(allocator, driver),
             .driver = driver,
+            .fullscreen_count = 0,
+            .screen_saver_profile = undefined,
         };
     }
 
     pub fn deinit(self: *Self) void {
         for (self.displays.items) |*d| {
-            if (d.window) |w| {
-                _ = w.setFullscreen(false);
-            }
             d.deinit(self.driver);
         }
         self.displays.deinit();
     }
 
-    /// Updates the displays array by removing all disconnected displays
-    /// and adding new connected ones.
-    pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+    /// Updates the displays array.
+    pub fn rePollDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+        // TODO: update display on connect/disconnect
         const new_displays = try pollDisplays(self.displays.allocator, self.driver);
-
-        for (self.displays.items) |*display| {
-            var disconnected = true;
-            for (new_displays.items) |*new_display| {
-                if (display.equals(new_display)) {
-                    disconnected = false;
-                    break;
-                }
-            }
-
-            if (disconnected) {
-                // TODO: need to test what will happen to the window
-            } else {
-                // avoids changing the video mode when deinit is called.
-                // as it's a useless call to the OS.
-                // TODO: need to test what will happen to the window
-                //display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
-            }
-            display.deinit(self.driver);
-        }
 
         self.displays.deinit();
 
@@ -531,32 +507,45 @@ pub const DisplayManager = struct {
             display.restoreOrignalVideoMode(self.driver);
         }
     }
-};
 
-//test "poll_displays" {
-//    const dyn = @import("x11/dynamic.zig");
-//    try dyn.initDynamicApi();
-//    const mons = try pollDisplays(std.testing.allocator);
-//    defer {
-//        for (mons.items) |*mon| {
-//            mon.deinit();
-//        }
-//        mons.deinit();
-//    }
-//
-//    for (mons.items) |mon| {
-//        mon.debugInfos(true);
-//        var vm: VideoMode = undefined;
-//        mon.queryCurrentMode(&vm);
-//        std.debug.print("\n[+] Current Mode {any}\n", .{vm});
-//        var area: common.geometry.WidowArea = undefined;
-//        mon.monitorFullArea(&area);
-//        std.debug.print("\n[+] Current Full Area {any}\n", .{area});
-//    }
-//    // width = 1280, .height = 800, .frequency = 60, .color_depth = 24
-//    const nvm = VideoMode.init(1280, 800, 60, 24);
-//    const mon = &mons.items[0];
-//    try mon.setVideoMode(&nvm);
-//    std.time.sleep(3 * std.time.ns_per_s);
-//    try mon.setVideoMode(null);
-//}
+    pub fn setDisplayWindow(self: *Self, d: *Display, w: ?*const Window) void {
+        var new_fullscreen_count = self.fullscreen_count;
+        if (d.window == null and w != null) {
+            new_fullscreen_count += 1;
+        } else if (d.window != null and w == null) {
+            new_fullscreen_count -= 1;
+        }
+        d.window = w;
+        if (self.fullscreen_count != new_fullscreen_count) {
+            if (new_fullscreen_count == 1) {
+                _ = libx11.XGetScreenSaver(
+                    self.driver.handles.xdisplay,
+                    &self.screen_saver_profile.timout,
+                    &self.screen_saver_profile.interval,
+                    &self.screen_saver_profile.prefer_blanking,
+                    &self.screen_saver_profile.allow_exposures,
+                );
+
+                _ = libx11.XSetScreenSaver(
+                    self.driver.handles.xdisplay,
+                    0,
+                    0,
+                    libx11.DontPreferBlanking,
+                    libx11.DontAllowExposures,
+                );
+            }
+
+            if (new_fullscreen_count == 0) {
+                _ = libx11.XSetScreenSaver(
+                    self.driver.handles.xdisplay,
+                    self.screen_saver_profile.timout,
+                    self.screen_saver_profile.interval,
+                    self.screen_saver_profile.prefer_blanking,
+                    self.screen_saver_profile.allow_exposures,
+                );
+            }
+
+            self.fullscreen_count = new_fullscreen_count;
+        }
+    }
+};
