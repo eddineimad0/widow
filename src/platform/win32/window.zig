@@ -1262,6 +1262,7 @@ pub const Window = struct {
                 self.acquireDisplay(d);
             } else {
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
+                //BUG: This call might cause a infinite loop
                 d.setWindow(null);
                 self.updateStyles(&self.win32.prev_frame);
             }

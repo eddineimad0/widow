@@ -228,12 +228,12 @@ fn pollVideoModes(
 
 /// Encapsulate the necessary infos for a display(monitor).
 pub const Display = struct {
-    handle: gdi.HMONITOR, // System handle to the display.
-    name: []u8, // Name assigned to the display
-    adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
-    curr_video: usize, // the index of the currently active videomode.
+    adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
+    name: []u8, // Name assigned to the display
+    handle: gdi.HMONITOR, // System handle to the display.
     window: ?*Window, // A pointer to the window occupying(fullscreen) the display.
+    curr_video: usize, // the index of the currently active videomode.
 
     // the original(registry setting of the dispaly video mode)
     // is always saved at index 0 of the `modes` ArrayList.
@@ -483,8 +483,8 @@ pub const DisplayManager = struct {
     }
 
     /// Returns a refrence to the Monitor occupied by the window.
-    pub fn findWindowDisplay(self: *Self, window_handle: win32.HWND) !*Display {
-        const display_handle = gdi.MonitorFromWindow(window_handle, gdi.MONITOR_DEFAULTTONEAREST);
+    pub fn findWindowDisplay(self: *Self, window: *const wndw.Window) !*Display {
+        const display_handle = gdi.MonitorFromWindow(window.handle, gdi.MONITOR_DEFAULTTONEAREST);
         // Find the monitor.
         var target: ?*Display = null;
         for (self.displays.items) |*d| {
@@ -496,8 +496,8 @@ pub const DisplayManager = struct {
 
         const display = target orelse {
             std.log.err(
-                "[DisplayManager]: monitor not found, requested handle={*}",
-                .{display_handle},
+                "[DisplayManager]: Display not found, requested handle={*} ,requesting window={d}",
+                .{ display_handle, window.data.id },
             );
             return DisplayError.NotFound;
         };

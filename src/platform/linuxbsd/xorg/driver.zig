@@ -211,7 +211,7 @@ pub const X11Driver = struct {
 
     const Self = @This();
 
-    pub fn initSingleton() XConnectionError!void {
+    pub fn initSingleton() XConnectionError!*const Self {
         @setCold(true);
 
         Self.driver_guard.lock();
@@ -267,9 +267,14 @@ pub const X11Driver = struct {
 
             Self.g_init = true;
         }
+
+        return &Self.globl_instance;
     }
 
-    pub fn deinitSingleton() void {
+    /// !!! Calling this function closes the connection to the x server,
+    /// effectively crashing any window that hasn't been destroyed yet.
+    /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
+    fn deinitSingleton() void {
         @setCold(true);
         Self.driver_guard.lock();
         defer Self.driver_guard.unlock();
@@ -722,6 +727,7 @@ pub const X11Driver = struct {
         );
     }
 
+    /// context management functions
     pub inline fn addToXContext(
         self: *const Self,
         window_id: libx11.Window,
@@ -746,10 +752,6 @@ pub const X11Driver = struct {
         ) == 0);
     }
 
-    pub inline fn windowManagerId(self: *const Self) libx11.Window {
-        return self.handles.root_window;
-    }
-
     pub inline fn findInXContext(
         self: *const Self,
         window_id: libx11.Window,
@@ -767,10 +769,14 @@ pub const X11Driver = struct {
         return data_return;
     }
 
-    // Enfoce readonly.
-    pub fn singleton() *const Self {
+    // Enfoce readonly access to the singleton.
+    inline fn singleton() *const Self {
         std.debug.assert(g_init == true);
         return &Self.globl_instance;
+    }
+
+    pub inline fn windowManagerId(self: *const Self) libx11.Window {
+        return self.handles.root_window;
     }
 };
 
@@ -803,7 +809,6 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
                 return 0;
             } else {
                 return -1;
-                // return X11Driver.last_error_handler.?(display, err);
             }
         }
     };
@@ -812,8 +817,7 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
 test "X11Driver init" {
     const dyn = @import("x11/dynamic.zig");
     try dyn.initDynamicApi();
-    try X11Driver.initSingleton("", "");
-    const singleton = X11Driver.singleton();
+    const singleton = try X11Driver.initSingleton("", "");
     std.debug.print("\nX11 execution context:\n", .{});
     std.debug.print("[+] DPI:{d},Scale:{d}\n", .{ singleton.g_dpi, singleton.g_screen_scale });
     std.debug.print("[+] Handles: {any}\n", .{singleton.handles});
@@ -827,8 +831,7 @@ test "XContext management" {
     const testing = std.testing;
     const dyn = @import("x11/dynamic.zig");
     try dyn.initDynamicApi();
-    try X11Driver.initSingleton("", "");
-    const singleton = X11Driver.singleton();
+    const singleton = try X11Driver.initSingleton("", "");
     var msg: [5]u8 = .{ 'H', 'E', 'L', 'L', 'O' };
     try testing.expect(singleton.addToXContext(1, &msg));
     var msg_alias_ptr = singleton.findInXContext(1);
