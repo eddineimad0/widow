@@ -20,18 +20,25 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const KeyCode = widow.keyboard.KeyCode;
+const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub fn main() void {
+pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
     // first we need to preform some platform specific initialization.
-    try widow.initWidowPlatform();
-    // clean up code to be called, when done using the library.
+    // and build a context for the current platform.
+    const ctx = try widow.createWidowContext(allocator);
+    defer widow.destroyWidowContext(allocator, ctx);
+    // when done using the library.
     // or don't let the os figure it's stuff.
     defer widow.deinitWidowPlatform();
+
+    // the window will require an event queue to
+    // send events.
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
@@ -42,7 +49,7 @@ pub fn main() void {
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, null) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
@@ -50,10 +57,6 @@ pub fn main() void {
     // closes the window when done.
     defer mywindow.deinit(allocator);
 
-    // the window will require an event queue to
-    // send events.
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
 
@@ -88,10 +91,10 @@ pub fn main() void {
 
 ## Minimum Zig Version
 
-✅ [0.13.0](https://ziglang.org/documentation/0.13.0/)   
+✅ [0.13.0](https://ziglang.org/documentation/0.13.0/)
 The main branch will stick to stable zig releases.
 
 ## Dependecies
 
 - [zigwin32](https://github.com/marlersoft/zigwin32): Provides binding for Win32 API.
-- [zigglgen](https://github.com/castholm/zigglgen): OpenGL binding used in the `gl_triangle.zig` example 
+- [zigglgen](https://github.com/castholm/zigglgen): OpenGL binding used in the `gl_triangle.zig` example

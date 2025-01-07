@@ -37,7 +37,7 @@ pub fn helperWindowProc(
             if (display_mgr_ref) |ref| {
                 const display_mgr: *display.DisplayManager = @ptrCast(@alignCast(ref));
                 if (!display_mgr.expected_video_change) {
-                    display_mgr.updateDisplays() catch |err| {
+                    display_mgr.rePollDisplays() catch |err| {
                         // updateDisplays should only fail if we ran out of memory
                         // which is very unlikely on 64 bit systems
                         // but if it does happen the library should panic.
