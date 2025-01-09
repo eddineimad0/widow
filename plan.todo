@@ -1,11 +1,11 @@
 [] General
     [x] Widow Context init need to be easier and more
     secure (less error prone)
-    [] should the event queue be moved to the context ?
-    [] builder api should not accept bools for flags
-    [] update readme
-    [] can singletons (driver, keymap, ...) be thread-local ?
+    [x] update readme
     [] redo the tests.
+    [] builder api should not accept bools for flags
+    [] can singletons (driver, keymap, ...) be thread-local ?
+    [] should the event queue be moved to the context ?
 [] Win32
     [x] Finish the display wrapper.
     [x] display wrapper need to be updated through hidden window events
@@ -13,6 +13,7 @@
     [-] fix: the closest videomode choice isn't accurate.
         + this is because of the screen DPI should the videomode be influenced by the dpi ?
 [] X11
-    [] finish display wrapper.
-    [] implement fullscreen for windows.
+    [x] finish display wrapper.
+    [-] implement fullscreen for windows.
+        + it's buggy and need to handle some cases
     [x] finish raw motion input.
