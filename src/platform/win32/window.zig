@@ -575,7 +575,7 @@ pub const Window = struct {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
-                const disp = self.ctx.display_mgr.findWindowDisplay(self.handle) catch break :null_exit;
+                const disp = self.ctx.display_mgr.findWindowDisplay(self) catch break :null_exit;
                 dpi = disp.displayDPI(self.ctx.driver);
             }
         }
@@ -1237,7 +1237,7 @@ pub const Window = struct {
             // WARN: the fullscreen flag should be updated before updating
             // the window style or the visuals will be buggy
             self.data.flags.is_fullscreen = value;
-            const d = self.ctx.display_mgr.findWindowDisplay(self.handle) catch {
+            const d = self.ctx.display_mgr.findWindowDisplay(self) catch {
                 self.data.flags.is_fullscreen = !value;
                 return false;
             };
@@ -1262,8 +1262,6 @@ pub const Window = struct {
                 self.acquireDisplay(d);
             } else {
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
-                //BUG: This call might cause a infinite loop
-                d.setWindow(null);
                 self.updateStyles(&self.win32.prev_frame);
             }
         }
@@ -1295,8 +1293,6 @@ pub const Window = struct {
             area.size.width,
             area.size.height,
         );
-
-        d.setWindow(self);
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).

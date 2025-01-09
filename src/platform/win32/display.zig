@@ -232,7 +232,6 @@ pub const Display = struct {
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
     name: []u8, // Name assigned to the display
     handle: gdi.HMONITOR, // System handle to the display.
-    window: ?*Window, // A pointer to the window occupying(fullscreen) the display.
     curr_video: usize, // the index of the currently active videomode.
 
     // the original(registry setting of the dispaly video mode)
@@ -253,7 +252,6 @@ pub const Display = struct {
             .name = name,
             .modes = modes,
             .curr_video = REGISTRY_VIDEOMODE_INDEX,
-            .window = null,
         };
     }
 
@@ -267,7 +265,7 @@ pub const Display = struct {
 
     /// checks if 2 displays represent the same device.
     pub inline fn equals(self: *const Self, other: *const Self) bool {
-        // Windows might change the display handle when a new one is plugged or
+        // Windows(OS) might change the display handle when a new one is plugged or
         // an old one is unplugged so make sure to compare the name.
         return (mem.eql(u8, self.name, other.name));
     }
@@ -354,12 +352,12 @@ pub const Display = struct {
     }
 
     /// Set the window Handle field
-    pub inline fn setWindow(self: *Self, window: ?*Window) void {
-        if (self.window) |w| {
-            _ = w.setFullscreen(false);
-        }
-        self.window = window;
-    }
+    //pub inline fn setWindow(self: *Self, window: ?*Window) void {
+    //    if (self.window) |w| {
+    //        _ = w.setFullscreen(false);
+    //    }
+    //    self.window = window;
+    //}
 
     /// Returns the dpi value for the given display.
     /// # Note
@@ -417,7 +415,6 @@ pub const Display = struct {
                 }
             }
             std.debug.print("current video mode: {}\n", .{self.curr_video});
-            std.debug.print("occupying window ref: {?*}\n", .{self.window});
         }
     }
 };
@@ -425,7 +422,6 @@ pub const Display = struct {
 pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
     prev_exec_state: sys_power.EXECUTION_STATE,
-    occupied_count: u8, // keeps track of how many monitor is occupied by a full window
     expected_video_change: bool, // For skipping unnecessary updates.
 
     const Self = @This();
@@ -433,7 +429,6 @@ pub const DisplayManager = struct {
 
     pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
         return .{
-            .occupied_count = 0,
             .expected_video_change = false,
             .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .displays = try pollDisplays(allocator),
@@ -443,9 +438,6 @@ pub const DisplayManager = struct {
     pub fn deinit(self: *Self) void {
         self.expected_video_change = true;
         for (self.displays.items) |*d| {
-            if (d.window) |w| {
-                _ = w.setFullscreen(false);
-            }
             // free allocated data.
             d.deinit();
         }
@@ -454,7 +446,8 @@ pub const DisplayManager = struct {
 
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
-    pub fn updateDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+    pub fn rePollDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+        // TODO: This can possibly be optimized but isn't a priority now
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
@@ -469,9 +462,7 @@ pub const DisplayManager = struct {
                 }
             }
 
-            if (disconnected) {
-                // TODO: need to test what will happen to the window
-            } else {
+            if (!disconnected) {
                 // avoids changing the video mode when deinit is called.
                 // as it's a useless call to the OS.
                 display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
