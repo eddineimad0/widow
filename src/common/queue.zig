@@ -1,10 +1,11 @@
 const std = @import("std");
 const mem = std.mem;
 
+/// Queue implemented as a single linked list.
 pub fn Queue(comptime T: type) type {
     return struct {
-        pub const Node = struct {
-            next: ?*Node = null,
+        const Node = struct {
+            next: ?*Node,
             data: T,
         };
 
@@ -27,7 +28,8 @@ pub fn Queue(comptime T: type) type {
                 current = next;
             }
             self.allocator.destroy(current);
-            self.head = null;
+            // self.head = null; || setting it to null will keep the queue valid for use
+            self.head = undefined;
         }
 
         /// Appends `item` to the queue.

@@ -1,11 +1,11 @@
 const std = @import("std");
 const common = @import("common");
 const platform = @import("platform");
-const gl = @import("gl");
 const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
 const EventQueue = common.event.EventQueue;
+const WidowContext = platform.WidowContext;
 
 pub const WindowBuilder = struct {
     attribs: common.window_data.WindowData,
@@ -60,22 +60,24 @@ pub const WindowBuilder = struct {
     /// # Parameters
     /// `allocator`: used for allocating space for the window implementation,
     /// the same allocator is required when deinitializing the created window.
+    /// `ctx`: a pointer to a valid WindowContext
     /// `id`: number used to identify the window, if null is used an identifer
     /// is generated from the platform window identifer whose value is unpredicatble.
     /// # Notes
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self, allocator: mem.Allocator, id: ?usize) !Window {
+    pub fn build(self: *Self, allocator: mem.Allocator, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
-        const window = Window.init(
+        const w = Window.init(
             allocator,
+            ctx,
             id,
             self.title,
             &self.attribs,
             &self.fbcfg,
         );
-        return window;
+        return w;
     }
 
     /// Set the window title.
@@ -186,6 +188,14 @@ pub const WindowBuilder = struct {
         return self;
     }
 
+    /// Specify whether the window should be fullscreen on creation.
+    /// # Parameters
+    /// `value`: the boolean value of the flag.
+    pub fn withFullScreen(self: *Self, value: bool) *Self {
+        self.attribs.flags.is_fullscreen = value;
+        return self;
+    }
+
     /// Specify the frame buffer configuration for the window.
     /// # Parameters
     /// `cfg`: a pointer to a FBConfig struct.
@@ -211,8 +221,9 @@ pub const Window = struct {
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
-    pub fn init(
+    fn init(
         allocator: mem.Allocator,
+        ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
@@ -221,6 +232,7 @@ pub const Window = struct {
         return .{
             .impl = try WindowImpl.init(
                 allocator,
+                ctx,
                 id,
                 window_title,
                 data,
@@ -836,6 +848,9 @@ pub const Window = struct {
 
     /// Activate or deactivate raw mouse input for the window,
     /// returns true on success.
+    ///# Note
+    /// raw mouse inputs will only be delivered when
+    /// the cursor need to be set to hidden mode.
     pub inline fn setRawMouseMotion(self: *Self, active: bool) bool {
         return self.impl.setRawMouseMotion(active);
     }

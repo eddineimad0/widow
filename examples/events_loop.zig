@@ -2,38 +2,39 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const KeyCode = widow.keyboard.KeyCode;
+const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    try widow.initWidowPlatform();
-    defer widow.deinitWidowPlatform();
-
-    var builder = widow.WindowBuilder.init();
-
-    var mywindow = builder.withTitle("Event Loop")
-        .withSize(1024, 800)
-        .withResize(true)
-        .withDPIAware(true)
-        .withPosition(200, 200)
-        .withDecoration(true)
-        .build(allocator, 1) catch |err| {
-        std.debug.print("Failed to build the window,{}\n", .{err});
-        return;
-    };
-
-    defer mywindow.deinit(allocator);
+    const ctx = try widow.createWidowContext(allocator);
+    defer widow.destroyWidowContext(allocator, ctx);
 
     var ev_queue = EventQueue.init(allocator);
     defer ev_queue.deinit();
 
-    _ = mywindow.setEventQueue(&ev_queue);
+    // create a WindowBuilder.
+    var builder = widow.WindowBuilder.init();
+    // customize the window.
+    var mywindows: [1]widow.Window = undefined;
+    mywindows[0] = builder.withTitle("Simple Window")
+        .withSize(1024, 768)
+        .withResize(false)
+        .withDPIAware(false)
+        .withPosition(200, 200)
+        .withDecoration(true)
+        .build(allocator, ctx, 0) catch |err| {
+        std.debug.print("Failed to build the window,{}\n", .{err});
+        return;
+    };
+    defer mywindows[0].deinit(allocator);
+
+    _ = mywindows[0].setEventQueue(&ev_queue);
 
     event_loop: while (true) {
-        try mywindow.waitEvent();
+        try mywindows[0].waitEvent();
 
         var event: widow.event.Event = undefined;
 
@@ -88,42 +89,42 @@ pub fn main() !void {
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on pressing Q key
-                            mywindow.queueCloseEvent();
+                            mywindows[key.window_id].queueCloseEvent();
                         }
                         if (key.keycode == .D) {
-                            mywindow.debugInfos(true, true);
+                            mywindows[key.window_id].debugInfos(true, true);
                         }
                         if (key.keycode == .P) {
                             std.debug.print(
                                 "ClientPosition:{}\n",
-                                .{mywindow.getClientPosition()},
+                                .{mywindows[key.window_id].getClientPosition()},
                             );
                         }
                         if (key.keycode == .M) {
-                            mywindow.setClientPosition(0, 0);
+                            mywindows[key.window_id].setClientPosition(0, 0);
                         }
                         if (key.keycode == .C) {
-                            mywindow.setClientSize(1024, 640);
+                            mywindows[key.window_id].setClientSize(1024, 640);
                         }
                         if (key.keycode == .R) {
-                            const resizable = mywindow.isResizable();
-                            mywindow.setResizable(!resizable);
+                            const resizable = mywindows[key.window_id].isResizable();
+                            mywindows[key.window_id].setResizable(!resizable);
                         }
                         if (key.keycode == .B) {
-                            const decorated = mywindow.isDecorated();
-                            mywindow.setDecorated(!decorated);
+                            const decorated = mywindows[key.window_id].isDecorated();
+                            mywindows[key.window_id].setDecorated(!decorated);
                         }
                         if (key.keycode == .E) {
-                            _ = mywindow.setFullscreen(true);
+                            _ = mywindows[key.window_id].setFullscreen(true);
                         }
                         if (key.keycode == .Escape) {
-                            _ = mywindow.setFullscreen(false);
+                            _ = mywindows[key.window_id].setFullscreen(false);
                         }
                         if (key.keycode == .N) {
                             if (key.mods.shift) {
-                                mywindow.setMinSize(null);
+                                mywindows[key.window_id].setMinSize(null);
                             } else {
-                                mywindow.setMinSize(widow.geometry.WidowSize{
+                                mywindows[key.window_id].setMinSize(widow.geometry.WidowSize{
                                     .width = 300,
                                     .height = 300,
                                 });
@@ -131,14 +132,14 @@ pub fn main() !void {
                         }
                         if (key.keycode == .U) {
                             if (key.mods.shift) {
-                                mywindow.allowDragAndDrop(allocator, true);
+                                mywindows[key.window_id].allowDragAndDrop(allocator, true);
                             } else {
-                                mywindow.allowDragAndDrop(allocator, false);
+                                mywindows[key.window_id].allowDragAndDrop(allocator, false);
                             }
                         }
                         if (key.keycode == .I) {
-                            const minimized = mywindow.isMinimized();
-                            mywindow.setMinimized(!minimized);
+                            const minimized = mywindows[key.window_id].isMinimized();
+                            mywindows[key.window_id].setMinimized(!minimized);
                         }
                     }
                 },
@@ -230,7 +231,7 @@ pub fn main() !void {
                 EventType.FileDrop => |window_id| {
 
                     // Get a Slice containing the path(s) to the latest file(s).
-                    const files = mywindow.getDroppedFilesURI();
+                    const files = mywindows[window_id].getDroppedFilesURI();
                     for (files) |*file| {
                         std.debug.print("File: {s} Dropped on window #{}\n", .{ file.*, window_id });
                     }
@@ -239,7 +240,7 @@ pub fn main() !void {
                     // you may want to manually free it.
                     if (files.len > 5) {
                         std.log.info("Free drop cache\n", .{});
-                        mywindow.freeDroppedFilesURI();
+                        mywindows[window_id].freeDroppedFilesURI();
                     }
                 },
                 EventType.WindowMove => |*new_pos| {

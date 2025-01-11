@@ -2,7 +2,7 @@ const std = @import("std");
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
-const ScanCode = widow.keyboard.ScanCode;
+const ScanCode = widow.input.keyboard.ScanCode;
 const CursorMode = widow.cursor.CursorMode;
 const CursorShape = widow.cursor.NativeCursorShape;
 var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
@@ -11,26 +11,27 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    try widow.initWidowPlatform();
-    defer widow.deinitWidowPlatform();
+    const ctx = try widow.createWidowContext(allocator);
+    defer widow.destroyWidowContext(allocator, ctx);
 
+    var ev_queue = EventQueue.init(allocator);
+    defer ev_queue.deinit();
+
+    // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
-
-    var mywindow = builder.withTitle("Cursor & icon")
-        .withSize(800, 600)
+    // customize the window.
+    var mywindow = builder.withTitle("Simple Window")
+        .withSize(1024, 800)
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, 1) catch |err| {
+        .build(allocator, ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
     defer mywindow.deinit(allocator);
-
-    var ev_queue = EventQueue.init(allocator);
-    defer ev_queue.deinit();
 
     _ = mywindow.setEventQueue(&ev_queue);
 
