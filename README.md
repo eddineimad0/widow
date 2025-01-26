@@ -31,9 +31,6 @@ pub fn main() !void {
     // and build a context for the current platform.
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
-    // when done using the library.
-    // or don't let the os figure it's stuff.
-    defer widow.deinitWidowPlatform();
 
     // the window will require an event queue to
     // send events.
