@@ -14,8 +14,8 @@ pub const IconError = error{
 };
 
 pub const CursorHints = struct {
-    pos: common.geometry.WidowPoint2D, // Track the cursor coordinates in respect to top left corner.
-    accum_pos: common.geometry.WidowPoint2D, // Accumulate the mouse movement
+    pos: common.geometry.Point2D, // Track the cursor coordinates in respect to top left corner.
+    accum_pos: common.geometry.Point2D, // Accumulate the mouse movement
     icon: libx11.Cursor,
     mode: common.cursor.CursorMode,
 };

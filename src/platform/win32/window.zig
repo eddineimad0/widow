@@ -196,10 +196,10 @@ fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
 }
 
 /// Returns the (width,height) of the entire window frame.
-pub fn windowSize(window_handle: win32.HWND) common.geometry.WidowSize {
+pub fn windowSize(window_handle: win32.HWND) common.geometry.RectSize {
     var rect: win32.RECT = undefined;
     _ = window_msg.GetWindowRect(window_handle, &rect);
-    const size = common.geometry.WidowSize{
+    const size = common.geometry.RectSize{
         .width = rect.right - rect.left,
         .height = rect.bottom - rect.top,
     };
@@ -344,7 +344,7 @@ pub const WindowWin32Data = struct {
     icon: Icon,
     dropped_files: std.ArrayList([]const u8),
     cursor: CursorHints,
-    prev_frame: common.geometry.WidowArea, // Used when going fullscreen to save restore coords.
+    prev_frame: common.geometry.Rect, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
     position_update: bool,
@@ -359,7 +359,7 @@ pub const Window = struct {
     win32: WindowWin32Data,
     fb_cfg: FBConfig,
 
-    pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
+    pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
         .x = window_msg.CW_USEDEFAULT,
         .y = window_msg.CW_USEDEFAULT,
     };
@@ -666,7 +666,7 @@ pub const Window = struct {
     /// Updates the registered window styles to match the current window config.
     fn updateStyles(
         self: *Self,
-        new_area: *const common.geometry.WidowArea,
+        new_area: *const common.geometry.Rect,
     ) void {
         const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
@@ -736,12 +736,12 @@ pub const Window = struct {
         );
     }
 
-    pub fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         var cursor_pos: foundation.POINT = undefined;
         _ = window_msg.GetCursorPos(&cursor_pos);
         _ = gdi.ScreenToClient(self.handle, &cursor_pos);
         // the cursor pos is relative to the upper left corner of the window.
-        return common.geometry.WidowPoint2D{ .x = cursor_pos.x, .y = cursor_pos.y };
+        return common.geometry.Point2D{ .x = cursor_pos.x, .y = cursor_pos.y };
     }
 
     pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
@@ -781,7 +781,7 @@ pub const Window = struct {
     }
 
     /// Returns the position of the top left corner of the client area.
-    pub inline fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getClientPosition(self: *const Self) common.geometry.Point2D {
         return self.data.client_area.top_left;
     }
 
@@ -838,16 +838,16 @@ pub const Window = struct {
     }
 
     /// Returns the Pixel size of the window's client area
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
-        return common.geometry.WidowSize{
+    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
+        return common.geometry.RectSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
     }
 
     /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.WidowSize {
-        var client_size = common.geometry.WidowSize{
+    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
+        var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
@@ -860,7 +860,7 @@ pub const Window = struct {
     }
 
     /// Sets the new (width,height) of the window's client area
-    pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
+    pub fn setClientSize(self: *Self, size: *common.geometry.RectSize) void {
         if (!self.data.flags.is_fullscreen) {
             var dpi: ?u32 = null;
             if (self.data.flags.is_dpi_aware) {
@@ -912,7 +912,7 @@ pub const Window = struct {
         }
     }
 
-    pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
+    pub fn setMinSize(self: *Self, min_size: ?common.geometry.RectSize) void {
         if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
             // No need to do anything.
             return;
@@ -972,7 +972,7 @@ pub const Window = struct {
         );
     }
 
-    pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
+    pub fn setMaxSize(self: *Self, max_size: ?common.geometry.RectSize) void {
         if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
             // No need to do anything.
             return;
@@ -1269,7 +1269,7 @@ pub const Window = struct {
     }
 
     pub fn acquireDisplay(self: *Self, d: *display.Display) void {
-        var area: common.geometry.WidowArea = undefined;
+        var area: common.geometry.Rect = undefined;
 
         d.getFullArea(&area);
 

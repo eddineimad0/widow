@@ -298,7 +298,7 @@ pub const Display = struct {
     /// Populate the `area` with the monitor's full area.
     pub inline fn getFullArea(
         self: *const Self,
-        area: *common.geometry.WidowArea,
+        area: *common.geometry.Rect,
         driver: *const X11Driver,
     ) void {
         const sr = getScreenRessources(driver);
@@ -472,7 +472,7 @@ pub const DisplayManager = struct {
     /// Returns a refrence to the Monitor occupied by the window.
     pub fn findWindowDisplay(self: *Self, w: *const Window) !*Display {
         const w_area = w.data.client_area;
-        var d_area: common.geometry.WidowArea = undefined;
+        var d_area: common.geometry.Rect = undefined;
         var max_intersect: f32 = 0.0;
         var target: ?*Display = null;
         for (self.displays.items) |*d| {

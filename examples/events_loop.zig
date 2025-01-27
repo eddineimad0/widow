@@ -124,7 +124,7 @@ pub fn main() !void {
                             if (key.mods.shift) {
                                 mywindows[key.window_id].setMinSize(null);
                             } else {
-                                mywindows[key.window_id].setMinSize(widow.geometry.WidowSize{
+                                mywindows[key.window_id].setMinSize(widow.geometry.RectSize{
                                     .width = 300,
                                     .height = 300,
                                 });

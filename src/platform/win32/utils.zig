@@ -194,10 +194,10 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
     }
 }
 
-pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.WidowPoint2D {
+pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.Point2D {
     const xpos = getXLparam(@bitCast(lparam));
     const ypos = getYLparam(@bitCast(lparam));
-    return common.geometry.WidowPoint2D{ .x = xpos, .y = ypos };
+    return common.geometry.Point2D{ .x = xpos, .y = ypos };
 }
 
 /// Posts a zig error code to the window's thread queue.

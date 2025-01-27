@@ -10,7 +10,7 @@ const VideoMode = common.video_mode.VideoMode;
 const sys_power = zigwin32.system.power;
 const window_msg = zigwin32.ui.windows_and_messaging;
 const gdi = zigwin32.graphics.gdi;
-const WidowArea = common.geometry.WidowArea;
+const Rect = common.geometry.Rect;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const Window = wndw.Window;
 const ArrayList = std.ArrayList;
@@ -385,14 +385,14 @@ pub const Display = struct {
     }
 
     /// Populate the `area` with the monitor's full area.
-    pub fn getFullArea(self: *const Self, area: *WidowArea) void {
+    pub fn getFullArea(self: *const Self, area: *Rect) void {
         var mi: gdi.MONITORINFO = undefined;
         mi.cbSize = @sizeOf(gdi.MONITORINFO);
         _ = gdi.GetMonitorInfoW(
             self.handle,
             &mi,
         );
-        area.* = WidowArea.init(
+        area.* = Rect.init(
             mi.rcMonitor.left,
             mi.rcMonitor.top,
             mi.rcMonitor.right - mi.rcMonitor.left,

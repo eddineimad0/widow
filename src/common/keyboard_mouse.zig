@@ -280,10 +280,10 @@ pub const InputState = struct {
     }
 };
 
-const IdAlias = usize;
+const WindowId = usize;
 // Events.
 pub const KeyEvent = struct {
-    window_id: IdAlias, // the window with keyboard focus
+    window_id: WindowId, // the window with keyboard focus
     keycode: KeyCode, // current layout symbol
     scancode: ScanCode, // hardware key symbol
     state: KeyState, // Pressed or Released
@@ -291,14 +291,14 @@ pub const KeyEvent = struct {
 };
 
 pub const MouseButtonEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     button: MouseButton,
     state: MouseButtonState, // Pressed or Released
     mods: KeyModifiers, // state of mod keys (shift,ctrl,capslock...)
 };
 
 pub const ScrollEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     x_offset: f64, // mouse horizontal scroll offset
     y_offset: f64, // mouse vertical scroll offset
 };

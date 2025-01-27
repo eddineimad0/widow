@@ -7,7 +7,7 @@ const debug = std.debug;
 const math = std.math;
 
 const maxInt = math.maxInt;
-const WidowArea = common.geometry.WidowArea;
+const Rect = common.geometry.Rect;
 
 pub const DEFAULT_SCREEN_DPI: f32 = @as(f32, 96);
 
@@ -157,12 +157,12 @@ pub fn parseDroppedFilesURI(
 /// returns the ratio of overlap between the display area and the window area.
 /// if the window and the display don't overlap it returns 0 and if the window is fully contained
 /// in the display it returns 1.0
-pub fn getDisplayOverlapRatio(display_area: *const WidowArea, window_area: *const WidowArea) f32 {
-    const overlap_top_left = common.geometry.WidowPoint2D{
+pub fn getDisplayOverlapRatio(display_area: *const Rect, window_area: *const Rect) f32 {
+    const overlap_top_left = common.geometry.Point2D{
         .x = @max(display_area.top_left.x, window_area.top_left.x),
         .y = @max(display_area.top_left.y, window_area.top_left.y),
     };
-    const overlap_bottom_right = common.geometry.WidowPoint2D{
+    const overlap_bottom_right = common.geometry.Point2D{
         .x = @min(display_area.top_left.x + display_area.size.width, window_area.top_left.x + window_area.size.width),
         .y = @min(display_area.top_left.y + display_area.size.height, window_area.top_left.y + window_area.size.height),
     };
@@ -183,13 +183,13 @@ pub fn getDisplayOverlapRatio(display_area: *const WidowArea, window_area: *cons
 test "dislay_window_intersection" {
     const testing = std.testing;
 
-    const display_area = WidowArea.init(0, 0, 1920, 1080);
-    const window_area_1 = WidowArea.init(0, 0, 1920, 1080);
-    const window_area_2 = WidowArea.init(400, 400, 800, 600);
-    const window_area_3 = WidowArea.init(-200, -200, 800, 600);
-    const window_area_4 = WidowArea.init(-200, 800, 800, 600);
-    const window_area_5 = WidowArea.init(1200, 800, 800, 600);
-    const window_area_6 = WidowArea.init(1200, -200, 800, 600);
+    const display_area = Rect.init(0, 0, 1920, 1080);
+    const window_area_1 = Rect.init(0, 0, 1920, 1080);
+    const window_area_2 = Rect.init(400, 400, 800, 600);
+    const window_area_3 = Rect.init(-200, -200, 800, 600);
+    const window_area_4 = Rect.init(-200, 800, 800, 600);
+    const window_area_5 = Rect.init(1200, 800, 800, 600);
+    const window_area_6 = Rect.init(1200, -200, 800, 600);
 
     try testing.expect(getDisplayOverlapRatio(&display_area, &window_area_1) == 1.0);
     try testing.expect(getDisplayOverlapRatio(&display_area, &window_area_2) == 1.0);
@@ -198,10 +198,10 @@ test "dislay_window_intersection" {
     try testing.expect(getDisplayOverlapRatio(&display_area, &window_area_5) > 0.0);
     try testing.expect(getDisplayOverlapRatio(&display_area, &window_area_6) > 0.0);
 
-    const out_window_area_1 = WidowArea.init(400, -800, 800, 600);
-    const out_window_area_2 = WidowArea.init(-1000, 400, 800, 600);
-    const out_window_area_3 = WidowArea.init(400, 1200, 800, 600);
-    const out_window_area_4 = WidowArea.init(2000, 400, 800, 600);
+    const out_window_area_1 = Rect.init(400, -800, 800, 600);
+    const out_window_area_2 = Rect.init(-1000, 400, 800, 600);
+    const out_window_area_3 = Rect.init(400, 1200, 800, 600);
+    const out_window_area_4 = Rect.init(2000, 400, 800, 600);
     try testing.expectApproxEqAbs(
         getDisplayOverlapRatio(&display_area, &out_window_area_1),
         0.0,
