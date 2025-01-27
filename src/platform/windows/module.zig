@@ -1,10 +1,10 @@
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
+const krnl32 = @import("win32api/kernel32.zig");
+const win32 = @import("win32api/defs.zig");
 
-const GetModuleHandleExW = zigwin32.system.library_loader.GetModuleHandleExW;
-const LoadLibraryA = zigwin32.system.library_loader.LoadLibraryA;
-const FreeLibrary = zigwin32.system.library_loader.FreeLibrary;
-const GetProcAddress = zigwin32.system.library_loader.GetProcAddress;
+const GetModuleHandleExW = krnl32.GetModuleHandleExW;
+const LoadLibraryA = krnl32.LoadLibraryA;
+const FreeLibrary = krnl32.FreeLibrary;
+const GetProcAddress = krnl32.GetProcAddress;
 
 pub inline fn loadWin32Module(module_name: [:0]const u8) ?win32.HINSTANCE {
     return LoadLibraryA(module_name.ptr);

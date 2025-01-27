@@ -1,15 +1,15 @@
 const std = @import("std");
 const mem = std.mem;
 const debug = std.debug;
-const win32 = @import("win32_defs.zig");
+const win32 = std.os.windows;
+const win32_defs = @import("win32_defs.zig");
 const utils = @import("utils.zig");
-const zigwin32 = @import("zigwin32");
+//const zigwin32 = @import("zigwin32");
 const common = @import("common");
 const wndw = @import("window.zig");
 const VideoMode = common.video_mode.VideoMode;
-const sys_power = zigwin32.system.power;
-const window_msg = zigwin32.ui.windows_and_messaging;
-const gdi = zigwin32.graphics.gdi;
+//const window_msg = zigwin32.ui.windows_and_messaging;
+const gdi = @import("win32api/gdi.zig");
 const Rect = common.geometry.Rect;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const Window = wndw.Window;
@@ -49,15 +49,15 @@ fn EnumMonitorProc(
 }
 
 /// Returns the handle used by the system to identify the monitor.
-fn querySystemHandle(display_adapter: []const u16) ?win32.HMONITOR {
+fn querySystemHandle(display_adapter: []const u16) ?gdi.HMONITOR {
     var dm: gdi.DEVMODEW = undefined;
     dm.dmSize = @sizeOf(gdi.DEVMODEW);
     dm.dmDriverExtra = 0;
     // We need to figure out the rectangle that the monitor occupies
     // on the virtual desktop.
-    if (win32.EnumDisplaySettingsExW(
+    if (gdi.EnumDisplaySettingsExW(
         @ptrCast(display_adapter.ptr),
-        win32.ENUM_CURRENT_SETTINGS,
+        win32_defs.ENUM_CURRENT_SETTINGS,
         &dm,
         0,
     ) == 0) {
@@ -179,7 +179,7 @@ fn pollVideoModes(
     // save the registry settings at index 0
     _ = gdi.EnumDisplaySettingsW(
         @ptrCast(adapter_name.ptr),
-        gdi.ENUM_REGISTRY_SETTINGS,
+        win32_defs.ENUM_REGISTRY_SETTINGS,
         &dev_mode,
     );
 
@@ -191,7 +191,7 @@ fn pollVideoModes(
     ));
 
     main_loop: while (true) : (i += 1) {
-        if (win32.EnumDisplaySettingsExW(
+        if (gdi.EnumDisplaySettingsExW(
             @ptrCast(adapter_name.ptr),
             i,
             &dev_mode,
@@ -221,10 +221,6 @@ fn pollVideoModes(
     modes.shrinkAndFree(modes.items.len);
     return modes;
 }
-
-///// Populate the given MonitorInfo struct with the corresponding monitor informations.
-//inline fn queryDisplayInfo(handle: win32.HMONITOR, mi: *gdi.MONITORINFO) void {
-//}
 
 /// Encapsulate the necessary infos for a display(monitor).
 pub const Display = struct {
@@ -319,12 +315,12 @@ pub const Display = struct {
             @ptrCast(&self.adapter),
             &dm,
             null,
-            gdi.CDS_FULLSCREEN,
+            gdi.CDS_TYPE{ .FULLSCREEN = 1 },
             null,
         );
 
         switch (result) {
-            gdi.DISP_CHANGE_SUCCESSFUL => {
+            gdi.DISP_CHANGE.SUCCESSFUL => {
                 self.curr_video = possible_mode;
                 return;
             },
@@ -344,20 +340,12 @@ pub const Display = struct {
                 @ptrCast(&self.adapter),
                 null,
                 null,
-                gdi.CDS_FULLSCREEN,
+                gdi.CDS_TYPE{ .FULLSCREEN = 1 },
                 null,
             );
             self.curr_video = REGISTRY_VIDEOMODE_INDEX;
         }
     }
-
-    /// Set the window Handle field
-    //pub inline fn setWindow(self: *Self, window: ?*Window) void {
-    //    if (self.window) |w| {
-    //        _ = w.setFullscreen(false);
-    //    }
-    //    self.window = window;
-    //}
 
     /// Returns the dpi value for the given display.
     /// # Note
@@ -369,12 +357,15 @@ pub const Display = struct {
             // [win32 docs]
             // This API is not DPI aware and should not be used if
             // the calling thread is per-monitor DPI aware.
-            if (func(self.handle, win32.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
-                return win32.USER_DEFAULT_SCREEN_DPI;
+            if (func(self.handle, win32_defs.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y) != win32.S_OK) {
+                return win32_defs.USER_DEFAULT_SCREEN_DPI;
             }
         } else {
             const device_cntxt = gdi.GetDC(null);
-            dpi_x = @intCast(gdi.GetDeviceCaps(device_cntxt, gdi.LOGPIXELSX));
+            dpi_x = @intCast(gdi.GetDeviceCaps(
+                device_cntxt,
+                gdi.GET_DEVICE_CAPS_INDEX.LOGPIXELSX,
+            ));
             _ = gdi.ReleaseDC(null, device_cntxt);
         }
         // [Win32 docs]
@@ -421,7 +412,6 @@ pub const Display = struct {
 
 pub const DisplayManager = struct {
     displays: std.ArrayList(Display),
-    prev_exec_state: sys_power.EXECUTION_STATE,
     expected_video_change: bool, // For skipping unnecessary updates.
 
     const Self = @This();
@@ -430,7 +420,6 @@ pub const DisplayManager = struct {
     pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
         return .{
             .expected_video_change = false,
-            .prev_exec_state = sys_power.ES_SYSTEM_REQUIRED,
             .displays = try pollDisplays(allocator),
         };
     }
@@ -477,7 +466,7 @@ pub const DisplayManager = struct {
 
     /// Returns a refrence to the Monitor occupied by the window.
     pub fn findWindowDisplay(self: *Self, window: *const wndw.Window) !*Display {
-        const display_handle = gdi.MonitorFromWindow(window.handle, gdi.MONITOR_DEFAULTTONEAREST);
+        const display_handle = gdi.MonitorFromWindow(window.handle, gdi.MONITOR_FROM_FLAGS.NEAREST);
         // Find the monitor.
         var target: ?*Display = null;
         for (self.displays.items) |*d| {

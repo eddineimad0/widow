@@ -1,13 +1,17 @@
 const std = @import("std");
-const win32 = @import("win32_defs.zig");
-const zigwin32 = @import("zigwin32");
+const win32 = std.os.windows;
+const win32_defs = @import("win32api/defs.zig");
+const macros = @import("win32api/macros.zig");
+const usr32 = @import("win32api/user32.zig");
+const gdi = @import("win32api/gdi.zig");
+const krnl32 = @import("win32api/kernel32.zig");
 const mod = @import("module.zig");
 const utils = @import("utils.zig");
 const opts = @import("build-options");
 
 const unicode = std.unicode;
-const sysinfo = zigwin32.system.system_information;
-const window_msg = zigwin32.ui.windows_and_messaging;
+//const sysinfo = zigwin32.system.system_information;
+//const window_msg = zigwin32.ui.windows_and_messaging;
 
 const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const mainWindowProc = @import("window_proc.zig").mainWindowProc;
@@ -39,6 +43,36 @@ const Win32Handles = struct {
 /// Holds pointer to functions that are not
 /// supported in all windows NT versions.
 const OptionalApi = struct {
+    // Types
+    // Functions
+    const SetProcessDPIAwareProc = *const fn () callconv(win32.WINAPI) win32.BOOL;
+    const RtlVerifyVersionInfoProc = *const fn (
+        VersionInfo: *krnl32.OSVERSIONINFOEXW,
+        TypeMask: u32,
+        ConditionMask: u64,
+    ) callconv(win32.WINAPI) win32.NTSTATUS;
+    const SetProcessDpiAwarenessProc = *const fn (
+        win32_defs.PROCESS_DPI_AWARENESS,
+    ) callconv(win32.WINAPI) win32.HRESULT;
+    pub const SetProcessDpiAwarenessContextProc = *const fn (
+        win32_defs.DPI_AWARENESS_CONTEXT,
+    ) callconv(win32.WINAPI) win32.HRESULT;
+    const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
+    const GetDpiForWindowProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
+    const GetDpiForMonitorProc = *const fn (
+        win32.HMONITOR,
+        win32.MONITOR_DPI_TYPE,
+        *u32,
+        *u32,
+    ) callconv(win32.WINAPI) win32.HRESULT;
+    const AdjustWindowRectExForDpiProc = *const fn (
+        *win32.RECT,
+        u32,
+        i32,
+        u32,
+        u32,
+    ) callconv(win32.WINAPI) win32.BOOL;
+
     // RtlVerifyVersionInfo is guaranteed to be on all NT versions
     RtlVerifyVersionInfo: win32.RtlVerifyVersionInfoProc,
     SetProcessDPIAware: ?win32.SetProcessDPIAwareProc,
@@ -137,11 +171,11 @@ pub const Win32Driver = struct {
             // Declare Process DPI Awareness.
             if (globl_instance.hints.is_win10b1703_or_above) {
                 _ = globl_instance.opt_func.SetProcessDpiAwarenessContext.?(
-                    win32.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+                    win32_defs.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
                 );
             } else if (globl_instance.hints.is_win8point1_or_above) {
                 _ = globl_instance.opt_func.SetProcessDpiAwareness.?(
-                    win32.PROCESS_PER_MONITOR_DPI_AWARE,
+                    win32_defs.PROCESS_PER_MONITOR_DPI_AWARE,
                 );
             } else if (globl_instance.hints.is_win_vista_or_above) {
                 _ = globl_instance.opt_func.SetProcessDPIAware.?();
@@ -234,14 +268,14 @@ pub const Win32Driver = struct {
             Self.g_init = false;
 
             // Unregister the window class.
-            _ = win32.UnregisterClassW(
-                utils.MAKEINTATOM(globl_instance.handles.wnd_class),
+            _ = usr32.UnregisterClassW(
+                macros.MAKEINTATOM(globl_instance.handles.wnd_class),
                 Self.globl_instance.handles.hinstance,
             );
 
             // Unregister the helper class.
-            _ = win32.UnregisterClassW(
-                utils.MAKEINTATOM(globl_instance.handles.helper_class),
+            _ = usr32.UnregisterClassW(
+                macros.MAKEINTATOM(globl_instance.handles.helper_class),
                 Self.globl_instance.handles.hinstance,
             );
 
@@ -251,7 +285,7 @@ pub const Win32Driver = struct {
 };
 
 fn isWin32VersionMinimum(
-    func: win32.RtlVerifyVersionInfoProc,
+    func: OptionalApi.RtlVerifyVersionInfoProc,
     major: u32,
     minor: u32,
 ) bool {
@@ -260,68 +294,68 @@ fn isWin32VersionMinimum(
     // be sure to use it as a minimum supported version,
     // rather than design the test for the one operating system.
     // This way, your detection code will continue to work on future versions of Windows.
-    var vi: sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(sysinfo.OSVERSIONINFOEXW);
-    vi.dwOSVersionInfoSize = @sizeOf(sysinfo.OSVERSIONINFOEXW);
+    var vi: krnl32.OSVERSIONINFOEXW = std.mem.zeroes(krnl32.OSVERSIONINFOEXW);
+    vi.dwOSVersionInfoSize = @sizeOf(krnl32.OSVERSIONINFOEXW);
     vi.dwMajorVersion = major;
     vi.dwMinorVersion = minor;
-    const mask = sysinfo.VER_FLAGS{
+    const mask = krnl32.VER_FLAGS{
         .MINORVERSION = 1,
         .MAJORVERSION = 1,
         .SERVICEPACKMINOR = 1,
         .SERVICEPACKMAJOR = 1,
     };
     var cond_mask: u64 = 0;
-    cond_mask = sysinfo.VerSetConditionMask(
+    cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_MAJORVERSION,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_MAJORVERSION,
+        win32_defs.VER_GREATER_EQUAL,
     );
-    cond_mask = sysinfo.VerSetConditionMask(
+    cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_MINORVERSION,
-        win32.VER_GREATER_EQUAL,
-    );
-    cond_mask =
-        sysinfo.VerSetConditionMask(
-        cond_mask,
-        sysinfo.VER_SERVICEPACKMAJOR,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_MINORVERSION,
+        win32_defs.VER_GREATER_EQUAL,
     );
     cond_mask =
-        sysinfo.VerSetConditionMask(
+        krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_SERVICEPACKMINOR,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_SERVICEPACKMAJOR,
+        win32_defs.VER_GREATER_EQUAL,
+    );
+    cond_mask =
+        krnl32.VerSetConditionMask(
+        cond_mask,
+        krnl32.VER_SERVICEPACKMINOR,
+        win32_defs.VER_GREATER_EQUAL,
     );
     return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 
-fn isWin10BuildMinimum(func: win32.RtlVerifyVersionInfoProc, build: u32) bool {
-    var vi: sysinfo.OSVERSIONINFOEXW = std.mem.zeroes(sysinfo.OSVERSIONINFOEXW);
-    vi.dwOSVersionInfoSize = @sizeOf(sysinfo.OSVERSIONINFOEXW);
+fn isWin10BuildMinimum(func: OptionalApi.RtlVerifyVersionInfoProc, build: u32) bool {
+    var vi: krnl32.OSVERSIONINFOEXW = std.mem.zeroes(krnl32.OSVERSIONINFOEXW);
+    vi.dwOSVersionInfoSize = @sizeOf(krnl32.OSVERSIONINFOEXW);
     vi.dwMajorVersion = 10;
     vi.dwMinorVersion = 0;
     vi.dwBuildNumber = build;
-    const mask = sysinfo.VER_FLAGS{
+    const mask = krnl32.VER_FLAGS{
         .MINORVERSION = 1,
         .MAJORVERSION = 1,
         .BUILDNUMBER = 1,
     };
     var cond_mask: u64 = 0;
-    cond_mask = sysinfo.VerSetConditionMask(
+    cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_MAJORVERSION,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_MAJORVERSION,
+        win32_defs.VER_GREATER_EQUAL,
     );
-    cond_mask = sysinfo.VerSetConditionMask(
+    cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_MINORVERSION,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_MINORVERSION,
+        win32_defs.VER_GREATER_EQUAL,
     );
-    cond_mask = sysinfo.VerSetConditionMask(
+    cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
-        sysinfo.VER_BUILDNUMBER,
-        win32.VER_GREATER_EQUAL,
+        krnl32.VER_BUILDNUMBER,
+        win32_defs.VER_GREATER_EQUAL,
     );
     return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
@@ -329,45 +363,45 @@ fn isWin10BuildMinimum(func: win32.RtlVerifyVersionInfoProc, build: u32) bool {
 fn registerMainClass(
     hinstance: win32.HINSTANCE,
 ) Win32DriverError!u16 {
-    var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
-    window_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
-    window_class.style = window_msg.WNDCLASS_STYLES{
+    var window_class: usr32.WNDCLASSEXW = std.mem.zeroes(usr32.WNDCLASSEXW);
+    window_class.cbSize = @sizeOf(usr32.WNDCLASSEXW);
+    window_class.style = usr32.WNDCLASS_STYLES{
         .HREDRAW = 1,
         .VREDRAW = 1,
         .OWNDC = 1, //CS_OWNDC is required for the opengl context.
     };
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
-    window_class.hCursor = window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
+    window_class.hCursor = usr32.LoadCursorW(null, win32_defs.IDC_ARROW);
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
         opts.WIN32_WNDCLASS_NAME,
     );
 
     if (opts.WIN32_ICON_RES_NAME) |icon_name| {
-        window_class.hIcon = @ptrCast(window_msg.LoadImageW(
+        window_class.hIcon = @ptrCast(gdi.LoadImageW(
             hinstance,
             unicode.utf8ToUtf16LeStringLiteral(icon_name),
-            window_msg.IMAGE_ICON,
+            @intFromEnum(gdi.IMAGE_ICON),
             0,
             0,
-            window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+            @bitCast(gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
 
     // even if an icon name was provided loading the image might fail
     // so check hIcon.
     if (window_class.hIcon == null) {
-        window_class.hIcon = @ptrCast(win32.LoadImageW(
+        window_class.hIcon = @ptrCast(gdi.LoadImageW(
             null,
-            window_msg.IDI_APPLICATION,
-            @intFromEnum(window_msg.IMAGE_ICON),
+            win32_defs.IDI_APPLICATION,
+            @intFromEnum(gdi.IMAGE_ICON),
             0,
             0,
-            @bitCast(window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
+            @bitCast(gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
 
-    const class = window_msg.RegisterClassExW(&window_class);
+    const class = usr32.RegisterClassExW(&window_class);
     if (class == 0) {
         return Win32DriverError.DupWNDClass;
     }
@@ -377,15 +411,15 @@ fn registerMainClass(
 fn registerHelperClass(
     hinstance: win32.HINSTANCE,
 ) Win32DriverError!u16 {
-    var window_class: window_msg.WNDCLASSEXW = std.mem.zeroes(window_msg.WNDCLASSEXW);
-    window_class.cbSize = @sizeOf(window_msg.WNDCLASSEXW);
+    var window_class: usr32.WNDCLASSEXW = std.mem.zeroes(usr32.WNDCLASSEXW);
+    window_class.cbSize = @sizeOf(usr32.WNDCLASSEXW);
     window_class.lpfnWndProc = helperWindowProc;
     window_class.hInstance = hinstance;
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
         opts.WIN32_WNDCLASS_NAME ++ "_HELPER",
     );
 
-    const class = window_msg.RegisterClassExW(&window_class);
+    const class = usr32.RegisterClassExW(&window_class);
     if (class == 0) {
         return Win32DriverError.DupWNDClass;
     }
