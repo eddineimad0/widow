@@ -52,7 +52,6 @@ pub fn main() !void {
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
         .withSize(640, 480)
-        .withResize(true)
         .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)

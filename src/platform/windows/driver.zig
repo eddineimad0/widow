@@ -385,17 +385,7 @@ fn registerMainClass(
     }
 
     // even if an icon name was provided loading the image might fail
-    // so check hIcon.
-    if (window_class.hIcon == null) {
-        window_class.hIcon = @ptrCast(win32_gfx.LoadImageW(
-            null,
-            win32_gfx.IDI_APPLICATION,
-            win32_gfx.IMAGE_ICON,
-            0,
-            0,
-            @bitCast(win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
-        ));
-    }
+    // in this case leave hIcon set to null for default Application icon.
 
     const class = win32_gfx.RegisterClassExW(&window_class);
     if (class == 0) {
