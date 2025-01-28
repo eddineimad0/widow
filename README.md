@@ -92,6 +92,4 @@ pub fn main() !void {
 The main branch will stick to stable zig releases.
 
 ## Dependecies
-
-- [zigwin32](https://github.com/marlersoft/zigwin32): Provides binding for Win32 API.
 - [zigglgen](https://github.com/castholm/zigglgen): OpenGL binding used in the `gl_triangle.zig` example
