@@ -1,3 +1,4 @@
+//! This file holds windows opengl.h bindings
 const win32 = @import("std").os.windows;
 
 //=================
@@ -7,10 +8,10 @@ pub const GL_VENDOR = @as(u32, 7936);
 pub const GL_RENDERER = @as(u32, 7937);
 pub const GL_VERSION = @as(u32, 7938);
 pub const GL_EXTENSIONS = @as(u32, 7939);
+
 //=================
 // Types
 //=================
-
 pub const PFD_PIXEL_TYPE = enum(i8) {
     RGBA = 0,
     COLORINDEX = 1,

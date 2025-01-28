@@ -1,3 +1,4 @@
+//! This file holds definitions of windows error codes
 const win32 = @import("std").os.windows;
 
 pub const ERROR_SUCCESS = @as(win32.DWORD, 0);

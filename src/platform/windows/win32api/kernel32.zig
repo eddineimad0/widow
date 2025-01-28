@@ -1,5 +1,13 @@
+//! This file holds windows kernel bindings
 const std = @import("std");
 const win32 = std.os.windows;
+
+//==========================
+// Constants
+//==========================
+pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = @as(u32, 0x02);
+pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS = @as(u32, 0x04);
+pub const VER_GREATER_EQUAL = @as(u32, 0x03);
 
 //===========================
 // Types

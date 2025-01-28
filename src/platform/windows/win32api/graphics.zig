@@ -1,4 +1,7 @@
+//! This file holds bindings for dealing with ui and graphical object
+//! on windows
 const win32 = @import("std").os.windows;
+const macros = @import("macros.zig");
 
 //=======================
 // Constants
@@ -66,6 +69,7 @@ pub const PWR_FAIL = @as(i32, -1);
 pub const PWR_SUSPENDREQUEST = @as(u32, 1);
 pub const PWR_SUSPENDRESUME = @as(u32, 2);
 pub const PWR_CRITICALRESUME = @as(u32, 3);
+pub const WM_COPYGLOBALDATA = @as(u32, 73);
 pub const WM_COPYDATA = @as(u32, 74);
 pub const WM_CANCELJOURNAL = @as(u32, 75);
 pub const WM_INPUTLANGCHANGEREQUEST = @as(u32, 80);
@@ -344,10 +348,88 @@ pub const HWND_NOTOPMOST = @as(win32.HWND, @ptrFromInt(0xfffffffffffffffe));
 pub const HWND_TOPMOST = @as(win32.HWND, @ptrFromInt(0xffffffffffffffff));
 pub const HWND_TOP = @as(win32.HWND, @ptrFromInt(0x0));
 pub const HWND_BOTTOM = @as(win32.HWND, @ptrFromInt(0x1));
+pub const DPI_AWARENESS_CONTEXT = isize;
+pub const DPI_AWARENESS_CONTEXT_UNAWARE = @as(DPI_AWARENESS_CONTEXT, -1);
+pub const DPI_AWARENESS_CONTEXT_SYSTEM_AWARE = @as(DPI_AWARENESS_CONTEXT, -2);
+pub const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE = @as(DPI_AWARENESS_CONTEXT, -3);
+pub const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = @as(DPI_AWARENESS_CONTEXT, -4);
+pub const DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED = @as(DPI_AWARENESS_CONTEXT, -5);
+pub const DEVICE_NOTIFY_WINDOW_HANDLE = @as(u32, 0);
+
+pub const USER_DEFAULT_SCREEN_DPI = @as(u32, 96);
+pub const USER_DEFAULT_SCREEN_DPI_F = @as(f64, 96.0);
+pub const CF_UNICODETEXT = @as(u32, 0x0D);
+pub const CW_USEDEFAULT = @as(i32, -2147483648);
+
+pub const SC_SCREENSAVE = @as(u32, 0x0F140);
+pub const SC_MONITORPOWER = @as(u32, 0x0F170);
+pub const SC_KEYMENU = @as(u32, 0x0F100);
+pub const XINPUT_GAMEPAD_GUIDE = @as(u32, 0x0400);
+pub const WAIT_TIMEOUT = @as(u32, 0x102);
+
+pub const DIDFT_OPTIONAL = @as(u32, 0x80000000);
+pub const ENUM_CURRENT_SETTINGS = @as(u32, 0xFFFFFFFF);
+pub const ENUM_REGISTRY_SETTINGS = @as(u32, 0xFFFFFFFE);
+
+pub const IDI_APPLICATION = macros.MAKEINTATOM(32512);
+
+// IDC_Standard Cursors.
+pub const IDC_ARROW = macros.MAKEINTRESOURCESW(32512); // Normal select.
+pub const IDC_IBEAM = macros.MAKEINTRESOURCESW(32513); // Text select.
+pub const IDC_WAIT = macros.MAKEINTRESOURCESW(32514); // Busy.
+pub const IDC_CROSS = macros.MAKEINTRESOURCESW(32515); // Precision select.
+pub const IDC_SIZEALL = macros.MAKEINTRESOURCESW(32646); // Move.
+pub const IDC_NO = macros.MAKEINTRESOURCESW(32648); // Unavailable.
+pub const IDC_HAND = macros.MAKEINTRESOURCESW(32649); // Link select.
+pub const IDC_APPSTARTING = macros.MAKEINTRESOURCESW(32650); // Working in background.
+pub const IDC_HELP = macros.MAKEINTRESOURCESW(32651); // Help select.
+
+// OCR_Standard Cursors.
+pub const OCR_NORMAL = @as(u16, 32512);
+pub const OCR_IBEAM = @as(u16, 32513);
+pub const OCR_WAIT = @as(u16, 32514);
+pub const OCR_CROSS = @as(u16, 32515);
+pub const OCR_UP = @as(u16, 32516);
+pub const OCR_SIZENWSE = @as(u16, 32642);
+pub const OCR_SIZENESW = @as(u16, 32643);
+pub const OCR_SIZEWE = @as(u16, 32644);
+pub const OCR_SIZENS = @as(u16, 32645);
+pub const OCR_SIZEALL = @as(u16, 32646);
+pub const OCR_NO = @as(u16, 32648);
 
 //===================
 // Types
 //===================
+pub const DPI_AWARENESS = enum(i32) {
+    INVALID = -1,
+    UNAWARE = 0,
+    SYSTEM_AWARE = 1,
+    PER_MONITOR_AWARE = 2,
+};
+pub const DPI_AWARENESS_INVALID = DPI_AWARENESS.INVALID;
+pub const DPI_AWARENESS_UNAWARE = DPI_AWARENESS.UNAWARE;
+pub const DPI_AWARENESS_SYSTEM_AWARE = DPI_AWARENESS.SYSTEM_AWARE;
+pub const DPI_AWARENESS_PER_MONITOR_AWARE = DPI_AWARENESS.PER_MONITOR_AWARE;
+
+pub const PROCESS_DPI_AWARENESS = enum(i32) {
+    DPI_UNAWARE = 0,
+    SYSTEM_DPI_AWARE = 1,
+    PER_MONITOR_DPI_AWARE = 2,
+};
+pub const PROCESS_DPI_UNAWARE = PROCESS_DPI_AWARENESS.DPI_UNAWARE;
+pub const PROCESS_SYSTEM_DPI_AWARE = PROCESS_DPI_AWARENESS.SYSTEM_DPI_AWARE;
+pub const PROCESS_PER_MONITOR_DPI_AWARE = PROCESS_DPI_AWARENESS.PER_MONITOR_DPI_AWARE;
+
+pub const MONITOR_DPI_TYPE = enum(i32) {
+    EFFECTIVE_DPI = 0,
+    ANGULAR_DPI = 1,
+    RAW_DPI = 2,
+    // DEFAULT = 0, this enum value conflicts with EFFECTIVE_DPI
+};
+pub const MDT_EFFECTIVE_DPI = MONITOR_DPI_TYPE.EFFECTIVE_DPI;
+pub const MDT_ANGULAR_DPI = MONITOR_DPI_TYPE.ANGULAR_DPI;
+pub const MDT_RAW_DPI = MONITOR_DPI_TYPE.RAW_DPI;
+pub const MDT_DEFAULT = MONITOR_DPI_TYPE.EFFECTIVE_DPI;
 pub const SET_WINDOW_POS_FLAGS = packed struct(u32) {
     NOSIZE: u1 = 0,
     NOMOVE: u1 = 0,
@@ -861,6 +943,77 @@ pub const GCLP_HMODULE = GET_CLASS_LONG_INDEX.L_HMODULE;
 pub const GCLP_MENUNAME = GET_CLASS_LONG_INDEX.L_MENUNAME;
 pub const GCLP_WNDPROC = GET_CLASS_LONG_INDEX.L_WNDPROC;
 
+pub const WNDCLASS_STYLES = packed struct(u32) {
+    VREDRAW: u1 = 0,
+    HREDRAW: u1 = 0,
+    _2: u1 = 0,
+    DBLCLKS: u1 = 0,
+    _4: u1 = 0,
+    OWNDC: u1 = 0,
+    CLASSDC: u1 = 0,
+    PARENTDC: u1 = 0,
+    _8: u1 = 0,
+    NOCLOSE: u1 = 0,
+    _10: u1 = 0,
+    SAVEBITS: u1 = 0,
+    BYTEALIGNCLIENT: u1 = 0,
+    BYTEALIGNWINDOW: u1 = 0,
+    GLOBALCLASS: u1 = 0,
+    _15: u1 = 0,
+    IME: u1 = 0,
+    DROPSHADOW: u1 = 0,
+    _18: u1 = 0,
+    _19: u1 = 0,
+    _20: u1 = 0,
+    _21: u1 = 0,
+    _22: u1 = 0,
+    _23: u1 = 0,
+    _24: u1 = 0,
+    _25: u1 = 0,
+    _26: u1 = 0,
+    _27: u1 = 0,
+    _28: u1 = 0,
+    _29: u1 = 0,
+    _30: u1 = 0,
+    _31: u1 = 0,
+};
+
+pub const CS_VREDRAW = WNDCLASS_STYLES{ .VREDRAW = 1 };
+pub const CS_HREDRAW = WNDCLASS_STYLES{ .HREDRAW = 1 };
+pub const CS_DBLCLKS = WNDCLASS_STYLES{ .DBLCLKS = 1 };
+pub const CS_OWNDC = WNDCLASS_STYLES{ .OWNDC = 1 };
+pub const CS_CLASSDC = WNDCLASS_STYLES{ .CLASSDC = 1 };
+pub const CS_PARENTDC = WNDCLASS_STYLES{ .PARENTDC = 1 };
+pub const CS_NOCLOSE = WNDCLASS_STYLES{ .NOCLOSE = 1 };
+pub const CS_SAVEBITS = WNDCLASS_STYLES{ .SAVEBITS = 1 };
+pub const CS_BYTEALIGNCLIENT = WNDCLASS_STYLES{ .BYTEALIGNCLIENT = 1 };
+pub const CS_BYTEALIGNWINDOW = WNDCLASS_STYLES{ .BYTEALIGNWINDOW = 1 };
+pub const CS_GLOBALCLASS = WNDCLASS_STYLES{ .GLOBALCLASS = 1 };
+pub const CS_IME = WNDCLASS_STYLES{ .IME = 1 };
+pub const CS_DROPSHADOW = WNDCLASS_STYLES{ .DROPSHADOW = 1 };
+
+pub const WNDPROC = *const fn (
+    param0: win32.HWND,
+    param1: u32,
+    param2: win32.WPARAM,
+    param3: win32.LPARAM,
+) callconv(win32.WINAPI) win32.LRESULT;
+
+pub const WNDCLASSEXW = extern struct {
+    cbSize: u32,
+    style: WNDCLASS_STYLES,
+    lpfnWndProc: ?WNDPROC,
+    cbClsExtra: i32,
+    cbWndExtra: i32,
+    hInstance: ?win32.HINSTANCE,
+    hIcon: ?win32.HICON,
+    hCursor: ?win32.HCURSOR,
+    hbrBackground: ?win32.HBRUSH,
+    lpszMenuName: ?[*:0]const u16,
+    lpszClassName: ?[*:0]const u16,
+    hIconSm: ?win32.HICON,
+};
+
 //==========================
 // Functions
 //=========================
@@ -962,3 +1115,28 @@ pub extern "user32" fn GetClassLongPtrW(
     hWnd: ?win32.HWND,
     nIndex: GET_CLASS_LONG_INDEX,
 ) callconv(win32.WINAPI) usize;
+
+pub extern "user32" fn RegisterClassExW(
+    unnamedParam1: ?*const WNDCLASSEXW,
+) callconv(win32.WINAPI) u16;
+
+pub extern "user32" fn UnregisterClassW(
+    lpClassName: ?win32.LPCWSTR,
+    hInstance: ?win32.HINSTANCE,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn MapVirtualKeyW(
+    uCode: win32.UINT,
+    uMapType: win32.UINT,
+) callconv(win32.WINAPI) win32.UINT;
+
+pub extern "user32" fn GetKeyState(
+    nVirtKey: win32.INT,
+) callconv(win32.WINAPI) win32.SHORT;
+
+pub extern "user32" fn PostMessageW(
+    hWnd: ?win32.HWND,
+    Msg: win32.UINT,
+    wParam: win32.WPARAM,
+    lParam: win32.LPARAM,
+) callconv(win32.WINAPI) win32.BOOL;

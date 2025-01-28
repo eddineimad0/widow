@@ -1,4 +1,5 @@
 //! Some usefule windows.h Macros.
+
 const win32 = @import("std").os.windows;
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
@@ -11,6 +12,7 @@ pub inline fn MAKEINTRESOURCESA(comptime r: u16) ?[*:0]const u8 {
     return @ptrFromInt(r);
 }
 
+/// Replacement for the `MAKEINTRESOURCESW` macro in the windows api.
 pub inline fn MAKEINTRESOURCESW(comptime r: u16) ?[*:0]align(1) const u16 {
     return @ptrFromInt(r);
 }
@@ -29,10 +31,6 @@ pub inline fn getXLparam(bits: usize) i16 {
 
 pub inline fn getYLparam(bits: usize) i16 {
     return @bitCast(hiWord(bits));
-}
-
-pub inline fn isBitSet(bitset: isize, comptime pos: comptime_int) bool {
-    return (bitset & (1 << pos)) != 0;
 }
 
 pub inline fn isHighSurrogate(surrogate: u16) bool {

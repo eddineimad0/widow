@@ -1,3 +1,4 @@
+//! This file holds bindings for working with input devices keyboard, mouse ...etc
 const win32 = @import("std").os.windows;
 
 //====================

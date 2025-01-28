@@ -1,10 +1,6 @@
 const win32 = @import("std").os.windows;
 
 //====================
-// Constants
-//===================
-
-//====================
 // Types
 //====================
 pub const HDROP = *opaque {};
