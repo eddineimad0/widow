@@ -1,24 +1,24 @@
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
+const krnl32 = @import("win32api/kernel32.zig");
+const win32 = @import("std").os.windows;
 
-const GetModuleHandleExW = zigwin32.system.library_loader.GetModuleHandleExW;
-const LoadLibraryA = zigwin32.system.library_loader.LoadLibraryA;
-const FreeLibrary = zigwin32.system.library_loader.FreeLibrary;
-const GetProcAddress = zigwin32.system.library_loader.GetProcAddress;
+const GetModuleHandleExW = krnl32.GetModuleHandleExW;
+const LoadLibraryA = krnl32.LoadLibraryA;
+const FreeLibrary = krnl32.FreeLibrary;
+const GetProcAddress = krnl32.GetProcAddress;
 
-pub inline fn loadWin32Module(module_name: [:0]const u8) ?win32.HINSTANCE {
+pub inline fn loadWin32Module(module_name: [:0]const u8) ?win32.HMODULE {
     return LoadLibraryA(module_name.ptr);
 }
 
-pub inline fn freeWin32Module(module_handle: win32.HINSTANCE) void {
+pub inline fn freeWin32Module(module_handle: win32.HMODULE) void {
     _ = FreeLibrary(module_handle);
 }
 
 pub inline fn getModuleSymbol(
-    module_handle: win32.HINSTANCE,
-    symbol_name: [:0]const u8,
+    module_handle: win32.HMODULE,
+    symbol_name: [*:0]const u8,
 ) ?win32.FARPROC {
-    return GetProcAddress(module_handle, symbol_name.ptr);
+    return GetProcAddress(module_handle, symbol_name);
 }
 
 /// Attempts to retrieve the process hinstance
@@ -26,9 +26,10 @@ pub inline fn getModuleSymbol(
 pub fn getProcessHandle() ?win32.HINSTANCE {
     var hinstance: ?win32.HINSTANCE = null;
     if (GetModuleHandleExW(
-        win32.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | win32.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        krnl32.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT |
+            krnl32.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
         @ptrFromInt(@intFromPtr(&getProcessHandle)),
-        &hinstance,
+        @ptrCast(&hinstance),
     ) == 0) {
         return null;
     }

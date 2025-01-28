@@ -8,7 +8,7 @@ const KeyModifiers = kbd_mouse.KeyModifiers;
 const MouseButtonEvent = kbd_mouse.MouseButtonEvent;
 const ScrollEvent = kbd_mouse.ScrollEvent;
 const Queue = @import("queue.zig").Queue;
-const IdAlias = usize;
+const WindowId = usize;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -34,45 +34,45 @@ pub const EventType = enum(u8) {
 };
 
 pub const ResizeEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     width: i32, // new client width,
     height: i32, // new client height,
 };
 
 pub const MoveEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     x: i32, // new x coordinat of the top left corner
     y: i32, // new y coordinate of the top left corner
 };
 
 pub const DPIChangeEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     dpi: u32, // new display dpi
     scaler: f64,
 };
 
 pub const CharacterEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     codepoint: u21, // utf8 character codepoint
     mods: KeyModifiers, // state of mod keys (shift,ctrl,caps-lock...)
 };
 
 pub const FocusEvent = struct {
-    window_id: IdAlias,
+    window_id: WindowId,
     has_focus: bool, // true gained focus else lost focus.
 };
 
 pub const Event = union(EventType) {
-    WindowClose: IdAlias,
-    WindowShown: IdAlias,
-    WindowHidden: IdAlias,
-    WindowMaximize: IdAlias,
-    WindowMinimize: IdAlias,
-    WindowRestore: IdAlias,
-    MouseEnter: IdAlias,
-    MouseExit: IdAlias,
-    FileDrop: IdAlias,
-    RedrawRequest: IdAlias,
+    WindowClose: WindowId,
+    WindowShown: WindowId,
+    WindowHidden: WindowId,
+    WindowMaximize: WindowId,
+    WindowMinimize: WindowId,
+    WindowRestore: WindowId,
+    MouseEnter: WindowId,
+    MouseExit: WindowId,
+    FileDrop: WindowId,
+    RedrawRequest: WindowId,
     WindowFocus: FocusEvent,
     WindowResize: ResizeEvent,
     WindowMove: MoveEvent,
@@ -84,11 +84,11 @@ pub const Event = union(EventType) {
     Character: CharacterEvent,
 };
 
-pub inline fn createCloseEvent(window_id: IdAlias) Event {
+pub inline fn createCloseEvent(window_id: WindowId) Event {
     return .{ .WindowClose = window_id };
 }
 
-pub inline fn createVisibilityEvent(window_id: IdAlias, shown: bool) Event {
+pub inline fn createVisibilityEvent(window_id: WindowId, shown: bool) Event {
     if (shown) {
         return .{ .WindowShown = window_id };
     } else {
@@ -96,42 +96,42 @@ pub inline fn createVisibilityEvent(window_id: IdAlias, shown: bool) Event {
     }
 }
 
-pub inline fn createMaximizeEvent(window_id: IdAlias) Event {
+pub inline fn createMaximizeEvent(window_id: WindowId) Event {
     return .{ .WindowMaximize = window_id };
 }
 
-pub inline fn createMinimizeEvent(window_id: IdAlias) Event {
+pub inline fn createMinimizeEvent(window_id: WindowId) Event {
     return .{ .WindowMinimize = window_id };
 }
 
-pub inline fn createRestoreEvent(window_id: IdAlias) Event {
+pub inline fn createRestoreEvent(window_id: WindowId) Event {
     return .{ .WindowRestore = window_id };
 }
 
-pub inline fn createMouseEnterEvent(window_id: IdAlias) Event {
+pub inline fn createMouseEnterEvent(window_id: WindowId) Event {
     return .{ .MouseEnter = window_id };
 }
 
-pub inline fn createMouseExitEvent(window_id: IdAlias) Event {
+pub inline fn createMouseExitEvent(window_id: WindowId) Event {
     return .{ .MouseExit = window_id };
 }
 
-pub inline fn createDropFileEvent(window_id: IdAlias) Event {
+pub inline fn createDropFileEvent(window_id: WindowId) Event {
     return .{ .FileDrop = window_id };
 }
 
-pub inline fn createRedrawEvent(window_id: IdAlias) Event {
+pub inline fn createRedrawEvent(window_id: WindowId) Event {
     return .{ .RedrawRequest = window_id };
 }
 
-pub inline fn createFocusEvent(window_id: IdAlias, focus: bool) Event {
+pub inline fn createFocusEvent(window_id: WindowId, focus: bool) Event {
     return .{ .WindowFocus = FocusEvent{
         .window_id = window_id,
         .has_focus = focus,
     } };
 }
 
-pub inline fn createResizeEvent(window_id: IdAlias, width: i32, height: i32) Event {
+pub inline fn createResizeEvent(window_id: WindowId, width: i32, height: i32) Event {
     return .{ .WindowResize = ResizeEvent{
         .window_id = window_id,
         .width = width,
@@ -139,7 +139,7 @@ pub inline fn createResizeEvent(window_id: IdAlias, width: i32, height: i32) Eve
     } };
 }
 
-pub inline fn createMoveEvent(window_id: IdAlias, x: i32, y: i32, is_mouse: bool) Event {
+pub inline fn createMoveEvent(window_id: WindowId, x: i32, y: i32, is_mouse: bool) Event {
     return if (!is_mouse)
         .{ .WindowMove = MoveEvent{
             .window_id = window_id,
@@ -155,7 +155,7 @@ pub inline fn createMoveEvent(window_id: IdAlias, x: i32, y: i32, is_mouse: bool
 }
 
 pub inline fn createMouseButtonEvent(
-    window_id: IdAlias,
+    window_id: WindowId,
     button: kbd_mouse.MouseButton,
     state: kbd_mouse.MouseButtonState,
     mods: kbd_mouse.KeyModifiers,
@@ -169,7 +169,7 @@ pub inline fn createMouseButtonEvent(
 }
 
 pub inline fn createKeyboardEvent(
-    window_id: IdAlias,
+    window_id: WindowId,
     keycode: kbd_mouse.KeyCode,
     scancode: kbd_mouse.ScanCode,
     state: kbd_mouse.KeyState,
@@ -185,7 +185,7 @@ pub inline fn createKeyboardEvent(
 }
 
 pub inline fn createScrollEvent(
-    window_id: IdAlias,
+    window_id: WindowId,
     delta_x: f64,
     delta_y: f64,
 ) Event {
@@ -196,7 +196,7 @@ pub inline fn createScrollEvent(
     } };
 }
 
-pub inline fn createDPIEvent(window_id: IdAlias, new_dpi: u32, new_scale: f64) Event {
+pub inline fn createDPIEvent(window_id: WindowId, new_dpi: u32, new_scale: f64) Event {
     return .{ .DPIChange = DPIChangeEvent{
         .window_id = window_id,
         .dpi = new_dpi,
@@ -205,7 +205,7 @@ pub inline fn createDPIEvent(window_id: IdAlias, new_dpi: u32, new_scale: f64) E
 }
 
 pub inline fn createCharEvent(
-    window_id: IdAlias,
+    window_id: WindowId,
     codepoint: u32,
     mods: kbd_mouse.KeyModifiers,
 ) Event {

@@ -28,7 +28,7 @@ pub const WindowBuilder = struct {
             // Defalut attributes
             .attribs = common.window_data.WindowData{
                 .id = 0,
-                .client_area = common.geometry.WidowArea.init(
+                .client_area = common.geometry.Rect.init(
                     platform.Window.WINDOW_DEFAULT_POSITION.x,
                     platform.Window.WINDOW_DEFAULT_POSITION.y,
                     640,
@@ -319,7 +319,7 @@ pub const Window = struct {
     /// portion of it. The virtual desktop's top-left in a single monitor setup
     /// is the same as that monitor's top left-corner, in a multi-monitor setup
     /// it depends on the setup's configuration.
-    pub inline fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getClientPosition(self: *const Self) common.geometry.Point2D {
         return self.impl.getClientPosition();
     }
 
@@ -341,7 +341,7 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
-    pub inline fn getClientSize(self: *const Self) common.geometry.WidowSize {
+    pub inline fn getClientSize(self: *const Self) common.geometry.RectSize {
         return self.impl.getClientSize();
     }
 
@@ -350,7 +350,7 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling the returned
     /// size might be diffrent from the logical size.
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
+    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
         return self.impl.getClientPixelSize();
     }
 
@@ -365,7 +365,7 @@ pub const Window = struct {
     /// For a full screen window this function does nothing.
     pub inline fn setClientSize(self: *Self, width: i32, height: i32) void {
         std.debug.assert(width > 0 and height > 0);
-        var new_size = common.geometry.WidowSize{
+        var new_size = common.geometry.RectSize{
             .width = width,
             .height = height,
         };
@@ -387,7 +387,7 @@ pub const Window = struct {
     /// scaling the specified size is auto scaled by the window's dpi.
     pub inline fn setMinSize(
         self: *Self,
-        min_size: ?common.geometry.WidowSize,
+        min_size: ?common.geometry.RectSize,
     ) void {
         self.impl.setMinSize(min_size);
     }
@@ -407,7 +407,7 @@ pub const Window = struct {
     /// the specified size is auto scaled by the window's dpi.
     pub inline fn setMaxSize(
         self: *Self,
-        max_size: ?common.geometry.WidowSize,
+        max_size: ?common.geometry.RectSize,
     ) void {
         self.impl.setMaxSize(max_size);
     }
@@ -424,7 +424,7 @@ pub const Window = struct {
     /// than zero,e.g:(16,9) for 16:9 ratio or (4,3) for 4:3 ratio.
     pub inline fn setAspectRatio(
         self: *Self,
-        ratio: ?common.geometry.WidowAspectRatio,
+        ratio: ?common.geometry.AspectRatio,
     ) void {
         if (ratio) |*value| {
             std.debug.assert(value.x > 0);
@@ -647,7 +647,7 @@ pub const Window = struct {
     /// The top-left corner of the client area is considered to be
     /// the origin point(0,0), with y axis pointing to the bottom,
     /// and the x axis pointing to the right
-    pub inline fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub inline fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         return self.impl.getCursorPosition();
     }
 

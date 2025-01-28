@@ -1,11 +1,10 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
 const display = @import("display.zig");
 const time = @import("time.zig");
 const driver = @import("driver.zig");
 const wndw = @import("window.zig");
-const window_msg = zigwin32.ui.windows_and_messaging;
+const win32_gfx = @import("win32api/graphics.zig");
+const win32 = std.os.windows;
 
 const mem = std.mem;
 
@@ -13,7 +12,7 @@ pub const Window = wndw.Window;
 pub const WindowError = wndw.WindowError;
 
 // Platform handles
-pub const DisplayHandle = win32.HMONITOR;
+pub const DisplayHandle = win32_gfx.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
 pub const GLContext = @import("wgl.zig").GLContext;
@@ -47,7 +46,7 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     const ctx = try a.create(WidowContext);
     ctx.* = try WidowContext.init(a);
     // register helper properties
-    _ = window_msg.SetPropW(
+    _ = win32_gfx.SetPropW(
         ctx.helper_window,
         display.HELPER_DISPLAY_PROP,
         @ptrCast(&ctx.display_mgr),
@@ -57,17 +56,17 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
 
 pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     // unregister helper properties
-    _ = window_msg.SetPropW(
+    _ = win32_gfx.SetPropW(
         ctx.helper_window,
         display.HELPER_DISPLAY_PROP,
         null,
     );
-    _ = window_msg.DestroyWindow(ctx.helper_window);
+    _ = win32_gfx.DestroyWindow(ctx.helper_window);
     ctx.display_mgr.deinit();
     a.destroy(ctx);
 }
 
 test "Platform" {
     @import("std").testing.refAllDecls(@import("display.zig"));
-    @import("std").testing.refAllDecls(@import("module.zig"));
+    @import("std").testing.refAllDecls(@import("dynlib.zig"));
 }

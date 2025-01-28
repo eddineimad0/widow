@@ -51,9 +51,9 @@ pub fn main() !void {
     var builder = widow.WindowBuilder.init();
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
-        .withSize(800, 600)
+        .withSize(640, 480)
         .withResize(true)
-        .withDPIAware(true)
+        .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
         .build(allocator, ctx, null) catch |err| {

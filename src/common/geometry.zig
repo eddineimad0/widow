@@ -1,13 +1,13 @@
 const std = @import("std");
-pub const WidowPoint2D = struct {
+pub const Point2D = struct {
     x: i32,
     y: i32,
 };
 
 // Shhhhhh.
-pub const WidowAspectRatio = WidowPoint2D;
+pub const AspectRatio = Point2D;
 
-pub const WidowSize = struct {
+pub const RectSize = struct {
     // The width and hight are both i32 and not u32
     // for best compatibility with the API functions
     // that expects int data type for both width and height.
@@ -25,15 +25,16 @@ pub const WidowSize = struct {
     }
 };
 
-pub const WidowArea = struct {
-    top_left: WidowPoint2D,
-    size: WidowSize,
+/// Represent an axis aligned Rectangle
+pub const Rect = struct {
+    top_left: Point2D,
+    size: RectSize,
 
     const Self = @This();
     pub fn init(x: i32, y: i32, width: i32, height: i32) Self {
         return Self{
-            .top_left = WidowPoint2D{ .x = x, .y = y },
-            .size = WidowSize{ .width = width, .height = height },
+            .top_left = Point2D{ .x = x, .y = y },
+            .size = RectSize{ .width = width, .height = height },
         };
     }
 };

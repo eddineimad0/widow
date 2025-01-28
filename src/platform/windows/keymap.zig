@@ -1,7 +1,6 @@
 const common = @import("common");
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
-const kbd_mouse = zigwin32.ui.input.keyboard_and_mouse;
+const win32_input = @import("win32api/input.zig");
+const win32 = @import("std").os.windows;
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 
@@ -795,14 +794,14 @@ fn vkToKeycode(keycode: u16) KeyCode {
         // Note: OEM keys are used for miscellanous characters
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
-        @intFromEnum(kbd_mouse.VK_OEM_1),
-        @intFromEnum(kbd_mouse.VK_OEM_2),
-        @intFromEnum(kbd_mouse.VK_OEM_3),
-        @intFromEnum(kbd_mouse.VK_OEM_4),
-        @intFromEnum(kbd_mouse.VK_OEM_5),
-        @intFromEnum(kbd_mouse.VK_OEM_6),
-        @intFromEnum(kbd_mouse.VK_OEM_7),
-        @intFromEnum(kbd_mouse.VK_OEM_102),
+        win32_input.VK_OEM_1,
+        win32_input.VK_OEM_2,
+        win32_input.VK_OEM_3,
+        win32_input.VK_OEM_4,
+        win32_input.VK_OEM_5,
+        win32_input.VK_OEM_6,
+        win32_input.VK_OEM_7,
+        win32_input.VK_OEM_102,
         => {
             // Use the key text to identify it.
             return keyTextToVirtual(keycode);
@@ -813,7 +812,7 @@ fn vkToKeycode(keycode: u16) KeyCode {
 
 fn keyTextToVirtual(keycode: u16) KeyCode {
     const MAPVK_VK_TO_CHAR = 2;
-    const key_text = kbd_mouse.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
+    const key_text = win32_input.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
     switch (key_text) {
         ';' => return KeyCode.Semicolon,
         '/' => return KeyCode.Slash,
@@ -834,7 +833,7 @@ pub fn translateVirtualKey(vk: u16, lparam: win32.LPARAM) struct { KeyCode, Scan
     var code: u32 = @truncate(ulparm);
     if (code == 0) {
         // scancode value shouldn't be zero
-        code = kbd_mouse.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+        code = win32_input.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
     }
     // Notes:
     // According to windows
