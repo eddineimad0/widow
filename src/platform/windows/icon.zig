@@ -1,10 +1,7 @@
 const std = @import("std");
 const common = @import("common");
-const win32_defs = @import("win32api/defs.zig");
+const win32_gfx = @import("win32api/graphics.zig");
 const win32 = std.os.windows;
-const gdi = @import("win32api/gdi.zig");
-const utils = @import("utils.zig");
-const krnl32 = @import("win32api/kernel32.zig");
 const mem = std.mem;
 
 pub const IconError = error{
@@ -25,8 +22,8 @@ fn createWin32Icon(
     yhot: u32,
     is_cursor: bool,
 ) IconError!win32.HICON {
-    var bmp_header: gdi.BITMAPV5HEADER = mem.zeroes(gdi.BITMAPV5HEADER);
-    bmp_header.bV5Size = @sizeOf(gdi.BITMAPV5HEADER);
+    var bmp_header: win32_gfx.BITMAPV5HEADER = mem.zeroes(win32_gfx.BITMAPV5HEADER);
+    bmp_header.bV5Size = @sizeOf(win32_gfx.BITMAPV5HEADER);
     bmp_header.bV5Width = width;
     //  If bV5Height value is negative, the bitmap is a top-down DIB
     //  and its origin is the upper-left corner.
@@ -34,19 +31,19 @@ fn createWin32Icon(
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
     // No compression and we will provide the color masks.
-    bmp_header.bV5Compression = gdi.BI_BITFIELDS;
+    bmp_header.bV5Compression = win32_gfx.BI_BITFIELDS;
     bmp_header.bV5AlphaMask = 0xFF000000;
     bmp_header.bV5BlueMask = 0x00FF0000;
     bmp_header.bV5GreenMask = 0x0000FF00;
     bmp_header.bV5RedMask = 0x000000FF;
 
     var dib: [*]u8 = undefined;
-    const dc = gdi.GetDC(null);
-    defer _ = gdi.ReleaseDC(null, dc);
-    const color_mask = gdi.CreateDIBSection(
+    const dc = win32_gfx.GetDC(null);
+    defer _ = win32_gfx.ReleaseDC(null, dc);
+    const color_mask = win32_gfx.CreateDIBSection(
         dc,
         @ptrCast(&bmp_header),
-        gdi.DIB_RGB_COLORS,
+        win32_gfx.DIB_RGB_COLORS,
         @ptrCast(&dib),
         null,
         0,
@@ -54,17 +51,17 @@ fn createWin32Icon(
     if (color_mask == null) {
         return IconError.NullColorMask;
     }
-    defer _ = gdi.DeleteObject(color_mask);
+    defer _ = win32_gfx.DeleteObject(color_mask);
 
-    const monochrome_mask = gdi.CreateBitmap(width, height, 1, 1, null);
+    const monochrome_mask = win32_gfx.CreateBitmap(width, height, 1, 1, null);
     if (monochrome_mask == null) {
         return IconError.NullMonochromeMask;
     }
-    defer _ = gdi.DeleteObject(monochrome_mask);
+    defer _ = win32_gfx.DeleteObject(monochrome_mask);
 
     @memcpy(dib, pixels);
 
-    var icon_info = gdi.ICONINFO{
+    var icon_info = win32_gfx.ICONINFO{
         // A value of TRUE(1) specifies an icon, FALSE(0) specify a cursor.
         .fIcon = @intFromBool(!is_cursor),
         .xHotspot = xhot,
@@ -73,7 +70,7 @@ fn createWin32Icon(
         .hbmColor = color_mask,
     };
 
-    const icon_handle = gdi.CreateIconIndirect(&icon_info);
+    const icon_handle = win32_gfx.CreateIconIndirect(&icon_info);
 
     return icon_handle orelse return IconError.BadIcon;
 }
@@ -90,7 +87,7 @@ pub const CursorHints = struct {
 
 pub fn destroyCursorIcon(cursor: *CursorHints) void {
     if (!cursor.sys_owned and cursor.icon != null) {
-        _ = gdi.DestroyCursor(cursor.icon);
+        _ = win32_gfx.DestroyCursor(cursor.icon);
         cursor.icon = null;
     }
 }
@@ -102,12 +99,12 @@ pub const Icon = struct {
 
 pub fn destroyIcon(icon: *Icon) void {
     if (icon.sm_handle) |handle| {
-        _ = gdi.DestroyIcon(handle);
+        _ = win32_gfx.DestroyIcon(handle);
         icon.sm_handle = null;
     }
 
     if (icon.bg_handle) |handle| {
-        _ = gdi.DestroyIcon(handle);
+        _ = win32_gfx.DestroyIcon(handle);
         icon.bg_handle = null;
     }
 }
@@ -176,29 +173,27 @@ pub fn createNativeCursor(
     const CursorShape = common.cursor.NativeCursorShape;
 
     const cursor_id = switch (shape) {
-        CursorShape.PointingHand => win32_defs.IDC_HAND,
-        CursorShape.Crosshair => win32_defs.IDC_CROSS,
-        CursorShape.Text => win32_defs.IDC_IBEAM,
-        CursorShape.BkgrndTask => win32_defs.IDC_APPSTARTING,
-        CursorShape.Help => win32_defs.IDC_HELP,
-        CursorShape.Busy => win32_defs.IDC_WAIT,
-        CursorShape.Forbidden => win32_defs.IDC_NO,
-        CursorShape.Move => win32_defs.IDC_SIZEALL,
-        CursorShape.Default => win32_defs.IDC_ARROW,
+        CursorShape.PointingHand => win32_gfx.IDC_HAND,
+        CursorShape.Crosshair => win32_gfx.IDC_CROSS,
+        CursorShape.Text => win32_gfx.IDC_IBEAM,
+        CursorShape.BkgrndTask => win32_gfx.IDC_APPSTARTING,
+        CursorShape.Help => win32_gfx.IDC_HELP,
+        CursorShape.Busy => win32_gfx.IDC_WAIT,
+        CursorShape.Forbidden => win32_gfx.IDC_NO,
+        CursorShape.Move => win32_gfx.IDC_SIZEALL,
+        CursorShape.Default => win32_gfx.IDC_ARROW,
     };
 
-    const handle = gdi.LoadImageW(
+    const handle = win32_gfx.LoadImageW(
         null,
         cursor_id,
-        gdi.GDI_IMAGE_TYPE.CURSOR,
+        win32_gfx.GDI_IMAGE_TYPE.CURSOR,
         0,
         0,
-        gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+        win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
     );
 
     if (handle == null) {
-        // We failed.
-        std.debug.print("error {}\n", .{krnl32.GetLastError()});
         return IconError.NotFound;
     }
 

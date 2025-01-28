@@ -1,26 +1,22 @@
 const std = @import("std");
-const win32_defs = @import("win32api/defs.zig");
-const win32 = std.os.windows;
 const common = @import("common");
-const wgl = @import("wgl.zig");
 const gl = @import("gl");
-const utils = @import("utils.zig");
+const win32_gfx = @import("win32api/graphics.zig");
 const win32_macros = @import("win32api/macros.zig");
+const win32_input = @import("win32api/input.zig");
+const shell32 = @import("win32api/shell32.zig");
+const wgl = @import("wgl.zig");
+const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
 const mem = std.mem;
 const debug = std.debug;
-const window_msg = @import("win32api/window_messages.zig");
-const win32_input = @import("win32api/input.zig");
-const gdi = @import("win32api/gdi.zig");
-const win32_shell = @import("win32api/shell_api.zig");
-const Win32Driver = @import("driver.zig").Win32Driver;
-const WidowContext = @import("platform.zig").WidowContext;
-const CursorHints = icon.CursorHints;
-const Icon = icon.Icon;
 const FBConfig = common.fb.FBConfig;
+const win32 = std.os.windows;
 const WindowData = common.window_data.WindowData;
 const WindowFlags = common.window_data.WindowFlags;
+const Win32Driver = @import("driver.zig").Win32Driver;
+const WidowContext = @import("platform.zig").WidowContext;
 
 pub const WindowError = error{
     CreateFailed,
@@ -35,12 +31,12 @@ pub const CreationLparamTuple = std.meta.Tuple(&.{ *const WindowData, *const Win
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @bitCast(gdi.WINDOW_STYLE{
+const STYLE_BASIC: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
     .CLIPCHILDREN = 1,
     .CLIPSIBLINGS = 1,
 });
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @bitCast(gdi.WINDOW_STYLE{
+const STYLE_FULLSCREEN: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
     .POPUP = 1,
     .GROUP = 1,
 });
@@ -48,19 +44,19 @@ const STYLE_FULLSCREEN: u32 = @bitCast(gdi.WINDOW_STYLE{
 const STYLE_BORDERLESS = STYLE_FULLSCREEN;
 
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @bitCast(gdi.WINDOW_STYLE{
+const STYLE_RESIZABLE: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
     .THICKFRAME = 1,
     .TABSTOP = 1,
 });
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @bitCast(gdi.WINDOW_STYLE{
+const STYLE_NORMAL: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
     .GROUP = 1,
     .SYSMENU = 1,
     .DLGFRAME = 1,
     .BORDER = 1,
 });
 
-const STYLES_MASK: u32 = @bitCast(gdi.WINDOW_STYLE{
+const STYLES_MASK: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
     .TABSTOP = 1,
     .GROUP = 1,
     .THICKFRAME = 1,
@@ -74,7 +70,7 @@ const STYLES_MASK: u32 = @bitCast(gdi.WINDOW_STYLE{
 });
 
 // Define our own message to report Window Procedure errors back
-pub const WM_ERROR_REPORT: u32 = window_msg.WM_USER + 1;
+pub const WM_ERROR_REPORT: u32 = win32_gfx.WM_USER + 1;
 
 // Define window property name
 pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
@@ -83,15 +79,15 @@ pub fn createHiddenWindow(
     title: [:0]const u16,
     driver: *const Win32Driver,
 ) WindowError!win32.HWND {
-    const helper_window = gdi.CreateWindowExW(
+    const helper_window = win32_gfx.CreateWindowExW(
         @bitCast(@as(u32, 0)),
         win32_macros.MAKEINTATOM(driver.handles.helper_class),
         title,
         @bitCast(@as(u32, 0)),
-        win32_defs.CW_USEDEFAULT,
-        win32_defs.CW_USEDEFAULT,
-        win32_defs.CW_USEDEFAULT,
-        win32_defs.CW_USEDEFAULT,
+        win32_gfx.CW_USEDEFAULT,
+        win32_gfx.CW_USEDEFAULT,
+        win32_gfx.CW_USEDEFAULT,
+        win32_gfx.CW_USEDEFAULT,
         null,
         null,
         driver.handles.hinstance,
@@ -100,7 +96,7 @@ pub fn createHiddenWindow(
         return WindowError.CreateFailed;
     };
 
-    _ = gdi.ShowWindow(helper_window, gdi.SW_HIDE);
+    _ = win32_gfx.ShowWindow(helper_window, win32_gfx.SW_HIDE);
     return helper_window;
 }
 
@@ -121,11 +117,11 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
         }
 
         if (flags.is_maximized) {
-            styles |= @bitCast(gdi.WINDOW_STYLE{ .MAXIMIZE = 1 });
+            styles |= @bitCast(win32_gfx.WINDOW_STYLE{ .MAXIMIZE = 1 });
         }
 
         if (flags.is_minimized) {
-            styles |= @bitCast(gdi.WINDOW_STYLE{ .MINIMIZE = 1 });
+            styles |= @bitCast(win32_gfx.WINDOW_STYLE{ .MINIMIZE = 1 });
         }
     }
 
@@ -136,7 +132,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
     var ex_styles: u32 = 0;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @bitCast(gdi.WS_EX_TOPMOST);
+        ex_styles |= @bitCast(win32_gfx.WS_EX_TOPMOST);
     }
     return ex_styles;
 }
@@ -160,10 +156,10 @@ pub fn adjustWindowRect(
             styles,
             0,
             ex_styles,
-            dpi orelse win32_defs.USER_DEFAULT_SCREEN_DPI,
+            dpi orelse win32_gfx.USER_DEFAULT_SCREEN_DPI,
         );
     } else {
-        _ = gdi.AdjustWindowRectEx(
+        _ = win32_gfx.AdjustWindowRectEx(
             rect,
             @bitCast(styles),
             0,
@@ -183,8 +179,8 @@ fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
         .y = rect.bottom,
     };
 
-    _ = gdi.ClientToScreen(window_handle, &upper_left);
-    _ = gdi.ClientToScreen(window_handle, &lower_right);
+    _ = win32_gfx.ClientToScreen(window_handle, &upper_left);
+    _ = win32_gfx.ClientToScreen(window_handle, &lower_right);
 
     rect.* = win32.RECT{
         .left = upper_left.x,
@@ -197,7 +193,7 @@ fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
 /// Returns the (width,height) of the entire window frame.
 pub fn windowSize(window_handle: win32.HWND) common.geometry.RectSize {
     var rect: win32.RECT = undefined;
-    _ = window_msg.GetWindowRect(window_handle, &rect);
+    _ = win32_gfx.GetWindowRect(window_handle, &rect);
     const size = common.geometry.RectSize{
         .width = rect.right - rect.left,
         .height = rect.bottom - rect.top,
@@ -205,7 +201,7 @@ pub fn windowSize(window_handle: win32.HWND) common.geometry.RectSize {
     return size;
 }
 
-pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
+pub fn applyCursorHints(hints: *icon.CursorHints, window: win32.HWND) void {
     switch (hints.mode) {
         .Normal => unCaptureCursor(),
         else => captureCursor(window),
@@ -217,46 +213,46 @@ pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
             break :img if (hints.icon) |h|
                 h
             else
-                gdi.LoadCursorW(null, win32_defs.IDC_ARROW);
+                win32_gfx.LoadCursorW(null, win32_gfx.IDC_ARROW);
         },
     };
 
-    _ = gdi.SetCursor(cursor_icon);
+    _ = win32_gfx.SetCursor(cursor_icon);
 }
 
-pub fn restoreCursor(hints: *CursorHints) void {
+pub fn restoreCursor(hints: *icon.CursorHints) void {
     switch (hints.mode) {
         .Captured, .Hidden => unCaptureCursor(),
         else => {},
     }
-    _ = gdi.SetCursor(gdi.LoadCursorW(null, win32_defs.IDC_ARROW));
+    _ = win32_gfx.SetCursor(win32_gfx.LoadCursorW(null, win32_gfx.IDC_ARROW));
 }
 
 /// Limits the cursor motion to the client rectangle.
 inline fn captureCursor(window_handle: win32.HWND) void {
     var clip_rect: win32.RECT = undefined;
-    _ = window_msg.GetClientRect(window_handle, &clip_rect);
+    _ = win32_gfx.GetClientRect(window_handle, &clip_rect);
     // ClipCursor expects screen coordinates.
     clientToScreen(window_handle, &clip_rect);
-    _ = window_msg.ClipCursor(&clip_rect);
+    _ = win32_gfx.ClipCursor(&clip_rect);
 }
 
 /// Removes cursor motion limitation.
 inline fn unCaptureCursor() void {
-    _ = window_msg.ClipCursor(null);
+    _ = win32_gfx.ClipCursor(null);
 }
 
 /// helper function for changing the window position,size and styles.
 fn setWindowPositionIntern(
     window_handle: win32.HWND,
     top: ?win32.HWND,
-    flags: window_msg.SET_WINDOW_POS_FLAGS,
+    flags: win32_gfx.SET_WINDOW_POS_FLAGS,
     x: i32,
     y: i32,
     width: i32,
     height: i32,
 ) void {
-    _ = window_msg.SetWindowPos(
+    _ = win32_gfx.SetWindowPos(
         window_handle,
         top,
         x,
@@ -293,14 +289,14 @@ fn createPlatformWindow(
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
-    if (data.client_area.top_left.x != win32_defs.CW_USEDEFAULT and
-        data.client_area.top_left.y != win32_defs.CW_USEDEFAULT)
+    if (data.client_area.top_left.x != win32_gfx.CW_USEDEFAULT and
+        data.client_area.top_left.y != win32_gfx.CW_USEDEFAULT)
     {
         frame_x = data.client_area.top_left.x + window_rect.left;
         frame_y = data.client_area.top_left.y + window_rect.top;
     } else {
-        frame_x = win32_defs.CW_USEDEFAULT;
-        frame_y = win32_defs.CW_USEDEFAULT;
+        frame_x = win32_gfx.CW_USEDEFAULT;
+        frame_y = win32_gfx.CW_USEDEFAULT;
     }
 
     // Final window frame.
@@ -318,7 +314,7 @@ fn createPlatformWindow(
     const creation_lparm: CreationLparamTuple = .{ data, driver };
 
     // Create the window.
-    const window_handle = gdi.CreateWindowExW(
+    const window_handle = win32_gfx.CreateWindowExW(
         @bitCast(ex_style), // dwExStyles
         win32_macros.MAKEINTATOM(driver.handles.wnd_class),
         window_title, // Window Name
@@ -340,9 +336,9 @@ fn createPlatformWindow(
 
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
-    icon: Icon,
+    icon: icon.Icon,
     dropped_files: std.ArrayList([]const u8),
-    cursor: CursorHints,
+    cursor: icon.CursorHints,
     prev_frame: common.geometry.Rect, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
@@ -359,8 +355,8 @@ pub const Window = struct {
     fb_cfg: FBConfig,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
-        .x = win32_defs.CW_USEDEFAULT,
-        .y = win32_defs.CW_USEDEFAULT,
+        .x = win32_gfx.CW_USEDEFAULT,
+        .y = win32_gfx.CW_USEDEFAULT,
     };
     const Self = @This();
 
@@ -393,20 +389,20 @@ pub const Window = struct {
             style,
             ex_style,
         );
-        errdefer _ = gdi.DestroyWindow(self.handle);
+        errdefer _ = win32_gfx.DestroyWindow(self.handle);
 
         // Finish setting up the window.
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
 
         self.win32 = WindowWin32Data{
-            .cursor = CursorHints{
+            .cursor = icon.CursorHints{
                 .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
                 .sys_owned = false,
                 .pos = .{ .x = 0, .y = 0 },
                 .accum_pos = .{ .x = 0, .y = 0 },
             },
-            .icon = Icon{
+            .icon = icon.Icon{
                 .sm_handle = null,
                 .bg_handle = null,
             },
@@ -429,12 +425,12 @@ pub const Window = struct {
         // these events aren't reported.
         self.processEvents() catch unreachable;
 
-        _ = gdi.SetPropW(
+        _ = win32_gfx.SetPropW(
             self.handle,
             WINDOW_REF_PROP,
             @ptrCast(self),
         );
-        errdefer _ = gdi.SetPropW(
+        errdefer _ = win32_gfx.SetPropW(
             self.handle,
             WINDOW_REF_PROP,
             null,
@@ -467,19 +463,19 @@ pub const Window = struct {
             var window_rect: win32.RECT = undefined;
             // [MSDN]:If the window has not been shown before,
             // GetWindowRect will not include the area of the drop shadow.
-            _ = window_msg.GetWindowRect(self.handle, &window_rect);
+            _ = win32_gfx.GetWindowRect(self.handle, &window_rect);
             // Offset and readjust the created window's frame.
-            _ = gdi.OffsetRect(
+            _ = win32_gfx.OffsetRect(
                 &client_rect,
                 window_rect.left - client_rect.left,
                 window_rect.top - client_rect.top,
             );
 
             const top = if (self.data.flags.is_topmost)
-                window_msg.HWND_TOPMOST
+                win32_gfx.HWND_TOPMOST
             else
-                window_msg.HWND_NOTOPMOST;
-            const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+                win32_gfx.HWND_NOTOPMOST;
+            const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
                 .NOZORDER = 1,
                 .NOACTIVATE = 1,
                 .NOOWNERZORDER = 1,
@@ -499,22 +495,22 @@ pub const Window = struct {
         // Allow Drag & Drop messages.
         if (self.ctx.driver.hints.is_win7_or_above) {
             // Sent when the user drops a file on the window [Windows XP minimum]
-            _ = window_msg.ChangeWindowMessageFilterEx(
+            _ = win32_gfx.ChangeWindowMessageFilterEx(
                 self.handle,
-                window_msg.WM_DROPFILES,
-                window_msg.MSGFLT_ALLOW,
+                win32_gfx.WM_DROPFILES,
+                win32_gfx.MSGFLT_ALLOW,
                 null,
             );
-            _ = window_msg.ChangeWindowMessageFilterEx(
+            _ = win32_gfx.ChangeWindowMessageFilterEx(
                 self.handle,
-                window_msg.WM_COPYDATA,
-                window_msg.MSGFLT_ALLOW,
+                win32_gfx.WM_COPYDATA,
+                win32_gfx.MSGFLT_ALLOW,
                 null,
             );
-            _ = window_msg.ChangeWindowMessageFilterEx(
+            _ = win32_gfx.ChangeWindowMessageFilterEx(
                 self.handle,
-                win32_defs.WM_COPYGLOBALDATA,
-                window_msg.MSGFLT_ALLOW,
+                win32_gfx.WM_COPYGLOBALDATA,
+                win32_gfx.MSGFLT_ALLOW,
                 null,
             );
         }
@@ -549,8 +545,8 @@ pub const Window = struct {
         self.win32.cursor.mode = .Normal;
         applyCursorHints(&self.win32.cursor, self.handle);
 
-        _ = gdi.SetPropW(self.handle, WINDOW_REF_PROP, null);
-        _ = gdi.DestroyWindow(self.handle);
+        _ = win32_gfx.SetPropW(self.handle, WINDOW_REF_PROP, null);
+        _ = win32_gfx.DestroyWindow(self.handle);
         self.freeDroppedFiles();
         allocator.destroy(self);
     }
@@ -558,18 +554,18 @@ pub const Window = struct {
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         // Show without activating.
-        _ = gdi.ShowWindow(self.handle, gdi.SW_SHOWNA);
+        _ = win32_gfx.ShowWindow(self.handle, win32_gfx.SW_SHOWNA);
         self.data.flags.is_visible = true;
     }
 
     pub fn focus(self: *Self) void {
-        _ = gdi.BringWindowToTop(self.handle);
-        _ = gdi.SetForegroundWindow(self.handle);
+        _ = win32_gfx.BringWindowToTop(self.handle);
+        _ = win32_gfx.SetForegroundWindow(self.handle);
         _ = win32_input.SetFocus(self.handle);
     }
 
     pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        var dpi: u32 = win32_defs.USER_DEFAULT_SCREEN_DPI;
+        var dpi: u32 = win32_gfx.USER_DEFAULT_SCREEN_DPI;
         null_exit: {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
@@ -580,15 +576,15 @@ pub const Window = struct {
         }
         if (scaler) |s| {
             const fdpi: f64 = @floatFromInt(dpi);
-            s.* = (fdpi / win32_defs.USER_DEFAULT_SCREEN_DPI_F);
+            s.* = (fdpi / win32_gfx.USER_DEFAULT_SCREEN_DPI_F);
         }
         return dpi;
     }
 
     /// the window should belong to the thread calling this function.
     pub fn processEvents(self: *Self) WindowError!void {
-        var msg: window_msg.MSG = undefined;
-        while (window_msg.PeekMessageW(&msg, self.handle, 0, 0, window_msg.PM_REMOVE) != 0) {
+        var msg: win32_gfx.MSG = undefined;
+        while (win32_gfx.PeekMessageW(&msg, self.handle, 0, 0, win32_gfx.PM_REMOVE) != 0) {
             if (msg.message == WM_ERROR_REPORT) {
                 // our custom error message
                 return @as(
@@ -599,8 +595,8 @@ pub const Window = struct {
                     ))),
                 );
             }
-            _ = window_msg.TranslateMessage(&msg);
-            _ = window_msg.DispatchMessageW(&msg);
+            _ = win32_gfx.TranslateMessage(&msg);
+            _ = win32_gfx.DispatchMessageW(&msg);
         }
         // Emit key up for released modifers keys.
         utils.clearStickyKeys(self);
@@ -639,7 +635,7 @@ pub const Window = struct {
     }
 
     pub fn waitEvent(self: *Self) WindowError!void {
-        _ = window_msg.WaitMessage();
+        _ = win32_gfx.WaitMessage();
         try self.processEvents();
     }
 
@@ -648,12 +644,12 @@ pub const Window = struct {
     /// if an event is received before timout it returns true,
     /// false otherwise.
     pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
-        if (window_msg.MsgWaitForMultipleObjects(
+        if (win32_gfx.MsgWaitForMultipleObjects(
             0,
             null,
             0,
             timeout,
-            window_msg.QS_ALLINPUT,
+            win32_gfx.QS_ALLINPUT,
         ) == win32.WAIT_TIMEOUT) {
             // Timeout period elapsed.
             return false;
@@ -667,20 +663,20 @@ pub const Window = struct {
         self: *Self,
         new_area: *const common.geometry.Rect,
     ) void {
-        const EX_STYLES_MASK: u32 = @bitCast(gdi.WS_EX_TOPMOST);
-        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+        const EX_STYLES_MASK: u32 = @bitCast(win32_gfx.WS_EX_TOPMOST);
+        const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .DRAWFRAME = 1,
             .NOACTIVATE = 1,
             .NOZORDER = 1,
         };
 
-        var reg_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
+        var reg_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
-            gdi.GWL_STYLE,
+            win32_gfx.GWL_STYLE,
         ));
-        var reg_ex_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
+        var reg_ex_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
-            gdi.GWL_EXSTYLE,
+            win32_gfx.GWL_EXSTYLE,
         ));
 
         reg_styles &= ~STYLES_MASK;
@@ -688,15 +684,15 @@ pub const Window = struct {
         reg_styles |= windowStyles(&self.data.flags);
         reg_ex_styles |= windowExStyles(&self.data.flags);
 
-        _ = gdi.SetWindowLongPtrW(
+        _ = win32_gfx.SetWindowLongPtrW(
             self.handle,
-            gdi.GWL_STYLE,
+            win32_gfx.GWL_STYLE,
             @bitCast(reg_styles),
         );
 
-        _ = gdi.SetWindowLongPtrW(
+        _ = win32_gfx.SetWindowLongPtrW(
             self.handle,
-            gdi.GWL_EXSTYLE,
+            win32_gfx.GWL_EXSTYLE,
             @bitCast(reg_ex_styles),
         );
 
@@ -720,9 +716,9 @@ pub const Window = struct {
         );
 
         const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
+            win32_gfx.HWND_TOPMOST
         else
-            window_msg.HWND_NOTOPMOST;
+            win32_gfx.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -737,8 +733,8 @@ pub const Window = struct {
 
     pub fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         var cursor_pos: win32.POINT = undefined;
-        _ = window_msg.GetCursorPos(&cursor_pos);
-        _ = gdi.ScreenToClient(self.handle, &cursor_pos);
+        _ = win32_gfx.GetCursorPos(&cursor_pos);
+        _ = win32_gfx.ScreenToClient(self.handle, &cursor_pos);
         // the cursor pos is relative to the upper left corner of the window.
         return common.geometry.Point2D{ .x = cursor_pos.x, .y = cursor_pos.y };
     }
@@ -751,8 +747,8 @@ pub const Window = struct {
         // no event will be reported.
         self.win32.cursor.pos.x = point.x;
         self.win32.cursor.pos.y = point.y;
-        _ = gdi.ClientToScreen(self.handle, &point);
-        _ = window_msg.SetCursorPos(point.x, point.y);
+        _ = win32_gfx.ClientToScreen(self.handle, &point);
+        _ = win32_gfx.SetCursorPos(point.x, point.y);
     }
 
     pub fn setCursorMode(self: *Self, mode: common.cursor.CursorMode) void {
@@ -769,14 +765,14 @@ pub const Window = struct {
 
     /// Notify and flash the taskbar.
     pub fn flash(self: *const Self) void {
-        var flash_info = window_msg.FLASHWINFO{
-            .cbSize = @sizeOf(window_msg.FLASHWINFO),
+        var flash_info = win32_gfx.FLASHWINFO{
+            .cbSize = @sizeOf(win32_gfx.FLASHWINFO),
             .hwnd = self.handle,
-            .dwFlags = window_msg.FLASHW_ALL,
+            .dwFlags = win32_gfx.FLASHW_ALL,
             .uCount = 3,
             .dwTimeout = 0,
         };
-        _ = window_msg.FlashWindowEx(&flash_info);
+        _ = win32_gfx.FlashWindowEx(&flash_info);
     }
 
     /// Returns the position of the top left corner of the client area.
@@ -788,7 +784,7 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         // Don't use SWP_NOSIZE to allow dpi change.
-        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .NOZORDER = 1,
             .NOACTIVATE = 1,
             .NOOWNERZORDER = 1,
@@ -821,9 +817,9 @@ pub const Window = struct {
         rect.top += y;
 
         const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
+            win32_gfx.HWND_TOPMOST
         else
-            window_msg.HWND_NOTOPMOST;
+            win32_gfx.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -852,7 +848,7 @@ pub const Window = struct {
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             const dpi: f64 = @floatFromInt(self.getScalingDPI(null));
-            const r_scaler = (win32_defs.USER_DEFAULT_SCREEN_DPI_F / dpi);
+            const r_scaler = (win32_gfx.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
@@ -887,7 +883,7 @@ pub const Window = struct {
                 self.restore();
             }
 
-            const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+            const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
                 .NOOWNERZORDER = 1,
@@ -895,9 +891,9 @@ pub const Window = struct {
             };
 
             const top = if (self.data.flags.is_topmost)
-                window_msg.HWND_TOPMOST
+                win32_gfx.HWND_TOPMOST
             else
-                window_msg.HWND_NOTOPMOST;
+                win32_gfx.HWND_NOTOPMOST;
 
             setWindowPositionIntern(
                 self.handle,
@@ -945,7 +941,7 @@ pub const Window = struct {
             self.data.min_size = null;
         }
 
-        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .NOACTIVATE = 1,
             .NOZORDER = 1,
             .NOOWNERZORDER = 1,
@@ -955,9 +951,9 @@ pub const Window = struct {
         const size = windowSize(self.handle);
 
         const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
+            win32_gfx.HWND_TOPMOST
         else
-            window_msg.HWND_NOTOPMOST;
+            win32_gfx.HWND_NOTOPMOST;
         // We need the system to post a WM_MINMAXINFO.
         // in order for the new size limits to be applied,
         setWindowPositionIntern(
@@ -1002,7 +998,7 @@ pub const Window = struct {
             self.data.max_size = null;
         }
 
-        const POSITION_FLAGS: u32 = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS: u32 = win32_gfx.SET_WINDOW_POS_FLAGS{
             .NOACTIVATE = 1,
             .NOZORDER = 1,
             .NOOWNERZORDER = 1,
@@ -1012,9 +1008,9 @@ pub const Window = struct {
         const size = windowSize(self.handle);
 
         const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
+            win32_gfx.HWND_TOPMOST
         else
-            window_msg.HWND_NOTOPMOST;
+            win32_gfx.HWND_NOTOPMOST;
         // We need the system to post a WM_MINMAXINFO.
         // in order for the new size limits to be applied,
         setWindowPositionIntern(
@@ -1030,7 +1026,7 @@ pub const Window = struct {
 
     /// Hides the window, this is different from minimizing it.
     pub fn hide(self: *Self) void {
-        _ = gdi.ShowWindow(self.handle, gdi.SW_HIDE);
+        _ = win32_gfx.ShowWindow(self.handle, win32_gfx.SW_HIDE);
         self.data.flags.is_visible = false;
     }
 
@@ -1048,17 +1044,17 @@ pub const Window = struct {
 
     /// Maximize the window.
     pub fn maximize(self: *const Self) void {
-        _ = gdi.ShowWindow(self.handle, gdi.SW_MAXIMIZE);
+        _ = win32_gfx.ShowWindow(self.handle, win32_gfx.SW_MAXIMIZE);
     }
 
     /// Minimizes the window.
     pub fn minimize(self: *const Self) void {
-        _ = gdi.ShowWindow(self.handle, gdi.SW_MINIMIZE);
+        _ = win32_gfx.ShowWindow(self.handle, win32_gfx.SW_MINIMIZE);
     }
 
     /// Restores the minimized or maximized window to a normal window.
     pub fn restore(self: *const Self) void {
-        _ = gdi.ShowWindow(self.handle, gdi.SW_RESTORE);
+        _ = win32_gfx.ShowWindow(self.handle, win32_gfx.SW_RESTORE);
     }
 
     /// Changes the title of the window.
@@ -1069,7 +1065,7 @@ pub const Window = struct {
     ) mem.Allocator.Error!void {
         const wide_title = try utils.utf8ToWideZ(allocator, new_title);
         defer allocator.free(wide_title);
-        _ = gdi.SetWindowTextW(self.handle, wide_title);
+        _ = win32_gfx.SetWindowTextW(self.handle, wide_title);
     }
 
     /// Returns the title of the window.
@@ -1079,7 +1075,7 @@ pub const Window = struct {
     ) (WindowError || mem.Allocator.Error)![]u8 {
         // This length doesn't take into account the null character
         // so add it when allocating.
-        const wide_title_len = gdi.GetWindowTextLengthW(self.handle);
+        const wide_title_len = win32_gfx.GetWindowTextLengthW(self.handle);
         if (wide_title_len > 0) {
             const uwide_title_len: usize = @intCast(wide_title_len);
             const wide_slice = try allocator.allocSentinel(
@@ -1090,7 +1086,7 @@ pub const Window = struct {
             defer allocator.free(wide_slice);
             // to get the full title we must specify the full
             // buffer length or we will be 1 character short.
-            _ = gdi.GetWindowTextW(
+            _ = win32_gfx.GetWindowTextW(
                 self.handle,
                 wide_slice.ptr,
                 wide_title_len + 1,
@@ -1108,20 +1104,20 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn getOpacity(self: *const Self) f32 {
-        const ex_styles = gdi.GetWindowLongPtrW(
+        const ex_styles = win32_gfx.GetWindowLongPtrW(
             self.handle,
-            gdi.GWL_EXSTYLE,
+            win32_gfx.GWL_EXSTYLE,
         );
-        if ((ex_styles & @as(isize, @bitCast(gdi.WS_EX_LAYERED))) != 0) {
+        if ((ex_styles & @as(isize, @bitCast(win32_gfx.WS_EX_LAYERED))) != 0) {
             var alpha: u8 = undefined;
-            var flags: gdi.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
-            _ = gdi.GetLayeredWindowAttributes(
+            var flags: win32_gfx.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
+            _ = win32_gfx.GetLayeredWindowAttributes(
                 self.handle,
                 null,
                 &alpha,
                 &flags,
             );
-            if ((@as(u32, @bitCast(flags)) & @as(u32, @bitCast(window_msg.LWA_ALPHA))) != 0) {
+            if ((@as(u32, @bitCast(flags)) & @as(u32, @bitCast(win32_gfx.LWA_ALPHA))) != 0) {
                 const falpha: f32 = @floatFromInt(alpha);
                 return (falpha / 255.0);
             }
@@ -1134,30 +1130,30 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f32) void {
-        var ex_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
+        var ex_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
-            gdi.GWL_EXSTYLE,
+            win32_gfx.GWL_EXSTYLE,
         ));
 
         if (value == @as(f32, 1.0)) {
-            ex_styles &= ~@as(u32, @bitCast(gdi.WS_EX_LAYERED));
+            ex_styles &= ~@as(u32, @bitCast(win32_gfx.WS_EX_LAYERED));
         } else {
             const alpha: u32 = @intFromFloat(value * 255.0);
 
-            if ((ex_styles & @as(u32, @bitCast(gdi.WS_EX_LAYERED))) == 0) {
-                ex_styles |= @as(u32, @bitCast(gdi.WS_EX_LAYERED));
+            if ((ex_styles & @as(u32, @bitCast(win32_gfx.WS_EX_LAYERED))) == 0) {
+                ex_styles |= @as(u32, @bitCast(win32_gfx.WS_EX_LAYERED));
             }
 
-            _ = gdi.SetLayeredWindowAttributes(
+            _ = win32_gfx.SetLayeredWindowAttributes(
                 self.handle,
                 0,
                 @truncate(alpha),
-                gdi.LWA_ALPHA,
+                win32_gfx.LWA_ALPHA,
             );
         }
-        _ = gdi.SetWindowLongPtrW(
+        _ = win32_gfx.SetWindowLongPtrW(
             self.handle,
-            gdi.GWL_EXSTYLE,
+            win32_gfx.GWL_EXSTYLE,
             @bitCast(ex_styles),
         );
     }
@@ -1167,9 +1163,9 @@ pub const Window = struct {
         self.data.aspect_ratio = ratio;
         if (ratio != null) {
             var rect: win32.RECT = undefined;
-            _ = window_msg.GetWindowRect(self.handle, &rect);
-            self.applyAspectRatio(&rect, window_msg.WMSZ_BOTTOMLEFT);
-            _ = gdi.MoveWindow(
+            _ = win32_gfx.GetWindowRect(self.handle, &rect);
+            self.applyAspectRatio(&rect, win32_gfx.WMSZ_BOTTOMLEFT);
+            _ = win32_gfx.MoveWindow(
                 self.handle,
                 rect.left,
                 rect.top,
@@ -1201,23 +1197,23 @@ pub const Window = struct {
         );
 
         switch (edge) {
-            window_msg.WMSZ_LEFT,
-            window_msg.WMSZ_RIGHT,
-            window_msg.WMSZ_BOTTOMLEFT,
-            window_msg.WMSZ_BOTTOMRIGHT,
+            win32_gfx.WMSZ_LEFT,
+            win32_gfx.WMSZ_RIGHT,
+            win32_gfx.WMSZ_BOTTOMLEFT,
+            win32_gfx.WMSZ_BOTTOMRIGHT,
             => {
                 client.bottom = client.top + (rect.bottom - rect.top);
                 const fborder_width: f64 = @floatFromInt((client.right - client.left) -
                     (rect.right - rect.left));
                 client.bottom += @intFromFloat(fborder_width / ratio);
             },
-            window_msg.WMSZ_TOPLEFT, window_msg.WMSZ_TOPRIGHT => {
+            win32_gfx.WMSZ_TOPLEFT, win32_gfx.WMSZ_TOPRIGHT => {
                 client.top = client.bottom - (rect.bottom - rect.top);
                 const fborder_width: f64 = @floatFromInt((client.right - client.left) -
                     (rect.right - rect.left));
                 client.top -= @intFromFloat(fborder_width / ratio);
             },
-            window_msg.WMSZ_TOP, window_msg.WMSZ_BOTTOM => {
+            win32_gfx.WMSZ_TOP, win32_gfx.WMSZ_BOTTOM => {
                 client.right = client.left + (rect.right - rect.left);
                 const fborder_height: f64 = @floatFromInt((client.bottom - client.top) -
                     (rect.bottom - rect.top));
@@ -1272,16 +1268,16 @@ pub const Window = struct {
 
         d.getFullArea(&area);
 
-        const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .NOZORDER = 1,
             .NOACTIVATE = 1,
             .NOCOPYBITS = 1,
         };
 
         const top = if (self.data.flags.is_topmost)
-            window_msg.HWND_TOPMOST
+            win32_gfx.HWND_TOPMOST
         else
-            window_msg.HWND_NOTOPMOST;
+            win32_gfx.HWND_NOTOPMOST;
 
         setWindowPositionIntern(
             self.handle,
@@ -1310,9 +1306,9 @@ pub const Window = struct {
         self.win32.allow_drag_n_drop = accepted;
         if (accepted) {
             self.win32.dropped_files = std.ArrayList([]const u8).init(allocator);
-            win32_shell.DragAcceptFiles(self.handle, win32.TRUE);
+            shell32.DragAcceptFiles(self.handle, win32.TRUE);
         } else {
-            win32_shell.DragAcceptFiles(self.handle, win32.FALSE);
+            shell32.DragAcceptFiles(self.handle, win32.FALSE);
             self.freeDroppedFiles();
         }
     }
@@ -1351,26 +1347,26 @@ pub const Window = struct {
                 @intFromPtr(new_icon.sm_handle.?),
             }
         else blk: {
-            const bg_icon = window_msg.GetClassLongPtrW(
+            const bg_icon = win32_gfx.GetClassLongPtrW(
                 self.handle,
-                window_msg.GCLP_HICON,
+                win32_gfx.GCLP_HICON,
             );
-            const sm_icon = window_msg.GetClassLongPtrW(
+            const sm_icon = win32_gfx.GetClassLongPtrW(
                 self.handle,
-                window_msg.GCLP_HICONSM,
+                win32_gfx.GCLP_HICONSM,
             );
             break :blk .{ bg_icon, sm_icon };
         };
-        _ = window_msg.SendMessageW(
+        _ = win32_gfx.SendMessageW(
             self.handle,
-            window_msg.WM_SETICON,
-            window_msg.ICON_BIG,
+            win32_gfx.WM_SETICON,
+            win32_gfx.ICON_BIG,
             @bitCast(bg_handle),
         );
-        _ = window_msg.SendMessageW(
+        _ = win32_gfx.SendMessageW(
             self.handle,
-            window_msg.WM_SETICON,
-            window_msg.ICON_SMALL,
+            win32_gfx.WM_SETICON,
+            win32_gfx.ICON_SMALL,
             @bitCast(sm_handle),
         );
         icon.destroyIcon(&self.win32.icon);

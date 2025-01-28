@@ -1,6 +1,4 @@
 const common = @import("common");
-const usr32 = @import("win32api/user32.zig");
-const win32_defs = @import("win32api/defs.zig");
 const win32_input = @import("win32api/input.zig");
 const win32 = @import("std").os.windows;
 const ScanCode = common.keyboard_mouse.ScanCode;
@@ -814,7 +812,7 @@ fn vkToKeycode(keycode: u16) KeyCode {
 
 fn keyTextToVirtual(keycode: u16) KeyCode {
     const MAPVK_VK_TO_CHAR = 2;
-    const key_text = usr32.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
+    const key_text = win32_input.MapVirtualKeyW(keycode, MAPVK_VK_TO_CHAR) & 0xFFFF;
     switch (key_text) {
         ';' => return KeyCode.Semicolon,
         '/' => return KeyCode.Slash,
@@ -835,7 +833,7 @@ pub fn translateVirtualKey(vk: u16, lparam: win32.LPARAM) struct { KeyCode, Scan
     var code: u32 = @truncate(ulparm);
     if (code == 0) {
         // scancode value shouldn't be zero
-        code = usr32.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+        code = win32_input.MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
     }
     // Notes:
     // According to windows

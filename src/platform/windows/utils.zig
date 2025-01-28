@@ -1,13 +1,10 @@
 const std = @import("std");
-const win32 = std.os.windows;
 const common = @import("common");
 const wndw = @import("window.zig");
-const krnl32 = @import("win32api/kernel32.zig");
-const usr32 = @import("win32api/user32.zig");
-const macros = @import("win32api/macros.zig");
-const win32_err_code = @import("win32api/error_codes.zig");
-const win32_defs = @import("win32api/defs.zig");
+const win32_gfx = @import("win32api/graphics.zig");
+const win32_macros = @import("win32api/macros.zig");
 const win32_input = @import("win32api/input.zig");
+const win32 = std.os.windows;
 const mem = std.mem;
 const geometry = common.geometry;
 const ScanCode = common.keyboard_mouse.ScanCode;
@@ -79,31 +76,31 @@ pub fn getKeyModifiers() KeyModifiers {
         .num_lock = false,
     };
     if (isBitSet(
-        usr32.GetKeyState(win32_input.VK_SHIFT),
+        win32_input.GetKeyState(win32_input.VK_SHIFT),
         15,
     )) {
         mods.shift = true;
     }
     if (isBitSet(
-        usr32.GetKeyState(win32_input.VK_CONTROL),
+        win32_input.GetKeyState(win32_input.VK_CONTROL),
         15,
     )) {
         mods.ctrl = true;
     }
-    if (isBitSet(usr32.GetKeyState(win32_input.VK_MENU), 15)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_MENU), 15)) {
         mods.alt = true;
     }
     if (isBitSet(
-        (usr32.GetKeyState(win32_input.VK_LWIN) |
-            usr32.GetKeyState(win32_input.VK_RWIN)),
+        (win32_input.GetKeyState(win32_input.VK_LWIN) |
+            win32_input.GetKeyState(win32_input.VK_RWIN)),
         15,
     )) {
         mods.meta = true;
     }
-    if (isBitSet(usr32.GetKeyState(win32_input.VK_CAPITAL), 0)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_CAPITAL), 0)) {
         mods.caps_lock = true;
     }
-    if (isBitSet(usr32.GetKeyState(win32_input.VK_NUMLOCK), 0)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_NUMLOCK), 0)) {
         mods.num_lock = true;
     }
     return mods;
@@ -139,7 +136,7 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
     for (0..4) |index| {
         if (window.data.input.keys[@intCast(@intFromEnum(codes[index]))] == KeyState.Pressed) {
             const is_key_up = !isBitSet(
-                usr32.GetKeyState(virtual_keys[index]),
+                win32_input.GetKeyState(virtual_keys[index]),
                 15,
             );
             if (is_key_up) {
@@ -158,14 +155,14 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
 }
 
 pub inline fn getMousePosition(lparam: win32.LPARAM) geometry.Point2D {
-    const xpos = macros.getXLparam(@bitCast(lparam));
-    const ypos = macros.getYLparam(@bitCast(lparam));
+    const xpos = win32_macros.getXLparam(@bitCast(lparam));
+    const ypos = win32_macros.getYLparam(@bitCast(lparam));
     return geometry.Point2D{ .x = xpos, .y = ypos };
 }
 
 /// Posts a zig error code to the window's thread queue.
 pub inline fn postWindowErrorMsg(e: wndw.WindowError, window: win32.HWND) void {
-    const ret = usr32.PostMessageW(
+    const ret = win32_gfx.PostMessageW(
         window,
         wndw.WM_ERROR_REPORT,
         @intFromError(e),

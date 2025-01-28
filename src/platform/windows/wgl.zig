@@ -1,15 +1,14 @@
 const std = @import("std");
 const common = @import("common");
-const win32 = std.os.windows;
-const utils = @import("utils.zig");
 const dynlib = @import("dynlib.zig");
 const gl = @import("opengl");
+const win32_gl = @import("win32api/opengl.zig");
+const win32_gfx = @import("win32api/graphics.zig");
+const win32_macros = @import("win32api/macros.zig");
 
 const mem = std.mem;
 const debug = std.debug;
-const opengl = @import("win32api/opengl.zig");
-const gdi = @import("win32api/gdi.zig");
-const macros = @import("win32api/macros.zig");
+const win32 = std.os.windows;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const FBConfig = common.fb.FBConfig;
 
@@ -131,10 +130,10 @@ const wgl_ext = struct {
     var loaded: bool = false;
 };
 
-fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void {
-    pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
+fn fillPFDstruct(pfd: *win32_gl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void {
+    pfd.nSize = @sizeOf(win32_gl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
-    pfd.dwFlags = opengl.PFD_FLAGS{
+    pfd.dwFlags = win32_gl.PFD_FLAGS{
         .DRAW_TO_WINDOW = 1,
         .SUPPORT_OPENGL = 1,
     };
@@ -142,8 +141,8 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void 
     if (cfg.flags.double_buffered) {
         pfd.dwFlags.DOUBLEBUFFER = 1;
     }
-    pfd.iPixelType = opengl.PFD_TYPE_RGBA;
-    pfd.iLayerType = opengl.PFD_MAIN_PLANE;
+    pfd.iPixelType = win32_gl.PFD_TYPE_RGBA;
+    pfd.iLayerType = win32_gl.PFD_MAIN_PLANE;
     pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
         cfg.color.blue_bits;
     pfd.cRedBits = cfg.color.red_bits;
@@ -172,32 +171,32 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void 
 fn createTempContext(
     window: win32.HWND,
 ) WGLError!win32.HGLRC {
-    var pfd = mem.zeroes(opengl.PIXELFORMATDESCRIPTOR);
-    pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
+    var pfd = mem.zeroes(win32_gl.PIXELFORMATDESCRIPTOR);
+    pfd.nSize = @sizeOf(win32_gl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
-    pfd.dwFlags = opengl.PFD_FLAGS{
+    pfd.dwFlags = win32_gl.PFD_FLAGS{
         .DRAW_TO_WINDOW = 1,
         .SUPPORT_OPENGL = 1,
         .DOUBLEBUFFER = 1,
     };
 
-    const wdc = gdi.GetDC(window);
+    const wdc = win32_gfx.GetDC(window);
 
-    const pfi = opengl.ChoosePixelFormat(wdc, &pfd);
+    const pfi = win32_gl.ChoosePixelFormat(wdc, &pfd);
     if (pfi == 0) {
         return WGLError.PFDNoMatch;
     }
 
-    if (opengl.SetPixelFormat(wdc, pfi, &pfd) == win32.FALSE) {
+    if (win32_gl.SetPixelFormat(wdc, pfi, &pfd) == win32.FALSE) {
         return WGLError.PFDNoMatch;
     }
 
-    const glc = opengl.wglCreateContext(wdc);
+    const glc = win32_gl.wglCreateContext(wdc);
     if (glc == null) {
         return WGLError.NoRC;
     }
 
-    _ = gdi.ReleaseDC(window, wdc);
+    _ = win32_gfx.ReleaseDC(window, wdc);
 
     return glc.?;
 }
@@ -205,11 +204,11 @@ fn createTempContext(
 fn loadGLExtensions(driver: *const Win32Driver) bool {
 
     // Create a temp window
-    const tmp_wndw = gdi.CreateWindowExW(
-        gdi.WINDOW_EX_STYLE{},
-        macros.MAKEINTATOM(driver.handles.wnd_class),
+    const tmp_wndw = win32_gfx.CreateWindowExW(
+        win32_gfx.WINDOW_EX_STYLE{},
+        win32_macros.MAKEINTATOM(driver.handles.wnd_class),
         &[_:0]u16{ 0x00, 0x00 },
-        gdi.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
+        win32_gfx.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
         0,
         0,
         16,
@@ -224,24 +223,24 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
         return false;
     }
 
-    _ = gdi.ShowWindow(tmp_wndw, gdi.SHOW_WINDOW_CMD{});
+    _ = win32_gfx.ShowWindow(tmp_wndw, win32_gfx.SHOW_WINDOW_CMD{});
 
-    defer _ = gdi.DestroyWindow(tmp_wndw);
+    defer _ = win32_gfx.DestroyWindow(tmp_wndw);
 
     const tmp_glc = createTempContext(tmp_wndw.?) catch {
         return false;
     };
 
-    defer _ = opengl.wglDeleteContext(tmp_glc);
+    defer _ = win32_gl.wglDeleteContext(tmp_glc);
 
-    const wdc = gdi.GetDC(tmp_wndw);
-    defer _ = gdi.ReleaseDC(tmp_wndw, wdc);
+    const wdc = win32_gfx.GetDC(tmp_wndw);
+    defer _ = win32_gfx.ReleaseDC(tmp_wndw, wdc);
 
-    if (opengl.wglMakeCurrent(wdc, tmp_glc) != win32.TRUE) {
+    if (win32_gl.wglMakeCurrent(wdc, tmp_glc) != win32.TRUE) {
         return false;
     }
 
-    wgl_ext.GetExtensionsStringARB = @ptrCast(opengl.wglGetProcAddress(
+    wgl_ext.GetExtensionsStringARB = @ptrCast(win32_gl.wglGetProcAddress(
         "wglGetExtensionsStringARB",
     ));
 
@@ -256,24 +255,24 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
 
         if (gl.glHasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_pixel_format = true;
-            wgl_ext.ChoosePixelFormatARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.ChoosePixelFormatARB = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglChoosePixelFormatARB",
             ));
-            wgl_ext.GetPixelFormatAttribivARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.GetPixelFormatAttribivARB = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglGetPixelFormatAttribivARB",
             ));
         }
 
         if (gl.glHasExtension("wgl_ext_swap_control", wgl_ext.supported_extensions.?)) {
             wgl_ext.EXT_swap_control = true;
-            wgl_ext.SwapIntervalEXT = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.SwapIntervalEXT = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglSwapIntervalEXT",
             ));
         }
 
         if (gl.glHasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_create_context = true;
-            wgl_ext.CreateContextAttribsARB = @ptrCast(opengl.wglGetProcAddress(
+            wgl_ext.CreateContextAttribsARB = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglCreateContextAttribsARB",
             ));
         }
@@ -289,9 +288,9 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
     var pixel_format = [1]c_int{0};
     var format_count: u32 = 0;
     var index: usize = 0;
-    var pfd: opengl.PIXELFORMATDESCRIPTOR = undefined;
+    var pfd: win32_gl.PIXELFORMATDESCRIPTOR = undefined;
 
-    const dc = gdi.GetDC(window);
+    const dc = win32_gfx.GetDC(window);
 
     if (wgl_ext.ARB_pixel_format) {
         const helper = struct {
@@ -452,19 +451,19 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
         ) != win32.TRUE or format_count == 0) {
             // Fallback
             fillPFDstruct(&pfd, cfg);
-            pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
+            pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
         }
     } else {
         fillPFDstruct(&pfd, cfg);
-        pixel_format[0] = opengl.ChoosePixelFormat(dc, &pfd);
+        pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
     }
 
-    if (opengl.SetPixelFormat(dc, pixel_format[0], &pfd) != win32.TRUE) {
+    if (win32_gl.SetPixelFormat(dc, pixel_format[0], &pfd) != win32.TRUE) {
         return null;
     }
 
     if (cfg.accel.opengl.ver.major < 3 or !wgl_ext.ARB_create_context) {
-        return opengl.wglCreateContext(dc);
+        return win32_gl.wglCreateContext(dc);
     }
 
     // Set the version of OpenGL in the attribute list.
@@ -496,9 +495,9 @@ pub const GLContext = struct {
     const Self = @This();
 
     pub fn init(window: win32.HWND, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
-        const prev_dc = opengl.wglGetCurrentDC();
-        const prev_glc = opengl.wglGetCurrentContext();
-        defer _ = opengl.wglMakeCurrent(prev_dc, prev_glc);
+        const prev_dc = win32_gl.wglGetCurrentDC();
+        const prev_glc = win32_gl.wglGetCurrentContext();
+        defer _ = win32_gl.wglMakeCurrent(prev_dc, prev_glc);
 
         if (!wgl_ext.loaded) {
             wgl_ext.loaded = loadGLExtensions(driver);
@@ -509,8 +508,8 @@ pub const GLContext = struct {
             return WGLError.NoRC;
         }
 
-        const wdc = gdi.GetDC(window);
-        _ = opengl.wglMakeCurrent(wdc, rc);
+        const wdc = win32_gfx.GetDC(window);
+        _ = win32_gl.wglMakeCurrent(wdc, rc);
 
         var vend: [*:0]const u8 = undefined;
         var rend: [*:0]const u8 = undefined;
@@ -521,12 +520,12 @@ pub const GLContext = struct {
         if (glGetString) |func| {
             const GL_UNKOWN_VENDOR = "Vendor_Unknown";
             const GL_UNKOWN_RENDER = "Renderer_Unknown";
-            vend = func(opengl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
-            rend = func(opengl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
-            ver = func(opengl.GL_VERSION) orelse "";
+            vend = func(win32_gl.GL_VENDOR) orelse GL_UNKOWN_VENDOR;
+            rend = func(win32_gl.GL_RENDERER) orelse GL_UNKOWN_RENDER;
+            ver = func(win32_gl.GL_VERSION) orelse "";
         }
 
-        _ = gdi.ReleaseDC(window, wdc);
+        _ = win32_gfx.ReleaseDC(window, wdc);
 
         return .{
             .glrc = rc.?,
@@ -540,21 +539,21 @@ pub const GLContext = struct {
     }
 
     pub fn deinit(self: *const Self) void {
-        _ = opengl.wglMakeCurrent(null, null);
-        _ = opengl.wglDeleteContext(self.glrc);
+        _ = win32_gl.wglMakeCurrent(null, null);
+        _ = win32_gl.wglDeleteContext(self.glrc);
     }
 
     pub fn makeCurrent(self: *const Self) bool {
-        const wdc = gdi.GetDC(self.owner);
-        const success = opengl.wglMakeCurrent(wdc, self.glrc) == win32.TRUE;
-        _ = gdi.ReleaseDC(self.owner, wdc);
+        const wdc = win32_gfx.GetDC(self.owner);
+        const success = win32_gl.wglMakeCurrent(wdc, self.glrc) == win32.TRUE;
+        _ = win32_gfx.ReleaseDC(self.owner, wdc);
         return success;
     }
 
     pub fn swapBuffers(self: *const Self) bool {
-        const wdc = gdi.GetDC(self.owner);
-        const success = opengl.SwapBuffers(wdc) == win32.TRUE;
-        _ = gdi.ReleaseDC(self.owner, wdc);
+        const wdc = win32_gfx.GetDC(self.owner);
+        const success = win32_gl.SwapBuffers(wdc) == win32.TRUE;
+        _ = win32_gfx.ReleaseDC(self.owner, wdc);
         return success;
     }
 
@@ -567,7 +566,7 @@ pub const GLContext = struct {
 };
 
 pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
-    var symbol_ptr = opengl.wglGetProcAddress(symbol_name);
+    var symbol_ptr = win32_gl.wglGetProcAddress(symbol_name);
     // wglGetProcAddress returns NULL on failure,
     // some implementations will return other values. 1, 2, and 3 are used, as well as -1
     if (symbol_ptr == null or

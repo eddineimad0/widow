@@ -1,16 +1,14 @@
 const std = @import("std");
-const win32 = std.os.windows;
 const utils = @import("utils.zig");
 const opt = @import("build-options");
 const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
 const wndw = @import("window.zig");
 const display = @import("display.zig");
-const window_msg = @import("win32api/window_messages.zig");
-const gdi = @import("win32api/gdi.zig");
-const macros = @import("win32api/macros.zig");
+const win32_macros = @import("win32api/macros.zig");
 const win32_input = @import("win32api/input.zig");
-const win32_defs = @import("win32api/defs.zig");
+const win32_gfx = @import("win32api/graphics.zig");
+const win32 = std.os.windows;
 
 /// The procedure function for the helper window
 pub fn helperWindowProc(
@@ -20,7 +18,7 @@ pub fn helperWindowProc(
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
     switch (msg) {
-        window_msg.WM_DISPLAYCHANGE => {
+        win32_gfx.WM_DISPLAYCHANGE => {
             // Monitor the window_msg.WM_DISPLAYCHANGE notification
             // to detect when settings change or when a
             // display is added or removed.
@@ -30,7 +28,7 @@ pub fn helperWindowProc(
                     .{},
                 );
             }
-            const display_mgr_ref = gdi.GetPropW(
+            const display_mgr_ref = win32_gfx.GetPropW(
                 hwnd,
                 display.HELPER_DISPLAY_PROP,
             );
@@ -53,7 +51,7 @@ pub fn helperWindowProc(
 
         else => {},
     }
-    return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+    return win32_gfx.DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
 /// The Window Procedure function.
@@ -63,15 +61,15 @@ pub fn mainWindowProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
-    const window_ref_prop = gdi.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
+    const window_ref_prop = win32_gfx.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
     if (window_ref_prop == null) {
-        if (msg == window_msg.WM_NCCREATE) {
+        if (msg == win32_gfx.WM_NCCREATE) {
             // [Win32api Docs]
             // On Windows 10 1607 or above, PMv1 applications may also call
-            // EnableNonClientDpiScaling during window_msg.WM_NCCREATE to request
+            // EnableNonClientDpiScaling during win32_gfx.WM_NCCREATE to request
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
-            const struct_ptr: *gdi.CREATESTRUCTW = @ptrFromInt(ulparam);
+            const struct_ptr: *win32_gfx.CREATESTRUCTW = @ptrFromInt(ulparam);
             const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
                 @alignCast(struct_ptr.*.lpCreateParams),
             );
@@ -85,12 +83,12 @@ pub fn mainWindowProc(
             }
         }
         // Skip until the window pointer is registered.
-        return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+        return win32_gfx.DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
     var window: *wndw.Window = @ptrCast(@alignCast(window_ref_prop.?));
     switch (msg) {
-        window_msg.WM_CLOSE => {
+        win32_gfx.WM_CLOSE => {
             // Received upon an attempt to close the window.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a CLOSE event\n", .{window.data.id});
@@ -100,7 +98,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_SHOWWINDOW => {
+        win32_gfx.WM_SHOWWINDOW => {
             // Sent when the window is about to be hidden or shown.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SHOWWINDOW event\n", .{window.data.id});
@@ -113,7 +111,7 @@ pub fn mainWindowProc(
             // Must forward the message to DefWindowProc in order to show or hide the window.
         },
 
-        window_msg.WM_MOUSEACTIVATE => {
+        win32_gfx.WM_MOUSEACTIVATE => {
             // Sent when the cursor is in an inactive window and
             // the user presses a mouse button.
             if (opt.LOG_PLATFORM_EVENTS) {
@@ -127,12 +125,12 @@ pub fn mainWindowProc(
             // while the user is interacting with the non client area
             // (resizing with borders,grabbing the title bar...),
             // this gives the user a better visual experience.
-            if (macros.loWord(@bitCast(lparam)) != window_msg.HTCLIENT) {
+            if (win32_macros.loWord(@bitCast(lparam)) != win32_gfx.HTCLIENT) {
                 window.win32.frame_action = true;
             }
         },
 
-        window_msg.WM_PAINT => {
+        win32_gfx.WM_PAINT => {
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a PAINT event\n", .{window.data.id});
             }
@@ -140,10 +138,10 @@ pub fn mainWindowProc(
             window.sendEvent(&event);
         },
 
-        window_msg.WM_KEYUP,
-        window_msg.WM_KEYDOWN,
-        window_msg.WM_SYSKEYUP,
-        window_msg.WM_SYSKEYDOWN,
+        win32_gfx.WM_KEYUP,
+        win32_gfx.WM_KEYDOWN,
+        win32_gfx.WM_SYSKEYUP,
+        win32_gfx.WM_SYSKEYDOWN,
         => {
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a KEY/SYSKEY event\n", .{window.data.id});
@@ -159,8 +157,8 @@ pub fn mainWindowProc(
             // it to the DefWindowProc function.
         },
 
-        window_msg.WM_NCPAINT, window_msg.WM_NCACTIVATE => {
-            // An application can intercept the window_msg.WM_NCPAINT message
+        win32_gfx.WM_NCPAINT, win32_gfx.WM_NCACTIVATE => {
+            // An application can intercept the win32_gfx.WM_NCPAINT message
             // and paint its own custom window frame
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a NCPAINT or NCACTIVATE event\n", .{window.data.id});
@@ -172,7 +170,7 @@ pub fn mainWindowProc(
             }
         },
 
-        window_msg.WM_MOUSELEAVE => {
+        win32_gfx.WM_MOUSELEAVE => {
             // Posted to a window when the cursor leaves the client area
             // of the window specified in a prior call to TrackMouseEvent.
             if (opt.LOG_PLATFORM_EVENTS) {
@@ -186,10 +184,10 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_LBUTTONUP,
-        window_msg.WM_MBUTTONUP,
-        window_msg.WM_RBUTTONUP,
-        window_msg.WM_XBUTTONUP,
+        win32_gfx.WM_LBUTTONUP,
+        win32_gfx.WM_MBUTTONUP,
+        win32_gfx.WM_RBUTTONUP,
+        win32_gfx.WM_XBUTTONUP,
         => {
             // Received a mouse button is released
             // while the cursor is in the client area of a window.
@@ -197,16 +195,16 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a BUTTONUP event\n", .{window.data.id});
             }
             msg_handler.mouseUpMSGHandler(window, msg, wparam);
-            if (msg == window_msg.WM_XBUTTONUP) {
+            if (msg == win32_gfx.WM_XBUTTONUP) {
                 return win32.TRUE;
             }
             return win32.FALSE;
         },
 
-        window_msg.WM_LBUTTONDOWN,
-        window_msg.WM_MBUTTONDOWN,
-        window_msg.WM_RBUTTONDOWN,
-        window_msg.WM_XBUTTONDOWN,
+        win32_gfx.WM_LBUTTONDOWN,
+        win32_gfx.WM_MBUTTONDOWN,
+        win32_gfx.WM_RBUTTONDOWN,
+        win32_gfx.WM_XBUTTONDOWN,
         => {
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a BUTTONDOWN event\n", .{window.data.id});
@@ -214,13 +212,13 @@ pub fn mainWindowProc(
             // Received a mouse button is pressed
             // while the cursor is in the client area of a window.
             msg_handler.mouseDownMSGHandler(window, msg, wparam);
-            if (msg == window_msg.WM_XBUTTONDOWN) {
+            if (msg == win32_gfx.WM_XBUTTONDOWN) {
                 return win32.TRUE;
             }
             return win32.FALSE;
         },
 
-        window_msg.WM_MOUSEMOVE => {
+        win32_gfx.WM_MOUSEMOVE => {
             // Posted to a window when the cursor moves.
             // If the mouse is not captured,
             // the message is posted to the window that contains the cursor.
@@ -275,7 +273,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_MOUSEWHEEL => {
+        win32_gfx.WM_MOUSEWHEEL => {
             // Sent to the active window when the mouse's vertical scroll wheel
             // is tilted or rotated. A positive value indicates that
             // the wheel was rotated forward, away from the user.
@@ -284,8 +282,8 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEWHEEL event\n", .{window.data.id});
             }
-            const scroll: f64 = @floatFromInt(macros.getYLparam(wparam));
-            const wheel_delta = scroll / @as(f64, win32_defs.WHEEL_DELTA);
+            const scroll: f64 = @floatFromInt(win32_macros.getYLparam(wparam));
+            const wheel_delta = scroll / @as(f64, win32_gfx.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
                 wheel_delta,
@@ -294,7 +292,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_MOUSEHWHEEL => {
+        win32_gfx.WM_MOUSEHWHEEL => {
             // Sent to the active window when the mouse's horizontal scroll
             // wheel is tilted or rotated. A positive value indicates that
             // the wheel was rotated left, a negative value indicates
@@ -302,8 +300,8 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEHWHEEL event\n", .{window.data.id});
             }
-            const scroll: f64 = @floatFromInt(macros.getYLparam(wparam));
-            const wheel_delta = -(scroll) / @as(f64, win32_defs.WHEEL_DELTA);
+            const scroll: f64 = @floatFromInt(win32_macros.getYLparam(wparam));
+            const wheel_delta = -(scroll) / @as(f64, win32_gfx.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
                 0.0,
@@ -312,10 +310,10 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_ERASEBKGND => {
+        win32_gfx.WM_ERASEBKGND => {
             // The message is sent to prepare an invalidated portion
             // of a window for painting. An application should
-            // return nonzero in response to window_msg.WM_ERASEBKGND
+            // return nonzero in response to win32_gfx.WM_ERASEBKGND
             // if it processes the message and erases the background.
             // returning true here prevents flickering and
             // allow us to do our own drawing.
@@ -325,9 +323,9 @@ pub fn mainWindowProc(
             return win32.TRUE;
         },
 
-        window_msg.WM_GETDPISCALEDSIZE => {
+        win32_gfx.WM_GETDPISCALEDSIZE => {
             // [MSDN]
-            // This message is received before a window_msg.WM_DPICHANGED
+            // This message is received before a win32_gfx.WM_DPICHANGED
             // for PMv2 awareness, and allows the window to compute its
             // desired size for the pending DPI change.
             // [SDL]
@@ -347,25 +345,25 @@ pub fn mainWindowProc(
             return win32.FALSE;
         },
 
-        window_msg.WM_DPICHANGED => {
+        win32_gfx.WM_DPICHANGED => {
             // Sent when the effective dots per inch (dpi) for a window has changed.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a DPICHANGED event\n", .{window.data.id});
             }
             const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const new_dpi = macros.loWord(wparam);
-            const scale = @as(f64, @floatFromInt(new_dpi)) / win32_defs.USER_DEFAULT_SCREEN_DPI_F;
-            const flags = window_msg.SET_WINDOW_POS_FLAGS{
+            const new_dpi = win32_macros.loWord(wparam);
+            const scale = @as(f64, @floatFromInt(new_dpi)) / win32_gfx.USER_DEFAULT_SCREEN_DPI_F;
+            const flags = win32_gfx.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
                 .NOOWNERZORDER = 1,
             };
             const top = if (window.data.flags.is_topmost)
-                window_msg.HWND_TOPMOST
+                win32_gfx.HWND_TOPMOST
             else
-                window_msg.HWND_NOTOPMOST;
+                win32_gfx.HWND_NOTOPMOST;
 
-            _ = window_msg.SetWindowPos(
+            _ = win32_gfx.SetWindowPos(
                 window.handle,
                 top,
                 suggested_rect.left,
@@ -379,7 +377,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_GETMINMAXINFO => {
+        win32_gfx.WM_GETMINMAXINFO => {
             // Sent to a window when the size or position of the window is about
             // to change. An application can use this message to override
             // the window's default maximized size and position,
@@ -393,7 +391,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_SIZING => {
+        win32_gfx.WM_SIZING => {
             // Sent to a window that the user is currently resizing.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SIZING event\n", .{window.data.id});
@@ -406,13 +404,13 @@ pub fn mainWindowProc(
             return win32.TRUE;
         },
 
-        window_msg.WM_SIZE => {
+        win32_gfx.WM_SIZE => {
             // Sent to a window after its size has changed.
             // usually due to maximizing, minimizing, resizing...etc.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SIZE event\n", .{window.data.id});
             }
-            const maximized = (wparam == window_msg.SIZE_MAXIMIZED);
+            const maximized = (wparam == win32_gfx.SIZE_MAXIMIZED);
             if (window.data.flags.is_maximized != maximized and maximized) {
                 const event = common.event.createMaximizeEvent(
                     window.data.id,
@@ -420,7 +418,7 @@ pub fn mainWindowProc(
                 window.sendEvent(&event);
             }
 
-            const minimized = (wparam == window_msg.SIZE_MINIMIZED);
+            const minimized = (wparam == win32_gfx.SIZE_MINIMIZED);
             if (window.data.flags.is_minimized != minimized and minimized) {
                 const event = common.event.createMinimizeEvent(
                     window.data.id,
@@ -434,7 +432,7 @@ pub fn mainWindowProc(
                 }
             }
 
-            const restored = (wparam == window_msg.SIZE_RESTORED and
+            const restored = (wparam == win32_gfx.SIZE_RESTORED and
                 (window.data.flags.is_minimized or window.data.flags.is_maximized));
             if (restored) {
                 const event = common.event.createRestoreEvent(
@@ -454,8 +452,8 @@ pub fn mainWindowProc(
             window.data.flags.is_maximized = maximized;
             window.data.flags.is_minimized = minimized;
 
-            const new_width: i32 = @intCast(macros.loWord(@bitCast(lparam)));
-            const new_height: i32 = @intCast(macros.hiWord(@bitCast(lparam)));
+            const new_width: i32 = @intCast(win32_macros.loWord(@bitCast(lparam)));
+            const new_height: i32 = @intCast(win32_macros.hiWord(@bitCast(lparam)));
 
             if (minimized or (window.data.client_area.size.width == new_width and
                 window.data.client_area.size.height == new_height))
@@ -482,20 +480,20 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_MOVE => blk: {
+        win32_gfx.WM_MOVE => blk: {
             // Sent after a window has been moved.
             // the lparam holds the new client top left coords.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOVE event\n", .{window.data.id});
             }
             // Our minimized flag is still not set so check using the winapi.
-            if (window_msg.IsIconic(window.handle) != 0) {
+            if (win32_gfx.IsIconic(window.handle) != 0) {
                 // if the window was minimized don't update the top left position.
                 break :blk;
             }
 
-            const xpos = macros.getXLparam(@bitCast(lparam));
-            const ypos = macros.getYLparam(@bitCast(lparam));
+            const xpos = win32_macros.getXLparam(@bitCast(lparam));
+            const ypos = win32_macros.getYLparam(@bitCast(lparam));
 
             if (window.data.client_area.top_left.x == xpos and
                 window.data.client_area.top_left.y == ypos)
@@ -523,13 +521,13 @@ pub fn mainWindowProc(
             }
         },
 
-        window_msg.WM_SETCURSOR => {
+        win32_gfx.WM_SETCURSOR => {
             // Sent if the mouse causes the cursor
             // to move within a window and mouse input is not captured.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SETCURSOR event\n", .{window.data.id});
             }
-            if (macros.loWord(@bitCast(lparam)) == window_msg.HTCLIENT) {
+            if (win32_macros.loWord(@bitCast(lparam)) == win32_gfx.HTCLIENT) {
                 // the mouse just moved into the client area
                 // update the cursor image acording to the current mode;
                 wndw.applyCursorHints(&window.win32.cursor, window.handle);
@@ -537,7 +535,7 @@ pub fn mainWindowProc(
             }
         },
 
-        window_msg.WM_SETFOCUS => {
+        win32_gfx.WM_SETFOCUS => {
             // Sent to a window after it has gained the keyboard focus.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SETFOCUS event\n", .{window.data.id});
@@ -556,7 +554,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_KILLFOCUS => {
+        win32_gfx.WM_KILLFOCUS => {
             // Sent to a window immediately before it loses the keyboard focus.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a KILLFOCUS event\n", .{window.data.id});
@@ -573,14 +571,14 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_SYSCOMMAND => {
-            // In window_msg.WM_SYSCOMMAND messages, the four low-order bits of the wParam
+        win32_gfx.WM_SYSCOMMAND => {
+            // In win32_gfx.WM_SYSCOMMAND messages, the four low-order bits of the wParam
             // parameter are used internally by the system.
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SYSCOMMAND event\n", .{window.data.id});
             }
             switch (wparam & 0xFFF0) {
-                win32_defs.SC_SCREENSAVE, win32_defs.SC_MONITORPOWER => {
+                win32_gfx.SC_SCREENSAVE, win32_gfx.SC_MONITORPOWER => {
                     if (window.data.flags.is_fullscreen) {
                         // No screen saver for fullscreen mode
                         return 0;
@@ -593,21 +591,21 @@ pub fn mainWindowProc(
             }
         },
 
-        window_msg.WM_UNICHAR => {
-            // The window_msg.WM_UNICHAR message can be used by an application
+        win32_gfx.WM_UNICHAR => {
+            // The win32_gfx.WM_UNICHAR message can be used by an application
             // to post input to other windows.
-            // (Tests whether a target app can process window_msg.WM_UNICHAR
+            // (Tests whether a target app can process win32_gfx.WM_UNICHAR
             // messages by sending the message with wParam
             // set to UNICODE_NOCHAR.)
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a UNICHAR event\n", .{window.data.id});
             }
-            if (wparam == window_msg.UNICODE_NOCHAR) {
+            if (wparam == win32_gfx.UNICODE_NOCHAR) {
                 // If wParam is UNICODE_NOCHAR and the application support this message,
                 return win32.TRUE;
             }
 
-            // The window_msg.WM_UNICHAR message is similar to WM_CHAR,
+            // The win32_gfx.WM_UNICHAR message is similar to WM_CHAR,
             // but it uses Unicode Transformation Format (UTF)-32
             const event = common.event.createCharEvent(
                 window.data.id,
@@ -618,9 +616,9 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_SYSCHAR, window_msg.WM_CHAR => {
+        win32_gfx.WM_SYSCHAR, win32_gfx.WM_CHAR => {
             // Posted to the window with the keyboard focus
-            // when a window_msg.WM_SYSKEYDOWN | WM_KEYDOWN
+            // when a win32_gfx.WM_SYSKEYDOWN | WM_KEYDOWN
             // message is translated by the TranslateMessage function.
             // WM_CHAR | WM_SYSCHAR message uses UTF-16
             // code units in its wParam if the Unicode version of the
@@ -629,12 +627,12 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a SYSCHAR/CHAR event\n", .{window.data.id});
             }
             msg_handler.charEventHandler(window, wparam);
-            if (msg != window_msg.WM_SYSCHAR) {
+            if (msg != win32_gfx.WM_SYSCHAR) {
                 return 0;
             }
         },
 
-        window_msg.WM_ENTERSIZEMOVE => {
+        win32_gfx.WM_ENTERSIZEMOVE => {
             // Sent one time to a window after it enters
             // the moving or sizing loop,
             // The window enters the moving or sizing
@@ -645,7 +643,7 @@ pub fn mainWindowProc(
             window.win32.frame_action = true;
         },
 
-        window_msg.WM_EXITSIZEMOVE => {
+        win32_gfx.WM_EXITSIZEMOVE => {
             // now we should report the resize and postion change events.
 
             // the frame action is done treat the cursor
@@ -670,7 +668,7 @@ pub fn mainWindowProc(
             window.win32.frame_action = false;
         },
 
-        window_msg.WM_DROPFILES => {
+        win32_gfx.WM_DROPFILES => {
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a DROPFILES event\n", .{window.data.id});
             }
@@ -678,7 +676,7 @@ pub fn mainWindowProc(
             return 0;
         },
 
-        window_msg.WM_INPUT => {
+        win32_gfx.WM_INPUT => {
             if (window.data.flags.has_raw_mouse != true or window.win32.cursor.mode != .Hidden) {
                 return 0;
             }
@@ -707,13 +705,13 @@ pub fn mainWindowProc(
                 var width: i32, var height: i32 = .{ 0, 0 };
 
                 if (inpt.data.mouse.usFlags & 0x02 != 0) {
-                    x += window_msg.GetSystemMetrics(window_msg.SM_XVIRTUALSCREEN);
-                    y += window_msg.GetSystemMetrics(window_msg.SM_XVIRTUALSCREEN);
-                    width = window_msg.GetSystemMetrics(window_msg.SM_CXVIRTUALSCREEN);
-                    height = window_msg.GetSystemMetrics(window_msg.SM_CYVIRTUALSCREEN);
+                    x += win32_gfx.GetSystemMetrics(win32_gfx.SM_XVIRTUALSCREEN);
+                    y += win32_gfx.GetSystemMetrics(win32_gfx.SM_XVIRTUALSCREEN);
+                    width = win32_gfx.GetSystemMetrics(win32_gfx.SM_CXVIRTUALSCREEN);
+                    height = win32_gfx.GetSystemMetrics(win32_gfx.SM_CYVIRTUALSCREEN);
                 } else {
-                    width = window_msg.GetSystemMetrics(window_msg.SM_CXSCREEN);
-                    height = window_msg.GetSystemMetrics(window_msg.SM_CYSCREEN);
+                    width = win32_gfx.GetSystemMetrics(win32_gfx.SM_CXSCREEN);
+                    height = win32_gfx.GetSystemMetrics(win32_gfx.SM_CYSCREEN);
                 }
 
                 x += @intFromFloat(@as(f64, @floatFromInt(inpt.data.mouse.lLastX)) / @as(f64, 65535) *
@@ -722,7 +720,7 @@ pub fn mainWindowProc(
                     @as(f64, @floatFromInt(height)));
 
                 var cur_pos: win32.POINT = .{ .x = x, .y = y };
-                _ = gdi.ScreenToClient(window.handle, &cur_pos);
+                _ = win32_gfx.ScreenToClient(window.handle, &cur_pos);
 
                 dx = cur_pos.x - window.win32.cursor.pos.x;
                 dy = cur_pos.y - window.win32.cursor.pos.y;
@@ -749,5 +747,5 @@ pub fn mainWindowProc(
 
         else => {},
     }
-    return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+    return win32_gfx.DefWindowProcW(hwnd, msg, wparam, lparam);
 }

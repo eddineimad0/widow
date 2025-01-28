@@ -441,3 +441,12 @@ pub extern "user32" fn RegisterRawInputDevices(
 pub extern "user32" fn SetFocus(
     hWnd: ?win32.HWND,
 ) callconv(win32.WINAPI) ?win32.HWND;
+
+pub extern "user32" fn MapVirtualKeyW(
+    uCode: win32.UINT,
+    uMapType: win32.UINT,
+) callconv(win32.WINAPI) win32.UINT;
+
+pub extern "user32" fn GetKeyState(
+    nVirtKey: win32.INT,
+) callconv(win32.WINAPI) win32.SHORT;
