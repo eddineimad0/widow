@@ -340,9 +340,10 @@ pub const SIZE_MINIMIZED = @as(u32, 1);
 pub const SIZE_MAXIMIZED = @as(u32, 2);
 pub const SIZE_MAXSHOW = @as(u32, 3);
 pub const SIZE_MAXHIDE = @as(u32, 4);
-pub const HWND_BOTTOM = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, 1)))));
-pub const HWND_TOPMOST = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, -1)))));
-pub const HWND_NOTOPMOST = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, -2)))));
+pub const HWND_NOTOPMOST = @as(win32.HWND, @ptrFromInt(0xfffffffffffffffe));
+pub const HWND_TOPMOST = @as(win32.HWND, @ptrFromInt(0xffffffffffffffff));
+pub const HWND_TOP = @as(win32.HWND, @ptrFromInt(0x0));
+pub const HWND_BOTTOM = @as(win32.HWND, @ptrFromInt(0x1));
 
 //===================
 // Types
