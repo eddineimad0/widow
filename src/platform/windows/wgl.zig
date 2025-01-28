@@ -7,9 +7,9 @@ const gl = @import("opengl");
 
 const mem = std.mem;
 const debug = std.debug;
-const opengl = zigwin32.graphics.open_gl;
-const gdi = zigwin32.graphics.gdi;
-const window_msg = zigwin32.ui.windows_and_messaging;
+const opengl = @import("win32api/opengl.zig");
+const gdi = @import("win32api/gdi.zig");
+const macros = @import("win32api/macros.zig");
 const Win32Driver = @import("driver.zig").Win32Driver;
 const FBConfig = common.fb.FBConfig;
 
@@ -205,11 +205,11 @@ fn createTempContext(
 fn loadGLExtensions(driver: *const Win32Driver) bool {
 
     // Create a temp window
-    const tmp_wndw = window_msg.CreateWindowExW(
-        window_msg.WINDOW_EX_STYLE{},
-        utils.MAKEINTATOM(driver.handles.wnd_class),
+    const tmp_wndw = gdi.CreateWindowExW(
+        gdi.WINDOW_EX_STYLE{},
+        macros.MAKEINTATOM(driver.handles.wnd_class),
         &[_:0]u16{ 0x00, 0x00 },
-        window_msg.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
+        gdi.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
         0,
         0,
         16,
@@ -224,9 +224,9 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
         return false;
     }
 
-    _ = window_msg.ShowWindow(tmp_wndw, window_msg.SW_HIDE);
+    _ = gdi.ShowWindow(tmp_wndw, gdi.SHOW_WINDOW_CMD{});
 
-    defer _ = window_msg.DestroyWindow(tmp_wndw);
+    defer _ = gdi.DestroyWindow(tmp_wndw);
 
     const tmp_glc = createTempContext(tmp_wndw.?) catch {
         return false;

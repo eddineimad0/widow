@@ -1,5 +1,5 @@
 const std = @import("std");
-const win32 = @import("win32_defs.zig");
+const win32 = std.os.windows;
 const zigwin32 = @import("zigwin32");
 const utils = @import("utils.zig");
 const opt = @import("build-options");
@@ -7,10 +7,10 @@ const common = @import("common");
 const msg_handler = @import("msg_handler.zig");
 const wndw = @import("window.zig");
 const display = @import("display.zig");
-const window_msg = zigwin32.ui.windows_and_messaging;
-const keyboard_mouse = zigwin32.ui.input.keyboard_and_mouse;
-const sys_service = zigwin32.system.system_services;
-const input = zigwin32.ui.input;
+const window_msg = @import("win32api/window_messages.zig");
+const gdi = @import("win32api/gdi.zig");
+const macros = @import("win32api/macros.zig");
+const win32_input = @import("win32api/input.zig");
 
 /// The procedure function for the helper window
 pub fn helperWindowProc(
@@ -30,7 +30,7 @@ pub fn helperWindowProc(
                     .{},
                 );
             }
-            const display_mgr_ref = window_msg.GetPropW(
+            const display_mgr_ref = gdi.GetPropW(
                 hwnd,
                 display.HELPER_DISPLAY_PROP,
             );
@@ -63,7 +63,7 @@ pub fn mainWindowProc(
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) isize {
-    const window_ref_prop = window_msg.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
+    const window_ref_prop = gdi.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
     if (window_ref_prop == null) {
         if (msg == window_msg.WM_NCCREATE) {
             // [Win32api Docs]
@@ -71,7 +71,7 @@ pub fn mainWindowProc(
             // EnableNonClientDpiScaling during window_msg.WM_NCCREATE to request
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
-            const struct_ptr: *window_msg.CREATESTRUCTW = @ptrFromInt(ulparam);
+            const struct_ptr: *gdi.CREATESTRUCTW = @ptrFromInt(ulparam);
             const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
                 @alignCast(struct_ptr.*.lpCreateParams),
             );
@@ -85,7 +85,7 @@ pub fn mainWindowProc(
             }
         }
         // Skip until the window pointer is registered.
-        return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
+        return gdi.DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
     var window: *wndw.Window = @ptrCast(@alignCast(window_ref_prop.?));
@@ -229,14 +229,14 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a MOUSEMOVE event\n", .{window.data.id});
             }
             if (!window.data.flags.cursor_in_client) {
-                var tme = keyboard_mouse.TRACKMOUSEEVENT{
-                    .cbSize = @sizeOf(keyboard_mouse.TRACKMOUSEEVENT),
-                    .dwFlags = keyboard_mouse.TME_LEAVE,
+                var tme = win32_input.TRACKMOUSEEVENT{
+                    .cbSize = @sizeOf(win32_input.TRACKMOUSEEVENT),
+                    .dwFlags = win32_input.TME_LEAVE,
                     .hwndTrack = window.handle,
                     .dwHoverTime = 0,
                 };
                 // Calling TrackMouseEvent in order to receive mouse leave events.
-                _ = keyboard_mouse.TrackMouseEvent(&tme);
+                _ = win32_input.TrackMouseEvent(&tme);
                 const event = common.event.createMouseEnterEvent(window.data.id);
                 window.sendEvent(&event);
                 window.data.flags.cursor_in_client = true;
@@ -494,8 +494,8 @@ pub fn mainWindowProc(
                 break :blk;
             }
 
-            const xpos = utils.getXLparam(@bitCast(lparam));
-            const ypos = utils.getYLparam(@bitCast(lparam));
+            const xpos = macros.getXLparam(@bitCast(lparam));
+            const ypos = macros.getYLparam(@bitCast(lparam));
 
             if (window.data.client_area.top_left.x == xpos and
                 window.data.client_area.top_left.y == ypos)
@@ -529,7 +529,7 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a SETCURSOR event\n", .{window.data.id});
             }
-            if (utils.loWord(@bitCast(lparam)) == window_msg.HTCLIENT) {
+            if (macros.loWord(@bitCast(lparam)) == window_msg.HTCLIENT) {
                 // the mouse just moved into the client area
                 // update the cursor image acording to the current mode;
                 wndw.applyCursorHints(&window.win32.cursor, window.handle);
@@ -684,16 +684,16 @@ pub fn mainWindowProc(
             }
 
             const ulparam: usize = @bitCast(lparam);
-            const raw_input: input.HRAWINPUT = @ptrFromInt(ulparam);
-            var inpt: input.RAWINPUT = undefined;
-            var raw_data_size: c_uint = @sizeOf(input.RAWINPUT);
+            const raw_input: win32_input.HRAWINPUT = @ptrFromInt(ulparam);
+            var inpt: win32_input.RAWINPUT = undefined;
+            var raw_data_size: c_uint = @sizeOf(win32_input.RAWINPUT);
 
-            const ret = input.GetRawInputData(
+            const ret = win32_input.GetRawInputData(
                 raw_input,
-                input.RID_INPUT,
+                win32_input.RID_INPUT,
                 &inpt,
                 &raw_data_size,
-                @sizeOf(input.RAWINPUTHEADER),
+                @sizeOf(win32_input.RAWINPUTHEADER),
             );
 
             if (ret != raw_data_size) {
@@ -721,8 +721,8 @@ pub fn mainWindowProc(
                 y += @intFromFloat(@as(f64, @floatFromInt(inpt.data.mouse.lLastY)) / @as(f64, 65535) *
                     @as(f64, @floatFromInt(height)));
 
-                var cur_pos: zigwin32.foundation.POINT = .{ .x = x, .y = y };
-                _ = zigwin32.graphics.gdi.ScreenToClient(window.handle, &cur_pos);
+                var cur_pos: win32.POINT = .{ .x = x, .y = y };
+                _ = gdi.ScreenToClient(window.handle, &cur_pos);
 
                 dx = cur_pos.x - window.win32.cursor.pos.x;
                 dy = cur_pos.y - window.win32.cursor.pos.y;

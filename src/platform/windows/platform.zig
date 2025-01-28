@@ -5,7 +5,7 @@ const display = @import("display.zig");
 const time = @import("time.zig");
 const driver = @import("driver.zig");
 const wndw = @import("window.zig");
-const window_msg = zigwin32.ui.windows_and_messaging;
+const gdi = @import("win32api/gdi.zig");
 
 const mem = std.mem;
 
@@ -47,7 +47,7 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     const ctx = try a.create(WidowContext);
     ctx.* = try WidowContext.init(a);
     // register helper properties
-    _ = window_msg.SetPropW(
+    _ = gdi.SetPropW(
         ctx.helper_window,
         display.HELPER_DISPLAY_PROP,
         @ptrCast(&ctx.display_mgr),
@@ -57,12 +57,12 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
 
 pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     // unregister helper properties
-    _ = window_msg.SetPropW(
+    _ = gdi.SetPropW(
         ctx.helper_window,
         display.HELPER_DISPLAY_PROP,
         null,
     );
-    _ = window_msg.DestroyWindow(ctx.helper_window);
+    _ = gdi.DestroyWindow(ctx.helper_window);
     ctx.display_mgr.deinit();
     a.destroy(ctx);
 }

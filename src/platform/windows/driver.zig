@@ -10,8 +10,6 @@ const utils = @import("utils.zig");
 const opts = @import("build-options");
 
 const unicode = std.unicode;
-//const sysinfo = zigwin32.system.system_information;
-//const window_msg = zigwin32.ui.windows_and_messaging;
 
 const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const mainWindowProc = @import("window_proc.zig").mainWindowProc;

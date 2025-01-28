@@ -1,11 +1,10 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
 const common = @import("common");
-const win32 = @import("win32_defs.zig");
+const win32_defs = @import("win32api/defs.zig");
+const win32 = std.os.windows;
+const gdi = @import("win32api/gdi.zig");
 const utils = @import("utils.zig");
 const mem = std.mem;
-const window_msg = zigwin32.ui.windows_and_messaging;
-const gdi = zigwin32.graphics.gdi;
 
 pub const IconError = error{
     NotFound, // requested icon resource was not found.
@@ -24,7 +23,7 @@ fn createWin32Icon(
     xhot: u32,
     yhot: u32,
     is_cursor: bool,
-) IconError!window_msg.HICON {
+) IconError!win32.HICON {
     var bmp_header: gdi.BITMAPV5HEADER = mem.zeroes(gdi.BITMAPV5HEADER);
     bmp_header.bV5Size = @sizeOf(gdi.BITMAPV5HEADER);
     bmp_header.bV5Width = width;
@@ -64,7 +63,7 @@ fn createWin32Icon(
 
     @memcpy(dib, pixels);
 
-    var icon_info = window_msg.ICONINFO{
+    var icon_info = gdi.ICONINFO{
         // A value of TRUE(1) specifies an icon, FALSE(0) specify a cursor.
         .fIcon = @intFromBool(!is_cursor),
         .xHotspot = xhot,
@@ -73,13 +72,13 @@ fn createWin32Icon(
         .hbmColor = color_mask,
     };
 
-    const icon_handle = window_msg.CreateIconIndirect(&icon_info);
+    const icon_handle = gdi.CreateIconIndirect(&icon_info);
 
     return icon_handle orelse return IconError.BadIcon;
 }
 
 pub const CursorHints = struct {
-    icon: ?window_msg.HCURSOR,
+    icon: ?win32.HCURSOR,
     // Track the cursor coordinates in respect to top left corner.
     pos: common.geometry.Point2D,
     // Accumulate the mouse movement
@@ -90,24 +89,24 @@ pub const CursorHints = struct {
 
 pub fn destroyCursorIcon(cursor: *CursorHints) void {
     if (!cursor.sys_owned and cursor.icon != null) {
-        _ = window_msg.DestroyCursor(cursor.icon);
+        _ = gdi.DestroyCursor(cursor.icon);
         cursor.icon = null;
     }
 }
 
 pub const Icon = struct {
-    sm_handle: ?window_msg.HICON,
-    bg_handle: ?window_msg.HICON,
+    sm_handle: ?win32.HICON,
+    bg_handle: ?win32.HICON,
 };
 
 pub fn destroyIcon(icon: *Icon) void {
     if (icon.sm_handle) |handle| {
-        _ = window_msg.DestroyIcon(handle);
+        _ = gdi.DestroyIcon(handle);
         icon.sm_handle = null;
     }
 
     if (icon.bg_handle) |handle| {
-        _ = window_msg.DestroyIcon(handle);
+        _ = gdi.DestroyIcon(handle);
         icon.bg_handle = null;
     }
 }
@@ -187,13 +186,13 @@ pub fn createNativeCursor(
         CursorShape.Default => win32.IDC_ARROW,
     };
 
-    const handle = window_msg.LoadImageA(
+    const handle = gdi.LoadImageA(
         null,
         cursor_id,
-        window_msg.GDI_IMAGE_TYPE.CURSOR,
+        gdi.GDI_IMAGE_TYPE.CURSOR,
         0,
         0,
-        window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+        gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
     );
 
     if (handle == null) {

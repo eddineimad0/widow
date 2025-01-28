@@ -1,5 +1,6 @@
 const krnl32 = @import("win32api/kernel32.zig");
-const win32 = @import("win32api/defs.zig");
+const win32 = @import("std").os.windows;
+const win32_defs = @import("win32api/defs.zig");
 
 const GetModuleHandleExW = krnl32.GetModuleHandleExW;
 const LoadLibraryA = krnl32.LoadLibraryA;
@@ -26,7 +27,7 @@ pub inline fn getModuleSymbol(
 pub fn getProcessHandle() ?win32.HINSTANCE {
     var hinstance: ?win32.HINSTANCE = null;
     if (GetModuleHandleExW(
-        win32.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | win32.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        win32_defs.GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT | win32.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
         @ptrFromInt(@intFromPtr(&getProcessHandle)),
         &hinstance,
     ) == 0) {
