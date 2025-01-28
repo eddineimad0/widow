@@ -5,7 +5,7 @@ const macros = @import("win32api/macros.zig");
 const usr32 = @import("win32api/user32.zig");
 const gdi = @import("win32api/gdi.zig");
 const krnl32 = @import("win32api/kernel32.zig");
-const mod = @import("module.zig");
+const mod = @import("dynlib.zig");
 const utils = @import("utils.zig");
 const opts = @import("build-options");
 
@@ -30,9 +30,9 @@ const OsVersionHints = struct {
 };
 
 const Win32Handles = struct {
-    ntdll: ?win32.HINSTANCE,
-    user32: ?win32.HINSTANCE,
-    shcore: ?win32.HINSTANCE,
+    ntdll: ?win32.HMODULE,
+    user32: ?win32.HMODULE,
+    shcore: ?win32.HMODULE,
     hinstance: win32.HINSTANCE,
     helper_class: u16,
     wnd_class: u16,
@@ -58,8 +58,8 @@ const OptionalApi = struct {
     const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
     const GetDpiForWindowProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
     const GetDpiForMonitorProc = *const fn (
-        win32.HMONITOR,
-        win32.MONITOR_DPI_TYPE,
+        gdi.HMONITOR,
+        win32_defs.MONITOR_DPI_TYPE,
         *u32,
         *u32,
     ) callconv(win32.WINAPI) win32.HRESULT;
@@ -72,14 +72,14 @@ const OptionalApi = struct {
     ) callconv(win32.WINAPI) win32.BOOL;
 
     // RtlVerifyVersionInfo is guaranteed to be on all NT versions
-    RtlVerifyVersionInfo: win32.RtlVerifyVersionInfoProc,
-    SetProcessDPIAware: ?win32.SetProcessDPIAwareProc,
-    SetProcessDpiAwareness: ?win32.SetProcessDpiAwarenessProc,
-    SetProcessDpiAwarenessContext: ?win32.SetProcessDpiAwarenessContextProc,
-    GetDpiForMonitor: ?win32.GetDpiForMonitorProc,
-    GetDpiForWindow: ?win32.GetDpiForWindowProc,
-    AdjustWindowRectExForDpi: ?win32.AdjustWindowRectExForDpiProc,
-    EnableNonClientDpiScaling: ?win32.EnableNonClientDpiScalingProc,
+    RtlVerifyVersionInfo: RtlVerifyVersionInfoProc,
+    SetProcessDPIAware: ?SetProcessDPIAwareProc,
+    SetProcessDpiAwareness: ?SetProcessDpiAwarenessProc,
+    SetProcessDpiAwarenessContext: ?SetProcessDpiAwarenessContextProc,
+    GetDpiForMonitor: ?GetDpiForMonitorProc,
+    GetDpiForWindow: ?GetDpiForWindowProc,
+    AdjustWindowRectExForDpi: ?AdjustWindowRectExForDpiProc,
+    EnableNonClientDpiScaling: ?EnableNonClientDpiScalingProc,
 };
 
 pub const Win32Driver = struct {
@@ -370,7 +370,7 @@ fn registerMainClass(
     };
     window_class.lpfnWndProc = mainWindowProc;
     window_class.hInstance = hinstance;
-    window_class.hCursor = usr32.LoadCursorW(null, win32_defs.IDC_ARROW);
+    window_class.hCursor = gdi.LoadCursorW(null, win32_defs.IDC_ARROW);
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
         opts.WIN32_WNDCLASS_NAME,
     );
@@ -379,7 +379,7 @@ fn registerMainClass(
         window_class.hIcon = @ptrCast(gdi.LoadImageW(
             hinstance,
             unicode.utf8ToUtf16LeStringLiteral(icon_name),
-            @intFromEnum(gdi.IMAGE_ICON),
+            gdi.IMAGE_ICON,
             0,
             0,
             @bitCast(gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
@@ -392,7 +392,7 @@ fn registerMainClass(
         window_class.hIcon = @ptrCast(gdi.LoadImageW(
             null,
             win32_defs.IDI_APPLICATION,
-            @intFromEnum(gdi.IMAGE_ICON),
+            gdi.IMAGE_ICON,
             0,
             0,
             @bitCast(gdi.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),

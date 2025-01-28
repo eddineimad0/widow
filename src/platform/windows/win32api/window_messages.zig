@@ -117,6 +117,7 @@ pub const WM_SYSCHAR = @as(u32, 262);
 pub const WM_SYSDEADCHAR = @as(u32, 263);
 pub const WM_KEYLAST = @as(u32, 265);
 pub const UNICODE_NOCHAR = @as(u32, 65535);
+pub const WM_UNICHAR = @as(u32, 265);
 pub const WM_IME_STARTCOMPOSITION = @as(u32, 269);
 pub const WM_IME_ENDCOMPOSITION = @as(u32, 270);
 pub const WM_IME_COMPOSITION = @as(u32, 271);
@@ -142,6 +143,7 @@ pub const WM_MENUCOMMAND = @as(u32, 294);
 pub const WM_CHANGEUISTATE = @as(u32, 295);
 pub const WM_UPDATEUISTATE = @as(u32, 296);
 pub const WM_QUERYUISTATE = @as(u32, 297);
+pub const WM_MOUSELEAVE = @as(u32, 675);
 pub const UIS_SET = @as(u32, 1);
 pub const UIS_CLEAR = @as(u32, 2);
 pub const UIS_INITIALIZE = @as(u32, 3);
@@ -338,9 +340,9 @@ pub const SIZE_MINIMIZED = @as(u32, 1);
 pub const SIZE_MAXIMIZED = @as(u32, 2);
 pub const SIZE_MAXSHOW = @as(u32, 3);
 pub const SIZE_MAXHIDE = @as(u32, 4);
-pub const HWND_BOTTOM = @as(win32.HWND, @ptrFromInt(@as(i32, 1)));
-pub const HWND_TOPMOST = @as(win32.HWND, @ptrFromInt(@as(i32, -1)));
-pub const HWND_NOTOPMOST = @as(win32.HWND, @ptrFromInt(@as(i32, -2)));
+pub const HWND_BOTTOM = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, 1)))));
+pub const HWND_TOPMOST = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, -1)))));
+pub const HWND_NOTOPMOST = @as(win32.HWND, @ptrFromInt(@as(u32, @bitCast(@as(i32, -2)))));
 
 //===================
 // Types
@@ -590,6 +592,274 @@ pub const SM_TABLETPC = SYSTEM_METRICS_INDEX.TABLETPC;
 pub const SM_XVIRTUALSCREEN = SYSTEM_METRICS_INDEX.XVIRTUALSCREEN;
 pub const SM_YVIRTUALSCREEN = SYSTEM_METRICS_INDEX.YVIRTUALSCREEN;
 
+pub const PEEK_MESSAGE_REMOVE_TYPE = packed struct(u32) {
+    REMOVE: u1 = 0,
+    NOYIELD: u1 = 0,
+    _2: u1 = 0,
+    _3: u1 = 0,
+    _4: u1 = 0,
+    _5: u1 = 0,
+    _6: u1 = 0,
+    _7: u1 = 0,
+    _8: u1 = 0,
+    _9: u1 = 0,
+    _10: u1 = 0,
+    _11: u1 = 0,
+    _12: u1 = 0,
+    _13: u1 = 0,
+    _14: u1 = 0,
+    _15: u1 = 0,
+    _16: u1 = 0,
+    _17: u1 = 0,
+    _18: u1 = 0,
+    _19: u1 = 0,
+    _20: u1 = 0,
+    QS_PAINT: u1 = 0,
+    QS_SENDMESSAGE: u1 = 0,
+    _23: u1 = 0,
+    _24: u1 = 0,
+    _25: u1 = 0,
+    _26: u1 = 0,
+    _27: u1 = 0,
+    _28: u1 = 0,
+    _29: u1 = 0,
+    _30: u1 = 0,
+    _31: u1 = 0,
+};
+pub const PM_NOREMOVE = PEEK_MESSAGE_REMOVE_TYPE{};
+pub const PM_REMOVE = PEEK_MESSAGE_REMOVE_TYPE{ .REMOVE = 1 };
+pub const PM_NOYIELD = PEEK_MESSAGE_REMOVE_TYPE{ .NOYIELD = 1 };
+pub const PM_QS_INPUT = PEEK_MESSAGE_REMOVE_TYPE{
+    ._16 = 1,
+    ._17 = 1,
+    ._18 = 1,
+    ._26 = 1,
+};
+pub const PM_QS_POSTMESSAGE = PEEK_MESSAGE_REMOVE_TYPE{
+    ._19 = 1,
+    ._20 = 1,
+    ._23 = 1,
+};
+pub const PM_QS_PAINT = PEEK_MESSAGE_REMOVE_TYPE{ .QS_PAINT = 1 };
+pub const PM_QS_SENDMESSAGE = PEEK_MESSAGE_REMOVE_TYPE{ .QS_SENDMESSAGE = 1 };
+
+pub const MSG = extern struct {
+    hwnd: ?win32.HWND,
+    message: u32,
+    wParam: win32.WPARAM,
+    lParam: win32.LPARAM,
+    time: u32,
+    pt: win32.POINT,
+};
+
+pub const MINMAXINFO = extern struct {
+    ptReserved: win32.POINT,
+    ptMaxSize: win32.POINT,
+    ptMaxPosition: win32.POINT,
+    ptMinTrackSize: win32.POINT,
+    ptMaxTrackSize: win32.POINT,
+};
+
+pub const SIZE = extern struct {
+    cx: i32,
+    cy: i32,
+};
+
+pub const WINDOW_MESSAGE_FILTER_ACTION = enum(u32) {
+    ALLOW = 1,
+    DISALLOW = 2,
+    RESET = 0,
+};
+pub const MSGFLT_ALLOW = WINDOW_MESSAGE_FILTER_ACTION.ALLOW;
+pub const MSGFLT_DISALLOW = WINDOW_MESSAGE_FILTER_ACTION.DISALLOW;
+pub const MSGFLT_RESET = WINDOW_MESSAGE_FILTER_ACTION.RESET;
+
+pub const MSGFLTINFO_STATUS = enum(u32) {
+    NONE = 0,
+    ALLOWED_HIGHER = 3,
+    ALREADYALLOWED_FORWND = 1,
+    ALREADYDISALLOWED_FORWND = 2,
+};
+pub const MSGFLTINFO_NONE = MSGFLTINFO_STATUS.NONE;
+pub const MSGFLTINFO_ALLOWED_HIGHER = MSGFLTINFO_STATUS.ALLOWED_HIGHER;
+pub const MSGFLTINFO_ALREADYALLOWED_FORWND = MSGFLTINFO_STATUS.ALREADYALLOWED_FORWND;
+pub const MSGFLTINFO_ALREADYDISALLOWED_FORWND = MSGFLTINFO_STATUS.ALREADYDISALLOWED_FORWND;
+
+pub const CHANGEFILTERSTRUCT = extern struct {
+    cbSize: u32,
+    ExtStatus: MSGFLTINFO_STATUS,
+};
+
+pub const QUEUE_STATUS_FLAGS = packed struct(u32) {
+    KEY: u1 = 0,
+    MOUSEMOVE: u1 = 0,
+    MOUSEBUTTON: u1 = 0,
+    POSTMESSAGE: u1 = 0,
+    TIMER: u1 = 0,
+    PAINT: u1 = 0,
+    SENDMESSAGE: u1 = 0,
+    HOTKEY: u1 = 0,
+    ALLPOSTMESSAGE: u1 = 0,
+    _9: u1 = 0,
+    RAWINPUT: u1 = 0,
+    _11: u1 = 0,
+    _12: u1 = 0,
+    _13: u1 = 0,
+    _14: u1 = 0,
+    _15: u1 = 0,
+    _16: u1 = 0,
+    _17: u1 = 0,
+    _18: u1 = 0,
+    _19: u1 = 0,
+    _20: u1 = 0,
+    _21: u1 = 0,
+    _22: u1 = 0,
+    _23: u1 = 0,
+    _24: u1 = 0,
+    _25: u1 = 0,
+    _26: u1 = 0,
+    _27: u1 = 0,
+    _28: u1 = 0,
+    _29: u1 = 0,
+    _30: u1 = 0,
+    _31: u1 = 0,
+};
+pub const QS_ALLEVENTS = QUEUE_STATUS_FLAGS{
+    .KEY = 1,
+    .MOUSEMOVE = 1,
+    .MOUSEBUTTON = 1,
+    .POSTMESSAGE = 1,
+    .TIMER = 1,
+    .PAINT = 1,
+    .HOTKEY = 1,
+    .RAWINPUT = 1,
+};
+pub const QS_ALLINPUT = QUEUE_STATUS_FLAGS{
+    .KEY = 1,
+    .MOUSEMOVE = 1,
+    .MOUSEBUTTON = 1,
+    .POSTMESSAGE = 1,
+    .TIMER = 1,
+    .PAINT = 1,
+    .SENDMESSAGE = 1,
+    .HOTKEY = 1,
+    .RAWINPUT = 1,
+};
+pub const QS_ALLPOSTMESSAGE = QUEUE_STATUS_FLAGS{ .ALLPOSTMESSAGE = 1 };
+pub const QS_HOTKEY = QUEUE_STATUS_FLAGS{ .HOTKEY = 1 };
+pub const QS_INPUT = QUEUE_STATUS_FLAGS{
+    .KEY = 1,
+    .MOUSEMOVE = 1,
+    .MOUSEBUTTON = 1,
+    .RAWINPUT = 1,
+};
+pub const QS_KEY = QUEUE_STATUS_FLAGS{ .KEY = 1 };
+pub const QS_MOUSE = QUEUE_STATUS_FLAGS{
+    .MOUSEMOVE = 1,
+    .MOUSEBUTTON = 1,
+};
+pub const QS_MOUSEBUTTON = QUEUE_STATUS_FLAGS{ .MOUSEBUTTON = 1 };
+pub const QS_MOUSEMOVE = QUEUE_STATUS_FLAGS{ .MOUSEMOVE = 1 };
+pub const QS_PAINT = QUEUE_STATUS_FLAGS{ .PAINT = 1 };
+pub const QS_POSTMESSAGE = QUEUE_STATUS_FLAGS{ .POSTMESSAGE = 1 };
+pub const QS_RAWINPUT = QUEUE_STATUS_FLAGS{ .RAWINPUT = 1 };
+pub const QS_SENDMESSAGE = QUEUE_STATUS_FLAGS{ .SENDMESSAGE = 1 };
+pub const QS_TIMER = QUEUE_STATUS_FLAGS{ .TIMER = 1 };
+
+pub const FLASHWINFO_FLAGS = packed struct(u32) {
+    CAPTION: u1 = 0,
+    TRAY: u1 = 0,
+    TIMER: u1 = 0,
+    _3: u1 = 0,
+    _4: u1 = 0,
+    _5: u1 = 0,
+    _6: u1 = 0,
+    _7: u1 = 0,
+    _8: u1 = 0,
+    _9: u1 = 0,
+    _10: u1 = 0,
+    _11: u1 = 0,
+    _12: u1 = 0,
+    _13: u1 = 0,
+    _14: u1 = 0,
+    _15: u1 = 0,
+    _16: u1 = 0,
+    _17: u1 = 0,
+    _18: u1 = 0,
+    _19: u1 = 0,
+    _20: u1 = 0,
+    _21: u1 = 0,
+    _22: u1 = 0,
+    _23: u1 = 0,
+    _24: u1 = 0,
+    _25: u1 = 0,
+    _26: u1 = 0,
+    _27: u1 = 0,
+    _28: u1 = 0,
+    _29: u1 = 0,
+    _30: u1 = 0,
+    _31: u1 = 0,
+};
+pub const FLASHW_ALL = FLASHWINFO_FLAGS{
+    .CAPTION = 1,
+    .TRAY = 1,
+};
+pub const FLASHW_CAPTION = FLASHWINFO_FLAGS{ .CAPTION = 1 };
+pub const FLASHW_STOP = FLASHWINFO_FLAGS{};
+pub const FLASHW_TIMER = FLASHWINFO_FLAGS{ .TIMER = 1 };
+pub const FLASHW_TIMERNOFG = FLASHWINFO_FLAGS{
+    .TIMER = 1,
+    ._3 = 1,
+};
+pub const FLASHW_TRAY = FLASHWINFO_FLAGS{ .TRAY = 1 };
+
+pub const FLASHWINFO = extern struct {
+    cbSize: u32,
+    hwnd: ?win32.HWND,
+    dwFlags: FLASHWINFO_FLAGS,
+    uCount: u32,
+    dwTimeout: u32,
+};
+
+pub const GET_CLASS_LONG_INDEX = enum(i32) {
+    W_ATOM = -32,
+    L_CBCLSEXTRA = -20,
+    L_CBWNDEXTRA = -18,
+    L_HBRBACKGROUND = -10,
+    L_HCURSOR = -12,
+    L_HICON = -14,
+    L_HICONSM = -34,
+    L_HMODULE = -16,
+    L_MENUNAME = -8,
+    L_STYLE = -26,
+    L_WNDPROC = -24,
+    // LP_HBRBACKGROUND = -10, this enum value conflicts with L_HBRBACKGROUND
+    // LP_HCURSOR = -12, this enum value conflicts with L_HCURSOR
+    // LP_HICON = -14, this enum value conflicts with L_HICON
+    // LP_HICONSM = -34, this enum value conflicts with L_HICONSM
+    // LP_HMODULE = -16, this enum value conflicts with L_HMODULE
+    // LP_MENUNAME = -8, this enum value conflicts with L_MENUNAME
+    // LP_WNDPROC = -24, this enum value conflicts with L_WNDPROC
+};
+pub const GCW_ATOM = GET_CLASS_LONG_INDEX.W_ATOM;
+pub const GCL_CBCLSEXTRA = GET_CLASS_LONG_INDEX.L_CBCLSEXTRA;
+pub const GCL_CBWNDEXTRA = GET_CLASS_LONG_INDEX.L_CBWNDEXTRA;
+pub const GCL_HBRBACKGROUND = GET_CLASS_LONG_INDEX.L_HBRBACKGROUND;
+pub const GCL_HCURSOR = GET_CLASS_LONG_INDEX.L_HCURSOR;
+pub const GCL_HICON = GET_CLASS_LONG_INDEX.L_HICON;
+pub const GCL_HICONSM = GET_CLASS_LONG_INDEX.L_HICONSM;
+pub const GCL_HMODULE = GET_CLASS_LONG_INDEX.L_HMODULE;
+pub const GCL_MENUNAME = GET_CLASS_LONG_INDEX.L_MENUNAME;
+pub const GCL_STYLE = GET_CLASS_LONG_INDEX.L_STYLE;
+pub const GCL_WNDPROC = GET_CLASS_LONG_INDEX.L_WNDPROC;
+pub const GCLP_HBRBACKGROUND = GET_CLASS_LONG_INDEX.L_HBRBACKGROUND;
+pub const GCLP_HCURSOR = GET_CLASS_LONG_INDEX.L_HCURSOR;
+pub const GCLP_HICON = GET_CLASS_LONG_INDEX.L_HICON;
+pub const GCLP_HICONSM = GET_CLASS_LONG_INDEX.L_HICONSM;
+pub const GCLP_HMODULE = GET_CLASS_LONG_INDEX.L_HMODULE;
+pub const GCLP_MENUNAME = GET_CLASS_LONG_INDEX.L_MENUNAME;
+pub const GCLP_WNDPROC = GET_CLASS_LONG_INDEX.L_WNDPROC;
+
 //==========================
 // Functions
 //=========================
@@ -617,3 +887,77 @@ pub extern "user32" fn DefWindowProcW(
     wParam: win32.WPARAM,
     lParam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.LRESULT;
+
+pub extern "user32" fn GetMessageTime() callconv(win32.WINAPI) i32;
+
+pub extern "user32" fn PeekMessageW(
+    lpMsg: ?*MSG,
+    hWnd: ?win32.HWND,
+    wMsgFilterMin: u32,
+    wMsgFilterMax: u32,
+    wRemoveMsg: PEEK_MESSAGE_REMOVE_TYPE,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn GetWindowRect(
+    hWnd: ?win32.HWND,
+    lpRect: ?*win32.RECT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn GetClientRect(
+    hWnd: ?win32.HWND,
+    lpRect: ?*win32.RECT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn ClipCursor(
+    lpRect: ?*const win32.RECT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn SetCursorPos(
+    X: i32,
+    Y: i32,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn GetCursorPos(
+    lpPoint: ?*win32.POINT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn ChangeWindowMessageFilterEx(
+    hwnd: ?win32.HWND,
+    message: u32,
+    action: WINDOW_MESSAGE_FILTER_ACTION,
+    pChangeFilterStruct: ?*CHANGEFILTERSTRUCT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn TranslateMessage(
+    lpMsg: ?*const MSG,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn DispatchMessageW(
+    lpMsg: ?*const MSG,
+) callconv(win32.WINAPI) win32.LRESULT;
+
+pub extern "user32" fn WaitMessage() callconv(win32.WINAPI) win32.LRESULT;
+
+pub extern "user32" fn MsgWaitForMultipleObjects(
+    nCount: u32,
+    pHandles: ?[*]const ?win32.HANDLE,
+    fWaitAll: win32.BOOL,
+    dwMilliseconds: u32,
+    dwWakeMask: QUEUE_STATUS_FLAGS,
+) callconv(win32.WINAPI) u32;
+
+pub extern "user32" fn FlashWindowEx(
+    pfwi: ?*FLASHWINFO,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn SendMessageW(
+    hWnd: ?win32.HWND,
+    Msg: u32,
+    wParam: win32.WPARAM,
+    lParam: win32.LPARAM,
+) callconv(win32.WINAPI) win32.LRESULT;
+
+pub extern "user32" fn GetClassLongPtrW(
+    hWnd: ?win32.HWND,
+    nIndex: GET_CLASS_LONG_INDEX,
+) callconv(win32.WINAPI) usize;

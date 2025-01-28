@@ -88,8 +88,3 @@ pub extern "user32" fn PostMessageW(
     wParam: win32.WPARAM,
     lParam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL;
-
-pub extern "user32" fn LoadCursorW(
-    hInstance: ?win32.HINSTANCE,
-    lpCursorName: ?[*:0]align(1) const u16,
-) callconv(win32.WINAPI) ?win32.HCURSOR;

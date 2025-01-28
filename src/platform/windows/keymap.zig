@@ -1,6 +1,7 @@
 const common = @import("common");
 const usr32 = @import("win32api/user32.zig");
 const win32_defs = @import("win32api/defs.zig");
+const win32_input = @import("win32api/input.zig");
 const win32 = @import("std").os.windows;
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
@@ -795,14 +796,14 @@ fn vkToKeycode(keycode: u16) KeyCode {
         // Note: OEM keys are used for miscellanous characters
         // which can vary depending on the keyboard
         // Solution: decide depending on ther text value.
-        @intFromEnum(win32_defs.VK_OEM_1),
-        @intFromEnum(win32_defs.VK_OEM_2),
-        @intFromEnum(win32_defs.VK_OEM_3),
-        @intFromEnum(win32_defs.VK_OEM_4),
-        @intFromEnum(win32_defs.VK_OEM_5),
-        @intFromEnum(win32_defs.VK_OEM_6),
-        @intFromEnum(win32_defs.VK_OEM_7),
-        @intFromEnum(win32_defs.VK_OEM_102),
+        win32_input.VK_OEM_1,
+        win32_input.VK_OEM_2,
+        win32_input.VK_OEM_3,
+        win32_input.VK_OEM_4,
+        win32_input.VK_OEM_5,
+        win32_input.VK_OEM_6,
+        win32_input.VK_OEM_7,
+        win32_input.VK_OEM_102,
         => {
             // Use the key text to identify it.
             return keyTextToVirtual(keycode);

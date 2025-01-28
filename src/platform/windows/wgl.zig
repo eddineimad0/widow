@@ -1,8 +1,8 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
 const common = @import("common");
-const win32 = @import("win32_defs.zig");
+const win32 = std.os.windows;
 const utils = @import("utils.zig");
+const dynlib = @import("dynlib.zig");
 const gl = @import("opengl");
 
 const mem = std.mem;
@@ -92,7 +92,7 @@ const WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB = 0x20A9;
 
 const wgl_ext = struct {
     var ChoosePixelFormatARB: ?*const fn (
-        hdc: ?gdi.HDC,
+        hdc: ?win32.HDC,
         piAttribIList: ?[*]c_int,
         pfAttribFList: ?[*]f32,
         nMaxFormats: win32.UINT,
@@ -101,7 +101,7 @@ const wgl_ext = struct {
     ) callconv(win32.WINAPI) win32.BOOL = null;
 
     var GetPixelFormatAttribivARB: ?*const fn (
-        hdc: ?gdi.HDC,
+        hdc: ?win32.HDC,
         iPixelFormat: c_int,
         iLayerPlane: c_int,
         nAttributes: win32.UINT,
@@ -110,17 +110,17 @@ const wgl_ext = struct {
     ) callconv(win32.WINAPI) win32.BOOL = null;
 
     var CreateContextAttribsARB: ?*const fn (
-        hdc: ?gdi.HDC,
-        hShareContext: ?opengl.HGLRC,
+        hdc: ?win32.HDC,
+        hShareContext: ?win32.HGLRC,
         attribList: ?[*]c_int,
-    ) callconv(win32.WINAPI) ?opengl.HGLRC = null;
+    ) callconv(win32.WINAPI) ?win32.HGLRC = null;
 
     var SwapIntervalEXT: ?*const fn (
         interval: c_int,
     ) callconv(win32.WINAPI) win32.BOOL = null;
 
     var GetExtensionsStringARB: ?*const fn (
-        hdc: ?gdi.HDC,
+        hdc: ?win32.HDC,
     ) callconv(win32.WINAPI) ?[*:0]const u8 = null;
 
     var supported_extensions: ?[:0]const u8 = null;
@@ -171,7 +171,7 @@ fn fillPFDstruct(pfd: *opengl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) void 
 
 fn createTempContext(
     window: win32.HWND,
-) WGLError!opengl.HGLRC {
+) WGLError!win32.HGLRC {
     var pfd = mem.zeroes(opengl.PIXELFORMATDESCRIPTOR);
     pfd.nSize = @sizeOf(opengl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
@@ -282,7 +282,7 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
     return true;
 }
 
-fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?opengl.HGLRC {
+fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
     var pfd_attrib_list: [48]c_int = undefined;
     var gl_attrib_list: [16]c_int = undefined;
     var pfd_fattrib_list = [1]f32{0};
@@ -486,7 +486,7 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?opengl.HGLRC {
 }
 
 pub const GLContext = struct {
-    glrc: opengl.HGLRC,
+    glrc: win32.HGLRC,
     owner: win32.HWND,
     driver: struct {
         name: [*:0]const u8,
@@ -567,8 +567,6 @@ pub const GLContext = struct {
 };
 
 pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
-    const lib_loader = zigwin32.system.library_loader;
-
     var symbol_ptr = opengl.wglGetProcAddress(symbol_name);
     // wglGetProcAddress returns NULL on failure,
     // some implementations will return other values. 1, 2, and 3 are used, as well as -1
@@ -582,9 +580,9 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
         // that are directly exported by the OpenGL32.DLL itself.
         // This means the old ones from OpenGL version 1.1. Fortunately those functions
         // can be obtained by the Win32's GetProcAddress.
-        const module = lib_loader.LoadLibraryA("opengl32.dll");
+        const module = dynlib.loadWin32Module("opengl32.dll");
         if (module) |m| {
-            symbol_ptr = lib_loader.GetProcAddress(m, symbol_name);
+            symbol_ptr = @ptrCast(dynlib.getModuleSymbol(m, symbol_name));
         } else {
             return null;
         }

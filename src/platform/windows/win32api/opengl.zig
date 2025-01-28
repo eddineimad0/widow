@@ -10,7 +10,6 @@ pub const GL_EXTENSIONS = @as(u32, 7939);
 //=================
 // Types
 //=================
-pub const HGLRC = *opaque {};
 
 pub const PFD_PIXEL_TYPE = enum(i8) {
     RGBA = 0,
@@ -139,10 +138,10 @@ pub extern "gdi32" fn SetPixelFormat(
 
 pub extern "opengl32" fn wglCreateContext(
     param0: ?win32.HDC,
-) callconv(win32.WINAPI) ?HGLRC;
+) callconv(win32.WINAPI) ?win32.HGLRC;
 
 pub extern "opengl32" fn wglDeleteContext(
-    param0: ?HGLRC,
+    param0: ?win32.HGLRC,
 ) callconv(win32.WINAPI) win32.BOOL;
 
 pub extern "opengl32" fn wglGetCurrentContext() callconv(win32.WINAPI) ?win32.HGLRC;
@@ -155,7 +154,7 @@ pub extern "opengl32" fn wglGetProcAddress(
 
 pub extern "opengl32" fn wglMakeCurrent(
     param0: ?win32.HDC,
-    param1: ?HGLRC,
+    param1: ?win32.HGLRC,
 ) callconv(win32.WINAPI) win32.BOOL;
 
 pub extern "gdi32" fn SwapBuffers(

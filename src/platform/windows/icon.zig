@@ -4,6 +4,7 @@ const win32_defs = @import("win32api/defs.zig");
 const win32 = std.os.windows;
 const gdi = @import("win32api/gdi.zig");
 const utils = @import("utils.zig");
+const krnl32 = @import("win32api/kernel32.zig");
 const mem = std.mem;
 
 pub const IconError = error{
@@ -151,7 +152,7 @@ pub fn createCursor(
     if (pixels) |slice| {
         const handle = try createWin32Icon(slice, width, height, xhot, yhot, true);
         return CursorHints{
-            .icon = handle,
+            .icon = @ptrCast(handle),
             .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
             .pos = .{ .x = 0, .y = 0 },
@@ -175,18 +176,18 @@ pub fn createNativeCursor(
     const CursorShape = common.cursor.NativeCursorShape;
 
     const cursor_id = switch (shape) {
-        CursorShape.PointingHand => win32.IDC_HAND,
-        CursorShape.Crosshair => win32.IDC_CROSS,
-        CursorShape.Text => win32.IDC_IBEAM,
-        CursorShape.BkgrndTask => win32.IDC_APPSTARTING,
-        CursorShape.Help => win32.IDC_HELP,
-        CursorShape.Busy => win32.IDC_WAIT,
-        CursorShape.Forbidden => win32.IDC_NO,
-        CursorShape.Move => win32.IDC_SIZEALL,
-        CursorShape.Default => win32.IDC_ARROW,
+        CursorShape.PointingHand => win32_defs.IDC_HAND,
+        CursorShape.Crosshair => win32_defs.IDC_CROSS,
+        CursorShape.Text => win32_defs.IDC_IBEAM,
+        CursorShape.BkgrndTask => win32_defs.IDC_APPSTARTING,
+        CursorShape.Help => win32_defs.IDC_HELP,
+        CursorShape.Busy => win32_defs.IDC_WAIT,
+        CursorShape.Forbidden => win32_defs.IDC_NO,
+        CursorShape.Move => win32_defs.IDC_SIZEALL,
+        CursorShape.Default => win32_defs.IDC_ARROW,
     };
 
-    const handle = gdi.LoadImageA(
+    const handle = gdi.LoadImageW(
         null,
         cursor_id,
         gdi.GDI_IMAGE_TYPE.CURSOR,
@@ -197,7 +198,7 @@ pub fn createNativeCursor(
 
     if (handle == null) {
         // We failed.
-        std.debug.print("error {}\n", .{utils.getLastError()});
+        std.debug.print("error {}\n", .{krnl32.GetLastError()});
         return IconError.NotFound;
     }
 

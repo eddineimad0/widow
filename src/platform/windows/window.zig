@@ -1,20 +1,19 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
+const win32_defs = @import("win32api/defs.zig");
+const win32 = std.os.windows;
 const common = @import("common");
 const wgl = @import("wgl.zig");
 const gl = @import("gl");
 const utils = @import("utils.zig");
+const win32_macros = @import("win32api/macros.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
 const mem = std.mem;
 const debug = std.debug;
-const window_msg = zigwin32.ui.windows_and_messaging;
-const input = zigwin32.ui.input;
-const foundation = zigwin32.foundation;
-const gdi = zigwin32.graphics.gdi;
-const DragAcceptFiles = zigwin32.ui.shell.DragAcceptFiles;
-const SetFocus = zigwin32.ui.input.keyboard_and_mouse.SetFocus;
+const window_msg = @import("win32api/window_messages.zig");
+const win32_input = @import("win32api/input.zig");
+const gdi = @import("win32api/gdi.zig");
+const win32_shell = @import("win32api/shell_api.zig");
 const Win32Driver = @import("driver.zig").Win32Driver;
 const WidowContext = @import("platform.zig").WidowContext;
 const CursorHints = icon.CursorHints;
@@ -36,12 +35,12 @@ pub const CreationLparamTuple = std.meta.Tuple(&.{ *const WindowData, *const Win
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @bitCast(window_msg.WINDOW_STYLE{
+const STYLE_BASIC: u32 = @bitCast(gdi.WINDOW_STYLE{
     .CLIPCHILDREN = 1,
     .CLIPSIBLINGS = 1,
 });
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @bitCast(window_msg.WINDOW_STYLE{
+const STYLE_FULLSCREEN: u32 = @bitCast(gdi.WINDOW_STYLE{
     .POPUP = 1,
     .GROUP = 1,
 });
@@ -49,19 +48,19 @@ const STYLE_FULLSCREEN: u32 = @bitCast(window_msg.WINDOW_STYLE{
 const STYLE_BORDERLESS = STYLE_FULLSCREEN;
 
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @bitCast(window_msg.WINDOW_STYLE{
+const STYLE_RESIZABLE: u32 = @bitCast(gdi.WINDOW_STYLE{
     .THICKFRAME = 1,
     .TABSTOP = 1,
 });
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @bitCast(window_msg.WINDOW_STYLE{
+const STYLE_NORMAL: u32 = @bitCast(gdi.WINDOW_STYLE{
     .GROUP = 1,
     .SYSMENU = 1,
     .DLGFRAME = 1,
     .BORDER = 1,
 });
 
-const STYLES_MASK: u32 = @bitCast(window_msg.WINDOW_STYLE{
+const STYLES_MASK: u32 = @bitCast(gdi.WINDOW_STYLE{
     .TABSTOP = 1,
     .GROUP = 1,
     .THICKFRAME = 1,
@@ -84,15 +83,15 @@ pub fn createHiddenWindow(
     title: [:0]const u16,
     driver: *const Win32Driver,
 ) WindowError!win32.HWND {
-    const helper_window = window_msg.CreateWindowExW(
+    const helper_window = gdi.CreateWindowExW(
         @bitCast(@as(u32, 0)),
-        utils.MAKEINTATOM(driver.handles.helper_class),
+        win32_macros.MAKEINTATOM(driver.handles.helper_class),
         title,
         @bitCast(@as(u32, 0)),
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
-        win32.CW_USEDEFAULT,
+        win32_defs.CW_USEDEFAULT,
+        win32_defs.CW_USEDEFAULT,
+        win32_defs.CW_USEDEFAULT,
+        win32_defs.CW_USEDEFAULT,
         null,
         null,
         driver.handles.hinstance,
@@ -101,7 +100,7 @@ pub fn createHiddenWindow(
         return WindowError.CreateFailed;
     };
 
-    _ = window_msg.ShowWindow(helper_window, window_msg.SW_HIDE);
+    _ = gdi.ShowWindow(helper_window, gdi.SW_HIDE);
     return helper_window;
 }
 
@@ -122,11 +121,11 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
         }
 
         if (flags.is_maximized) {
-            styles |= @bitCast(window_msg.WINDOW_STYLE{ .MAXIMIZE = 1 });
+            styles |= @bitCast(gdi.WINDOW_STYLE{ .MAXIMIZE = 1 });
         }
 
         if (flags.is_minimized) {
-            styles |= @bitCast(window_msg.WINDOW_STYLE{ .MINIMIZE = 1 });
+            styles |= @bitCast(gdi.WINDOW_STYLE{ .MINIMIZE = 1 });
         }
     }
 
@@ -137,7 +136,7 @@ pub fn windowExStyles(flags: *const WindowFlags) u32 {
     var ex_styles: u32 = 0;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @bitCast(window_msg.WS_EX_TOPMOST);
+        ex_styles |= @bitCast(gdi.WS_EX_TOPMOST);
     }
     return ex_styles;
 }
@@ -161,10 +160,10 @@ pub fn adjustWindowRect(
             styles,
             0,
             ex_styles,
-            dpi orelse win32.USER_DEFAULT_SCREEN_DPI,
+            dpi orelse win32_defs.USER_DEFAULT_SCREEN_DPI,
         );
     } else {
-        _ = window_msg.AdjustWindowRectEx(
+        _ = gdi.AdjustWindowRectEx(
             rect,
             @bitCast(styles),
             0,
@@ -175,11 +174,11 @@ pub fn adjustWindowRect(
 
 /// Converts client coordinate of `rect` to screen coordinate.
 fn clientToScreen(window_handle: win32.HWND, rect: *win32.RECT) void {
-    var upper_left = foundation.POINT{
+    var upper_left = win32.POINT{
         .x = rect.left,
         .y = rect.top,
     };
-    var lower_right = foundation.POINT{
+    var lower_right = win32.POINT{
         .x = rect.right,
         .y = rect.bottom,
     };
@@ -218,11 +217,11 @@ pub fn applyCursorHints(hints: *CursorHints, window: win32.HWND) void {
             break :img if (hints.icon) |h|
                 h
             else
-                window_msg.LoadCursorW(null, window_msg.IDC_ARROW);
+                gdi.LoadCursorW(null, win32_defs.IDC_ARROW);
         },
     };
 
-    _ = window_msg.SetCursor(cursor_icon);
+    _ = gdi.SetCursor(cursor_icon);
 }
 
 pub fn restoreCursor(hints: *CursorHints) void {
@@ -230,7 +229,7 @@ pub fn restoreCursor(hints: *CursorHints) void {
         .Captured, .Hidden => unCaptureCursor(),
         else => {},
     }
-    _ = window_msg.SetCursor(window_msg.LoadCursorW(null, window_msg.IDC_ARROW));
+    _ = gdi.SetCursor(gdi.LoadCursorW(null, win32_defs.IDC_ARROW));
 }
 
 /// Limits the cursor motion to the client rectangle.
@@ -294,14 +293,14 @@ fn createPlatformWindow(
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
     var frame_y: i32 = undefined;
-    if (data.client_area.top_left.x != window_msg.CW_USEDEFAULT and
-        data.client_area.top_left.y != window_msg.CW_USEDEFAULT)
+    if (data.client_area.top_left.x != win32_defs.CW_USEDEFAULT and
+        data.client_area.top_left.y != win32_defs.CW_USEDEFAULT)
     {
         frame_x = data.client_area.top_left.x + window_rect.left;
         frame_y = data.client_area.top_left.y + window_rect.top;
     } else {
-        frame_x = window_msg.CW_USEDEFAULT;
-        frame_y = window_msg.CW_USEDEFAULT;
+        frame_x = win32_defs.CW_USEDEFAULT;
+        frame_y = win32_defs.CW_USEDEFAULT;
     }
 
     // Final window frame.
@@ -319,9 +318,9 @@ fn createPlatformWindow(
     const creation_lparm: CreationLparamTuple = .{ data, driver };
 
     // Create the window.
-    const window_handle = window_msg.CreateWindowExW(
+    const window_handle = gdi.CreateWindowExW(
         @bitCast(ex_style), // dwExStyles
-        utils.MAKEINTATOM(driver.handles.wnd_class),
+        win32_macros.MAKEINTATOM(driver.handles.wnd_class),
         window_title, // Window Name
         @bitCast(style), // dwStyles
         frame[0], // X
@@ -360,8 +359,8 @@ pub const Window = struct {
     fb_cfg: FBConfig,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
-        .x = window_msg.CW_USEDEFAULT,
-        .y = window_msg.CW_USEDEFAULT,
+        .x = win32_defs.CW_USEDEFAULT,
+        .y = win32_defs.CW_USEDEFAULT,
     };
     const Self = @This();
 
@@ -394,7 +393,7 @@ pub const Window = struct {
             style,
             ex_style,
         );
-        errdefer _ = window_msg.DestroyWindow(self.handle);
+        errdefer _ = gdi.DestroyWindow(self.handle);
 
         // Finish setting up the window.
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
@@ -430,12 +429,12 @@ pub const Window = struct {
         // these events aren't reported.
         self.processEvents() catch unreachable;
 
-        _ = window_msg.SetPropW(
+        _ = gdi.SetPropW(
             self.handle,
             WINDOW_REF_PROP,
             @ptrCast(self),
         );
-        errdefer _ = window_msg.SetPropW(
+        errdefer _ = gdi.SetPropW(
             self.handle,
             WINDOW_REF_PROP,
             null,
@@ -514,7 +513,7 @@ pub const Window = struct {
             );
             _ = window_msg.ChangeWindowMessageFilterEx(
                 self.handle,
-                win32.WM_COPYGLOBALDATA,
+                win32_defs.WM_COPYGLOBALDATA,
                 window_msg.MSGFLT_ALLOW,
                 null,
             );
@@ -550,8 +549,8 @@ pub const Window = struct {
         self.win32.cursor.mode = .Normal;
         applyCursorHints(&self.win32.cursor, self.handle);
 
-        _ = window_msg.SetPropW(self.handle, WINDOW_REF_PROP, null);
-        _ = window_msg.DestroyWindow(self.handle);
+        _ = gdi.SetPropW(self.handle, WINDOW_REF_PROP, null);
+        _ = gdi.DestroyWindow(self.handle);
         self.freeDroppedFiles();
         allocator.destroy(self);
     }
@@ -559,18 +558,18 @@ pub const Window = struct {
     /// Shows the hidden window.
     pub fn show(self: *Self) void {
         // Show without activating.
-        _ = window_msg.ShowWindow(self.handle, window_msg.SW_SHOWNA);
+        _ = gdi.ShowWindow(self.handle, gdi.SW_SHOWNA);
         self.data.flags.is_visible = true;
     }
 
     pub fn focus(self: *Self) void {
-        _ = window_msg.BringWindowToTop(self.handle);
-        _ = window_msg.SetForegroundWindow(self.handle);
-        _ = SetFocus(self.handle);
+        _ = gdi.BringWindowToTop(self.handle);
+        _ = gdi.SetForegroundWindow(self.handle);
+        _ = win32_input.SetFocus(self.handle);
     }
 
     pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
-        var dpi: u32 = win32.USER_DEFAULT_SCREEN_DPI;
+        var dpi: u32 = win32_defs.USER_DEFAULT_SCREEN_DPI;
         null_exit: {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
@@ -581,7 +580,7 @@ pub const Window = struct {
         }
         if (scaler) |s| {
             const fdpi: f64 = @floatFromInt(dpi);
-            s.* = (fdpi / win32.USER_DEFAULT_SCREEN_DPI_F);
+            s.* = (fdpi / win32_defs.USER_DEFAULT_SCREEN_DPI_F);
         }
         return dpi;
     }
@@ -668,20 +667,20 @@ pub const Window = struct {
         self: *Self,
         new_area: *const common.geometry.Rect,
     ) void {
-        const EX_STYLES_MASK: u32 = @bitCast(window_msg.WS_EX_TOPMOST);
+        const EX_STYLES_MASK: u32 = @bitCast(gdi.WS_EX_TOPMOST);
         const POSITION_FLAGS = window_msg.SET_WINDOW_POS_FLAGS{
             .DRAWFRAME = 1,
             .NOACTIVATE = 1,
             .NOZORDER = 1,
         };
 
-        var reg_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
+        var reg_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_STYLE,
+            gdi.GWL_STYLE,
         ));
-        var reg_ex_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
+        var reg_ex_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_EXSTYLE,
+            gdi.GWL_EXSTYLE,
         ));
 
         reg_styles &= ~STYLES_MASK;
@@ -689,15 +688,15 @@ pub const Window = struct {
         reg_styles |= windowStyles(&self.data.flags);
         reg_ex_styles |= windowExStyles(&self.data.flags);
 
-        _ = window_msg.SetWindowLongPtrW(
+        _ = gdi.SetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_STYLE,
+            gdi.GWL_STYLE,
             @bitCast(reg_styles),
         );
 
-        _ = window_msg.SetWindowLongPtrW(
+        _ = gdi.SetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_EXSTYLE,
+            gdi.GWL_EXSTYLE,
             @bitCast(reg_ex_styles),
         );
 
@@ -737,7 +736,7 @@ pub const Window = struct {
     }
 
     pub fn getCursorPosition(self: *const Self) common.geometry.Point2D {
-        var cursor_pos: foundation.POINT = undefined;
+        var cursor_pos: win32.POINT = undefined;
         _ = window_msg.GetCursorPos(&cursor_pos);
         _ = gdi.ScreenToClient(self.handle, &cursor_pos);
         // the cursor pos is relative to the upper left corner of the window.
@@ -745,7 +744,7 @@ pub const Window = struct {
     }
 
     pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
-        var point = foundation.POINT{
+        var point = win32.POINT{
             .x = x,
             .y = y,
         };
@@ -853,7 +852,7 @@ pub const Window = struct {
         };
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             const dpi: f64 = @floatFromInt(self.getScalingDPI(null));
-            const r_scaler = (win32.USER_DEFAULT_SCREEN_DPI_F / dpi);
+            const r_scaler = (win32_defs.USER_DEFAULT_SCREEN_DPI_F / dpi);
             client_size.scaleBy(r_scaler);
         }
         return client_size;
@@ -869,7 +868,7 @@ pub const Window = struct {
                 size.scaleBy(scaler);
             }
 
-            var new_client_rect = foundation.RECT{
+            var new_client_rect = win32.RECT{
                 .left = 0,
                 .top = 0,
                 .right = size.width,
@@ -1031,7 +1030,7 @@ pub const Window = struct {
 
     /// Hides the window, this is different from minimizing it.
     pub fn hide(self: *Self) void {
-        _ = window_msg.ShowWindow(self.handle, window_msg.SW_HIDE);
+        _ = gdi.ShowWindow(self.handle, gdi.SW_HIDE);
         self.data.flags.is_visible = false;
     }
 
@@ -1049,17 +1048,17 @@ pub const Window = struct {
 
     /// Maximize the window.
     pub fn maximize(self: *const Self) void {
-        _ = window_msg.ShowWindow(self.handle, window_msg.SW_MAXIMIZE);
+        _ = gdi.ShowWindow(self.handle, gdi.SW_MAXIMIZE);
     }
 
     /// Minimizes the window.
     pub fn minimize(self: *const Self) void {
-        _ = window_msg.ShowWindow(self.handle, window_msg.SW_MINIMIZE);
+        _ = gdi.ShowWindow(self.handle, gdi.SW_MINIMIZE);
     }
 
     /// Restores the minimized or maximized window to a normal window.
     pub fn restore(self: *const Self) void {
-        _ = window_msg.ShowWindow(self.handle, window_msg.SW_RESTORE);
+        _ = gdi.ShowWindow(self.handle, gdi.SW_RESTORE);
     }
 
     /// Changes the title of the window.
@@ -1070,7 +1069,7 @@ pub const Window = struct {
     ) mem.Allocator.Error!void {
         const wide_title = try utils.utf8ToWideZ(allocator, new_title);
         defer allocator.free(wide_title);
-        _ = window_msg.SetWindowTextW(self.handle, wide_title);
+        _ = gdi.SetWindowTextW(self.handle, wide_title);
     }
 
     /// Returns the title of the window.
@@ -1080,7 +1079,7 @@ pub const Window = struct {
     ) (WindowError || mem.Allocator.Error)![]u8 {
         // This length doesn't take into account the null character
         // so add it when allocating.
-        const wide_title_len = window_msg.GetWindowTextLengthW(self.handle);
+        const wide_title_len = gdi.GetWindowTextLengthW(self.handle);
         if (wide_title_len > 0) {
             const uwide_title_len: usize = @intCast(wide_title_len);
             const wide_slice = try allocator.allocSentinel(
@@ -1091,7 +1090,7 @@ pub const Window = struct {
             defer allocator.free(wide_slice);
             // to get the full title we must specify the full
             // buffer length or we will be 1 character short.
-            _ = window_msg.GetWindowTextW(
+            _ = gdi.GetWindowTextW(
                 self.handle,
                 wide_slice.ptr,
                 wide_title_len + 1,
@@ -1109,20 +1108,20 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn getOpacity(self: *const Self) f32 {
-        const ex_styles = window_msg.GetWindowLongPtrW(
+        const ex_styles = gdi.GetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_EXSTYLE,
+            gdi.GWL_EXSTYLE,
         );
-        if ((ex_styles & @as(isize, @bitCast(window_msg.WS_EX_LAYERED))) != 0) {
+        if ((ex_styles & @as(isize, @bitCast(gdi.WS_EX_LAYERED))) != 0) {
             var alpha: u8 = undefined;
-            var flags: window_msg.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
-            _ = window_msg.GetLayeredWindowAttributes(
+            var flags: gdi.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
+            _ = gdi.GetLayeredWindowAttributes(
                 self.handle,
                 null,
                 &alpha,
                 &flags,
             );
-            if ((@intFromEnum(flags) & @intFromEnum(window_msg.LWA_ALPHA)) != 0) {
+            if ((@as(u32, @bitCast(flags)) & @as(u32, @bitCast(window_msg.LWA_ALPHA))) != 0) {
                 const falpha: f32 = @floatFromInt(alpha);
                 return (falpha / 255.0);
             }
@@ -1135,30 +1134,30 @@ pub const Window = struct {
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
     pub fn setOpacity(self: *Self, value: f32) void {
-        var ex_styles: usize = @bitCast(window_msg.GetWindowLongPtrW(
+        var ex_styles: usize = @bitCast(gdi.GetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_EXSTYLE,
+            gdi.GWL_EXSTYLE,
         ));
 
         if (value == @as(f32, 1.0)) {
-            ex_styles &= ~@as(u32, @bitCast(window_msg.WS_EX_LAYERED));
+            ex_styles &= ~@as(u32, @bitCast(gdi.WS_EX_LAYERED));
         } else {
             const alpha: u32 = @intFromFloat(value * 255.0);
 
-            if ((ex_styles & @as(u32, @bitCast(window_msg.WS_EX_LAYERED))) == 0) {
-                ex_styles |= @as(u32, @bitCast(window_msg.WS_EX_LAYERED));
+            if ((ex_styles & @as(u32, @bitCast(gdi.WS_EX_LAYERED))) == 0) {
+                ex_styles |= @as(u32, @bitCast(gdi.WS_EX_LAYERED));
             }
 
-            _ = window_msg.SetLayeredWindowAttributes(
+            _ = gdi.SetLayeredWindowAttributes(
                 self.handle,
                 0,
                 @truncate(alpha),
-                window_msg.LWA_ALPHA,
+                gdi.LWA_ALPHA,
             );
         }
-        _ = window_msg.SetWindowLongPtrW(
+        _ = gdi.SetWindowLongPtrW(
             self.handle,
-            window_msg.GWL_EXSTYLE,
+            gdi.GWL_EXSTYLE,
             @bitCast(ex_styles),
         );
     }
@@ -1170,7 +1169,7 @@ pub const Window = struct {
             var rect: win32.RECT = undefined;
             _ = window_msg.GetWindowRect(self.handle, &rect);
             self.applyAspectRatio(&rect, window_msg.WMSZ_BOTTOMLEFT);
-            _ = window_msg.MoveWindow(
+            _ = gdi.MoveWindow(
                 self.handle,
                 rect.left,
                 rect.top,
@@ -1181,12 +1180,12 @@ pub const Window = struct {
         }
     }
 
-    pub fn applyAspectRatio(self: *const Self, client: *foundation.RECT, edge: u32) void {
+    pub fn applyAspectRatio(self: *const Self, client: *win32.RECT, edge: u32) void {
         const faspect_x: f64 = @floatFromInt(self.data.aspect_ratio.?.x);
         const faspect_y: f64 = @floatFromInt(self.data.aspect_ratio.?.y);
         const ratio: f64 = faspect_x / faspect_y;
 
-        var rect = foundation.RECT{
+        var rect = win32.RECT{
             .left = 0,
             .top = 0,
             .right = 0,
@@ -1311,9 +1310,9 @@ pub const Window = struct {
         self.win32.allow_drag_n_drop = accepted;
         if (accepted) {
             self.win32.dropped_files = std.ArrayList([]const u8).init(allocator);
-            DragAcceptFiles(self.handle, win32.TRUE);
+            win32_shell.DragAcceptFiles(self.handle, win32.TRUE);
         } else {
-            DragAcceptFiles(self.handle, win32.FALSE);
+            win32_shell.DragAcceptFiles(self.handle, win32.FALSE);
             self.freeDroppedFiles();
         }
     }
@@ -1486,23 +1485,23 @@ pub const Window = struct {
 };
 
 pub inline fn enableRawMouseMotion(window: win32.HWND) bool {
-    var rid = input.RAWINPUTDEVICE{
+    var rid = win32_input.RAWINPUTDEVICE{
         .usUsagePage = 0x1,
         .usUsage = 0x2,
-        .dwFlags = input.RAWINPUTDEVICE_FLAGS{},
+        .dwFlags = win32_input.RAWINPUTDEVICE_FLAGS{},
         .hwndTarget = window,
     };
-    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    const ret = win32_input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
     return ret == win32.TRUE;
 }
 
 pub inline fn disableRawMouseMotion() bool {
-    var rid = input.RAWINPUTDEVICE{
+    var rid = win32_input.RAWINPUTDEVICE{
         .usUsagePage = 0x1,
         .usUsage = 0x2,
-        .dwFlags = input.RIDEV_REMOVE,
+        .dwFlags = win32_input.RIDEV_REMOVE,
         .hwndTarget = null,
     };
-    const ret = input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
+    const ret = win32_input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
     return ret == win32.TRUE;
 }

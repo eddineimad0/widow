@@ -1,6 +1,6 @@
 const std = @import("std");
 const common = @import("common");
-const win32_defs = @import("win32api/win32_defs.zig");
+const win32_defs = @import("win32api/defs.zig");
 const utils = @import("utils.zig");
 const wndw = @import("window.zig");
 const gdi = @import("win32api/gdi.zig");
@@ -27,7 +27,7 @@ const LparamTuple = std.meta.Tuple(&.{ ?gdi.HMONITOR, []const u16 });
 
 fn EnumMonitorProc(
     handle: ?gdi.HMONITOR,
-    _: ?gdi.HDC,
+    _: ?win32.HDC,
     _: ?*win32.RECT,
     lparam: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL {

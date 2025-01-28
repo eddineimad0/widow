@@ -15,7 +15,7 @@ pub const BI_BITFIELDS = @as(i32, 3);
 // Types
 //==========================
 pub const HMONITOR = *opaque {};
-pub const HDC = *opaque {};
+//pub const HDC = *opaque {};
 pub const HGDIOBJ = *opaque {};
 pub const HBITMAP = HGDIOBJ;
 
@@ -186,7 +186,7 @@ pub const DISPLAY_DEVICEW = extern struct {
 
 pub const MONITORENUMPROC = *const fn (
     param0: ?HMONITOR,
-    param1: ?HDC,
+    param1: ?win32.HDC,
     param2: ?*win32.RECT,
     param3: win32.LPARAM,
 ) callconv(win32.WINAPI) win32.BOOL;
@@ -351,6 +351,41 @@ pub const WINDOW_EX_STYLE = packed struct(u32) {
     _31: u1 = 0,
 };
 
+pub const WS_EX_DLGMODALFRAME = WINDOW_EX_STYLE{ .DLGMODALFRAME = 1 };
+pub const WS_EX_NOPARENTNOTIFY = WINDOW_EX_STYLE{ .NOPARENTNOTIFY = 1 };
+pub const WS_EX_TOPMOST = WINDOW_EX_STYLE{ .TOPMOST = 1 };
+pub const WS_EX_ACCEPTFILES = WINDOW_EX_STYLE{ .ACCEPTFILES = 1 };
+pub const WS_EX_TRANSPARENT = WINDOW_EX_STYLE{ .TRANSPARENT = 1 };
+pub const WS_EX_MDICHILD = WINDOW_EX_STYLE{ .MDICHILD = 1 };
+pub const WS_EX_TOOLWINDOW = WINDOW_EX_STYLE{ .TOOLWINDOW = 1 };
+pub const WS_EX_WINDOWEDGE = WINDOW_EX_STYLE{ .WINDOWEDGE = 1 };
+pub const WS_EX_CLIENTEDGE = WINDOW_EX_STYLE{ .CLIENTEDGE = 1 };
+pub const WS_EX_CONTEXTHELP = WINDOW_EX_STYLE{ .CONTEXTHELP = 1 };
+pub const WS_EX_RIGHT = WINDOW_EX_STYLE{ .RIGHT = 1 };
+pub const WS_EX_LEFT = WINDOW_EX_STYLE{};
+pub const WS_EX_RTLREADING = WINDOW_EX_STYLE{ .RTLREADING = 1 };
+pub const WS_EX_LTRREADING = WINDOW_EX_STYLE{};
+pub const WS_EX_LEFTSCROLLBAR = WINDOW_EX_STYLE{ .LEFTSCROLLBAR = 1 };
+pub const WS_EX_RIGHTSCROLLBAR = WINDOW_EX_STYLE{};
+pub const WS_EX_CONTROLPARENT = WINDOW_EX_STYLE{ .CONTROLPARENT = 1 };
+pub const WS_EX_STATICEDGE = WINDOW_EX_STYLE{ .STATICEDGE = 1 };
+pub const WS_EX_APPWINDOW = WINDOW_EX_STYLE{ .APPWINDOW = 1 };
+pub const WS_EX_OVERLAPPEDWINDOW = WINDOW_EX_STYLE{
+    .WINDOWEDGE = 1,
+    .CLIENTEDGE = 1,
+};
+pub const WS_EX_PALETTEWINDOW = WINDOW_EX_STYLE{
+    .TOPMOST = 1,
+    .TOOLWINDOW = 1,
+    .WINDOWEDGE = 1,
+};
+pub const WS_EX_LAYERED = WINDOW_EX_STYLE{ .LAYERED = 1 };
+pub const WS_EX_NOINHERITLAYOUT = WINDOW_EX_STYLE{ .NOINHERITLAYOUT = 1 };
+pub const WS_EX_NOREDIRECTIONBITMAP = WINDOW_EX_STYLE{ .NOREDIRECTIONBITMAP = 1 };
+pub const WS_EX_LAYOUTRTL = WINDOW_EX_STYLE{ .LAYOUTRTL = 1 };
+pub const WS_EX_COMPOSITED = WINDOW_EX_STYLE{ .COMPOSITED = 1 };
+pub const WS_EX_NOACTIVATE = WINDOW_EX_STYLE{ .NOACTIVATE = 1 };
+
 pub const WINDOW_STYLE = packed struct(u32) {
     ACTIVECAPTION: u1 = 0,
     _1: u1 = 0,
@@ -390,6 +425,56 @@ pub const WINDOW_STYLE = packed struct(u32) {
     // SIZEBOX (bit index 18) conflicts with THICKFRAME
     // CHILDWINDOW (bit index 30) conflicts with CHILD
 };
+
+pub const WS_OVERLAPPED = WINDOW_STYLE{};
+pub const WS_POPUP = WINDOW_STYLE{ .POPUP = 1 };
+pub const WS_CHILD = WINDOW_STYLE{ .CHILD = 1 };
+pub const WS_MINIMIZE = WINDOW_STYLE{ .MINIMIZE = 1 };
+pub const WS_VISIBLE = WINDOW_STYLE{ .VISIBLE = 1 };
+pub const WS_DISABLED = WINDOW_STYLE{ .DISABLED = 1 };
+pub const WS_CLIPSIBLINGS = WINDOW_STYLE{ .CLIPSIBLINGS = 1 };
+pub const WS_CLIPCHILDREN = WINDOW_STYLE{ .CLIPCHILDREN = 1 };
+pub const WS_MAXIMIZE = WINDOW_STYLE{ .MAXIMIZE = 1 };
+pub const WS_CAPTION = WINDOW_STYLE{
+    .DLGFRAME = 1,
+    .BORDER = 1,
+};
+pub const WS_BORDER = WINDOW_STYLE{ .BORDER = 1 };
+pub const WS_DLGFRAME = WINDOW_STYLE{ .DLGFRAME = 1 };
+pub const WS_VSCROLL = WINDOW_STYLE{ .VSCROLL = 1 };
+pub const WS_HSCROLL = WINDOW_STYLE{ .HSCROLL = 1 };
+pub const WS_SYSMENU = WINDOW_STYLE{ .SYSMENU = 1 };
+pub const WS_THICKFRAME = WINDOW_STYLE{ .THICKFRAME = 1 };
+pub const WS_GROUP = WINDOW_STYLE{ .GROUP = 1 };
+pub const WS_TABSTOP = WINDOW_STYLE{ .TABSTOP = 1 };
+pub const WS_MINIMIZEBOX = WINDOW_STYLE{ .GROUP = 1 };
+pub const WS_MAXIMIZEBOX = WINDOW_STYLE{ .TABSTOP = 1 };
+pub const WS_TILED = WINDOW_STYLE{};
+pub const WS_ICONIC = WINDOW_STYLE{ .MINIMIZE = 1 };
+pub const WS_SIZEBOX = WINDOW_STYLE{ .THICKFRAME = 1 };
+pub const WS_TILEDWINDOW = WINDOW_STYLE{
+    .TABSTOP = 1,
+    .GROUP = 1,
+    .THICKFRAME = 1,
+    .SYSMENU = 1,
+    .DLGFRAME = 1,
+    .BORDER = 1,
+};
+pub const WS_OVERLAPPEDWINDOW = WINDOW_STYLE{
+    .TABSTOP = 1,
+    .GROUP = 1,
+    .THICKFRAME = 1,
+    .SYSMENU = 1,
+    .DLGFRAME = 1,
+    .BORDER = 1,
+};
+pub const WS_POPUPWINDOW = WINDOW_STYLE{
+    .SYSMENU = 1,
+    .BORDER = 1,
+    .POPUP = 1,
+};
+pub const WS_CHILDWINDOW = WINDOW_STYLE{ .CHILD = 1 };
+pub const WS_ACTIVECAPTION = WINDOW_STYLE{ .ACTIVECAPTION = 1 };
 
 pub const SHOW_WINDOW_CMD = packed struct(u32) {
     SHOWNORMAL: u1 = 0,
@@ -433,6 +518,63 @@ pub const SHOW_WINDOW_CMD = packed struct(u32) {
     // ERASE (bit index 2) conflicts with SHOWNOACTIVATE
 };
 
+pub const SW_FORCEMINIMIZE = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+    .SHOWNA = 1,
+};
+pub const SW_HIDE = SHOW_WINDOW_CMD{};
+pub const SW_MAXIMIZE = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+};
+pub const SW_MINIMIZE = SHOW_WINDOW_CMD{
+    .SHOWMINIMIZED = 1,
+    .SHOWNOACTIVATE = 1,
+};
+pub const SW_RESTORE = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWNA = 1,
+};
+pub const SW_SHOW = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWNOACTIVATE = 1,
+};
+pub const SW_SHOWDEFAULT = SHOW_WINDOW_CMD{
+    .SHOWMINIMIZED = 1,
+    .SHOWNA = 1,
+};
+pub const SW_SHOWMAXIMIZED = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+};
+pub const SW_SHOWMINIMIZED = SHOW_WINDOW_CMD{ .SHOWMINIMIZED = 1 };
+pub const SW_SHOWMINNOACTIVE = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+    .SHOWNOACTIVATE = 1,
+};
+pub const SW_SHOWNA = SHOW_WINDOW_CMD{ .SHOWNA = 1 };
+pub const SW_SHOWNOACTIVATE = SHOW_WINDOW_CMD{ .SHOWNOACTIVATE = 1 };
+pub const SW_SHOWNORMAL = SHOW_WINDOW_CMD{ .SHOWNORMAL = 1 };
+pub const SW_NORMAL = SHOW_WINDOW_CMD{ .SHOWNORMAL = 1 };
+pub const SW_MAX = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+    .SHOWNA = 1,
+};
+pub const SW_PARENTCLOSING = SHOW_WINDOW_CMD{ .SHOWNORMAL = 1 };
+pub const SW_OTHERZOOM = SHOW_WINDOW_CMD{ .SHOWMINIMIZED = 1 };
+pub const SW_PARENTOPENING = SHOW_WINDOW_CMD{
+    .SHOWNORMAL = 1,
+    .SHOWMINIMIZED = 1,
+};
+pub const SW_OTHERUNZOOM = SHOW_WINDOW_CMD{ .SHOWNOACTIVATE = 1 };
+pub const SW_SCROLLCHILDREN = SHOW_WINDOW_CMD{ .SHOWNORMAL = 1 };
+pub const SW_INVALIDATE = SHOW_WINDOW_CMD{ .SHOWMINIMIZED = 1 };
+pub const SW_ERASE = SHOW_WINDOW_CMD{ .SHOWNOACTIVATE = 1 };
+pub const SW_SMOOTHSCROLL = SHOW_WINDOW_CMD{ .SMOOTHSCROLL = 1 };
+
 pub const CREATESTRUCTW = extern struct {
     lpCreateParams: ?*anyopaque,
     hInstance: ?win32.HINSTANCE,
@@ -447,6 +589,71 @@ pub const CREATESTRUCTW = extern struct {
     lpszClass: ?[*:0]const u16,
     dwExStyle: u32,
 };
+
+pub const WINDOW_LONG_PTR_INDEX = enum(i32) {
+    _EXSTYLE = -20,
+    P_HINSTANCE = -6,
+    P_HWNDPARENT = -8,
+    P_ID = -12,
+    _STYLE = -16,
+    P_USERDATA = -21,
+    P_WNDPROC = -4,
+    // _HINSTANCE = -6, this enum value conflicts with P_HINSTANCE
+    // _ID = -12, this enum value conflicts with P_ID
+    // _USERDATA = -21, this enum value conflicts with P_USERDATA
+    // _WNDPROC = -4, this enum value conflicts with P_WNDPROC
+    // _HWNDPARENT = -8, this enum value conflicts with P_HWNDPARENT
+    _,
+};
+pub const GWL_EXSTYLE = WINDOW_LONG_PTR_INDEX._EXSTYLE;
+pub const GWLP_HINSTANCE = WINDOW_LONG_PTR_INDEX.P_HINSTANCE;
+pub const GWLP_HWNDPARENT = WINDOW_LONG_PTR_INDEX.P_HWNDPARENT;
+pub const GWLP_ID = WINDOW_LONG_PTR_INDEX.P_ID;
+pub const GWL_STYLE = WINDOW_LONG_PTR_INDEX._STYLE;
+pub const GWLP_USERDATA = WINDOW_LONG_PTR_INDEX.P_USERDATA;
+pub const GWLP_WNDPROC = WINDOW_LONG_PTR_INDEX.P_WNDPROC;
+pub const GWL_HINSTANCE = WINDOW_LONG_PTR_INDEX.P_HINSTANCE;
+pub const GWL_ID = WINDOW_LONG_PTR_INDEX.P_ID;
+pub const GWL_USERDATA = WINDOW_LONG_PTR_INDEX.P_USERDATA;
+pub const GWL_WNDPROC = WINDOW_LONG_PTR_INDEX.P_WNDPROC;
+pub const GWL_HWNDPARENT = WINDOW_LONG_PTR_INDEX.P_HWNDPARENT;
+
+pub const LAYERED_WINDOW_ATTRIBUTES_FLAGS = packed struct(u32) {
+    COLORKEY: u1 = 0,
+    ALPHA: u1 = 0,
+    _2: u1 = 0,
+    _3: u1 = 0,
+    _4: u1 = 0,
+    _5: u1 = 0,
+    _6: u1 = 0,
+    _7: u1 = 0,
+    _8: u1 = 0,
+    _9: u1 = 0,
+    _10: u1 = 0,
+    _11: u1 = 0,
+    _12: u1 = 0,
+    _13: u1 = 0,
+    _14: u1 = 0,
+    _15: u1 = 0,
+    _16: u1 = 0,
+    _17: u1 = 0,
+    _18: u1 = 0,
+    _19: u1 = 0,
+    _20: u1 = 0,
+    _21: u1 = 0,
+    _22: u1 = 0,
+    _23: u1 = 0,
+    _24: u1 = 0,
+    _25: u1 = 0,
+    _26: u1 = 0,
+    _27: u1 = 0,
+    _28: u1 = 0,
+    _29: u1 = 0,
+    _30: u1 = 0,
+    _31: u1 = 0,
+};
+pub const LWA_ALPHA = LAYERED_WINDOW_ATTRIBUTES_FLAGS{ .ALPHA = 1 };
+pub const LWA_COLORKEY = LAYERED_WINDOW_ATTRIBUTES_FLAGS{ .COLORKEY = 1 };
 
 //---------------------------
 // Functions
@@ -465,7 +672,7 @@ pub extern "user32" fn GetMonitorInfoW(
 ) callconv(win32.WINAPI) win32.BOOL;
 
 pub extern "user32" fn EnumDisplayMonitors(
-    hdc: ?HDC,
+    hdc: ?win32.HDC,
     lprcClip: ?*win32.RECT,
     lpfnEnum: ?MONITORENUMPROC,
     dwData: win32.LPARAM,
@@ -494,16 +701,16 @@ pub extern "user32" fn ChangeDisplaySettingsExW(
 
 pub extern "user32" fn GetDC(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?HDC;
+) callconv(win32.WINAPI) ?win32.HDC;
 
 pub extern "gdi32" fn GetDeviceCaps(
-    hdc: ?HDC,
+    hdc: ?win32.HDC,
     index: GET_DEVICE_CAPS_INDEX,
 ) callconv(@import("std").os.windows.WINAPI) i32;
 
 pub extern "user32" fn ReleaseDC(
     hWnd: ?win32.HWND,
-    hDC: ?HDC,
+    hDC: ?win32.HDC,
 ) callconv(@import("std").os.windows.WINAPI) i32;
 
 pub extern "user32" fn MonitorFromWindow(
@@ -513,15 +720,15 @@ pub extern "user32" fn MonitorFromWindow(
 
 pub extern "user32" fn LoadImageW(
     hInst: ?win32.HINSTANCE,
-    name: ?win32.LPCWSTR,
-    type: u32,
+    name: ?[*:0]align(1) const u16,
+    type: GDI_IMAGE_TYPE,
     cx: i32,
     cy: i32,
-    fuLoad: u32,
+    fuLoad: IMAGE_FLAGS,
 ) callconv(win32.WINAPI) ?win32.HANDLE;
 
 pub extern "gdi32" fn CreateDIBSection(
-    hdc: ?HDC,
+    hdc: ?win32.HDC,
     pbmi: ?*const BITMAPINFO,
     usage: DIB_USAGE,
     ppvBits: ?*?*anyopaque,
@@ -600,4 +807,88 @@ pub extern "user32" fn GetPropW(
 pub extern "user32" fn ClientToScreen(
     hWnd: ?win32.HWND,
     lpPoint: ?*win32.POINT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn AdjustWindowRectEx(
+    lpRect: ?*win32.RECT,
+    dwStyle: WINDOW_STYLE,
+    bMenu: win32.BOOL,
+    dwExStyle: WINDOW_EX_STYLE,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn LoadCursorW(
+    hInstance: ?win32.HINSTANCE,
+    lpCursorName: ?[*:0]align(1) const u16,
+) callconv(win32.WINAPI) ?win32.HCURSOR;
+
+pub extern "user32" fn SetCursor(
+    hCursor: ?win32.HCURSOR,
+) callconv(win32.WINAPI) ?win32.HCURSOR;
+
+pub extern "user32" fn BringWindowToTop(
+    hWnd: ?win32.HWND,
+) callconv(win32.WINAPI) ?win32.HCURSOR;
+
+pub extern "user32" fn SetForegroundWindow(
+    hWnd: ?win32.HWND,
+) callconv(win32.WINAPI) ?win32.HCURSOR;
+
+pub extern "user32" fn GetWindowLongPtrW(
+    hWnd: ?win32.HWND,
+    nIndex: WINDOW_LONG_PTR_INDEX,
+) callconv(win32.WINAPI) isize;
+
+pub extern "user32" fn SetWindowLongPtrW(
+    hWnd: ?win32.HWND,
+    nIndex: WINDOW_LONG_PTR_INDEX,
+    dwNewLong: isize,
+) callconv(win32.WINAPI) isize;
+
+pub extern "user32" fn ScreenToClient(
+    hWnd: ?win32.HWND,
+    lpPoint: ?*win32.POINT,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn SetWindowTextW(
+    hWnd: ?win32.HWND,
+    lpString: ?[*:0]const u16,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn GetWindowTextW(
+    hWnd: ?win32.HWND,
+    lpString: [*:0]u16,
+    nMaxCount: i32,
+) callconv(win32.WINAPI) i32;
+
+pub extern "user32" fn GetWindowTextLengthW(
+    hWnd: ?win32.HWND,
+) callconv(win32.WINAPI) i32;
+
+pub extern "user32" fn GetLayeredWindowAttributes(
+    hwnd: ?win32.HWND,
+    pcrKey: ?*u32,
+    pbAlpha: ?*u8,
+    pdwFlags: ?*LAYERED_WINDOW_ATTRIBUTES_FLAGS,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn SetLayeredWindowAttributes(
+    hwnd: ?win32.HWND,
+    crKey: u32,
+    bAlpha: u8,
+    dwFlags: LAYERED_WINDOW_ATTRIBUTES_FLAGS,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn MoveWindow(
+    hWnd: ?win32.HWND,
+    X: i32,
+    Y: i32,
+    nWidth: i32,
+    nHeight: i32,
+    bRepaint: win32.BOOL,
+) callconv(win32.WINAPI) win32.BOOL;
+
+pub extern "user32" fn OffsetRect(
+    lprc: ?*win32.RECT,
+    dx: i32,
+    dy: i32,
 ) callconv(win32.WINAPI) win32.BOOL;

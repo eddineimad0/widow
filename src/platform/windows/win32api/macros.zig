@@ -2,12 +2,16 @@
 const win32 = @import("std").os.windows;
 
 /// Replacement for the `MAKEINTATOM` macro in the windows api.
-pub inline fn MAKEINTATOM(atom: u16) ?win32.LPCWSTR {
+pub inline fn MAKEINTATOM(atom: u16) ?[*:0]align(1) const u16 {
     return @ptrFromInt(atom);
 }
 
 /// Replacement for the `MAKEINTRESOURCESA` macro in the windows api.
 pub inline fn MAKEINTRESOURCESA(comptime r: u16) ?[*:0]const u8 {
+    return @ptrFromInt(r);
+}
+
+pub inline fn MAKEINTRESOURCESW(comptime r: u16) ?[*:0]align(1) const u16 {
     return @ptrFromInt(r);
 }
 

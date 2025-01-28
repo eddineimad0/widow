@@ -1,6 +1,5 @@
 const std = @import("std");
 const win32 = std.os.windows;
-const zigwin32 = @import("zigwin32");
 const utils = @import("utils.zig");
 const opt = @import("build-options");
 const common = @import("common");
@@ -11,6 +10,7 @@ const window_msg = @import("win32api/window_messages.zig");
 const gdi = @import("win32api/gdi.zig");
 const macros = @import("win32api/macros.zig");
 const win32_input = @import("win32api/input.zig");
+const win32_defs = @import("win32api/defs.zig");
 
 /// The procedure function for the helper window
 pub fn helperWindowProc(
@@ -85,7 +85,7 @@ pub fn mainWindowProc(
             }
         }
         // Skip until the window pointer is registered.
-        return gdi.DefWindowProcW(hwnd, msg, wparam, lparam);
+        return window_msg.DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
     var window: *wndw.Window = @ptrCast(@alignCast(window_ref_prop.?));
@@ -127,7 +127,7 @@ pub fn mainWindowProc(
             // while the user is interacting with the non client area
             // (resizing with borders,grabbing the title bar...),
             // this gives the user a better visual experience.
-            if (utils.loWord(@bitCast(lparam)) != window_msg.HTCLIENT) {
+            if (macros.loWord(@bitCast(lparam)) != window_msg.HTCLIENT) {
                 window.win32.frame_action = true;
             }
         },
@@ -172,7 +172,7 @@ pub fn mainWindowProc(
             }
         },
 
-        win32.WM_MOUSELEAVE => {
+        window_msg.WM_MOUSELEAVE => {
             // Posted to a window when the cursor leaves the client area
             // of the window specified in a prior call to TrackMouseEvent.
             if (opt.LOG_PLATFORM_EVENTS) {
@@ -284,8 +284,8 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEWHEEL event\n", .{window.data.id});
             }
-            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
-            const wheel_delta = scroll / @as(f64, win32.WHEEL_DELTA);
+            const scroll: f64 = @floatFromInt(macros.getYLparam(wparam));
+            const wheel_delta = scroll / @as(f64, win32_defs.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
                 wheel_delta,
@@ -302,8 +302,8 @@ pub fn mainWindowProc(
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a MOUSEHWHEEL event\n", .{window.data.id});
             }
-            const scroll: f64 = @floatFromInt(utils.getYLparam(wparam));
-            const wheel_delta = -(scroll) / @as(f64, win32.WHEEL_DELTA);
+            const scroll: f64 = @floatFromInt(macros.getYLparam(wparam));
+            const wheel_delta = -(scroll) / @as(f64, win32_defs.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
                 0.0,
@@ -353,8 +353,8 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a DPICHANGED event\n", .{window.data.id});
             }
             const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const new_dpi = utils.loWord(wparam);
-            const scale = @as(f64, @floatFromInt(new_dpi)) / win32.USER_DEFAULT_SCREEN_DPI_F;
+            const new_dpi = macros.loWord(wparam);
+            const scale = @as(f64, @floatFromInt(new_dpi)) / win32_defs.USER_DEFAULT_SCREEN_DPI_F;
             const flags = window_msg.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
@@ -454,8 +454,8 @@ pub fn mainWindowProc(
             window.data.flags.is_maximized = maximized;
             window.data.flags.is_minimized = minimized;
 
-            const new_width: i32 = @intCast(utils.loWord(@bitCast(lparam)));
-            const new_height: i32 = @intCast(utils.hiWord(@bitCast(lparam)));
+            const new_width: i32 = @intCast(macros.loWord(@bitCast(lparam)));
+            const new_height: i32 = @intCast(macros.hiWord(@bitCast(lparam)));
 
             if (minimized or (window.data.client_area.size.width == new_width and
                 window.data.client_area.size.height == new_height))
@@ -580,7 +580,7 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a SYSCOMMAND event\n", .{window.data.id});
             }
             switch (wparam & 0xFFF0) {
-                win32.SC_SCREENSAVE, win32.SC_MONITORPOWER => {
+                win32_defs.SC_SCREENSAVE, win32_defs.SC_MONITORPOWER => {
                     if (window.data.flags.is_fullscreen) {
                         // No screen saver for fullscreen mode
                         return 0;
@@ -593,7 +593,7 @@ pub fn mainWindowProc(
             }
         },
 
-        win32.WM_UNICHAR => {
+        window_msg.WM_UNICHAR => {
             // The window_msg.WM_UNICHAR message can be used by an application
             // to post input to other windows.
             // (Tests whether a target app can process window_msg.WM_UNICHAR

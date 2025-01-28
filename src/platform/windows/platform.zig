@@ -1,6 +1,5 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
+const win32 = std.os.windows;
 const display = @import("display.zig");
 const time = @import("time.zig");
 const driver = @import("driver.zig");
@@ -13,7 +12,7 @@ pub const Window = wndw.Window;
 pub const WindowError = wndw.WindowError;
 
 // Platform handles
-pub const DisplayHandle = win32.HMONITOR;
+pub const DisplayHandle = gdi.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
 pub const GLContext = @import("wgl.zig").GLContext;
@@ -69,5 +68,5 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
 
 test "Platform" {
     @import("std").testing.refAllDecls(@import("display.zig"));
-    @import("std").testing.refAllDecls(@import("module.zig"));
+    @import("std").testing.refAllDecls(@import("dynlib.zig"));
 }
