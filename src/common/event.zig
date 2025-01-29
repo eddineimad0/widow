@@ -27,7 +27,7 @@ pub const EventType = enum(u8) {
     // new coordinates for the top left corner of the window.
     MouseMove, // The mouse position (relative to the client area's top left corner) changed.
     MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
-    KeyBoard, // A certain Keyboard key action(press or release) was performed.
+    Keyboard, // A certain Keyboard key action(press or release) was performed.
     MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
     DPIChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
@@ -78,7 +78,7 @@ pub const Event = union(EventType) {
     WindowMove: MoveEvent,
     MouseMove: MoveEvent,
     MouseButton: MouseButtonEvent,
-    KeyBoard: KeyEvent,
+    Keyboard: KeyEvent,
     MouseScroll: ScrollEvent,
     DPIChange: DPIChangeEvent,
     Character: CharacterEvent,
@@ -175,7 +175,7 @@ pub inline fn createKeyboardEvent(
     state: kbd_mouse.KeyState,
     mods: kbd_mouse.KeyModifiers,
 ) Event {
-    return .{ .KeyBoard = KeyEvent{
+    return .{ .Keyboard = KeyEvent{
         .window_id = window_id,
         .keycode = keycode,
         .scancode = scancode,
