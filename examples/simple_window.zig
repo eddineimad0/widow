@@ -50,7 +50,7 @@ pub fn main() !void {
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
-                EventType.KeyBoard => |*key| {
+                EventType.Keyboard => |*key| {
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on

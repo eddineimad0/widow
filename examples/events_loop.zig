@@ -51,7 +51,7 @@ pub fn main() !void {
                 // WindowMove => The window has been moved, the Point2D struct specify the
                 // new coordinates for the top left corner of the window.
                 // FileDrop => Some file was released in the window area.
-                // KeyBoard => A certain Keyboard key action(press or release) was performed.
+                // Keyboard => A certain Keyboard key action(press or release) was performed.
                 // MouseButton, => A certain Mouse button action(press or release) was performed while
                 // the mouse is over the client area.
                 // MouseScroll => One of the mouse wheels(vertical,horizontal) was scrolled.
@@ -70,7 +70,7 @@ pub fn main() !void {
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
-                EventType.KeyBoard => |*key| {
+                EventType.Keyboard => |*key| {
                     // This event holds the keyboard key keycode (symbolic representation that
                     // depends on the layout active on the os)
                     // and scancode (Hardware representation of the key).
