@@ -5,7 +5,6 @@ const dyn_x11 = @import("x11/dynamic.zig");
 const unix = @import("common").unix;
 const driver = @import("driver.zig");
 
-const time = unix.time;
 const mem = std.mem;
 
 const KeyMaps = @import("keymaps.zig").KeyMaps;
