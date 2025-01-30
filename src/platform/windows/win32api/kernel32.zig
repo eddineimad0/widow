@@ -99,14 +99,6 @@ pub extern "kernel32" fn GetComputerNameA(
 ) callconv(win32.WINAPI) win32.BOOL;
 pub extern "kernel32" fn GetLargePageMinimum() callconv(win32.WINAPI) win32.SIZE_T;
 
-pub extern "kernel32" fn QueryPerformanceFrequency(
-    lpFrequency: *win32.LARGE_INTEGER,
-) callconv(win32.WINAPI) win32.BOOL;
-
-pub extern "kernel32" fn QueryPerformanceCounter(
-    lpPerformanceCount: *win32.LARGE_INTEGER,
-) callconv(win32.WINAPI) win32.BOOL;
-
 pub extern "kernel32" fn GetModuleHandleExW(
     dwFlags: win32.DWORD,
     lpModuleName: win32.LPCWSTR,

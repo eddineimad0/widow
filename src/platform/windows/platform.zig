@@ -1,6 +1,5 @@
 const std = @import("std");
 const display = @import("display.zig");
-const time = @import("time.zig");
 const driver = @import("driver.zig");
 const wndw = @import("window.zig");
 const win32_gfx = @import("win32api/graphics.zig");

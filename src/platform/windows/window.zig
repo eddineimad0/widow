@@ -31,43 +31,20 @@ pub const CreationLparamTuple = std.meta.Tuple(&.{ *const WindowData, *const Win
 
 // Window Styles as defined by the SDL library.
 // Basic : clip child and siblings windows when drawing to content.
-const STYLE_BASIC: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
-    .CLIPCHILDREN = 1,
-    .CLIPSIBLINGS = 1,
-});
+const STYLE_BASIC: u32 = win32_gfx.WS_CLIPCHILDREN | win32_gfx.WS_CLIPSIBLINGS;
 // Fullscreen : just a popup window with monitor width and height.
-const STYLE_FULLSCREEN: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
-    .POPUP = 1,
-    .GROUP = 1,
-});
+const STYLE_FULLSCREEN: u32 = win32_gfx.WS_POPUP;
 // Captionless: without a caption(title bar)
 const STYLE_BORDERLESS = STYLE_FULLSCREEN;
-
 // Resizable : can be resized using the widow border can also be maximazed.
-const STYLE_RESIZABLE: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
-    .THICKFRAME = 1,
-    .TABSTOP = 1,
-});
+const STYLE_RESIZABLE: u32 = win32_gfx.WS_MAXIMIZEBOX | win32_gfx.WS_THICKFRAME;
 // Normal: both a title bar and minimize button.
-const STYLE_NORMAL: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
-    .GROUP = 1,
-    .SYSMENU = 1,
-    .DLGFRAME = 1,
-    .BORDER = 1,
-});
+const STYLE_NORMAL: u32 = win32_gfx.WS_SYSMENU | win32_gfx.WS_MINIMIZEBOX;
 
-const STYLES_MASK: u32 = @bitCast(win32_gfx.WINDOW_STYLE{
-    .TABSTOP = 1,
-    .GROUP = 1,
-    .THICKFRAME = 1,
-    .SYSMENU = 1,
-    .DLGFRAME = 1,
-    .BORDER = 1,
-    .POPUP = 1,
-    .MAXIMIZE = 1,
-    .CLIPSIBLINGS = 1,
-    .CLIPCHILDREN = 1,
-});
+const STYLES_MASK: u32 = STYLE_BASIC | STYLE_FULLSCREEN | STYLE_BORDERLESS |
+    STYLE_RESIZABLE | STYLE_NORMAL | win32_gfx.WS_CAPTION;
+
+const EX_STYLES_MASK: u32 = win32_gfx.WS_EX_TOPMOST | win32_gfx.WS_EX_APPWINDOW;
 
 // Define our own message to report Window Procedure errors back
 pub const WM_ERROR_REPORT: u32 = win32_gfx.WM_USER + 1;
@@ -106,22 +83,23 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
     if (flags.is_fullscreen) {
         styles |= STYLE_FULLSCREEN;
     } else {
+        styles |= STYLE_NORMAL;
         if (!flags.is_decorated) {
             styles |= STYLE_BORDERLESS;
         } else {
-            styles |= STYLE_NORMAL;
-        }
+            styles |= win32_gfx.WS_CAPTION;
 
-        if (flags.is_resizable) {
-            styles |= STYLE_RESIZABLE;
+            if (flags.is_resizable) {
+                styles |= STYLE_RESIZABLE;
+            }
         }
 
         if (flags.is_maximized) {
-            styles |= @bitCast(win32_gfx.WINDOW_STYLE{ .MAXIMIZE = 1 });
+            styles |= win32_gfx.WS_MAXIMIZE;
         }
 
         if (flags.is_minimized) {
-            styles |= @bitCast(win32_gfx.WINDOW_STYLE{ .MINIMIZE = 1 });
+            styles |= win32_gfx.WS_MINIMIZE;
         }
     }
 
@@ -129,10 +107,10 @@ pub fn windowStyles(flags: *const WindowFlags) u32 {
 }
 
 pub fn windowExStyles(flags: *const WindowFlags) u32 {
-    var ex_styles: u32 = 0;
+    var ex_styles: u32 = win32_gfx.WS_EX_APPWINDOW;
     if (flags.is_fullscreen or flags.is_topmost) {
         // Should be placed above all non topmost windows.
-        ex_styles |= @bitCast(win32_gfx.WS_EX_TOPMOST);
+        ex_styles |= win32_gfx.WS_EX_TOPMOST;
     }
     return ex_styles;
 }
@@ -663,7 +641,6 @@ pub const Window = struct {
         self: *Self,
         new_area: *const common.geometry.Rect,
     ) void {
-        const EX_STYLES_MASK: u32 = @bitCast(win32_gfx.WS_EX_TOPMOST);
         const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .DRAWFRAME = 1,
             .NOACTIVATE = 1,
@@ -1108,7 +1085,7 @@ pub const Window = struct {
             self.handle,
             win32_gfx.GWL_EXSTYLE,
         );
-        if ((ex_styles & @as(isize, @bitCast(win32_gfx.WS_EX_LAYERED))) != 0) {
+        if ((ex_styles & @as(isize, win32_gfx.WS_EX_LAYERED)) != 0) {
             var alpha: u8 = undefined;
             var flags: win32_gfx.LAYERED_WINDOW_ATTRIBUTES_FLAGS = undefined;
             _ = win32_gfx.GetLayeredWindowAttributes(
@@ -1136,12 +1113,12 @@ pub const Window = struct {
         ));
 
         if (value == @as(f32, 1.0)) {
-            ex_styles &= ~@as(u32, @bitCast(win32_gfx.WS_EX_LAYERED));
+            ex_styles &= ~@as(u32, win32_gfx.WS_EX_LAYERED);
         } else {
             const alpha: u32 = @intFromFloat(value * 255.0);
 
-            if ((ex_styles & @as(u32, @bitCast(win32_gfx.WS_EX_LAYERED))) == 0) {
-                ex_styles |= @as(u32, @bitCast(win32_gfx.WS_EX_LAYERED));
+            if ((ex_styles & @as(u32, win32_gfx.WS_EX_LAYERED)) == 0) {
+                ex_styles |= @as(u32, win32_gfx.WS_EX_LAYERED);
             }
 
             _ = win32_gfx.SetLayeredWindowAttributes(

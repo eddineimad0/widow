@@ -205,10 +205,10 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
 
     // Create a temp window
     const tmp_wndw = win32_gfx.CreateWindowExW(
-        win32_gfx.WINDOW_EX_STYLE{},
+        0,
         win32_macros.MAKEINTATOM(driver.handles.wnd_class),
         &[_:0]u16{ 0x00, 0x00 },
-        win32_gfx.WINDOW_STYLE{ .POPUP = 1, .DISABLED = 1 },
+        win32_gfx.WS_POPUP | win32_gfx.WS_DISABLED,
         0,
         0,
         16,

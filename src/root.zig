@@ -2,7 +2,6 @@ const std = @import("std");
 const common = @import("common");
 const gl = @import("opengl");
 const platform = @import("platform");
-const mem = std.mem;
 
 // Exports
 pub const geometry = common.geometry;
@@ -37,11 +36,14 @@ pub const opengl = struct {
 
 pub const WindowBuilder = @import("window.zig").WindowBuilder;
 pub const Window = @import("window.zig").Window;
+pub const WindowHandle = platform.WindowHandle;
+pub const DisplayHandle = platform.DisplayHandle;
 
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
 pub const createWidowContext = platform.createWidowContext;
+
 /// destroys and frees the resources used by the platform context.
 /// calling this function invalidates the context, therfore it should
 /// only be called after destroying all the other widow objects, otherwise it will cause
