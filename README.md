@@ -31,9 +31,6 @@ pub fn main() !void {
     // and build a context for the current platform.
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
-    // when done using the library.
-    // or don't let the os figure it's stuff.
-    defer widow.deinitWidowPlatform();
 
     // the window will require an event queue to
     // send events.
@@ -72,7 +69,7 @@ pub fn main() !void {
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
-                EventType.KeyBoard => |*key| {
+                EventType.Keyboard => |*key| {
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on
@@ -95,6 +92,4 @@ pub fn main() !void {
 The main branch will stick to stable zig releases.
 
 ## Dependecies
-
-- [zigwin32](https://github.com/marlersoft/zigwin32): Provides binding for Win32 API.
 - [zigglgen](https://github.com/castholm/zigglgen): OpenGL binding used in the `gl_triangle.zig` example

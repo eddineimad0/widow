@@ -1,11 +1,8 @@
 const std = @import("std");
-const zigwin32 = @import("zigwin32");
 const common = @import("common");
-const win32 = @import("win32_defs.zig");
-const utils = @import("utils.zig");
+const win32_gfx = @import("win32api/graphics.zig");
+const win32 = std.os.windows;
 const mem = std.mem;
-const window_msg = zigwin32.ui.windows_and_messaging;
-const gdi = zigwin32.graphics.gdi;
 
 pub const IconError = error{
     NotFound, // requested icon resource was not found.
@@ -24,9 +21,9 @@ fn createWin32Icon(
     xhot: u32,
     yhot: u32,
     is_cursor: bool,
-) IconError!window_msg.HICON {
-    var bmp_header: gdi.BITMAPV5HEADER = mem.zeroes(gdi.BITMAPV5HEADER);
-    bmp_header.bV5Size = @sizeOf(gdi.BITMAPV5HEADER);
+) IconError!win32.HICON {
+    var bmp_header: win32_gfx.BITMAPV5HEADER = mem.zeroes(win32_gfx.BITMAPV5HEADER);
+    bmp_header.bV5Size = @sizeOf(win32_gfx.BITMAPV5HEADER);
     bmp_header.bV5Width = width;
     //  If bV5Height value is negative, the bitmap is a top-down DIB
     //  and its origin is the upper-left corner.
@@ -34,19 +31,19 @@ fn createWin32Icon(
     bmp_header.bV5Planes = 1;
     bmp_header.bV5BitCount = 32; // 32 bits colors.
     // No compression and we will provide the color masks.
-    bmp_header.bV5Compression = gdi.BI_BITFIELDS;
+    bmp_header.bV5Compression = win32_gfx.BI_BITFIELDS;
     bmp_header.bV5AlphaMask = 0xFF000000;
     bmp_header.bV5BlueMask = 0x00FF0000;
     bmp_header.bV5GreenMask = 0x0000FF00;
     bmp_header.bV5RedMask = 0x000000FF;
 
     var dib: [*]u8 = undefined;
-    const dc = gdi.GetDC(null);
-    defer _ = gdi.ReleaseDC(null, dc);
-    const color_mask = gdi.CreateDIBSection(
+    const dc = win32_gfx.GetDC(null);
+    defer _ = win32_gfx.ReleaseDC(null, dc);
+    const color_mask = win32_gfx.CreateDIBSection(
         dc,
         @ptrCast(&bmp_header),
-        gdi.DIB_RGB_COLORS,
+        win32_gfx.DIB_RGB_COLORS,
         @ptrCast(&dib),
         null,
         0,
@@ -54,17 +51,17 @@ fn createWin32Icon(
     if (color_mask == null) {
         return IconError.NullColorMask;
     }
-    defer _ = gdi.DeleteObject(color_mask);
+    defer _ = win32_gfx.DeleteObject(color_mask);
 
-    const monochrome_mask = gdi.CreateBitmap(width, height, 1, 1, null);
+    const monochrome_mask = win32_gfx.CreateBitmap(width, height, 1, 1, null);
     if (monochrome_mask == null) {
         return IconError.NullMonochromeMask;
     }
-    defer _ = gdi.DeleteObject(monochrome_mask);
+    defer _ = win32_gfx.DeleteObject(monochrome_mask);
 
     @memcpy(dib, pixels);
 
-    var icon_info = window_msg.ICONINFO{
+    var icon_info = win32_gfx.ICONINFO{
         // A value of TRUE(1) specifies an icon, FALSE(0) specify a cursor.
         .fIcon = @intFromBool(!is_cursor),
         .xHotspot = xhot,
@@ -73,41 +70,41 @@ fn createWin32Icon(
         .hbmColor = color_mask,
     };
 
-    const icon_handle = window_msg.CreateIconIndirect(&icon_info);
+    const icon_handle = win32_gfx.CreateIconIndirect(&icon_info);
 
     return icon_handle orelse return IconError.BadIcon;
 }
 
 pub const CursorHints = struct {
-    icon: ?window_msg.HCURSOR,
+    icon: ?win32.HCURSOR,
     // Track the cursor coordinates in respect to top left corner.
-    pos: common.geometry.WidowPoint2D,
+    pos: common.geometry.Point2D,
     // Accumulate the mouse movement
-    accum_pos: common.geometry.WidowPoint2D,
+    accum_pos: common.geometry.Point2D,
     mode: common.cursor.CursorMode,
     sys_owned: bool, // As to avoid deleting system owned cursor images.
 };
 
 pub fn destroyCursorIcon(cursor: *CursorHints) void {
     if (!cursor.sys_owned and cursor.icon != null) {
-        _ = window_msg.DestroyCursor(cursor.icon);
+        _ = win32_gfx.DestroyCursor(cursor.icon);
         cursor.icon = null;
     }
 }
 
 pub const Icon = struct {
-    sm_handle: ?window_msg.HICON,
-    bg_handle: ?window_msg.HICON,
+    sm_handle: ?win32.HICON,
+    bg_handle: ?win32.HICON,
 };
 
 pub fn destroyIcon(icon: *Icon) void {
     if (icon.sm_handle) |handle| {
-        _ = window_msg.DestroyIcon(handle);
+        _ = win32_gfx.DestroyIcon(handle);
         icon.sm_handle = null;
     }
 
     if (icon.bg_handle) |handle| {
-        _ = window_msg.DestroyIcon(handle);
+        _ = win32_gfx.DestroyIcon(handle);
         icon.bg_handle = null;
     }
 }
@@ -152,7 +149,7 @@ pub fn createCursor(
     if (pixels) |slice| {
         const handle = try createWin32Icon(slice, width, height, xhot, yhot, true);
         return CursorHints{
-            .icon = handle,
+            .icon = @ptrCast(handle),
             .sys_owned = false,
             .mode = common.cursor.CursorMode.Normal,
             .pos = .{ .x = 0, .y = 0 },
@@ -176,29 +173,27 @@ pub fn createNativeCursor(
     const CursorShape = common.cursor.NativeCursorShape;
 
     const cursor_id = switch (shape) {
-        CursorShape.PointingHand => win32.IDC_HAND,
-        CursorShape.Crosshair => win32.IDC_CROSS,
-        CursorShape.Text => win32.IDC_IBEAM,
-        CursorShape.BkgrndTask => win32.IDC_APPSTARTING,
-        CursorShape.Help => win32.IDC_HELP,
-        CursorShape.Busy => win32.IDC_WAIT,
-        CursorShape.Forbidden => win32.IDC_NO,
-        CursorShape.Move => win32.IDC_SIZEALL,
-        CursorShape.Default => win32.IDC_ARROW,
+        CursorShape.PointingHand => win32_gfx.IDC_HAND,
+        CursorShape.Crosshair => win32_gfx.IDC_CROSS,
+        CursorShape.Text => win32_gfx.IDC_IBEAM,
+        CursorShape.BkgrndTask => win32_gfx.IDC_APPSTARTING,
+        CursorShape.Help => win32_gfx.IDC_HELP,
+        CursorShape.Busy => win32_gfx.IDC_WAIT,
+        CursorShape.Forbidden => win32_gfx.IDC_NO,
+        CursorShape.Move => win32_gfx.IDC_SIZEALL,
+        CursorShape.Default => win32_gfx.IDC_ARROW,
     };
 
-    const handle = window_msg.LoadImageA(
+    const handle = win32_gfx.LoadImageW(
         null,
         cursor_id,
-        window_msg.GDI_IMAGE_TYPE.CURSOR,
+        win32_gfx.GDI_IMAGE_TYPE.CURSOR,
         0,
         0,
-        window_msg.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
+        win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
     );
 
     if (handle == null) {
-        // We failed.
-        std.debug.print("error {}\n", .{utils.getLastError()});
         return IconError.NotFound;
     }
 

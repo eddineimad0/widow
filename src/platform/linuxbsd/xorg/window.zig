@@ -51,7 +51,7 @@ pub const Window = struct {
         xdnd_allow: bool,
     },
 
-    pub const WINDOW_DEFAULT_POSITION = common.geometry.WidowPoint2D{
+    pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
         .x = 0,
         .y = 0,
     };
@@ -461,7 +461,7 @@ pub const Window = struct {
     }
 
     /// Returns the position of the top left corner of the client area.
-    pub fn getClientPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getClientPosition(self: *const Self) common.geometry.Point2D {
         return self.data.client_area.top_left;
     }
 
@@ -479,7 +479,7 @@ pub const Window = struct {
     }
 
     /// Returns the Physical size of the window's client area
-    pub fn getClientPixelSize(self: *const Self) common.geometry.WidowSize {
+    pub fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
         return .{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
@@ -487,7 +487,7 @@ pub const Window = struct {
     }
 
     /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.WidowSize {
+    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = self.ctx.driver;
         _ = libx11.XGetWindowAttributes(
@@ -503,7 +503,7 @@ pub const Window = struct {
     }
 
     /// Sets the new (width,height) of the window's client area
-    pub fn setClientSize(self: *Self, size: *common.geometry.WidowSize) void {
+    pub fn setClientSize(self: *Self, size: *common.geometry.RectSize) void {
         if (self.data.flags.is_maximized) {
             // un-maximize the window
             self.restore();
@@ -532,7 +532,7 @@ pub const Window = struct {
         drvr.flushXRequests();
     }
 
-    pub fn setMinSize(self: *Self, min_size: ?common.geometry.WidowSize) void {
+    pub fn setMinSize(self: *Self, min_size: ?common.geometry.RectSize) void {
         if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
             // No need to do anything.
             return;
@@ -573,7 +573,7 @@ pub const Window = struct {
         self.updateSizeHints();
     }
 
-    pub fn setMaxSize(self: *Self, max_size: ?common.geometry.WidowSize) void {
+    pub fn setMaxSize(self: *Self, max_size: ?common.geometry.RectSize) void {
         if (self.data.flags.is_fullscreen or !self.data.flags.is_resizable) {
             // No need to do anything.
             return;
@@ -613,7 +613,7 @@ pub const Window = struct {
         self.updateSizeHints();
     }
 
-    pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.WidowAspectRatio) void {
+    pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.AspectRatio) void {
         self.data.aspect_ratio = ratio;
         self.updateSizeHints();
     }
@@ -853,7 +853,7 @@ pub const Window = struct {
         value: bool,
     ) bool {
         const drvr = self.ctx.driver;
-        var display_area: common.geometry.WidowArea = undefined;
+        var display_area: common.geometry.Rect = undefined;
 
         if (self.data.flags.is_fullscreen != value) {
             self.data.flags.is_fullscreen = value;
@@ -976,7 +976,7 @@ pub const Window = struct {
         }
     }
 
-    pub fn getCursorPosition(self: *const Self) common.geometry.WidowPoint2D {
+    pub fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         const drvr = self.ctx.driver;
         var root: libx11.Window = undefined;
         var child: libx11.Window = undefined;

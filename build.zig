@@ -125,14 +125,12 @@ fn prepareWidowModule(
 
     const platform_mod: *std.Build.Module = switch (display_target) {
         .Win32 => win32: {
-            const zigwin32 = b.dependency("zigwin32", .{});
             break :win32 b.createModule(
                 .{
-                    .root_source_file = b.path("src/platform/win32/platform.zig"),
+                    .root_source_file = b.path("src/platform/windows/platform.zig"),
                     .imports = &.{
                         .{ .name = "opengl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
-                        .{ .name = "zigwin32", .module = zigwin32.module("zigwin32") },
                     },
                 },
             );

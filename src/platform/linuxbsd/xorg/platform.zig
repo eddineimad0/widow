@@ -1,12 +1,15 @@
 const std = @import("std");
 const display = @import("display.zig");
 const libx11 = @import("x11/xlib.zig");
+const x11ext = @import("x11/extensions/extensions.zig");
 const dyn_x11 = @import("x11/dynamic.zig");
 const unix = @import("common").unix;
 const driver = @import("driver.zig");
 
-const time = unix.time;
 const mem = std.mem;
+
+pub const WindowHandle = libx11.Window;
+pub const DisplayHandle = x11ext.RRCrtc;
 
 const KeyMaps = @import("keymaps.zig").KeyMaps;
 pub const Window = @import("window.zig").Window;

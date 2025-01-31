@@ -1,14 +1,17 @@
 const std = @import("std");
 const common = @import("common");
-const zigwin32 = @import("zigwin32");
-const win32 = @import("win32_defs.zig");
 const wndw = @import("window.zig");
+const win32_gfx = @import("win32api/graphics.zig");
+const win32_macros = @import("win32api/macros.zig");
+const win32_input = @import("win32api/input.zig");
+const win32 = std.os.windows;
 const mem = std.mem;
-const kbd_mouse = zigwin32.ui.input.keyboard_and_mouse;
-const foundation = zigwin32.foundation;
+const geometry = common.geometry;
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
 const KeyState = common.keyboard_mouse.KeyState;
+const KeyModifiers = common.keyboard_mouse.KeyModifiers;
+const event = common.event;
 
 /// For comparing wide c strings.
 pub fn wideStrZCmp(noalias str_a: [*:0]const u16, noalias str_b: [*:0]const u16) bool {
@@ -59,55 +62,12 @@ pub fn wideZToUtf8(allocator: std.mem.Allocator, wide_str: []const u16) ![]u8 {
     return wideToUtf8(allocator, wide_str.ptr[0..zero_indx]);
 }
 
-/// Replacement for the `MAKEINTATOM` macro in the windows api.
-pub inline fn MAKEINTATOM(atom: u16) ?win32.LPCWSTR {
-    return @ptrFromInt(atom);
-}
-
-/// Replacement for the `MAKEINTRESOURCESA` macro in the windows api.
-pub inline fn MAKEINTRESOURCESA(comptime r: u16) ?[*:0]const u8 {
-    return @ptrFromInt(r);
-}
-
-// Some usefule windows.h Macros.
-pub inline fn hiWord(bits: usize) u16 {
-    return @truncate((bits >> 16) & 0xFFFF);
-}
-
-pub inline fn loWord(bits: usize) u16 {
-    return @truncate((bits & 0xFFFF));
-}
-
-pub inline fn getXLparam(bits: usize) i16 {
-    return @bitCast(loWord(bits));
-}
-
-pub inline fn getYLparam(bits: usize) i16 {
-    return @bitCast(hiWord(bits));
-}
-
 pub inline fn isBitSet(bitset: isize, comptime pos: comptime_int) bool {
     return (bitset & (1 << pos)) != 0;
 }
 
-pub inline fn isHighSurrogate(surrogate: u16) bool {
-    return (surrogate >= 0xD800 and surrogate <= 0xDBFF);
-}
-
-pub inline fn isLowSurrogate(surrogate: u16) bool {
-    return (surrogate >= 0xDC00 and surrogate <= 0xDFFF);
-}
-
-pub inline fn getLastError() win32.WIN32_ERROR {
-    return foundation.GetLastError();
-}
-
-pub inline fn clearThreadError() void {
-    foundation.SetLastError(win32.WIN32_ERROR.NO_ERROR); // 0
-}
-
-pub fn getKeyModifiers() common.keyboard_mouse.KeyModifiers {
-    var mods = common.keyboard_mouse.KeyModifiers{
+pub fn getKeyModifiers() KeyModifiers {
+    var mods = KeyModifiers{
         .shift = false,
         .ctrl = false,
         .alt = false,
@@ -116,31 +76,31 @@ pub fn getKeyModifiers() common.keyboard_mouse.KeyModifiers {
         .num_lock = false,
     };
     if (isBitSet(
-        kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_SHIFT)),
+        win32_input.GetKeyState(win32_input.VK_SHIFT),
         15,
     )) {
         mods.shift = true;
     }
     if (isBitSet(
-        kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_CONTROL)),
+        win32_input.GetKeyState(win32_input.VK_CONTROL),
         15,
     )) {
         mods.ctrl = true;
     }
-    if (isBitSet(kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_MENU)), 15)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_MENU), 15)) {
         mods.alt = true;
     }
     if (isBitSet(
-        (kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_LWIN)) |
-            kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_RWIN))),
+        (win32_input.GetKeyState(win32_input.VK_LWIN) |
+            win32_input.GetKeyState(win32_input.VK_RWIN)),
         15,
     )) {
         mods.meta = true;
     }
-    if (isBitSet(kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_CAPITAL)), 0)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_CAPITAL), 0)) {
         mods.caps_lock = true;
     }
-    if (isBitSet(kbd_mouse.GetKeyState(@intFromEnum(kbd_mouse.VK_NUMLOCK)), 0)) {
+    if (isBitSet(win32_input.GetKeyState(win32_input.VK_NUMLOCK), 0)) {
         mods.num_lock = true;
     }
     return mods;
@@ -159,11 +119,11 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
         ScanCode.RMeta,
     };
 
-    const virtual_keys = comptime [4]kbd_mouse.VIRTUAL_KEY{
-        kbd_mouse.VK_LSHIFT,
-        kbd_mouse.VK_RSHIFT,
-        kbd_mouse.VK_LWIN,
-        kbd_mouse.VK_RWIN,
+    const virtual_keys = comptime [4]win32_input.VIRTUAL_KEY{
+        win32_input.VK_LSHIFT,
+        win32_input.VK_RSHIFT,
+        win32_input.VK_LWIN,
+        win32_input.VK_RWIN,
     };
 
     const virtual_codes = comptime [4]KeyCode{
@@ -176,12 +136,12 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
     for (0..4) |index| {
         if (window.data.input.keys[@intCast(@intFromEnum(codes[index]))] == KeyState.Pressed) {
             const is_key_up = !isBitSet(
-                kbd_mouse.GetKeyState(@intFromEnum(virtual_keys[index])),
+                win32_input.GetKeyState(virtual_keys[index]),
                 15,
             );
             if (is_key_up) {
                 window.data.input.keys[@intCast(@intFromEnum(codes[index]))] = KeyState.Released;
-                const fake_event = common.event.createKeyboardEvent(
+                const fake_event = event.createKeyboardEvent(
                     window.data.id,
                     virtual_codes[index],
                     codes[index],
@@ -194,15 +154,15 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
     }
 }
 
-pub inline fn getMousePosition(lparam: win32.LPARAM) common.geometry.WidowPoint2D {
-    const xpos = getXLparam(@bitCast(lparam));
-    const ypos = getYLparam(@bitCast(lparam));
-    return common.geometry.WidowPoint2D{ .x = xpos, .y = ypos };
+pub inline fn getMousePosition(lparam: win32.LPARAM) geometry.Point2D {
+    const xpos = win32_macros.getXLparam(@bitCast(lparam));
+    const ypos = win32_macros.getYLparam(@bitCast(lparam));
+    return geometry.Point2D{ .x = xpos, .y = ypos };
 }
 
 /// Posts a zig error code to the window's thread queue.
 pub inline fn postWindowErrorMsg(e: wndw.WindowError, window: win32.HWND) void {
-    const ret = zigwin32.ui.windows_and_messaging.PostMessageW(
+    const ret = win32_gfx.PostMessageW(
         window,
         wndw.WM_ERROR_REPORT,
         @intFromError(e),

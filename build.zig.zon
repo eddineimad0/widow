@@ -1,16 +1,8 @@
 .{
     .name = "widow",
-
-    .version = "0.0.0",
-
-    .minimum_zig_version = "0.12.0",
-
-    .dependencies = .{
-        .zigwin32 = .{
-            .url = "https://github.com/marlersoft/zigwin32/archive/c425babf298e22256c17ffe76662b7363d6413b8.zip",
-            .hash = "12201f545fe9effc8b43146ae281525734ddebbbba637de04ac00d0fff243712c85d",
-        },
-    },
+    .version = "0.2.0",
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",

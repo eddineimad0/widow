@@ -51,9 +51,8 @@ pub fn main() !void {
     var builder = widow.WindowBuilder.init();
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
-        .withSize(800, 600)
-        .withResize(true)
-        .withDPIAware(true)
+        .withSize(640, 480)
+        .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
         .build(allocator, ctx, null) catch |err| {
@@ -95,7 +94,7 @@ pub fn main() !void {
                     std.debug.print("closing Window #{}\n", .{window_id});
                     break :event_loop;
                 },
-                EventType.KeyBoard => |*key| {
+                EventType.Keyboard => |*key| {
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             // let's request closing the window on

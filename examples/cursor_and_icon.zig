@@ -52,7 +52,7 @@ pub fn main() !void {
                 EventType.MouseMove => |*pos| {
                     std.debug.print("Mouse=({},{})\n", .{ pos.x, pos.y });
                 },
-                EventType.KeyBoard => |*key| {
+                EventType.Keyboard => |*key| {
                     if (key.state.isPressed()) {
                         switch (key.scancode) {
                             ScanCode.Q => {
