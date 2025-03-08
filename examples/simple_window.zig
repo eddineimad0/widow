@@ -3,7 +3,7 @@ const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.input.keyboard.KeyCode;
-var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);

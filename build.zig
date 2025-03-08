@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) !void {
         display_target = detectDispalyTarget(b.allocator, &target);
     }
 
-    const widow = prepareWidowModule(
+    const widow = createWidowModule(
         b,
         display_target.?,
         prepareCompileOptions(b),
@@ -46,16 +46,22 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
         });
+
         example.root_module.addImport("widow", widow);
         if (mem.eql(u8, example_name, "gl_triangle")) {
-            example.root_module.addImport("gl", b.createModule(.{
-                .root_source_file = b.path("libs/zigglgen/gl-4.2-core.zig"),
-            }));
+            const gl_bindings = @import("zigglgen").generateBindingsModule(b, .{
+                .api = .gl,
+                .version = .@"4.1",
+                .profile = .core,
+                .extensions = &.{ .ARB_clip_control, .NV_scissor_exclusive },
+            });
+
+            example.root_module.addImport("gl", gl_bindings);
+            if (target.result.os.tag == .windows) {
+                example.dll_export_fns = true;
+            }
         }
-        example.linkLibC();
-        if (mem.eql(u8, example_name, "gl_triangle") and target.result.os.tag == .windows) {
-            example.dll_export_fns = true;
-        }
+
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
@@ -107,7 +113,7 @@ fn detectDispalyTarget(
     };
 }
 
-fn prepareWidowModule(
+fn createWidowModule(
     b: *std.Build,
     display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
