@@ -61,6 +61,9 @@ pub fn build(b: *std.Build) !void {
                 example.dll_export_fns = true;
             }
         }
+        if (target.result.os.tag == .linux) {
+            example.linkLibC();
+        }
 
         const install_step = b.addInstallArtifact(example, .{});
         example_step.dependOn(&example.step);

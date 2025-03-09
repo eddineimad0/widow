@@ -1328,18 +1328,19 @@ fn setInitialWindowPropeties(
 ) WindowError!void {
     // communication protocols
 
-    var protocols = [2]libx11.Atom{
-        // this allows us to recieve close request from the window manager.
+    var protocols = [_]libx11.Atom{
+        // this allows us to receive close request from the window manager.
         // instead of it closing the socket and crashing our app
         driver.ewmh.WM_DELETE_WINDOW,
         // this allows the window manager to check if a window is still alive and responding
         driver.ewmh._NET_WM_PING,
     };
+
     _ = libx11.XSetWMProtocols(
         driver.handles.xdisplay,
         window,
         &protocols,
-        protocols.len,
+        0,
     );
 
     libx11.XChangeProperty(
