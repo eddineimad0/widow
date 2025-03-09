@@ -498,7 +498,7 @@ pub fn initDynamicApi() unix.ModuleError!void {
         defs.XORG_LIBS_NAME[defs.LIB_X11_SONAME_INDEX],
     );
     if (__libx11_module) |m| {
-        inline for (info.Struct.decls) |*d| {
+        inline for (info.@"struct".decls) |*d| {
             if (comptime d.name.len > MAX_NAME_LENGTH - 1) {
                 @compileError(
                     "Libx11 function name is greater than the maximum buffer length",
