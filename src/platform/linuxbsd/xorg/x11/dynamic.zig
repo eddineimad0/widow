@@ -112,7 +112,7 @@ pub const dyn_api = struct {
         window: types.Window,
         atoms: ?[*]types.Atom,
         count: c_int,
-    ) types.Status;
+    ) callconv(.C) types.Status;
     const XChangePropertyProc = *const fn (
         display: ?*types.Display,
         w: types.Window,
@@ -212,7 +212,7 @@ pub const dyn_api = struct {
     // Errors
     const XSetErrorHandlerProc = *const fn (
         handler: ?*const types.XErrorHandlerFunc,
-    ) ?*const types.XErrorHandlerFunc;
+    ) callconv(.C) ?*const types.XErrorHandlerFunc;
 
     // Misc
     const XFreeProc = *const fn (data: *anyopaque) callconv(.C) c_int;

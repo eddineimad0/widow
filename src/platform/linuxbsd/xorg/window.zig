@@ -1340,7 +1340,7 @@ fn setInitialWindowPropeties(
         driver.handles.xdisplay,
         window,
         &protocols,
-        0,
+        protocols.len,
     );
 
     libx11.XChangeProperty(
