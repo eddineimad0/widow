@@ -120,7 +120,7 @@ pub const Win32Driver = struct {
     const Self = @This();
 
     pub fn initSingleton() Win32DriverError!*const Self {
-        @setCold(true);
+        @branchHint(.cold);
 
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
@@ -259,7 +259,6 @@ pub const Win32Driver = struct {
     /// that hasn't been destroyed yet.
     /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
     fn deinitSingleton() void {
-        @setCold(true);
         if (Self.g_init) {
             Self.g_init = false;
 
@@ -313,16 +312,16 @@ fn isWin32VersionMinimum(
     );
     cond_mask =
         krnl32.VerSetConditionMask(
-        cond_mask,
-        krnl32.VER_SERVICEPACKMAJOR,
-        krnl32.VER_GREATER_EQUAL,
-    );
+            cond_mask,
+            krnl32.VER_SERVICEPACKMAJOR,
+            krnl32.VER_GREATER_EQUAL,
+        );
     cond_mask =
         krnl32.VerSetConditionMask(
-        cond_mask,
-        krnl32.VER_SERVICEPACKMINOR,
-        krnl32.VER_GREATER_EQUAL,
-    );
+            cond_mask,
+            krnl32.VER_SERVICEPACKMINOR,
+            krnl32.VER_GREATER_EQUAL,
+        );
     return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
 }
 

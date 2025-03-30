@@ -21,7 +21,7 @@ const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.input.keyboard.KeyCode;
-var gpa_allocator = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
@@ -88,7 +88,7 @@ pub fn main() !void {
 
 ## Minimum Zig Version
 
-✅ [0.13.0](https://ziglang.org/documentation/0.13.0/)
+✅ [0.14.0](https://ziglang.org/documentation/0.14.0/)
 The main branch will stick to stable zig releases.
 
 ## Dependecies

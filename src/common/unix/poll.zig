@@ -34,7 +34,7 @@ pub fn poll(fd: c_int, flag: PollFlag, timeout_ns: i64, ready_count: *u32) bool 
         } else {
             const seconds = @divTrunc(timeout_ns, NS_PER_SEC);
             const nanoseconds = timeout_ns - (seconds * NS_PER_SEC);
-            const t = posix.timespec{ .tv_sec = seconds, .tv_nsec = nanoseconds };
+            const t = posix.timespec{ .sec = seconds, .nsec = nanoseconds };
             count = std.c.ppoll(@ptrCast(&pfd), 1, &t, null);
 
             if (count > 0) {

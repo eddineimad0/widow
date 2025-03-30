@@ -112,7 +112,7 @@ pub const dyn_api = struct {
         window: types.Window,
         atoms: ?[*]types.Atom,
         count: c_int,
-    ) types.Status;
+    ) callconv(.C) types.Status;
     const XChangePropertyProc = *const fn (
         display: ?*types.Display,
         w: types.Window,
@@ -212,7 +212,7 @@ pub const dyn_api = struct {
     // Errors
     const XSetErrorHandlerProc = *const fn (
         handler: ?*const types.XErrorHandlerFunc,
-    ) ?*const types.XErrorHandlerFunc;
+    ) callconv(.C) ?*const types.XErrorHandlerFunc;
 
     // Misc
     const XFreeProc = *const fn (data: *anyopaque) callconv(.C) c_int;
@@ -498,7 +498,7 @@ pub fn initDynamicApi() unix.ModuleError!void {
         defs.XORG_LIBS_NAME[defs.LIB_X11_SONAME_INDEX],
     );
     if (__libx11_module) |m| {
-        inline for (info.Struct.decls) |*d| {
+        inline for (info.@"struct".decls) |*d| {
             if (comptime d.name.len > MAX_NAME_LENGTH - 1) {
                 @compileError(
                     "Libx11 function name is greater than the maximum buffer length",
