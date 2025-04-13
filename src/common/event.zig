@@ -7,7 +7,7 @@ const KeyEvent = kbd_mouse.KeyEvent;
 const KeyModifiers = kbd_mouse.KeyModifiers;
 const MouseButtonEvent = kbd_mouse.MouseButtonEvent;
 const ScrollEvent = kbd_mouse.ScrollEvent;
-const Queue = @import("queue.zig").Queue;
+const Deque = @import("deque.zig").Deque;
 const WindowId = usize;
 
 pub const EventType = enum(u8) {
@@ -217,31 +217,33 @@ pub inline fn createCharEvent(
 }
 
 pub const EventQueue = struct {
-    queue: Queue(Event),
+    queue: Deque(Event),
+    allocator:mem.Allocator,
     const Self = @This();
 
     /// initializes an event Queue For the window.
     /// call deinit when done
     /// # parameters
     /// 'allocator': used for the queue's heap allocations.
-    pub fn init(allocator: std.mem.Allocator) Self {
+    /// 'initial_capacity': the initial capacity of the queue, shouldn't be zero.
+    pub fn init(allocator: std.mem.Allocator,initial_capacity:usize) (mem.Allocator.Error||error{CapacityZero})!Self {
         return .{
-            .queue = Queue(Event).init(allocator),
+            .queue = try Deque(Event).init(allocator,initial_capacity),
+            .allocator = allocator,
         };
     }
 
     /// frees all queued events.
     pub fn deinit(self: *Self) void {
-        self.queue.deinit();
+        self.queue.deinit(self.allocator);
+        self.* = undefined;
     }
 
     pub fn queueEvent(self: *Self, event: *const Event) mem.Allocator.Error!void {
-        return self.queue.append(event);
+        try self.queue.pushBack(self.allocator, event);
     }
 
     pub fn popEvent(self: *Self, event: *Event) bool {
-        const first = self.queue.get() orelse return false;
-        event.* = first.*;
-        return self.queue.removeFront();
+        return self.queue.popFront(event);
     }
 };

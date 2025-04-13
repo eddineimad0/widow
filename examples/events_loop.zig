@@ -12,7 +12,7 @@ pub fn main() !void {
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
 
-    var ev_queue = EventQueue.init(allocator);
+    var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
 
     // create a WindowBuilder.
