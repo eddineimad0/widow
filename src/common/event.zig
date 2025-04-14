@@ -219,6 +219,7 @@ pub inline fn createCharEvent(
 pub const EventQueue = struct {
     queue: Deque(Event),
     allocator:mem.Allocator,
+    initial_capacity:usize,
     const Self = @This();
 
     /// initializes an event Queue For the window.
@@ -230,6 +231,7 @@ pub const EventQueue = struct {
         return .{
             .queue = try Deque(Event).init(allocator,initial_capacity),
             .allocator = allocator,
+            .initial_capacity = initial_capacity,
         };
     }
 
@@ -244,6 +246,11 @@ pub const EventQueue = struct {
     }
 
     pub fn popEvent(self: *Self, event: *Event) bool {
-        return self.queue.popFront(event);
+        const ok = self.queue.popFront(event);
+        if(!ok and self.queue.getCapacity() > 4 * self.initial_capacity){
+            // can only fail due to allocation failure, if so ignore
+            _ = self.queue.shrinkCapacity(self.allocator, self.initial_capacity) catch true;
+        }
+        return ok;
     }
 };

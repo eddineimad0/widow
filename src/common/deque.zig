@@ -14,6 +14,7 @@ pub fn Deque(comptime T: type) type {
 
         /// create a new `Deque`, the allocator is used to allocate the backing buffer.
         /// `deinit()` should be called to free the buffer.
+        /// capacity can't be 0 and is adjusted to a power of 2
         pub fn init(
             allocator: mem.Allocator,
             capacity: usize,
@@ -66,6 +67,57 @@ pub fn Deque(comptime T: type) type {
             self.front = 0;
         }
 
+        fn copyDataBuffer(self: *Self, dst_buffer: []T) void {
+            dbg.assert(self.size <= dst_buffer.len);
+            if (self.writeIndex() > self.front) {
+                @memcpy(dst_buffer[0..self.size], self.data[self.front..(self.front + self.size)]);
+            } else {
+                const first_copy_size = self.data.len - self.front;
+                @memcpy(dst_buffer[0..first_copy_size], self.data[self.front..]);
+                @memcpy(
+                    dst_buffer[first_copy_size..(first_copy_size + self.writeIndex())],
+                    self.data[0..self.writeIndex()],
+                );
+            }
+        }
+
+        /// new_capacity can't be 0 and is adjusted to a power of 2
+        /// Will only work if the current `deque` size is less or equal to the new_capacity
+        /// otherwise false is returned
+        pub fn shrinkCapacity(
+            self: *Self,
+            a: mem.Allocator,
+            new_capacity: usize,
+        ) (mem.Allocator.Error || error{CapacityZero})!bool {
+            if (new_capacity == 0) return error.CapacityZero;
+
+            if(self.size > new_capacity){
+                return false;
+            }
+
+
+            const final_capacity = if (((new_capacity - 1) & new_capacity) == 0)
+                new_capacity
+            else
+                math.ceilPowerOfTwoAssert(usize, new_capacity);
+
+            if (self.data.len <= final_capacity) {
+                return true;
+            }
+
+            if (self.isEmpty()) {
+                self.data = try a.realloc(self.data, final_capacity);
+            } else {
+                const new_buffer = try a.alloc(T, new_capacity);
+                self.copyDataBuffer(new_buffer);
+                a.free(self.data);
+                self.data = new_buffer;
+            }
+
+            self.front = 0;
+            return true;
+        }
+
         /// Returns `true` if the queue is empty and `false` otherwise.
         pub inline fn isEmpty(self: *const Self) bool {
             return self.size == 0;
@@ -74,6 +126,10 @@ pub fn Deque(comptime T: type) type {
         /// Returns `true` if the queue is full and `false` otherwise.
         pub inline fn isFull(self: *const Self) bool {
             return self.size == self.data.len;
+        }
+
+        pub inline fn getCapacity(self:*const Self) usize {
+            return self.data.len;
         }
 
         pub fn pushBack(self: *Self, a: mem.Allocator, item: *const T) mem.Allocator.Error!void {
@@ -94,8 +150,11 @@ pub fn Deque(comptime T: type) type {
             self.front = (self.front + 1) % self.data.len;
             self.size -= 1;
             return true;
+        }
 
-            // TODO: (Optional) Shrinking logic
+        pub fn clearRetainingCapacity(self: *Self) void {
+            self.front = 0;
+            self.size = 0;
         }
     };
 }
@@ -273,4 +332,72 @@ test "deque_resize" {
     try testing.expectEqual(d.size, 0);
     try testing.expect(d.isEmpty());
     try testing.expect(!d.isFull());
+}
+
+
+test "deque_shrinking" {
+    const INITIAL_CAP = 32;
+
+    const testing = std.testing;
+    var d = try Deque(usize).init(testing.allocator, INITIAL_CAP);
+    defer d.deinit(testing.allocator);
+    try testing.expectEqual(d.data.len, INITIAL_CAP);
+
+    const FILL_COUNT = 8;
+    for (0..FILL_COUNT)|i| {
+        try d.pushBack(testing.allocator, &i);
+    }
+    try testing.expectEqual(d.size, FILL_COUNT);
+    try testing.expectEqual(d.data.len, INITIAL_CAP);
+    // [0,1,2,3,4,5,6,7,X,...]
+    //  r               w
+
+    try testing.expect(try d.shrinkCapacity(testing.allocator, FILL_COUNT));
+    // [0,1,2,3,4,5,6,7]
+    //  r+w
+    try testing.expectEqual(d.size, FILL_COUNT);
+    try testing.expectEqual(d.data.len, FILL_COUNT);
+    var data:usize = undefined;
+    for (0..FILL_COUNT)|i| {
+        try testing.expect(d.popFront(&data));
+        try testing.expectEqual(data,i);
+    }
+    try testing.expectEqual(d.size, 0);
+    try testing.expectEqual(d.data.len, FILL_COUNT);
+
+    // refill
+    for (0..FILL_COUNT)|i| {
+        try d.pushBack(testing.allocator, &i);
+    }
+    try testing.expectEqual(d.size, FILL_COUNT);
+    try testing.expectEqual(d.data.len, FILL_COUNT);
+
+    // keep only half
+    for (0..(FILL_COUNT - 2))|i| {
+        try testing.expect(d.popFront(&data));
+        try testing.expectEqual(data,i);
+    }
+    for (0..2)|i| {
+        try d.pushBack(testing.allocator, &i);
+    }
+    try testing.expectEqual(d.size, FILL_COUNT/2);
+    try testing.expectEqual(d.data.len, FILL_COUNT);
+    // [0,1,x,x,x,x,6,7]
+    //     w        r
+
+    try testing.expect(try d.shrinkCapacity(testing.allocator, FILL_COUNT/2));
+    // [6,7,0,1]
+    // r+w
+    try testing.expectEqual(d.size, FILL_COUNT/2);
+    try testing.expectEqual(d.data.len, FILL_COUNT/2);
+
+    try testing.expect(d.popFront(&data));
+    try testing.expectEqual(data,6);
+    try testing.expect(d.popFront(&data));
+    try testing.expectEqual(data,7);
+    try testing.expect(d.popFront(&data));
+    try testing.expectEqual(data,0);
+    try testing.expect(d.popFront(&data));
+    try testing.expectEqual(data,1);
+
 }
