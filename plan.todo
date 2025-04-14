@@ -7,6 +7,8 @@
     [] can singletons (driver, keymap, ...) be thread-local ?
     [] should the event queue be moved to the context ?
     [] For non resizable windows have smaller more narrow title bar
+    [] allocator migration to unamanged
+    [x] use dequeue as events queue
 [] Win32
     [x] Finish the display wrapper.
     [x] display wrapper need to be updated through hidden window events

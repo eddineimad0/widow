@@ -44,7 +44,7 @@ pub fn main() !void {
 
     // the window will require an event queue to
     // send events.
-    var ev_queue = EventQueue.init(allocator);
+    var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
 
     // create a WindowBuilder.
