@@ -3,7 +3,6 @@
     secure (less error prone)
     [x] update readme
     [] redo the tests.
-    [] builder api should not accept bools for flags
     [] can singletons (driver, keymap, ...) be thread-local ?
     [] should the event queue be moved to the context ?
     [] For non resizable windows have smaller more narrow title bar

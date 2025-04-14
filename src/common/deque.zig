@@ -385,6 +385,7 @@ test "deque_shrinking" {
     // [0,1,x,x,x,x,6,7]
     //     w        r
 
+    try testing.expect(!(try d.shrinkCapacity(testing.allocator, FILL_COUNT/4)));
     try testing.expect(try d.shrinkCapacity(testing.allocator, FILL_COUNT/2));
     // [6,7,0,1]
     // r+w
