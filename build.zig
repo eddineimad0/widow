@@ -107,7 +107,7 @@ fn detectDispalyTarget(
             if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_X11))) {
                 break :unix .Xorg;
             } else if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_WAYLAND))) {
-                break :unix .Wayland;
+                break :unix .Xorg;
             } else {
                 @panic("Unsupported unix display server");
             }
