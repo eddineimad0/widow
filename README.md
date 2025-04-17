@@ -29,30 +29,33 @@ pub fn main() !void {
 
     // first we need to preform some platform specific initialization.
     // and build a context for the current platform.
+    // the context also keep a copy of the allocator you pass it
+    // to use it for all allocations done by the library.
     const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to
     // send events.
-    var ev_queue = EventQueue.init(allocator);
+    var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
-        .withSize(800, 640)
+        .withSize(800, 600)
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, ctx, null) catch |err| {
+        .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
     // closes the window when done.
-    defer mywindow.deinit(allocator);
+    defer mywindow.deinit();
+
 
 
     _ = mywindow.setEventQueue(&ev_queue);
