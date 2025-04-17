@@ -2,4 +2,5 @@ zig-*
 *.txt
 .zig-*
 ignore/
+.vscode/
 

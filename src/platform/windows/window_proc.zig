@@ -8,6 +8,8 @@ const display = @import("display.zig");
 const win32_macros = @import("win32api/macros.zig");
 const win32_input = @import("win32api/input.zig");
 const win32_gfx = @import("win32api/graphics.zig");
+
+const WidowContext = @import("platform.zig").WidowContext;
 const win32 = std.os.windows;
 
 /// The procedure function for the helper window
@@ -28,16 +30,17 @@ pub fn helperWindowProc(
                     .{},
                 );
             }
-            const display_mgr_ref = win32_gfx.GetPropW(
+            const ctx_ref = win32_gfx.GetPropW(
                 hwnd,
                 display.HELPER_DISPLAY_PROP,
             );
-            if (display_mgr_ref) |ref| {
-                const display_mgr: *display.DisplayManager = @ptrCast(@alignCast(ref));
+            if (ctx_ref) |ref| {
+                const widow_ctx: *WidowContext = @ptrCast(@alignCast(ref));
+                const display_mgr: *display.DisplayManager = &widow_ctx.display_mgr;
                 if (!display_mgr.expected_video_change) {
-                    display_mgr.rePollDisplays() catch |err| {
+                    display_mgr.rePollDisplays(widow_ctx.allocator) catch |err| {
                         // updateDisplays should only fail if we ran out of memory
-                        // which is very unlikely on 64 bit systems
+                        // which is very unlikely on windows 64 bit systems
                         // but if it does happen the library should panic.
                         std.log.err(
                             "[Display Manager]: Failed to refresh Displays, error={}\n",

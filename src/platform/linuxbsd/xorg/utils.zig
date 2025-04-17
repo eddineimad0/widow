@@ -135,10 +135,11 @@ pub fn fixKeyMods(
 }
 
 pub fn parseDroppedFilesURI(
+    allocator: mem.Allocator,
     data: [:0]const u8,
-    output: *std.ArrayList([]const u8),
+    output: *std.ArrayListUnmanaged([]const u8),
 ) mem.Allocator.Error!void {
-    try output.ensureTotalCapacity(4);
+    try output.ensureTotalCapacity(allocator, 4);
     var iter = mem.tokenizeSequence(u8, data, "\r\n");
     while (iter.next()) |tok| {
         if (tok[0] == '#') {
@@ -150,7 +151,7 @@ pub fn parseDroppedFilesURI(
             start = 7;
         }
 
-        try output.append(tok[start..]);
+        try output.append(allocator, tok[start..]);
     }
 }
 

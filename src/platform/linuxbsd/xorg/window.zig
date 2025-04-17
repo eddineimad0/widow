@@ -42,7 +42,7 @@ pub const Window = struct {
     x11: struct {
         xdnd_req: struct {
             raw_data: ?[*]const u8,
-            paths: std.ArrayList([]const u8),
+            paths: std.ArrayListUnmanaged([]const u8),
             version: c_long,
             src: c_long,
             format: c_long,
@@ -83,11 +83,7 @@ pub const Window = struct {
                 .version = 0,
                 .format = 0,
                 .raw_data = null,
-                .paths = .{
-                    .items = undefined,
-                    .allocator = undefined,
-                    .capacity = 0,
-                },
+                .paths = .empty,
             },
             .xdnd_allow = false,
         };
@@ -926,7 +922,6 @@ pub const Window = struct {
 
     pub fn setDragAndDrop(
         self: *Self,
-        allocator: mem.Allocator,
         accepted: bool,
     ) void {
         const version: i32 = libx11.XDND_VER;
@@ -938,7 +933,7 @@ pub const Window = struct {
         self.x11.xdnd_allow = accepted;
 
         if (accepted) {
-            self.x11.xdnd_req.paths = std.ArrayList([]const u8).init(allocator);
+            debug.assert(self.x11.xdnd_req.paths.capacity == 0 and self.x11.xdnd_req.paths.items.len == 0);
             libx11.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
@@ -967,12 +962,11 @@ pub const Window = struct {
 
     /// Frees the allocated memory used to hold the file(s) path(s).
     pub fn freeDroppedFiles(self: *Self) void {
-        // Avoid double free.
         if (self.x11.xdnd_req.raw_data) |rd| {
             _ = libx11.XFree(@constCast(rd));
         }
         if (self.x11.xdnd_req.paths.capacity != 0) {
-            self.x11.xdnd_req.paths.clearAndFree();
+            self.x11.xdnd_req.paths.clearAndFree(self.ctx.allocator);
         }
     }
 

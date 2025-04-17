@@ -321,7 +321,7 @@ pub inline fn charEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
 }
 
 pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void {
-    const allocator = window.win32.dropped_files.allocator;
+    const allocator = window.ctx.allocator;
     for (window.win32.dropped_files.items) |file| {
         allocator.free(file);
     }
@@ -333,7 +333,7 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
     const count = shell32.DragQueryFileW(drop_handle, 0xFFFFFFFF, null, 0);
     if (count != 0) err_exit: {
         if (window.win32.dropped_files.capacity < count) {
-            window.win32.dropped_files.ensureTotalCapacity(count) catch {
+            window.win32.dropped_files.ensureTotalCapacity(allocator, count) catch {
                 utils.postWindowErrorMsg(
                     wndw.WindowError.OutOfMemory,
                     window.handle,
@@ -387,7 +387,7 @@ pub inline fn dropEventHandler(window: *wndw.Window, wparam: win32.WPARAM) void 
                     );
                     break :err_exit;
                 };
-                window.win32.dropped_files.append(file_path) catch unreachable;
+                window.win32.dropped_files.append(allocator, file_path) catch unreachable;
             }
         }
         const event = common.event.createDropFileEvent(

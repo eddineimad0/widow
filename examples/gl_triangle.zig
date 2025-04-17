@@ -55,13 +55,13 @@ pub fn main() !void {
         .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, ctx, null) catch |err| {
+        .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
 
     // closes the window when done.
-    defer mywindow.deinit(allocator);
+    defer mywindow.deinit();
     mywindow.focus();
 
     _ = mywindow.setEventQueue(&ev_queue);
