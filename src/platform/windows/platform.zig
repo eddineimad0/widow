@@ -19,6 +19,7 @@ pub const glLoaderFunc = @import("wgl.zig").glLoaderFunc;
 
 pub const WidowContext = struct {
     helper_window: win32.HWND,
+    allocator: mem.Allocator,
     driver: *const driver.Win32Driver,
     display_mgr: display.DisplayManager,
 
@@ -34,6 +35,7 @@ pub const WidowContext = struct {
             .driver = d,
             .helper_window = h,
             .display_mgr = display_mgr,
+            .allocator = a,
         };
     }
 };
@@ -48,7 +50,7 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     _ = win32_gfx.SetPropW(
         ctx.helper_window,
         display.HELPER_DISPLAY_PROP,
-        @ptrCast(&ctx.display_mgr),
+        @ptrCast(ctx),
     );
     return ctx;
 }
@@ -61,7 +63,7 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
         null,
     );
     _ = win32_gfx.DestroyWindow(ctx.helper_window);
-    ctx.display_mgr.deinit();
+    ctx.display_mgr.deinit(ctx.allocator);
     a.destroy(ctx);
 }
 

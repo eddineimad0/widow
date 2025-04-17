@@ -25,11 +25,11 @@ pub fn main() !void {
         .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
-        .build(allocator, ctx, 0) catch |err| {
+        .build(ctx, 0) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
     };
-    defer mywindows[0].deinit(allocator);
+    defer mywindows[0].deinit();
 
     _ = mywindows[0].setEventQueue(&ev_queue);
 
@@ -132,9 +132,9 @@ pub fn main() !void {
                         }
                         if (key.keycode == .U) {
                             if (key.mods.shift) {
-                                mywindows[key.window_id].allowDragAndDrop(allocator, true);
+                                mywindows[key.window_id].allowDragAndDrop(true);
                             } else {
-                                mywindows[key.window_id].allowDragAndDrop(allocator, false);
+                                mywindows[key.window_id].allowDragAndDrop(false);
                             }
                         }
                         if (key.keycode == .I) {

@@ -21,6 +21,7 @@ pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
 pub const WidowContext = struct {
     driver: *const driver.X11Driver,
     key_map: *const KeyMaps,
+    allocator: mem.Allocator,
     display_mgr: display.DisplayManager,
     raw_mouse_motion_window: ?libx11.Window,
 
@@ -33,6 +34,7 @@ pub const WidowContext = struct {
         return .{
             .driver = d,
             .key_map = km,
+            .allocator = a,
             .display_mgr = display_mgr,
             .raw_mouse_motion_window = null,
         };
@@ -52,7 +54,7 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || unix.ModuleE
 }
 
 pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
-    ctx.display_mgr.deinit();
+    ctx.display_mgr.deinit(ctx.allocator);
     a.destroy(ctx);
 }
 

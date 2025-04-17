@@ -58,8 +58,6 @@ pub const WindowBuilder = struct {
 
     /// Creates and returns the built window instance.
     /// # Parameters
-    /// `allocator`: used for allocating space for the window implementation,
-    /// the same allocator is required when deinitializing the created window.
     /// `ctx`: a pointer to a valid WindowContext
     /// `id`: number used to identify the window, if null is used an identifer
     /// is generated from the platform window identifer whose value is unpredicatble.
@@ -67,10 +65,9 @@ pub const WindowBuilder = struct {
     /// The user should deinitialize the Window instance when done.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub fn build(self: *Self, allocator: mem.Allocator, ctx: *WidowContext, id: ?usize) !Window {
+    pub fn build(self: *Self, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
         const w = Window.init(
-            allocator,
             ctx,
             id,
             self.title,
@@ -212,8 +209,7 @@ pub const Window = struct {
     /// Initializes and returns a Window instance.
     /// Prefer using a WindowBuilder instead of calling this directly.
     /// # Parameters
-    /// `Allocator` : the allocator to be used with window related
-    /// allocations(title,...).
+    /// `ctx` : a pointer to a valid WidowContext,
     /// `title` : the window's title.
     /// `data` : a refrence to a WindowData structure.
     /// `fb_cfg`: a pointer to a FBConfig struct.
@@ -222,7 +218,6 @@ pub const Window = struct {
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
     fn init(
-        allocator: mem.Allocator,
         ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
@@ -231,7 +226,6 @@ pub const Window = struct {
     ) !Self {
         return .{
             .impl = try WindowImpl.init(
-                allocator,
                 ctx,
                 id,
                 window_title,
@@ -242,10 +236,8 @@ pub const Window = struct {
     }
 
     /// Destroys the window and releases all allocated ressources.
-    /// # Parameters
-    /// `allocator`: the allocator used when creating the window.
-    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
-        self.impl.deinit(allocator);
+    pub fn deinit(self: *Self) void {
+        self.impl.deinit();
         self.impl = undefined;
     }
 
@@ -447,13 +439,11 @@ pub const Window = struct {
 
     /// Changes the title of the window.
     /// # Parameters
-    /// `allocator`: allocator used on some platforms(windows) when rencoding
-    /// the title string.
     /// `new_title`: utf-8 string of the new title to be set.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn setTitle(self: *Self, allocator: mem.Allocator, new_title: []const u8) !void {
-        return self.impl.setTitle(allocator, new_title);
+    pub inline fn setTitle(self: *Self, new_title: []const u8) !void {
+        return self.impl.setTitle(new_title);
     }
 
     /// Gets the window's current visibility state.
@@ -707,9 +697,8 @@ pub const Window = struct {
     /// and dropped.
     /// # Parameters
     /// `allow`: true to allow file dropping, false to block it.
-    /// `uri_allocator`: used to allocate memory for dropped files URI/Path.
-    pub inline fn allowDragAndDrop(self: *Self, uri_allocator: mem.Allocator, allow: bool) void {
-        self.impl.setDragAndDrop(uri_allocator, allow);
+    pub inline fn allowDragAndDrop(self: *Self, allow: bool) void {
+        self.impl.setDragAndDrop(allow);
     }
 
     /// Returns a slice that holds the path(s) to the latest dropped file(s)

@@ -9,7 +9,7 @@ const mem = std.mem;
 const debug = std.debug;
 
 const X11Driver = @import("driver.zig").X11Driver;
-const ArrayList = std.ArrayList;
+const ArrayList = std.ArrayListUnmanaged;
 const Allocator = std.mem.Allocator;
 const Window = @import("window.zig").Window;
 
@@ -66,6 +66,7 @@ fn videoModeFromRRMode(
 /// Fills the `modes_arry` and `ids_arry` with all possible
 /// video modes for the specified `output`
 fn pollVideoModes(
+    allocator: mem.Allocator,
     driver: *const X11Driver,
     screens_res: *const x11ext.XRRScreenResources,
     output_info: *const x11ext.XRROutputInfo,
@@ -74,10 +75,10 @@ fn pollVideoModes(
     ids_arry: *ArrayList(x11ext.RRMode),
 ) Allocator.Error!void {
     const n_modes: usize = @intCast(output_info.nmode);
-    try modes_arry.ensureTotalCapacity(n_modes);
-    try ids_arry.ensureTotalCapacity(n_modes);
-    errdefer modes_arry.deinit();
-    errdefer ids_arry.deinit();
+    try modes_arry.ensureTotalCapacity(allocator, n_modes);
+    try ids_arry.ensureTotalCapacity(allocator, n_modes);
+    errdefer modes_arry.deinit(allocator);
+    errdefer ids_arry.deinit(allocator);
 
     var videomode: VideoMode = undefined;
     for (0..n_modes) |i| {
@@ -105,15 +106,15 @@ fn pollVideoModes(
             if (duplicate) {
                 continue;
             }
-            try modes_arry.append(videomode);
+            try modes_arry.append(allocator, videomode);
             // This help us when changing crtc(video device)'s video modes.
-            try ids_arry.append(info.id);
+            try ids_arry.append(allocator, info.id);
         } else {
             continue;
         }
     }
-    modes_arry.shrinkAndFree(modes_arry.items.len);
-    ids_arry.shrinkAndFree(ids_arry.items.len);
+    modes_arry.shrinkAndFree(allocator, modes_arry.items.len);
+    ids_arry.shrinkAndFree(allocator, ids_arry.items.len);
 }
 
 /// Querys the x server for the current connected screens.
@@ -144,9 +145,9 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
     );
     errdefer {
         for (displays.items) |*d| {
-            d.deinit(driver);
+            d.deinit(allocator, driver);
         }
-        displays.deinit();
+        displays.deinit(allocator);
     }
 
     var screens: ?[*]x11ext.XineramaScreenInfo = null;
@@ -212,12 +213,13 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             .window = null,
             .xinerama_index = xinerama_index,
             .orig_video_mode = x11ext.RRMode_None,
-            .modes = ArrayList(VideoMode).init(allocator),
-            .modes_ids = ArrayList(x11ext.RRMode).init(allocator),
+            .modes = .empty,
+            .modes_ids = .empty,
         };
-        errdefer d.deinit(driver);
+        errdefer d.deinit(allocator, driver);
 
         try pollVideoModes(
+            allocator,
             driver,
             screens_res,
             output_info,
@@ -227,7 +229,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             &d.modes_ids,
         );
 
-        try displays.append(d);
+        try displays.append(allocator, d);
         driver.extensions.xrandr.XRRFreeOutputInfo(output_info);
         driver.extensions.xrandr.XRRFreeCrtcInfo(crtc_info);
     }
@@ -236,7 +238,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         _ = libx11.XFree(scrns);
     }
     // Shrink and free.
-    displays.shrinkAndFree(displays.items.len);
+    displays.shrinkAndFree(allocator, displays.items.len);
     return displays;
 }
 
@@ -253,11 +255,11 @@ pub const Display = struct {
 
     const Self = @This();
 
-    pub fn deinit(self: *Self, driver: *const X11Driver) void {
+    pub fn deinit(self: *Self, allocator: mem.Allocator, driver: *const X11Driver) void {
         self.restoreOrignalVideoMode(driver);
-        self.modes.allocator.free(self.name);
-        self.modes.deinit();
-        self.modes_ids.deinit();
+        allocator.free(self.name);
+        self.modes.deinit(allocator);
+        self.modes_ids.deinit(allocator);
     }
 
     /// Check of if the 2 displays are equals.
@@ -428,7 +430,7 @@ pub const Display = struct {
 };
 
 pub const DisplayManager = struct {
-    displays: std.ArrayList(Display),
+    displays: ArrayList(Display),
     driver: *const X11Driver,
     screen_saver_profile: struct {
         timout: c_int,
@@ -452,17 +454,17 @@ pub const DisplayManager = struct {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
         for (self.displays.items) |*d| {
-            d.deinit(self.driver);
+            d.deinit(allocator, self.driver);
         }
-        self.displays.deinit();
+        self.displays.deinit(allocator);
     }
 
     /// Updates the displays array.
-    pub fn rePollDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+    pub fn rePollDisplays(self: *Self, allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!void {
         // TODO: update display on connect/disconnect
-        const new_displays = try pollDisplays(self.displays.allocator, self.driver);
+        const new_displays = try pollDisplays(allocator, self.driver);
 
         self.displays.deinit();
 

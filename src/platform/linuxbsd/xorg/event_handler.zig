@@ -416,7 +416,7 @@ inline fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) vo
         var data_slice: [:0]const u8 = undefined;
         data_slice.ptr = @ptrCast(data);
         data_slice.len = data_len;
-        utils.parseDroppedFilesURI(data_slice, &window.x11.xdnd_req.paths) catch |err| {
+        utils.parseDroppedFilesURI(window.ctx.allocator, data_slice, &window.x11.xdnd_req.paths) catch |err| {
             var ev: libx11.XEvent = undefined;
             ev.type = libx11.ClientMessage;
             ev.xclient.window = window.handle;

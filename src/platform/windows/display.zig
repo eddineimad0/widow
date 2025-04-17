@@ -8,7 +8,7 @@ const debug = std.debug;
 const win32 = std.os.windows;
 const VideoMode = common.video_mode.VideoMode;
 const Win32Driver = @import("driver.zig").Win32Driver;
-const ArrayList = std.ArrayList;
+const ArrayList = std.ArrayListUnmanaged;
 
 pub const DisplayError = error{
     MissingHandle,
@@ -90,9 +90,9 @@ fn pollDisplays(
     var displays = try ArrayList(Display).initCapacity(allocator, 4);
     errdefer {
         for (displays.items) |*display| {
-            display.deinit();
+            display.deinit(allocator);
         }
-        displays.deinit();
+        displays.deinit(allocator);
     }
     var display_device: win32_gfx.DISPLAY_DEVICEW = undefined;
     display_device.cb = @sizeOf(win32_gfx.DISPLAY_DEVICEW);
@@ -132,29 +132,19 @@ fn pollDisplays(
                 return DisplayError.MissingHandle;
             };
 
-            // We'll need it when enumerating video modes.
-            // This isn't required since *EnumDisplaySettingsExW* won't return
-            // a non compatible video mode unless `EDS_RAWMODE(0x2)` is specified.
-            // const is_pruned = (display_adapter.StateFlags & win32_gfx.DISPLAY_DEVICE_MODESPRUNED) != 0;
-
-            // Enumerate all "possible" video modes.
-            var modes = try pollVideoModes(allocator, &display_adapter.DeviceName);
-            errdefer modes.deinit();
-
-            const display_name = utils.wideZToUtf8(allocator, &display_device.DeviceName) catch {
-                return mem.Allocator.Error.OutOfMemory;
-            };
-            errdefer allocator.free(display_name);
-            try displays.append(Display.init(
+            var display = try Display.init(
+                allocator,
                 handle,
                 display_adapter.DeviceName,
-                display_name,
-                modes,
-            ));
+                display_device.DeviceName,
+            );
+            errdefer display.deinit(allocator);
+
+            try displays.append(allocator, display);
         }
     }
     // Shrink and fit
-    displays.shrinkAndFree(displays.items.len);
+    displays.shrinkAndFree(allocator, displays.items.len);
     return displays;
 }
 
@@ -166,7 +156,7 @@ fn pollVideoModes(
 ) mem.Allocator.Error!ArrayList(VideoMode) {
     var i: u32 = 0;
     var modes = try ArrayList(VideoMode).initCapacity(allocator, 64);
-    errdefer modes.deinit();
+    errdefer modes.deinit(allocator);
     var dev_mode: win32_gfx.DEVMODEW = undefined;
     dev_mode.dmSize = @sizeOf(win32_gfx.DEVMODEW);
     dev_mode.dmDriverExtra = 0;
@@ -178,7 +168,7 @@ fn pollVideoModes(
         &dev_mode,
     );
 
-    try modes.append(VideoMode.init(
+    try modes.append(allocator, VideoMode.init(
         @intCast(dev_mode.dmPelsWidth),
         @intCast(dev_mode.dmPelsHeight),
         @intCast(dev_mode.dmDisplayFrequency),
@@ -210,19 +200,19 @@ fn pollVideoModes(
             }
         }
 
-        try modes.append(mode);
+        try modes.append(allocator, mode);
     }
     // Shrink and fit
-    modes.shrinkAndFree(modes.items.len);
+    modes.shrinkAndFree(allocator, modes.items.len);
     return modes;
 }
 
 /// Encapsulate the necessary infos for a display(monitor).
 pub const Display = struct {
+    handle: win32_gfx.HMONITOR, // System handle to the display.
     modes: ArrayList(VideoMode), // All the VideoModes that the monitor support.
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
     name: []u8, // Name assigned to the display
-    handle: win32_gfx.HMONITOR, // System handle to the display.
     curr_video: usize, // the index of the currently active videomode.
 
     // the original(registry setting of the dispaly video mode)
@@ -232,26 +222,36 @@ pub const Display = struct {
     const Self = @This();
 
     pub fn init(
+        allocator: mem.Allocator,
         handle: win32_gfx.HMONITOR,
-        adapter: [32]u16,
-        name: []u8,
-        modes: ArrayList(VideoMode),
-    ) Self {
+        adapter_name: [32]u16,
+        device_name: [32]u16,
+    ) mem.Allocator.Error!Self {
+
+        // Enumerate all "possible" video modes.
+        var modes = try pollVideoModes(allocator, &adapter_name);
+        errdefer modes.deinit(allocator);
+
+        const display_name = utils.wideZToUtf8(allocator, &device_name) catch {
+            return mem.Allocator.Error.OutOfMemory;
+        };
+        errdefer allocator.free(display_name);
+
         return .{
             .handle = handle,
-            .adapter = adapter,
-            .name = name,
             .modes = modes,
+            .adapter = adapter_name,
+            .name = display_name,
             .curr_video = REGISTRY_VIDEOMODE_INDEX,
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
         // Hack since both self.name and self.modes
         // use the same allocator.
         self.restoreRegistryMode();
-        self.modes.allocator.free(self.name);
-        self.modes.deinit();
+        allocator.free(self.name);
+        self.modes.deinit(allocator);
     }
 
     /// checks if 2 displays represent the same device.
@@ -406,7 +406,7 @@ pub const Display = struct {
 };
 
 pub const DisplayManager = struct {
-    displays: std.ArrayList(Display),
+    displays: ArrayList(Display),
     expected_video_change: bool, // For skipping unnecessary updates.
 
     const Self = @This();
@@ -419,23 +419,22 @@ pub const DisplayManager = struct {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
         self.expected_video_change = true;
         for (self.displays.items) |*d| {
-            // free allocated data.
-            d.deinit();
+            d.deinit(allocator);
         }
-        self.displays.deinit();
+        self.displays.deinit(allocator);
     }
 
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
-    pub fn rePollDisplays(self: *Self) (mem.Allocator.Error || DisplayError)!void {
+    pub fn rePollDisplays(self: *Self, allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!void {
         // TODO: This can possibly be optimized but isn't a priority now
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 
-        const new_displays = try pollDisplays(self.displays.allocator);
+        const new_displays = try pollDisplays(allocator);
 
         for (self.displays.items) |*display| {
             var disconnected = true;
@@ -451,10 +450,10 @@ pub const DisplayManager = struct {
                 // as it's a useless call to the OS.
                 display.curr_video = Display.REGISTRY_VIDEOMODE_INDEX;
             }
-            display.deinit();
+            display.deinit(allocator);
         }
 
-        self.displays.deinit();
+        self.displays.deinit(allocator);
 
         self.displays = new_displays;
     }
@@ -506,9 +505,9 @@ test "Display init" {
     var all_monitors = try pollDisplays(testing_allocator);
     defer {
         for (all_monitors.items) |*monitor| {
-            monitor.deinit();
+            monitor.deinit(testing_allocator);
         }
-        all_monitors.deinit();
+        all_monitors.deinit(testing_allocator);
     }
     try testing.expect(all_monitors.items.len > 0); // Should at least contain 1 display
     for (all_monitors.items) |*mon| {
@@ -522,9 +521,9 @@ test "change primary video mode" {
     var displays = try pollDisplays(testing_allocator);
     defer {
         for (displays.items) |*display| {
-            display.deinit();
+            display.deinit(testing_allocator);
         }
-        displays.deinit();
+        displays.deinit(testing_allocator);
     }
     var primary = &displays.items[0];
     var output: VideoMode = undefined;

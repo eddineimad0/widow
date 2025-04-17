@@ -242,8 +242,7 @@ fn setWindowPositionIntern(
 }
 
 fn createPlatformWindow(
-    allocator: mem.Allocator,
-    driver: *const Win32Driver,
+    ctx: *const WidowContext,
     title: []const u8,
     data: *const WindowData,
     style: u32,
@@ -262,7 +261,7 @@ fn createPlatformWindow(
     // query the system for the targted monitor(the one that intersect
     // the window frame rectangle)'s dpi value and adjust for it now
     // or do it after window creation, we will leave it for after creation.
-    adjustWindowRect(driver, &window_rect, style, ex_style, null);
+    adjustWindowRect(ctx.driver, &window_rect, style, ex_style, null);
 
     // Decide the position(top left) of the client area
     var frame_x: i32 = undefined;
@@ -286,15 +285,15 @@ fn createPlatformWindow(
     };
 
     // Encode the title string in utf-16.
-    const window_title = try utils.utf8ToWideZ(allocator, title);
-    defer allocator.free(window_title);
+    const window_title = try utils.utf8ToWideZ(ctx.allocator, title);
+    defer ctx.allocator.free(window_title);
 
-    const creation_lparm: CreationLparamTuple = .{ data, driver };
+    const creation_lparm: CreationLparamTuple = .{ data, ctx.driver };
 
     // Create the window.
     const window_handle = win32_gfx.CreateWindowExW(
         @bitCast(ex_style), // dwExStyles
-        win32_macros.MAKEINTATOM(driver.handles.wnd_class),
+        win32_macros.MAKEINTATOM(ctx.driver.handles.wnd_class),
         window_title, // Window Name
         @bitCast(style), // dwStyles
         frame[0], // X
@@ -303,7 +302,7 @@ fn createPlatformWindow(
         frame[3], // height
         null, // Parent Hwnd
         null, // hMenu
-        driver.handles.hinstance, // hInstance
+        ctx.driver.handles.hinstance, // hInstance
         @ptrCast(@constCast(&creation_lparm)), // CREATESTRUCT lparam
     ) orelse {
         return WindowError.CreateFailed;
@@ -315,7 +314,7 @@ fn createPlatformWindow(
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
     icon: icon.Icon,
-    dropped_files: std.ArrayList([]const u8),
+    dropped_files: std.ArrayListUnmanaged([]const u8),
     cursor: icon.CursorHints,
     prev_frame: common.geometry.Rect, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
@@ -339,15 +338,14 @@ pub const Window = struct {
     const Self = @This();
 
     pub fn init(
-        allocator: mem.Allocator,
         ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
         fb_cfg: *FBConfig,
     ) !*Self {
-        var self = try allocator.create(Self);
-        errdefer allocator.destroy(self);
+        var self = try ctx.allocator.create(Self);
+        errdefer ctx.allocator.destroy(self);
 
         self.ctx = ctx;
         self.ev_queue = null;
@@ -360,8 +358,7 @@ pub const Window = struct {
         };
 
         self.handle = try createPlatformWindow(
-            allocator,
-            self.ctx.driver,
+            ctx,
             window_title,
             data,
             style,
@@ -387,11 +384,7 @@ pub const Window = struct {
             .high_surrogate = 0,
             .frame_action = false,
             .position_update = false,
-            .dropped_files = .{
-                .allocator = undefined,
-                .items = undefined,
-                .capacity = 0,
-            },
+            .dropped_files = .empty,
             .allow_drag_n_drop = false,
             .prev_frame = .{
                 .size = .{ .width = 0, .height = 0 },
@@ -513,7 +506,7 @@ pub const Window = struct {
         return self;
     }
 
-    pub fn deinit(self: *Self, allocator: mem.Allocator) void {
+    pub fn deinit(self: *Self) void {
         self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
@@ -526,7 +519,8 @@ pub const Window = struct {
         _ = win32_gfx.SetPropW(self.handle, WINDOW_REF_PROP, null);
         _ = win32_gfx.DestroyWindow(self.handle);
         self.freeDroppedFiles();
-        allocator.destroy(self);
+        const ctx = self.ctx;
+        ctx.allocator.destroy(self);
     }
 
     /// Shows the hidden window.
@@ -1036,12 +1030,11 @@ pub const Window = struct {
 
     /// Changes the title of the window.
     pub fn setTitle(
-        self: *Self,
-        allocator: mem.Allocator,
+        self: *const Self,
         new_title: []const u8,
     ) mem.Allocator.Error!void {
-        const wide_title = try utils.utf8ToWideZ(allocator, new_title);
-        defer allocator.free(wide_title);
+        const wide_title = try utils.utf8ToWideZ(self.ctx.allocator, new_title);
+        defer self.ctx.allocator.free(wide_title);
         _ = win32_gfx.SetWindowTextW(self.handle, wide_title);
     }
 
@@ -1274,7 +1267,6 @@ pub const Window = struct {
 
     pub inline fn setDragAndDrop(
         self: *Self,
-        allocator: std.mem.Allocator,
         accepted: bool,
     ) void {
         if (accepted == self.win32.allow_drag_n_drop) {
@@ -1282,7 +1274,7 @@ pub const Window = struct {
         }
         self.win32.allow_drag_n_drop = accepted;
         if (accepted) {
-            self.win32.dropped_files = std.ArrayList([]const u8).init(allocator);
+            debug.assert(self.win32.dropped_files.items.len == 0 and self.win32.dropped_files.capacity == 0);
             shell32.DragAcceptFiles(self.handle, win32.TRUE);
         } else {
             shell32.DragAcceptFiles(self.handle, win32.FALSE);
@@ -1296,11 +1288,10 @@ pub const Window = struct {
         if (self.win32.dropped_files.capacity == 0) {
             return;
         }
-        const allocator = self.win32.dropped_files.allocator;
         for (self.win32.dropped_files.items) |item| {
-            allocator.free(item);
+            self.ctx.allocator.free(item);
         }
-        self.win32.dropped_files.clearAndFree();
+        self.win32.dropped_files.clearAndFree(self.ctx.allocator);
     }
 
     pub fn setIcon(
