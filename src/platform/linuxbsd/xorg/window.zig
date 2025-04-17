@@ -58,15 +58,14 @@ pub const Window = struct {
     const Self = @This();
 
     pub fn init(
-        allocator: mem.Allocator,
         ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
         data: *WindowData,
         fb_cfg: *FBConfig,
     ) (Allocator.Error || WindowError)!*Self {
-        var self = try allocator.create(Self);
-        errdefer allocator.destroy(self);
+        var self = try ctx.allocator.create(Self);
+        errdefer ctx.allocator.destroy(self);
 
         self.data = data.*;
         self.fb_cfg = fb_cfg.*;
@@ -132,6 +131,7 @@ pub const Window = struct {
                 self.focus();
             }
         }
+
         if (self.data.flags.is_fullscreen) {
             // BUG: This doesn't work
             if (!self.setFullscreen(true)) return WindowError.CreateFail;
@@ -141,7 +141,7 @@ pub const Window = struct {
     }
 
     /// Destroy the window
-    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Self) void {
         std.debug.assert(self.handle != 0);
         self.ev_queue = null;
         if (self.data.flags.is_fullscreen) _ = self.setFullscreen(false);
@@ -151,7 +151,8 @@ pub const Window = struct {
         _ = self.ctx.driver.removeFromXContext(self.handle);
         self.freeDroppedFiles();
         self.handle = 0;
-        allocator.destroy(self);
+        const ctx = self.ctx;
+        ctx.allocator.destroy(self);
     }
 
     pub fn setEventQueue(
