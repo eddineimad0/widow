@@ -3,7 +3,7 @@
     secure (less error prone)
     [x] update readme
     [] redo the tests.
-    [] can singletons (driver, keymap, ...) be thread-local ?
+    [] should singletons (driver, keymap, ...) be thread-local ?
     [] should the event queue be moved to the context ?
     [x] allocator migration to unamanged
     [x] use dequeue as events queue
@@ -11,8 +11,7 @@
     [x] Finish the display wrapper.
     [x] display wrapper need to be updated through hidden window events
     [x] fix: memory leak when quitting in fullscreen mode.
-    [-] fix: the closest videomode choice isn't accurate.
-        + this is because of the screen DPI should the videomode be influenced by the dpi ?
+    [x] fix: the closest videomode choice isn't accurate.
 # Linux
 [] replace utils function with available zig std library replacements.
 - X11

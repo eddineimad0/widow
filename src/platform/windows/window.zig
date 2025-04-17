@@ -128,13 +128,16 @@ pub fn adjustWindowRect(
     ex_styles: u32,
     dpi: ?u32,
 ) void {
-    if (drvr.opt_func.AdjustWindowRectExForDpi) |func| {
-        _ = func(
+    // HACK: AdjustWindowRectExForDpi computes a
+    // wrong rectangle for non dpi aware windows (some pixels are lost in both width and height)
+    // so don't use it
+    if (dpi != null and drvr.opt_func.AdjustWindowRectExForDpi != null) {
+        _ = drvr.opt_func.AdjustWindowRectExForDpi.?(
             rect,
             styles,
             0,
             ex_styles,
-            dpi orelse win32_gfx.USER_DEFAULT_SCREEN_DPI,
+            dpi.?,
         );
     } else {
         _ = win32_gfx.AdjustWindowRectEx(
@@ -264,16 +267,13 @@ fn createPlatformWindow(
     adjustWindowRect(ctx.driver, &window_rect, style, ex_style, null);
 
     // Decide the position(top left) of the client area
-    var frame_x: i32 = undefined;
-    var frame_y: i32 = undefined;
+    var frame_x: i32 = win32_gfx.CW_USEDEFAULT;
+    var frame_y: i32 = win32_gfx.CW_USEDEFAULT;
     if (data.client_area.top_left.x != win32_gfx.CW_USEDEFAULT and
         data.client_area.top_left.y != win32_gfx.CW_USEDEFAULT)
     {
         frame_x = data.client_area.top_left.x + window_rect.left;
         frame_y = data.client_area.top_left.y + window_rect.top;
-    } else {
-        frame_x = win32_gfx.CW_USEDEFAULT;
-        frame_y = win32_gfx.CW_USEDEFAULT;
     }
 
     // Final window frame.
@@ -1199,21 +1199,19 @@ pub const Window = struct {
         value: bool,
     ) bool {
         if (self.data.flags.is_fullscreen != value) {
-            // WARN: the fullscreen flag should be updated before updating
-            // the window style or the visuals will be buggy
-            self.data.flags.is_fullscreen = value;
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch {
                 self.data.flags.is_fullscreen = !value;
                 return false;
             };
             if (value) {
-                // save for when we exit the fullscreen mode
                 // For non resizalble window we change
                 // monitor resoultion
                 if (!self.data.flags.is_resizable) {
+
+                    const size = self.getClientSize();
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
-                        .width = self.data.client_area.size.width,
-                        .height = self.data.client_area.size.height,
+                        .width = size.width,
+                        .height = size.height,
                         // INFO: These 2 are hardcoded for now
                         .frequency = 60,
                         .color_depth = 32,
@@ -1222,10 +1220,15 @@ pub const Window = struct {
                         return false;
                     };
                 }
+                // WARN: the fullscreen flag should be updated before updating
+                // the window style or the visuals will be buggy
+                // and after getting the clientSize
+                self.data.flags.is_fullscreen = value;
                 self.win32.prev_frame = self.data.client_area;
                 self.updateStyles(&self.data.client_area);
                 self.acquireDisplay(d);
             } else {
+                self.data.flags.is_fullscreen = value;
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
                 self.updateStyles(&self.win32.prev_frame);
             }
@@ -1415,7 +1418,7 @@ pub const Window = struct {
                 const ls = self.getClientSize();
                 const ps = self.getClientPixelSize();
                 std.debug.print(
-                    "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
+                    "size with dpi scaling (w:{},h:{}) | size without dpi scaling (w:{},h:{})\n",
                     .{
                         ps.width,
                         ps.height,
