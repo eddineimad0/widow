@@ -19,4 +19,4 @@
     [] implement fullscreen for windows.
         + it's buggy and need to handle some cases
     [x] finish raw motion input.
-    [] drag and drop is always on fix it.
+    [x] drag and drop is always on fix it.

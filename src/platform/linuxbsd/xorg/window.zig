@@ -1370,7 +1370,6 @@ fn setInitialWindowPropeties(
     }
 
     // WMHints.
-
     var hints = libx11.XAllocWMHints() orelse return WindowError.CreateFail;
     defer _ = libx11.XFree(hints);
     hints.flags = libx11.StateHint;

@@ -201,6 +201,8 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         }
 
         std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
+        const accept:c_long = if(w.x11.xdnd_allow and w.x11.xdnd_req.format != libx11.None) 1 else 0;
+        const action = if(accept == 1) drvr.ewmh.XdndActionCopy else libx11.None;
         var reply = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
                 .type = libx11.ClientMessage,
@@ -212,10 +214,10 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
                 .send_event = 0,
                 .data = .{ .l = [5]c_long{
                     @intCast(w.handle),
-                    if (w.x11.xdnd_req.format != libx11.None) 1 else 0,
+                    accept,
                     0,
                     0,
-                    @intCast(drvr.ewmh.XdndActionCopy),
+                    @intCast(action),
                 } },
             },
         };
