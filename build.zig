@@ -63,14 +63,6 @@ fn detectDispalyTarget(
                     @panic("XDG_SESSION_TYPE env variable not set");
                 }
 
-<<<<<<< HEAD
-            if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_X11))) {
-                break :unix .Xorg;
-            } else if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_WAYLAND))) {
-                break :unix .Xorg;//.Wayland;
-            } else {
-                @panic("Unsupported unix display server");
-=======
                 if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_X11))) {
                     break :unix .Xorg;
                 } else if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_WAYLAND))) {
@@ -78,7 +70,6 @@ fn detectDispalyTarget(
                 } else {
                     @panic("Unsupported unix display server");
                 }
->>>>>>> main
             }
         },
         else => @panic("Unsupported Target"),
