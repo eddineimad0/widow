@@ -433,7 +433,7 @@ pub const Window = struct {
     /// and is responsible for freeing the memory.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn getTitle(self: *const Self, allocator: mem.Allocator) ![]u8 {
+    pub inline fn getTitle(self: *const Self, allocator: mem.Allocator) mem.Allocator.Error![]u8 {
         return self.impl.getTitle(allocator);
     }
 
@@ -442,7 +442,8 @@ pub const Window = struct {
     /// `new_title`: utf-8 string of the new title to be set.
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
-    pub inline fn setTitle(self: *Self, new_title: []const u8) !void {
+    /// 'InvalidUtf8': function could fail if the new_title isn't a valid utf-8 string
+    pub inline fn setTitle(self: *Self, new_title: []const u8) error{OutOfMemory,InvalidUtf8}!void {
         return self.impl.setTitle(new_title);
     }
 

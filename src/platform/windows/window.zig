@@ -969,7 +969,7 @@ pub const Window = struct {
             self.data.max_size = null;
         }
 
-        const POSITION_FLAGS: u32 = win32_gfx.SET_WINDOW_POS_FLAGS{
+        const POSITION_FLAGS = win32_gfx.SET_WINDOW_POS_FLAGS{
             .NOACTIVATE = 1,
             .NOZORDER = 1,
             .NOOWNERZORDER = 1,
@@ -1032,7 +1032,7 @@ pub const Window = struct {
     pub fn setTitle(
         self: *const Self,
         new_title: []const u8,
-    ) mem.Allocator.Error!void {
+    )   error{OutOfMemory,InvalidUtf8}!void {
         const wide_title = try utils.utf8ToWideZ(self.ctx.allocator, new_title);
         defer self.ctx.allocator.free(wide_title);
         _ = win32_gfx.SetWindowTextW(self.handle, wide_title);
