@@ -247,6 +247,7 @@ fn makeTestStep(b: *std.Build, widow_module:*std.Build.Module) void {
     const widow_test = b.addTest(.{
         .root_module = widow_module,
     });
+    widow_test.linkLibC();
     const run_widow_test = b.addRunArtifact(widow_test);
     test_step.dependOn(&run_widow_test.step);
 }

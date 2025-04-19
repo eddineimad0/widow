@@ -19,6 +19,7 @@ pub const Colormap = XID;
 pub const Cursor = XID;
 pub const KeySym = XID;
 pub const KeyCode = u8;
+pub const CARD32 = u32;
 const _XDisplay = opaque {};
 const _XPrivate = opaque {};
 const _XGC = opaque {};

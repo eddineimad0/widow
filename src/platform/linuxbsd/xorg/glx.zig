@@ -565,8 +565,8 @@ pub const GLContext = struct {
     }
 
     pub fn setSwapIntervals(self: *const Self, intrvl: i32) bool {
-        if (glx_ext_api.EXT_swap_control) {
-            glx_ext_api.glXSwapIntervalEXT(
+        if (glx_ext_api.EXT_swap_control and glx_ext_api.glXSwapIntervalEXT != null) {
+            glx_ext_api.glXSwapIntervalEXT.?(
                 self.x_display,
                 self.glwndw,
                 @intCast(intrvl),

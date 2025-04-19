@@ -16,7 +16,7 @@
 [] replace utils function with available zig std library replacements.
 - X11
     [x] finish display wrapper.
-    [-] implement fullscreen for windows.
+    [] implement fullscreen for windows.
         + it's buggy and need to handle some cases
     [x] finish raw motion input.
     [] drag and drop is always on fix it.
