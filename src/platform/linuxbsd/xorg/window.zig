@@ -670,8 +670,8 @@ pub const Window = struct {
                     .data = .{
                         .l = .{
                             _NET_WM_STATE_ADD,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT),
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ),
                             1,
                             0,
                         },
@@ -766,7 +766,7 @@ pub const Window = struct {
     pub fn getTitle(
         self: *const Self,
         allocator: std.mem.Allocator,
-    ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
+    ) (Allocator.Error || WindowError)![]u8 {
         const drvr = self.ctx.driver;
         const name_atom = if (drvr.ewmh._NET_WM_NAME != 0)
             drvr.ewmh._NET_WM_NAME
@@ -803,7 +803,7 @@ pub const Window = struct {
             self.handle,
             drvr.ewmh._NET_WM_WINDOW_OPACITY,
             libx11.XA_CARDINAL,
-            &cardinal,
+            @ptrCast(&cardinal),
         ) catch return 1.0;
         std.debug.assert(cardinal != null);
         defer _ = libx11.XFree(cardinal.?);
