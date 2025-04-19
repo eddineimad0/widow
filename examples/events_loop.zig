@@ -141,6 +141,10 @@ pub fn main() !void {
                             const minimized = mywindows[key.window_id].isMinimized();
                             mywindows[key.window_id].setMinimized(!minimized);
                         }
+                        if (key.keycode == .K) {
+                            const maximized = mywindows[key.window_id].isMaximized();
+                            mywindows[key.window_id].setMaximized(!maximized);
+                        }
                     }
                 },
                 EventType.MouseButton => |*mouse_event| {

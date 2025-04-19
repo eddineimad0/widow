@@ -515,8 +515,8 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
                 }
             }
 
+            window.data.flags.is_maximized = maximized;
             if (maximized) {
-                window.data.flags.is_maximized = maximized;
                 const event = common.event.createMaximizeEvent(window.data.id);
                 window.sendEvent(&event);
             }
