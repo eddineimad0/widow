@@ -67,7 +67,8 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     a.destroy(ctx);
 }
 
-test "Platform" {
-    @import("std").testing.refAllDecls(@import("display.zig"));
+test "platform_unit_test" {
+    @import("std").testing.refAllDecls(display);
+    @import("std").testing.refAllDecls(driver);
     @import("std").testing.refAllDecls(@import("dynlib.zig"));
 }

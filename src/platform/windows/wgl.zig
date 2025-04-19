@@ -559,7 +559,7 @@ pub const GLContext = struct {
 
     pub fn setSwapIntervals(intrvl: i32) bool {
         if (wgl_ext.EXT_swap_control and intrvl > 0) {
-            return wgl_ext.SwapIntervalEXT(intrvl) == win32.TRUE;
+            return wgl_ext.SwapIntervalEXT.?(intrvl) == win32.TRUE;
         }
         return false;
     }
