@@ -73,9 +73,10 @@ pub fn Queue(comptime T: type) type {
     };
 }
 
-test "Queue test" {
+test "queue_test" {
     const testing = std.testing;
     var int_queue = Queue(u32).init(testing.allocator);
+    defer int_queue.deinit();
     const int_array = [5]u32{ 1, 2, 3, 4, 5 };
     try int_queue.append(&int_array[0]);
     try int_queue.append(&int_array[1]);
@@ -90,5 +91,4 @@ test "Queue test" {
     try testing.expect(second == 2);
     const third = int_queue.get();
     try testing.expect(third.?.* == 3);
-    int_queue.deinit();
 }

@@ -14,12 +14,10 @@ const queue = @import("queue.zig");
 const deque = @import("deque.zig");
 
 
-test "common_mod_tests" {
+test "common_module_tests" {
     const std = @import("std");
     const testing = std.testing;
 
-    testing.refAllDeclsRecursive(queue);
-    testing.refAllDeclsRecursive(deque);
-
-    try testing.expect(false);
+    testing.refAllDecls(queue);
+    testing.refAllDecls(deque);
 }

@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) !void {
 
     makeExamplesStep(b,target,optimize, widow);
 
-    makeTestStep(b);
+    makeTestStep(b, widow);
 }
 
 fn detectDispalyTarget(
@@ -85,10 +85,14 @@ fn createWidowModule(
 ) *std.Build.Module {
     const gl_mod = b.createModule(.{
         .root_source_file = b.path("src/opengl/gl.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
     const common_mod = b.createModule(.{
         .root_source_file = b.path("src/common/common.zig"),
+        .target = target,
+        .optimize = optimize,
         .imports = &.{
             .{ .name = "opengl", .module = gl_mod },
         },
@@ -99,6 +103,8 @@ fn createWidowModule(
             break :win32 b.createModule(
                 .{
                     .root_source_file = b.path("src/platform/windows/platform.zig"),
+                    .target = target,
+                    .optimize = optimize,
                     .imports = &.{
                         .{ .name = "opengl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
@@ -109,7 +115,8 @@ fn createWidowModule(
         .Xorg => b.createModule(
             .{
                 .root_source_file = b.path("src/platform/linuxbsd/xorg/platform.zig"),
-
+                .target = target,
+                .optimize = optimize,
                 .imports = &.{
                     .{ .name = "opengl", .module = gl_mod },
                     .{ .name = "common", .module = common_mod },
@@ -233,13 +240,13 @@ widow_module:*std.Build.Module) void {
 
 }
 
-fn makeTestStep(b: *std.Build) void {
-
-    const common_test = b.addTest(.{
-        .root_source_file = b.path("src/common/deque.zig"),
-    });
-
+fn makeTestStep(b: *std.Build, widow_module:*std.Build.Module) void {
 
     const test_step = b.step("test", "run all unit tests");
-    test_step.dependOn(&common_test.step);
+
+    const widow_test = b.addTest(.{
+        .root_module = widow_module,
+    });
+    const run_widow_test = b.addRunArtifact(widow_test);
+    test_step.dependOn(&run_widow_test.step);
 }
