@@ -50,3 +50,10 @@ pub const createWidowContext = platform.createWidowContext;
 /// undefined behaviour, alternatively you could not call it and let the os clean up
 /// the resources.
 pub const destroyWidowContext = platform.destroyWidowContext;
+
+
+test "all_widow_unit_tests" {
+    std.testing.refAllDeclsRecursive(common);
+    std.testing.refAllDeclsRecursive(platform);
+    std.testing.refAllDeclsRecursive(gl);
+}
