@@ -794,27 +794,31 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn getOpacity(self: *const Self) f64 {
+    pub fn getOpacity(self: *const Self) f32 {
         const drvr = self.ctx.driver;
-        var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
+        var value: ?*libx11.CARD32 = null; // cardinal, and xid are the same bitwidth.
         const OPAQUE = @as(u32, 0xFFFFFFFF);
         _ = utils.x11WindowProperty(
             drvr.handles.xdisplay,
             self.handle,
             drvr.ewmh._NET_WM_WINDOW_OPACITY,
             libx11.XA_CARDINAL,
-            @ptrCast(&cardinal),
+            @ptrCast(&value),
         ) catch return 1.0;
-        std.debug.assert(cardinal != null);
-        defer _ = libx11.XFree(cardinal.?);
-        return (@as(f64, @floatFromInt(cardinal.?.*)) / @as(f64, @floatFromInt(OPAQUE)));
+        if(value)|v|{
+            defer _ = libx11.XFree(v);
+            const curr_opacity:f64 =  (@as(f64, @floatFromInt(v.*)) / @as(f64, @floatFromInt(OPAQUE)));
+            return @floatCast(curr_opacity);
+        }else{
+            return 1.0;
+        }
     }
 
     /// Sets the window's opacity
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn setOpacity(self: *Self, value: f64) bool {
+    pub fn setOpacity(self: *Self, value: f32) bool {
         const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_WINDOW_OPACITY == 0) {
             return false;
@@ -829,7 +833,7 @@ pub const Window = struct {
             );
         } else {
             const OPAQUE = @as(u32, 0xFFFFFFFF);
-            const alpha: libx11.XID = @intFromFloat(value * @as(f64, @floatFromInt(OPAQUE)));
+            const alpha: libx11.XID = @intFromFloat(@as(f64,value) * @as(f64, @floatFromInt(OPAQUE)));
             libx11.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,

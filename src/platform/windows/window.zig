@@ -1099,7 +1099,7 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn setOpacity(self: *Self, value: f32) void {
+    pub fn setOpacity(self: *Self, value: f32) bool {
         var ex_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
             win32_gfx.GWL_EXSTYLE,
@@ -1126,6 +1126,8 @@ pub const Window = struct {
             win32_gfx.GWL_EXSTYLE,
             @bitCast(ex_styles),
         );
+
+        return true;
     }
 
     pub fn setAspectRatio(self: *Self, ratio: ?common.geometry.AspectRatio) void {
