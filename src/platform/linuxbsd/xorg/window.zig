@@ -331,60 +331,34 @@ pub const Window = struct {
     }
 
     fn updateStyles(self: *const Self) bool {
-        if (self.data.flags.is_fullscreen) {
-            if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
-                self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
-            {
-                var event = libx11.XEvent{
-                    .xclient = libx11.XClientMessageEvent{
-                        .type = libx11.ClientMessage,
-                        .display = self.ctx.driver.handles.xdisplay,
-                        .window = self.handle,
-                        .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
-                        .format = 32,
-                        .serial = 0,
-                        .send_event = 0,
-                        .data = .{ .l = [5]c_long{
-                            _NET_WM_STATE_ADD,
-                            @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
-                            0,
-                            1,
-                            0,
-                        } },
-                    },
-                };
-                self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
-            } else {
-                return false;
-            }
+        if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
+            self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
+        {
+            // NOTE: if the window isn't resizable the window manager
+            // might not do anything in response to this message.
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = null,
+                    .window = self.handle,
+                    .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = 0,
+                    .data = .{ .l = [5]c_long{
+                        if(self.data.flags.is_fullscreen) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                        @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
+            self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
+            return true;
         } else {
-            if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
-                self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
-            {
-                var event = libx11.XEvent{
-                    .xclient = libx11.XClientMessageEvent{
-                        .type = libx11.ClientMessage,
-                        .display = self.ctx.driver.handles.xdisplay,
-                        .window = self.handle,
-                        .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
-                        .format = 32,
-                        .serial = 0,
-                        .send_event = 0,
-                        .data = .{ .l = [5]c_long{
-                            _NET_WM_STATE_REMOVE,
-                            @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
-                            0,
-                            1,
-                            0,
-                        } },
-                    },
-                };
-                self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
-            } else {
-                return false;
-            }
+            return false;
         }
-        return true;
     }
 
     /// Notify and flash the taskbar.
@@ -857,17 +831,41 @@ pub const Window = struct {
         var display_area: common.geometry.Rect = undefined;
 
         if (self.data.flags.is_fullscreen != value) {
-            self.data.flags.is_fullscreen = value;
-
-            if (!self.updateStyles()) return false;
 
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
             d.getFullArea(&display_area, drvr);
 
+            if (!self.data.flags.is_resizable) {
+
+                const size_hints = libx11.XAllocSizeHints();
+                if (size_hints) |hints| {
+                    defer _ = libx11.XFree(hints);
+                    var supplied: c_long = 0;
+                    _ = libx11.XGetWMNormalHints(
+                        self.ctx.driver.handles.xdisplay,
+                        self.handle,
+                        hints,
+                        &supplied,
+                    );
+
+                    hints.flags &= ~(@as(@TypeOf(hints.flags),libx11.PMinSize) |
+                    @as(@TypeOf(hints.flags),libx11.PMaxSize));
+
+                    _ = libx11.XSetWMNormalHints(
+                        self.ctx.driver.handles.xdisplay,
+                        self.handle,
+                        @ptrCast(hints),
+                    );
+                }else{
+                    return false;
+                }
+            }
+
+
             if (value) {
+
                 if (!self.data.flags.is_resizable) {
-                    //BUG: the window decoration isn't removed.
-                    self.updateSizeHints();
+
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = self.data.client_area.size.width,
                         .height = self.data.client_area.size.height,
@@ -876,7 +874,10 @@ pub const Window = struct {
                         .color_depth = 32,
                     }) catch return false;
                 }
-                if (drvr.extensions.xinerama.is_active and drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+
+
+                if (drvr.extensions.xinerama.is_active and
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
                     var event = libx11.XEvent{
                         .xclient = libx11.XClientMessageEvent{
                             .type = libx11.ClientMessage,
@@ -906,9 +907,12 @@ pub const Window = struct {
                     @intCast(display_area.size.width),
                     @intCast(display_area.size.height),
                 );
+
                 self.ctx.display_mgr.setDisplayWindow(d, self);
+
             } else {
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
+
                 if (drvr.extensions.xinerama.is_active and drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
                     libx11.XDeleteProperty(
                         drvr.handles.xdisplay,
@@ -916,7 +920,14 @@ pub const Window = struct {
                         drvr.ewmh._NET_WM_FULLSCREEN_MONITORS,
                     );
                 }
+
                 self.ctx.display_mgr.setDisplayWindow(d, null);
+            }
+
+            self.data.flags.is_fullscreen = value;
+            if (!self.updateStyles()){
+                self.data.flags.is_fullscreen = !value;
+                return false;
             }
 
             drvr.flushXRequests();
