@@ -49,6 +49,7 @@ pub const Window = struct {
         },
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
+        windowed_area:common.geometry.Rect,
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
@@ -85,6 +86,7 @@ pub const Window = struct {
                 .paths = .empty,
             },
             .xdnd_allow = false,
+            .windowed_area = data.client_area,
         };
         self.ctx = ctx;
 
@@ -818,36 +820,32 @@ pub const Window = struct {
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
             d.getFullArea(&display_area, drvr);
 
-            if (!self.data.flags.is_resizable) {
-
-                const size_hints = libx11.XAllocSizeHints();
-                if (size_hints) |hints| {
-                    defer _ = libx11.XFree(hints);
-                    var supplied: c_long = 0;
-                    _ = libx11.XGetWMNormalHints(
-                        self.ctx.driver.handles.xdisplay,
-                        self.handle,
-                        hints,
-                        &supplied,
-                    );
-
-                    hints.flags &= ~(@as(@TypeOf(hints.flags),libx11.PMinSize) |
-                    @as(@TypeOf(hints.flags),libx11.PMaxSize));
-
-                    _ = libx11.XSetWMNormalHints(
-                        self.ctx.driver.handles.xdisplay,
-                        self.handle,
-                        @ptrCast(hints),
-                    );
-                }else{
-                    return false;
-                }
-            }
-
-
             if (value) {
 
                 if (!self.data.flags.is_resizable) {
+
+                    const size_hints = libx11.XAllocSizeHints();
+                    if (size_hints) |hints| {
+                        defer _ = libx11.XFree(hints);
+                        var supplied: c_long = 0;
+                        _ = libx11.XGetWMNormalHints(
+                            self.ctx.driver.handles.xdisplay,
+                            self.handle,
+                            hints,
+                            &supplied,
+                        );
+
+                        hints.flags &= ~(@as(@TypeOf(hints.flags),libx11.PMinSize) |
+                        @as(@TypeOf(hints.flags),libx11.PMaxSize));
+
+                        _ = libx11.XSetWMNormalHints(
+                            self.ctx.driver.handles.xdisplay,
+                            self.handle,
+                            @ptrCast(hints),
+                        );
+                    }else{
+                        return false;
+                    }
 
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = self.data.client_area.size.width,
@@ -882,6 +880,7 @@ pub const Window = struct {
                     self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
                 }
 
+                self.x11.windowed_area = self.data.client_area;
                 _ = libx11.XMoveResizeWindow(
                     drvr.handles.xdisplay,
                     self.handle,
@@ -890,13 +889,15 @@ pub const Window = struct {
                     @intCast(display_area.size.width),
                     @intCast(display_area.size.height),
                 );
-
-                self.ctx.display_mgr.setDisplayWindow(d, self);
+                self.ctx.display_mgr.setScreenSaver(false);
 
             } else {
+
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
 
-                if (drvr.extensions.xinerama.is_active and drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+                if (drvr.extensions.xinerama.is_active and
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+
                     libx11.XDeleteProperty(
                         drvr.handles.xdisplay,
                         self.handle,
@@ -904,10 +905,20 @@ pub const Window = struct {
                     );
                 }
 
-                self.ctx.display_mgr.setDisplayWindow(d, null);
+                self.data.client_area = self.x11.windowed_area;
+                _ = libx11.XMoveResizeWindow(
+                    drvr.handles.xdisplay,
+                    self.handle,
+                    self.x11.windowed_area.top_left.x,
+                    self.x11.windowed_area.top_left.y,
+                    @intCast(self.x11.windowed_area.size.width),
+                    @intCast(self.x11.windowed_area.size.height)
+                );
+                self.ctx.display_mgr.setScreenSaver(true);
             }
 
             self.data.flags.is_fullscreen = value;
+            self.updateSizeHints();
             if (!self.updateStyles()){
                 self.data.flags.is_fullscreen = !value;
                 return false;
