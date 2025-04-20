@@ -814,6 +814,7 @@ pub const Window = struct {
     ) bool {
         const drvr = self.ctx.driver;
         var display_area: common.geometry.Rect = undefined;
+        var new_window_area:*common.geometry.Rect = &display_area;
 
         if (self.data.flags.is_fullscreen != value) {
 
@@ -881,7 +882,6 @@ pub const Window = struct {
                 }
 
                 self.x11.windowed_area = self.data.client_area;
-                self.data.client_area = display_area;
 
                 self.ctx.display_mgr.setScreenSaver(false);
 
@@ -899,7 +899,7 @@ pub const Window = struct {
                     );
                 }
 
-                self.data.client_area = self.x11.windowed_area;
+                new_window_area = &self.x11.windowed_area;
                 self.ctx.display_mgr.setScreenSaver(true);
             }
 
@@ -913,10 +913,10 @@ pub const Window = struct {
             _ = libx11.XMoveResizeWindow(
                 drvr.handles.xdisplay,
                 self.handle,
-                self.data.client_rect.top_left.x,
-                self.data.client_rect.top_left.y,
-                @intCast(self.data.client_rect.size.width),
-                @intCast(self.data.client_rect.size.height),
+                new_window_area.top_left.x,
+                new_window_area.top_left.y,
+                @intCast(new_window_area.size.width),
+                @intCast(new_window_area.size.height),
             );
 
             drvr.flushXRequests();
