@@ -881,14 +881,8 @@ pub const Window = struct {
                 }
 
                 self.x11.windowed_area = self.data.client_area;
-                _ = libx11.XMoveResizeWindow(
-                    drvr.handles.xdisplay,
-                    self.handle,
-                    display_area.top_left.x,
-                    display_area.top_left.y,
-                    @intCast(display_area.size.width),
-                    @intCast(display_area.size.height),
-                );
+                self.data.client_area = display_area;
+
                 self.ctx.display_mgr.setScreenSaver(false);
 
             } else {
@@ -906,14 +900,6 @@ pub const Window = struct {
                 }
 
                 self.data.client_area = self.x11.windowed_area;
-                _ = libx11.XMoveResizeWindow(
-                    drvr.handles.xdisplay,
-                    self.handle,
-                    self.x11.windowed_area.top_left.x,
-                    self.x11.windowed_area.top_left.y,
-                    @intCast(self.x11.windowed_area.size.width),
-                    @intCast(self.x11.windowed_area.size.height)
-                );
                 self.ctx.display_mgr.setScreenSaver(true);
             }
 
@@ -923,6 +909,15 @@ pub const Window = struct {
                 self.data.flags.is_fullscreen = !value;
                 return false;
             }
+
+            _ = libx11.XMoveResizeWindow(
+                drvr.handles.xdisplay,
+                self.handle,
+                self.data.client_rect.top_left.x,
+                self.data.client_rect.top_left.y,
+                @intCast(self.data.client_rect.size.width),
+                @intCast(self.data.client_rect.size.height),
+            );
 
             drvr.flushXRequests();
         }
