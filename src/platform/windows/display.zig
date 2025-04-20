@@ -1,6 +1,7 @@
 const std = @import("std");
 const common = @import("common");
 const win32_gfx = @import("win32api/graphics.zig");
+const win32_krnl = @import("win32api/kernel32.zig");
 const utils = @import("utils.zig");
 const wndw = @import("window.zig");
 const mem = std.mem;
@@ -408,15 +409,22 @@ pub const Display = struct {
 pub const DisplayManager = struct {
     displays: ArrayList(Display),
     expected_video_change: bool, // For skipping unnecessary updates.
+    orig_thread_exec_state:win32_krnl.EXECUTION_STATE,
 
     const Self = @This();
     pub const WINDOW_PROP = std.unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
 
     pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
-        return .{
+        var self:Self =  .{
             .expected_video_change = false,
             .displays = try pollDisplays(allocator),
+            .orig_thread_exec_state = undefined,
         };
+
+        self.orig_thread_exec_state = win32_krnl.SetThreadExecutionState(.{.CONTINUOUS = 1});
+        _ = win32_krnl.SetThreadExecutionState(self.orig_thread_exec_state);
+
+        return self;
     }
 
     pub fn deinit(self: *Self, allocator: mem.Allocator) void {
@@ -496,6 +504,14 @@ pub const DisplayManager = struct {
             display.restoreRegistryMode();
         }
         self.expected_video_change = false;
+    }
+
+    pub fn setScreenSaver(self:*Self,on:bool)void{
+        if(!on){
+            self.orig_thread_exec_state = win32_krnl.SetThreadExecutionState(.{.CONTINUOUS = 1,.DISPLAY_REQUIRED = 1,});
+        }else{
+            _ = win32_krnl.SetThreadExecutionState(self.orig_thread_exec_state);
+        }
     }
 };
 
