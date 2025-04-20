@@ -77,6 +77,10 @@ pub const dyn_api = struct {
         display: ?*types.Display,
         window: types.Window,
     ) callconv(.C) c_int;
+    const XMapRaisedProc = *const fn (
+        display: ?*types.Display,
+        window: types.Window,
+    ) callconv(.C) c_int;
     const XUnmapWindowProc = *const fn (
         display: ?*types.Display,
         window: types.Window,
@@ -208,6 +212,12 @@ pub const dyn_api = struct {
     const XEventsQueuedProc = *const fn (display: ?*types.Display, mode: c_int) callconv(.C) c_int;
     const XGetEventDataProc = *const fn (display: ?*types.Display, cookie: *types.XGenericEventCookie) callconv(.C) types.Bool;
     const XFreeEventDataProc = *const fn (display: ?*types.Display, cookie: *types.XGenericEventCookie) callconv(.C) void;
+    const XCheckTypedWindowEventProc = *const fn (
+        display: *types.Display,
+        w:types.Window,
+        event_type:c_int,
+        x_event: *types.XEvent,
+    ) callconv(.C) types.Bool;
 
     // Errors
     const XSetErrorHandlerProc = *const fn (
@@ -395,6 +405,7 @@ pub const dyn_api = struct {
     pub var XCreateColormap: XCreateColormapProc = undefined;
     pub var XDestroyWindow: XDestroyWindowProc = undefined;
     pub var XMapWindow: XMapWindowProc = undefined;
+    pub var XMapRaised: XMapRaisedProc = undefined;
     pub var XUnmapWindow: XUnmapWindowProc = undefined;
     pub var XMoveWindow: XMoveWindowProc = undefined;
     pub var XMoveResizeWindow: XMoveResizeWindowProc = undefined;
@@ -419,6 +430,7 @@ pub const dyn_api = struct {
     pub var XEventsQueued: XEventsQueuedProc = undefined;
     pub var XGetEventData: XGetEventDataProc = undefined;
     pub var XFreeEventData: XFreeEventDataProc = undefined;
+    pub var XCheckTypedWindowEvent: XCheckTypedWindowEventProc = undefined;
 
     // Properties
     pub var XSetWMProtocols: XSetWMProtocolsProc = undefined;

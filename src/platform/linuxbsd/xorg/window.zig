@@ -134,7 +134,9 @@ pub const Window = struct {
 
         if (self.data.flags.is_fullscreen) {
             // BUG: This doesn't work
-            if (!self.setFullscreen(true)) return WindowError.CreateFail;
+            _ = libx11.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
+            const ok = waitForWindowVisibility(ctx.driver.handles.xdisplay, self.handle);
+            if (!ok or !self.setFullscreen(true)) return WindowError.CreateFail;
         }
 
         return self;
@@ -203,38 +205,19 @@ pub const Window = struct {
     }
 
     pub fn waitEvent(self: *Self) WindowError!void {
-        // Indefinetly wait for event
-        var ready: u32 = 0;
-        // start by flushing and checking for available events.
-        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
-            _ = unix.poll(
-                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
-                unix.PollFlag.IORead,
-                -1,
-                &ready,
-            );
-        }
+        // indefinetly wait
+        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay,-1);
+        debug.assert(ok);
         try self.processEvents();
     }
 
     /// Waits for an event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
-        const timeout_ns = timeout * std.time.ns_per_ms;
-        var ready: u32 = 0;
-        // start by flushing and checking for available events.
-        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
-            if (unix.poll(
-                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
-                unix.PollFlag.IORead,
-                timeout_ns,
-                &ready,
-            ) == false) {
-                // timeout or error
-                return false;
-            }
+        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay, timeout);
+        if(ok){
+            try self.processEvents();
         }
-        try self.processEvents();
-        return true;
+        return ok;
     }
 
     /// Shows the hidden window.
@@ -1428,6 +1411,7 @@ fn setInitialWindowPropeties(
     );
 }
 
+
 pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
     const window = driver.findInXContext(window_id);
     return @ptrCast(@alignCast(window));
@@ -1465,4 +1449,36 @@ pub inline fn disableRawMouseMotion(driver: *const X11Driver) bool {
         @ptrCast(&ev_mask),
         1,
     ) == libx11.Success;
+}
+
+fn waitOnX11Socket(display:*libx11.Display,timeout:i64) bool {
+    const timeout_ns = timeout * std.time.ns_per_ms;
+    var ready: u32 = 0;
+    // start by flushing and checking for available events.
+    while (libx11.XPending(display) == 0) {
+        if (unix.poll(
+            libx11.ConnectionNumber(display),
+            unix.PollFlag.IORead,
+            timeout_ns,
+            &ready,
+        ) == false) {
+            // timeout or error
+            return false;
+        }
+    }
+    return true;
+}
+
+inline fn isNextEventType(display: *libx11.Display, window_id:libx11.Window, event_type:c_int) bool {
+    var e:libx11.XEvent = undefined;
+    return libx11.XCheckTypedWindowEvent(display,window_id,event_type,&e) == libx11.True;
+}
+
+fn waitForWindowVisibility(display: *libx11.Display, window_id:libx11.Window) bool {
+    while(!isNextEventType(display, window_id, libx11.VisibilityNotify)){
+        if(!waitOnX11Socket(display, 200)){
+            return false;
+        }
+    }
+    return true;
 }
