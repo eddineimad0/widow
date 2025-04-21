@@ -132,9 +132,9 @@ pub const Window = struct {
 
 
         if (self.data.flags.is_fullscreen) {
-            // BUG: This doesn't work
             _ = libx11.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
             const ok = waitForWindowVisibility(ctx.driver.handles.xdisplay, self.handle);
+            self.data.flags.is_fullscreen = false;
             if (!ok or !self.setFullscreen(true)) return WindowError.CreateFail;
         }else{
 
@@ -1497,7 +1497,7 @@ inline fn isNextEventType(display: *libx11.Display, window_id:libx11.Window, eve
 
 fn waitForWindowVisibility(display: *libx11.Display, window_id:libx11.Window) bool {
     while(!isNextEventType(display, window_id, libx11.VisibilityNotify)){
-        if(!waitOnX11Socket(display, 200)){
+        if(!waitOnX11Socket(display, 250)){
             return false;
         }
     }
