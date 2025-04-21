@@ -1229,10 +1229,12 @@ pub const Window = struct {
                 self.win32.prev_frame = self.data.client_area;
                 self.updateStyles(&self.data.client_area);
                 self.acquireDisplay(d);
+                self.ctx.display_mgr.setScreenSaver(false);
             } else {
                 self.data.flags.is_fullscreen = value;
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
                 self.updateStyles(&self.win32.prev_frame);
+                self.ctx.display_mgr.setScreenSaver(true);
             }
         }
         return true;

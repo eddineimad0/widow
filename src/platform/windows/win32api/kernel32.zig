@@ -68,6 +68,22 @@ pub const VER_SERVICEPACKMAJOR = VER_FLAGS{ .SERVICEPACKMAJOR = 1 };
 pub const VER_SUITENAME = VER_FLAGS{ .SUITENAME = 1 };
 pub const VER_PRODUCT_TYPE = VER_FLAGS{ .PRODUCT_TYPE = 1 };
 
+pub const EXECUTION_STATE = packed struct(win32.DWORD) {
+    SYSTEM_REQUIRED : u1 = 0,
+    DISPLAY_REQUIRED : u1 = 0,
+    USER_PRESENT :u1 = 0,
+    __UNUSED_1:u3 = 0,
+    AWAYMODE_REQUIRED:u1 = 0,
+    __UNUSED_2:u24 = 0,
+    CONTINUOUS :u1 = 0,
+
+    pub const ES_AWAYMODE_REQUIRED = EXECUTION_STATE{ .AWAYMODE_REQUIRED = 1 };
+    pub const ES_CONTINUOUS = EXECUTION_STATE{ .CONTINUOUS = 1 };
+    pub const ES_DISPLAY_REQUIRED = EXECUTION_STATE{ .DISPLAY_REQUIRED = 1 };
+    pub const ES_SYSTEM_REQUIRED = EXECUTION_STATE{ .SYSTEM_REQUIRED = 1 };
+    pub const ES_USER_PRESENT = EXECUTION_STATE{ .USER_PRESENT = 1 };
+};
+
 //---------------------------
 // Functions
 //---------------------------
@@ -110,3 +126,9 @@ pub extern "kernel32" fn VerSetConditionMask(
     TypeMask: VER_FLAGS,
     Condition: u8,
 ) callconv(@import("std").os.windows.WINAPI) u64;
+
+
+pub extern "kernel32" fn SetThreadExecutionState(
+  esFlags:EXECUTION_STATE
+) callconv(@import("std").os.windows.WINAPI) EXECUTION_STATE;
+
