@@ -18,6 +18,6 @@
 - X11
     [x] finish display wrapper.
     [x] implement fullscreen for windows.
-        [] creating a window with the fullscreen flag doesn't work (fuck x11)
+        [x] creating a window with the fullscreen flag doesn't work (fuck x11)
     [x] finish raw motion input.
     [x] drag and drop is always on fix it.
