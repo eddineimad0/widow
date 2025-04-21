@@ -203,14 +203,16 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         // Copy the display name.
         // in case of an error the dislay 'deinit' should free the name.
         const name_len = utils.strZLen(output_info.name);
+        var name_src_slice:[]const u8 = undefined;
+        name_src_slice.ptr  = output_info.name;
+        name_src_slice.len  = name_len;
         const name = try allocator.alloc(u8, name_len);
-        utils.strNCpy(name.ptr, output_info.name, name_len);
+        @memcpy(name, name_src_slice);
 
         var d = Display{
             .adapter = output_info.crtc,
             .name = name,
             .output = screens_res.outputs[i],
-            .window = null,
             .xinerama_index = xinerama_index,
             .orig_video_mode = x11ext.RRMode_None,
             .modes = .empty,
@@ -247,11 +249,10 @@ pub const Display = struct {
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
     modes_ids: ArrayList(x11ext.RRMode),
     name: []u8,
-    window: ?*const Window,
-    xinerama_index: i32,
     adapter: x11ext.RRCrtc,
     output: x11ext.RROutput,
     orig_video_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
+    xinerama_index: i32,
 
     const Self = @This();
 
@@ -438,7 +439,6 @@ pub const DisplayManager = struct {
         prefer_blanking: c_int,
         allow_exposures: c_int,
     },
-    fullscreen_count: u32,
 
     const Self = @This();
 
@@ -446,12 +446,19 @@ pub const DisplayManager = struct {
         allocator: mem.Allocator,
         driver: *const X11Driver,
     ) (mem.Allocator.Error || DisplayError)!Self {
-        return .{
+        var self:Self =  .{
             .displays = try pollDisplays(allocator, driver),
             .driver = driver,
-            .fullscreen_count = 0,
             .screen_saver_profile = undefined,
         };
+        _ = libx11.XGetScreenSaver(
+            self.driver.handles.xdisplay,
+            &self.screen_saver_profile.timout,
+            &self.screen_saver_profile.interval,
+            &self.screen_saver_profile.prefer_blanking,
+            &self.screen_saver_profile.allow_exposures,
+        );
+        return self;
     }
 
     pub fn deinit(self: *Self, allocator: mem.Allocator) void {
@@ -510,44 +517,31 @@ pub const DisplayManager = struct {
         }
     }
 
-    pub fn setDisplayWindow(self: *Self, d: *Display, w: ?*const Window) void {
-        var new_fullscreen_count = self.fullscreen_count;
-        if (d.window == null and w != null) {
-            new_fullscreen_count += 1;
-        } else if (d.window != null and w == null) {
-            new_fullscreen_count -= 1;
-        }
-        d.window = w;
-        if (self.fullscreen_count != new_fullscreen_count) {
-            if (new_fullscreen_count == 1) {
-                _ = libx11.XGetScreenSaver(
-                    self.driver.handles.xdisplay,
-                    &self.screen_saver_profile.timout,
-                    &self.screen_saver_profile.interval,
-                    &self.screen_saver_profile.prefer_blanking,
-                    &self.screen_saver_profile.allow_exposures,
-                );
+    pub fn setScreenSaver(self:*Self, on:bool) void {
+        if (!on) {
+            _ = libx11.XGetScreenSaver(
+                self.driver.handles.xdisplay,
+                &self.screen_saver_profile.timout,
+                &self.screen_saver_profile.interval,
+                &self.screen_saver_profile.prefer_blanking,
+                &self.screen_saver_profile.allow_exposures,
+            );
 
-                _ = libx11.XSetScreenSaver(
-                    self.driver.handles.xdisplay,
-                    0,
-                    0,
-                    libx11.DontPreferBlanking,
-                    libx11.DontAllowExposures,
-                );
-            }
-
-            if (new_fullscreen_count == 0) {
-                _ = libx11.XSetScreenSaver(
-                    self.driver.handles.xdisplay,
-                    self.screen_saver_profile.timout,
-                    self.screen_saver_profile.interval,
-                    self.screen_saver_profile.prefer_blanking,
-                    self.screen_saver_profile.allow_exposures,
-                );
-            }
-
-            self.fullscreen_count = new_fullscreen_count;
+            _ = libx11.XSetScreenSaver(
+                self.driver.handles.xdisplay,
+                0,
+                0,
+                libx11.DontPreferBlanking,
+                libx11.DontAllowExposures,
+            );
+        }else{
+            _ = libx11.XSetScreenSaver(
+                self.driver.handles.xdisplay,
+                self.screen_saver_profile.timout,
+                self.screen_saver_profile.interval,
+                self.screen_saver_profile.prefer_blanking,
+                self.screen_saver_profile.allow_exposures,
+            );
         }
     }
 };

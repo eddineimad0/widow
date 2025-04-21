@@ -188,7 +188,7 @@ pub const WindowBuilder = struct {
     /// Specify whether the window should be fullscreen on creation.
     /// # Parameters
     /// `value`: the boolean value of the flag.
-    pub fn withFullScreen(self: *Self, value: bool) *Self {
+    pub fn withFullscreen(self: *Self, value: bool) *Self {
         self.attribs.flags.is_fullscreen = value;
         return self;
     }

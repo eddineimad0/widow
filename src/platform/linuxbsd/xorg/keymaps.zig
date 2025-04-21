@@ -1,10 +1,11 @@
 const std = @import("std");
 const common = @import("common");
-const utils = @import("utils.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
 const ScanCode = common.keyboard_mouse.ScanCode;
 const KeyCode = common.keyboard_mouse.KeyCode;
+
+const mem = std.mem;
 
 const X11Driver = @import("driver.zig").X11Driver;
 const SymHashMap = std.AutoArrayHashMap(u32, u32);
@@ -527,9 +528,24 @@ fn mapXKeySymToWidowKeyCode(keysym: libx11.KeySym) KeyCode {
     };
 }
 
+/// Takes 2 many-items-pointers and compares the first `n` items
+/// the caller should make sure that n isn't outside the pointers bounds.
+inline fn bytesNCmp(
+    noalias a: [*]const u8,
+    noalias b: [*]const u8,
+    n: usize,
+) bool {
+    for (0..n) |i| {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 fn mapXKeyNameToKeyCode(name: []const u8) KeyCode {
     for (KEYNAME_TO_KEYCODE_MAP) |pair| {
-        if (utils.bytesNCmp(name.ptr, pair[1], 4)) {
+        if (bytesNCmp(name.ptr, pair[1], 4)) {
             return pair[0];
         }
     }

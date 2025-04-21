@@ -12,11 +12,12 @@
     [x] display wrapper need to be updated through hidden window events
     [x] fix: memory leak when quitting in fullscreen mode.
     [x] fix: the closest videomode choice isn't accurate.
+    [x] feature: disable screen saver on fullscreen
 # Linux
-[] replace utils function with available zig std library replacements.
+[x] replace utils function with available zig std library replacements.
 - X11
     [x] finish display wrapper.
-    [] implement fullscreen for windows.
-        + it's buggy and need to handle some cases
+    [x] implement fullscreen for windows.
+        [] creating a window with the fullscreen flag doesn't work (fuck x11)
     [x] finish raw motion input.
-    [] drag and drop is always on fix it.
+    [x] drag and drop is always on fix it.

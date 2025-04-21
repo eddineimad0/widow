@@ -472,7 +472,6 @@ pub fn mainWindowProc(
 
             // For windows that allows resizing by dragging it's edges,
             // this message is received multiple times during the resize process
-            // causing ton of events allocations.
             const event = common.event.createResizeEvent(
                 window.data.id,
                 new_width,
