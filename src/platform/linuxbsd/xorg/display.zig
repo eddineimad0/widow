@@ -203,8 +203,11 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         // Copy the display name.
         // in case of an error the dislay 'deinit' should free the name.
         const name_len = utils.strZLen(output_info.name);
+        var name_src_slice:[]const u8 = undefined;
+        name_src_slice.ptr  = output_info.name;
+        name_src_slice.len  = name_len;
         const name = try allocator.alloc(u8, name_len);
-        utils.strNCpy(name.ptr, output_info.name, name_len);
+        @memcpy(name, name_src_slice);
 
         var d = Display{
             .adapter = output_info.crtc,

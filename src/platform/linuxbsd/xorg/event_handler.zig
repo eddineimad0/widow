@@ -727,8 +727,8 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
 
             const wndw_pos_x, const wndw_pos_y = .{ ev.xconfigure.x, ev.xconfigure.y };
 
-            if (wndw_pos_x != window.data.client_area.top_left.x or
-                wndw_pos_y != window.data.client_area.top_left.y)
+            if (window.data.flags.is_minimized and (wndw_pos_x != window.data.client_area.top_left.x or
+                wndw_pos_y != window.data.client_area.top_left.y))
             {
                 window.data.client_area.top_left.x = wndw_pos_x;
                 window.data.client_area.top_left.y = wndw_pos_y;

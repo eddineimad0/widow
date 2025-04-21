@@ -122,24 +122,31 @@ pub const Window = struct {
         try setInitialWindowPropeties(ctx.driver, self.handle, data);
 
         self.setTitle(window_title);
+        self.setClientPosition(data.client_area.top_left.x, data.client_area.top_left.y);
+        self.setClientSize(&data.client_area.size);
+        self.processEvents() catch return WindowError.CreateFail;
+
         if (!self.data.flags.is_decorated) {
             self.setDecorated(false);
         }
 
-        if (self.data.flags.is_visible) {
-            self.show();
-
-            if (self.data.flags.is_focused) {
-                self.focus();
-            }
-        }
 
         if (self.data.flags.is_fullscreen) {
             // BUG: This doesn't work
             _ = libx11.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
             const ok = waitForWindowVisibility(ctx.driver.handles.xdisplay, self.handle);
             if (!ok or !self.setFullscreen(true)) return WindowError.CreateFail;
+        }else{
+
+            if (self.data.flags.is_visible) {
+                self.show();
+
+                if (self.data.flags.is_focused) {
+                    self.focus();
+                }
+            }
         }
+
 
         return self;
     }
@@ -1395,6 +1402,14 @@ fn setInitialWindowPropeties(
         size_hints.min_width = window_size.width;
         size_hints.max_height = window_size.height;
         size_hints.min_height = window_size.height;
+    }
+
+    if(data.client_area.top_left.x != Window.WINDOW_DEFAULT_POSITION.x and
+        data.client_area.top_left.y != Window.WINDOW_DEFAULT_POSITION.y
+    ){
+        size_hints.x = data.client_area.top_left.x;
+        size_hints.y = data.client_area.top_left.y;
+        size_hints.flags |= libx11.PPosition;
     }
 
     _ = libx11.XSetWMNormalHints(
