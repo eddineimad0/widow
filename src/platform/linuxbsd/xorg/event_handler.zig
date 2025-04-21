@@ -201,6 +201,8 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         }
 
         std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
+        const accept:c_long = if(w.x11.xdnd_allow and w.x11.xdnd_req.format != libx11.None) 1 else 0;
+        const action = if(accept == 1) drvr.ewmh.XdndActionCopy else libx11.None;
         var reply = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
                 .type = libx11.ClientMessage,
@@ -212,10 +214,10 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
                 .send_event = 0,
                 .data = .{ .l = [5]c_long{
                     @intCast(w.handle),
-                    if (w.x11.xdnd_req.format != libx11.None) 1 else 0,
+                    accept,
                     0,
                     0,
-                    @intCast(drvr.ewmh.XdndActionCopy),
+                    @intCast(action),
                 } },
             },
         };
@@ -515,8 +517,8 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
                 }
             }
 
+            window.data.flags.is_maximized = maximized;
             if (maximized) {
-                window.data.flags.is_maximized = maximized;
                 const event = common.event.createMaximizeEvent(window.data.id);
                 window.sendEvent(&event);
             }
@@ -725,8 +727,8 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
 
             const wndw_pos_x, const wndw_pos_y = .{ ev.xconfigure.x, ev.xconfigure.y };
 
-            if (wndw_pos_x != window.data.client_area.top_left.x or
-                wndw_pos_y != window.data.client_area.top_left.y)
+            if (window.data.flags.is_minimized and (wndw_pos_x != window.data.client_area.top_left.x or
+                wndw_pos_y != window.data.client_area.top_left.y))
             {
                 window.data.client_area.top_left.x = wndw_pos_x;
                 window.data.client_area.top_left.y = wndw_pos_y;

@@ -49,6 +49,7 @@ pub const Window = struct {
         },
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
+        windowed_area:common.geometry.Rect,
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
@@ -85,6 +86,7 @@ pub const Window = struct {
                 .paths = .empty,
             },
             .xdnd_allow = false,
+            .windowed_area = data.client_area,
         };
         self.ctx = ctx;
 
@@ -120,22 +122,31 @@ pub const Window = struct {
         try setInitialWindowPropeties(ctx.driver, self.handle, data);
 
         self.setTitle(window_title);
+        self.setClientPosition(data.client_area.top_left.x, data.client_area.top_left.y);
+        self.setClientSize(&data.client_area.size);
+        self.processEvents() catch return WindowError.CreateFail;
+
         if (!self.data.flags.is_decorated) {
             self.setDecorated(false);
         }
 
-        if (self.data.flags.is_visible) {
-            self.show();
-
-            if (self.data.flags.is_focused) {
-                self.focus();
-            }
-        }
 
         if (self.data.flags.is_fullscreen) {
             // BUG: This doesn't work
-            if (!self.setFullscreen(true)) return WindowError.CreateFail;
+            _ = libx11.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
+            const ok = waitForWindowVisibility(ctx.driver.handles.xdisplay, self.handle);
+            if (!ok or !self.setFullscreen(true)) return WindowError.CreateFail;
+        }else{
+
+            if (self.data.flags.is_visible) {
+                self.show();
+
+                if (self.data.flags.is_focused) {
+                    self.focus();
+                }
+            }
         }
+
 
         return self;
     }
@@ -203,38 +214,19 @@ pub const Window = struct {
     }
 
     pub fn waitEvent(self: *Self) WindowError!void {
-        // Indefinetly wait for event
-        var ready: u32 = 0;
-        // start by flushing and checking for available events.
-        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
-            _ = unix.poll(
-                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
-                unix.PollFlag.IORead,
-                -1,
-                &ready,
-            );
-        }
+        // indefinetly wait
+        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay,-1);
+        debug.assert(ok);
         try self.processEvents();
     }
 
     /// Waits for an event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
-        const timeout_ns = timeout * std.time.ns_per_ms;
-        var ready: u32 = 0;
-        // start by flushing and checking for available events.
-        while (libx11.XPending(self.ctx.driver.handles.xdisplay) == 0) {
-            if (unix.poll(
-                libx11.ConnectionNumber(self.ctx.driver.handles.xdisplay),
-                unix.PollFlag.IORead,
-                timeout_ns,
-                &ready,
-            ) == false) {
-                // timeout or error
-                return false;
-            }
+        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay, timeout);
+        if(ok){
+            try self.processEvents();
         }
-        try self.processEvents();
-        return true;
+        return ok;
     }
 
     /// Shows the hidden window.
@@ -331,60 +323,34 @@ pub const Window = struct {
     }
 
     fn updateStyles(self: *const Self) bool {
-        if (self.data.flags.is_fullscreen) {
-            if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
-                self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
-            {
-                var event = libx11.XEvent{
-                    .xclient = libx11.XClientMessageEvent{
-                        .type = libx11.ClientMessage,
-                        .display = self.ctx.driver.handles.xdisplay,
-                        .window = self.handle,
-                        .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
-                        .format = 32,
-                        .serial = 0,
-                        .send_event = 0,
-                        .data = .{ .l = [5]c_long{
-                            _NET_WM_STATE_ADD,
-                            @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
-                            0,
-                            1,
-                            0,
-                        } },
-                    },
-                };
-                self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
-            } else {
-                return false;
-            }
+        if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
+            self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
+        {
+            // NOTE: if the window isn't resizable the window manager
+            // might not do anything in response to this message.
+            var event = libx11.XEvent{
+                .xclient = libx11.XClientMessageEvent{
+                    .type = libx11.ClientMessage,
+                    .display = null,
+                    .window = self.handle,
+                    .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
+                    .format = 32,
+                    .serial = 0,
+                    .send_event = 0,
+                    .data = .{ .l = [5]c_long{
+                        if(self.data.flags.is_fullscreen) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                        @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
+                        0,
+                        0,
+                        0,
+                    } },
+                },
+            };
+            self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
+            return true;
         } else {
-            if (self.ctx.driver.ewmh._NET_WM_STATE != 0 and
-                self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN != 0)
-            {
-                var event = libx11.XEvent{
-                    .xclient = libx11.XClientMessageEvent{
-                        .type = libx11.ClientMessage,
-                        .display = self.ctx.driver.handles.xdisplay,
-                        .window = self.handle,
-                        .message_type = self.ctx.driver.ewmh._NET_WM_STATE,
-                        .format = 32,
-                        .serial = 0,
-                        .send_event = 0,
-                        .data = .{ .l = [5]c_long{
-                            _NET_WM_STATE_REMOVE,
-                            @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
-                            0,
-                            1,
-                            0,
-                        } },
-                    },
-                };
-                self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
-            } else {
-                return false;
-            }
+            return false;
         }
-        return true;
     }
 
     /// Notify and flash the taskbar.
@@ -670,8 +636,8 @@ pub const Window = struct {
                     .data = .{
                         .l = .{
                             _NET_WM_STATE_ADD,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT,
-                            drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ,
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT),
+                            @intCast(drvr.ewmh._NET_WM_STATE_MAXIMIZED_HORZ),
                             1,
                             0,
                         },
@@ -766,7 +732,7 @@ pub const Window = struct {
     pub fn getTitle(
         self: *const Self,
         allocator: std.mem.Allocator,
-    ) (Allocator.Error.OutOfMemory || WindowError)![]u8 {
+    ) (Allocator.Error || WindowError)![]u8 {
         const drvr = self.ctx.driver;
         const name_atom = if (drvr.ewmh._NET_WM_NAME != 0)
             drvr.ewmh._NET_WM_NAME
@@ -794,27 +760,31 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn getOpacity(self: *const Self) f64 {
+    pub fn getOpacity(self: *const Self) f32 {
         const drvr = self.ctx.driver;
-        var cardinal: ?*libx11.XID = null; // cardinal, and xid are the same bitwidth.
+        var value: ?*libx11.CARD32 = null; // cardinal, and xid are the same bitwidth.
         const OPAQUE = @as(u32, 0xFFFFFFFF);
         _ = utils.x11WindowProperty(
             drvr.handles.xdisplay,
             self.handle,
             drvr.ewmh._NET_WM_WINDOW_OPACITY,
             libx11.XA_CARDINAL,
-            &cardinal,
+            @ptrCast(&value),
         ) catch return 1.0;
-        std.debug.assert(cardinal != null);
-        defer _ = libx11.XFree(cardinal.?);
-        return (@as(f64, @floatFromInt(cardinal.?.*)) / @as(f64, @floatFromInt(OPAQUE)));
+        if(value)|v|{
+            defer _ = libx11.XFree(v);
+            const curr_opacity:f64 =  (@as(f64, @floatFromInt(v.*)) / @as(f64, @floatFromInt(OPAQUE)));
+            return @floatCast(curr_opacity);
+        }else{
+            return 1.0;
+        }
     }
 
     /// Sets the window's opacity
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn setOpacity(self: *Self, value: f64) bool {
+    pub fn setOpacity(self: *Self, value: f32) bool {
         const drvr = self.ctx.driver;
         if (drvr.ewmh._NET_WM_WINDOW_OPACITY == 0) {
             return false;
@@ -829,7 +799,7 @@ pub const Window = struct {
             );
         } else {
             const OPAQUE = @as(u32, 0xFFFFFFFF);
-            const alpha: libx11.XID = @intFromFloat(value * @as(f64, @floatFromInt(OPAQUE)));
+            const alpha: libx11.XID = @intFromFloat(@as(f64,value) * @as(f64, @floatFromInt(OPAQUE)));
             libx11.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
@@ -851,19 +821,40 @@ pub const Window = struct {
     ) bool {
         const drvr = self.ctx.driver;
         var display_area: common.geometry.Rect = undefined;
+        var new_window_area:*common.geometry.Rect = &display_area;
 
         if (self.data.flags.is_fullscreen != value) {
-            self.data.flags.is_fullscreen = value;
-
-            if (!self.updateStyles()) return false;
 
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
             d.getFullArea(&display_area, drvr);
 
             if (value) {
+
                 if (!self.data.flags.is_resizable) {
-                    //BUG: the window decoration isn't removed.
-                    self.updateSizeHints();
+
+                    const size_hints = libx11.XAllocSizeHints();
+                    if (size_hints) |hints| {
+                        defer _ = libx11.XFree(hints);
+                        var supplied: c_long = 0;
+                        _ = libx11.XGetWMNormalHints(
+                            self.ctx.driver.handles.xdisplay,
+                            self.handle,
+                            hints,
+                            &supplied,
+                        );
+
+                        hints.flags &= ~(@as(@TypeOf(hints.flags),libx11.PMinSize) |
+                        @as(@TypeOf(hints.flags),libx11.PMaxSize));
+
+                        _ = libx11.XSetWMNormalHints(
+                            self.ctx.driver.handles.xdisplay,
+                            self.handle,
+                            @ptrCast(hints),
+                        );
+                    }else{
+                        return false;
+                    }
+
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = self.data.client_area.size.width,
                         .height = self.data.client_area.size.height,
@@ -872,7 +863,10 @@ pub const Window = struct {
                         .color_depth = 32,
                     }) catch return false;
                 }
-                if (drvr.extensions.xinerama.is_active and drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+
+
+                if (drvr.extensions.xinerama.is_active and
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
                     var event = libx11.XEvent{
                         .xclient = libx11.XClientMessageEvent{
                             .type = libx11.ClientMessage,
@@ -894,26 +888,43 @@ pub const Window = struct {
                     self.ctx.driver.sendXEvent(&event, self.ctx.driver.windowManagerId());
                 }
 
-                _ = libx11.XMoveResizeWindow(
-                    drvr.handles.xdisplay,
-                    self.handle,
-                    display_area.top_left.x,
-                    display_area.top_left.y,
-                    @intCast(display_area.size.width),
-                    @intCast(display_area.size.height),
-                );
-                self.ctx.display_mgr.setDisplayWindow(d, self);
+                self.x11.windowed_area = self.data.client_area;
+
+                self.ctx.display_mgr.setScreenSaver(false);
+
             } else {
+
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
-                if (drvr.extensions.xinerama.is_active and drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+
+                if (drvr.extensions.xinerama.is_active and
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+
                     libx11.XDeleteProperty(
                         drvr.handles.xdisplay,
                         self.handle,
                         drvr.ewmh._NET_WM_FULLSCREEN_MONITORS,
                     );
                 }
-                self.ctx.display_mgr.setDisplayWindow(d, null);
+
+                new_window_area = &self.x11.windowed_area;
+                self.ctx.display_mgr.setScreenSaver(true);
             }
+
+            self.data.flags.is_fullscreen = value;
+            self.updateSizeHints();
+            if (!self.updateStyles()){
+                self.data.flags.is_fullscreen = !value;
+                return false;
+            }
+
+            _ = libx11.XMoveResizeWindow(
+                drvr.handles.xdisplay,
+                self.handle,
+                new_window_area.top_left.x,
+                new_window_area.top_left.y,
+                @intCast(new_window_area.size.width),
+                @intCast(new_window_area.size.height),
+            );
 
             drvr.flushXRequests();
         }
@@ -1366,7 +1377,6 @@ fn setInitialWindowPropeties(
     }
 
     // WMHints.
-
     var hints = libx11.XAllocWMHints() orelse return WindowError.CreateFail;
     defer _ = libx11.XFree(hints);
     hints.flags = libx11.StateHint;
@@ -1394,6 +1404,14 @@ fn setInitialWindowPropeties(
         size_hints.min_height = window_size.height;
     }
 
+    if(data.client_area.top_left.x != Window.WINDOW_DEFAULT_POSITION.x and
+        data.client_area.top_left.y != Window.WINDOW_DEFAULT_POSITION.y
+    ){
+        size_hints.x = data.client_area.top_left.x;
+        size_hints.y = data.client_area.top_left.y;
+        size_hints.flags |= libx11.PPosition;
+    }
+
     _ = libx11.XSetWMNormalHints(
         driver.handles.xdisplay,
         window,
@@ -1413,6 +1431,7 @@ fn setInitialWindowPropeties(
         @ptrCast(class_hints),
     );
 }
+
 
 pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
     const window = driver.findInXContext(window_id);
@@ -1451,4 +1470,36 @@ pub inline fn disableRawMouseMotion(driver: *const X11Driver) bool {
         @ptrCast(&ev_mask),
         1,
     ) == libx11.Success;
+}
+
+fn waitOnX11Socket(display:*libx11.Display,timeout:i64) bool {
+    const timeout_ns = timeout * std.time.ns_per_ms;
+    var ready: u32 = 0;
+    // start by flushing and checking for available events.
+    while (libx11.XPending(display) == 0) {
+        if (unix.poll(
+            libx11.ConnectionNumber(display),
+            unix.PollFlag.IORead,
+            timeout_ns,
+            &ready,
+        ) == false) {
+            // timeout or error
+            return false;
+        }
+    }
+    return true;
+}
+
+inline fn isNextEventType(display: *libx11.Display, window_id:libx11.Window, event_type:c_int) bool {
+    var e:libx11.XEvent = undefined;
+    return libx11.XCheckTypedWindowEvent(display,window_id,event_type,&e) == libx11.True;
+}
+
+fn waitForWindowVisibility(display: *libx11.Display, window_id:libx11.Window) bool {
+    while(!isNextEventType(display, window_id, libx11.VisibilityNotify)){
+        if(!waitOnX11Socket(display, 200)){
+            return false;
+        }
+    }
+    return true;
 }

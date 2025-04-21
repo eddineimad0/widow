@@ -188,7 +188,7 @@ pub const WindowBuilder = struct {
     /// Specify whether the window should be fullscreen on creation.
     /// # Parameters
     /// `value`: the boolean value of the flag.
-    pub fn withFullScreen(self: *Self, value: bool) *Self {
+    pub fn withFullscreen(self: *Self, value: bool) *Self {
         self.attribs.flags.is_fullscreen = value;
         return self;
     }
@@ -555,16 +555,18 @@ pub const Window = struct {
     /// Changes the opacity value of the window(client area + decorations).
     /// # Parameters
     /// `value`: the new opacity value.
+    /// # Returns
+    /// `true` on success otherwise `false`.
     /// # Notes
     /// The window's opacity or alpha value is a real number
     /// between 1 and 0 that reflects how transparent
     /// the window(client area + decorations) is
     /// with 1 being opaque, and 0 being fully transparent.
     /// A window is always created with an opacity value of 1.
-    pub inline fn setOpacity(self: *Self, value: f32) void {
+    pub inline fn setOpacity(self: *Self, value: f32) bool {
         std.debug.assert(value <= @as(f32, 1.0));
         std.debug.assert(value >= @as(f32, 0.0));
-        self.impl.setOpacity(value);
+        return self.impl.setOpacity(value);
     }
 
     /// Brings the window to the front and acquires input focus.
