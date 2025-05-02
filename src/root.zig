@@ -31,7 +31,7 @@ pub const opengl = struct {
     /// opengl functions after creating an opengl
     /// rendering context.
     pub const loaderFunc = platform.glLoaderFunc;
-    pub const GLconfig = gl.GLConfig;
+    pub const GLContext = platform.GLContext;
 };
 
 pub const WindowBuilder = @import("window.zig").WindowBuilder;
