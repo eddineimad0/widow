@@ -10,10 +10,10 @@ pub const GLProfile = enum(u1) {
 /// opengl context.
 pub const GLConfig = struct {
     ver: struct {
-        major: u8 = 4,
-        minor: u8 = 2,
-    } = .{},
-    profile: GLProfile = .Core,
+        major: u8,
+        minor: u8,
+    },
+    profile: GLProfile,
 };
 
 /// Returns true if the `target` extension is in the `ext_list` string
