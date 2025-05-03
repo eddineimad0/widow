@@ -143,22 +143,22 @@ fn fillPFDstruct(pfd: *win32_gl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) voi
     }
     pfd.iPixelType = win32_gl.PFD_TYPE_RGBA;
     pfd.iLayerType = win32_gl.PFD_MAIN_PLANE;
-    pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
-        cfg.color.blue_bits;
-    pfd.cRedBits = cfg.color.red_bits;
+    pfd.cColorBits = @as(u8, cfg.color_bits.red_bits) + cfg.color_bits.green_bits +
+        cfg.color_bits.blue_bits;
+    pfd.cRedBits = cfg.color_bits.red_bits;
     pfd.cRedShift = 0;
-    pfd.cGreenBits = cfg.color.green_bits;
+    pfd.cGreenBits = cfg.color_bits.green_bits;
     pfd.cGreenShift = 0;
-    pfd.cBlueBits = cfg.color.blue_bits;
+    pfd.cBlueBits = cfg.color_bits.blue_bits;
     pfd.cBlueShift = 0;
-    pfd.cAlphaBits = cfg.color.alpha_bits;
+    pfd.cAlphaBits = cfg.color_bits.alpha_bits;
     pfd.cAlphaShift = 0;
-    pfd.cAccumBits = @as(u8, cfg.accum.red_bits) + cfg.accum.green_bits +
-        cfg.accum.blue_bits + cfg.accum.alpha_bits;
-    pfd.cAccumRedBits = cfg.accum.red_bits;
-    pfd.cAccumGreenBits = cfg.accum.green_bits;
-    pfd.cAccumBlueBits = cfg.accum.blue_bits;
-    pfd.cAccumAlphaBits = cfg.accum.alpha_bits;
+    pfd.cAccumBits = @as(u8, cfg.accum_bits.red_bits) + cfg.accum_bits.green_bits +
+        cfg.accum_bits.blue_bits + cfg.accum_bits.alpha_bits;
+    pfd.cAccumRedBits = cfg.accum_bits.red_bits;
+    pfd.cAccumGreenBits = cfg.accum_bits.green_bits;
+    pfd.cAccumBlueBits = cfg.accum_bits.blue_bits;
+    pfd.cAccumAlphaBits = cfg.accum_bits.alpha_bits;
     pfd.cDepthBits = cfg.depth_bits;
     pfd.cStencilBits = cfg.stencil_bits;
     pfd.cAuxBuffers = 0;
@@ -313,32 +313,32 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
             &pfd_attrib_list,
             &index,
             WGL_COLOR_BITS_ARB,
-            @as(c_int, cfg.color.red_bits) + cfg.color.blue_bits +
-                cfg.color.green_bits,
+            @as(c_int, cfg.color_bits.red_bits) + cfg.color_bits.blue_bits +
+                cfg.color_bits.green_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_RED_BITS_ARB,
-            cfg.color.red_bits,
+            cfg.color_bits.red_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_GREEN_BITS_ARB,
-            cfg.color.green_bits,
+            cfg.color_bits.green_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_BLUE_BITS_ARB,
-            cfg.color.blue_bits,
+            cfg.color_bits.blue_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_ALPHA_BITS_ARB,
-            cfg.color.alpha_bits,
+            cfg.color_bits.alpha_bits,
         );
 
         // Specifiy accum bits count.
@@ -346,32 +346,32 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
             &pfd_attrib_list,
             &index,
             WGL_ACCUM_BITS_ARB,
-            @as(c_int, cfg.accum.red_bits) + cfg.accum.blue_bits +
-                cfg.accum.green_bits,
+            @as(c_int, cfg.accum_bits.red_bits) + cfg.accum_bits.blue_bits +
+                cfg.accum_bits.green_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_ACCUM_RED_BITS_ARB,
-            cfg.accum.red_bits,
+            cfg.accum_bits.red_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_ACCUM_GREEN_BITS_ARB,
-            cfg.accum.green_bits,
+            cfg.accum_bits.green_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_ACCUM_BLUE_BITS_ARB,
-            cfg.accum.blue_bits,
+            cfg.accum_bits.blue_bits,
         );
         helper.setAttribute(
             &pfd_attrib_list,
             &index,
             WGL_ACCUM_ALPHA_BITS_ARB,
-            cfg.accum.alpha_bits,
+            cfg.accum_bits.alpha_bits,
         );
 
         // Support for hardware acceleration.

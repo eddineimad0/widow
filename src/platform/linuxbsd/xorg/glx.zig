@@ -379,14 +379,14 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     helper.setAttribute(&attribs, &idx, GLX_RENDER_TYPE, GLX_RGBA_BIT);
     helper.setAttribute(&attribs, &idx, GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT);
     helper.setAttribute(&attribs, &idx, GLX_X_RENDERABLE, 1);
-    helper.setAttribute(&attribs, &idx, GLX_RED_SIZE, cfg.color.red_bits);
-    helper.setAttribute(&attribs, &idx, GLX_GREEN_SIZE, cfg.color.green_bits);
-    helper.setAttribute(&attribs, &idx, GLX_BLUE_SIZE, cfg.color.blue_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ALPHA_SIZE, cfg.color.alpha_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_RED_SIZE, cfg.accum.red_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_GREEN_SIZE, cfg.accum.green_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_BLUE_SIZE, cfg.accum.blue_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_ALPHA_SIZE, cfg.accum.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_RED_SIZE, cfg.color_bits.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_GREEN_SIZE, cfg.color_bits.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_BLUE_SIZE, cfg.color_bits.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ALPHA_SIZE, cfg.color_bits.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_RED_SIZE, cfg.accum_bits.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_GREEN_SIZE, cfg.accum_bits.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_BLUE_SIZE, cfg.accum_bits.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_ALPHA_SIZE, cfg.accum_bits.alpha_bits);
     helper.setAttribute(&attribs, &idx, GLX_DEPTH_SIZE, cfg.depth_bits);
     helper.setAttribute(&attribs, &idx, GLX_STENCIL_SIZE, cfg.stencil_bits);
     if (cfg.flags.double_buffered) {
