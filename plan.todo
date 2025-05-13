@@ -5,6 +5,9 @@
     [] redo the tests.
     [] should singletons (driver, keymap, ...) be thread-local ?
     [] should the event queue be moved to the context ?
+    [] opengl context info log
+    [] ALT-F4 events handeling
+    [] window Display changing events
     [x] allocator migration to unamanged
     [x] use dequeue as events queue
 # Win32
@@ -13,6 +16,7 @@
     [x] fix: memory leak when quitting in fullscreen mode.
     [x] fix: the closest videomode choice isn't accurate.
     [x] feature: disable screen saver on fullscreen
+    [] WM_PAINT: is usless when using events (callbacks is better for it)
 # Linux
 [x] replace utils function with available zig std library replacements.
 - X11
