@@ -134,10 +134,20 @@ pub fn mainWindowProc(
         },
 
         win32_gfx.WM_PAINT => {
+            // No serious window application uses WM_PAINT for rendering
+            // since most of the time you should decide when to render and not
+            // the windows event loop. however for some event like the user resizing the window
+            // you want the rendering code to respond to WM_PAINT and paint the new regions.
+            // so we should notify the client that a repaint was requested but when the user
+            // is doing such actions windows OS decides to hold our thread hostage
+            // and keeps calling this function with WM_PAINT, WM_SIZE...etc until the user stop
+            // so in order to respond to the user actions and repaint the window i can think of 3 options
+            // 1. use a callback or build the library around callbacks like glfw did (too late for this)
+            // 2. have the rendering code be on another thread and notify it using messages
             if (opt.LOG_PLATFORM_EVENTS) {
                 std.log.info("window: {} recieved a PAINT event\n", .{window.data.id});
             }
-            const event = common.event.createRedrawEvent(window.data.id);
+            const event = common.event.createRePaintEvent(window.data.id);
             window.sendEvent(&event);
         },
 

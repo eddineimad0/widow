@@ -68,7 +68,13 @@ pub fn main() !void {
 
     var gl_ctx = try mywindow.initGLContext();
     defer gl_ctx.deinit();
+    std.debug.print(
+        "Hardware: {s}, Driver: {s}, Made by: {s}\n",
+        .{ gl_ctx.getHardwareName(), gl_ctx.getDriverVersion(), gl_ctx.getVendorName() },
+    );
     _ = gl_ctx.makeCurrent();
+    const ok = gl_ctx.setSwapIntervals(.Synced);
+    std.debug.print("VSync={s}\n", .{if (ok) "ON" else "OFF"});
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
@@ -83,7 +89,6 @@ pub fn main() !void {
     gl.UseProgram(render_prg);
 
     event_loop: while (true) {
-        // sleeps until an event is postd.
         try mywindow.pollEvents();
 
         var event: widow.event.Event = undefined;

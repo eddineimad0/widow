@@ -125,7 +125,7 @@ const wgl_ext = struct {
     var supported_extensions: ?[:0]const u8 = null;
     var ARB_pixel_format: bool = false;
     var ARB_create_context: bool = false;
-    var EXT_swap_control: bool = false;
+    var EXT_swap_control_tear: bool = false;
 
     var loaded: bool = false;
 };
@@ -263,11 +263,14 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
             ));
         }
 
-        if (gl.glHasExtension("wgl_ext_swap_control", wgl_ext.supported_extensions.?)) {
-            wgl_ext.EXT_swap_control = true;
+        if (gl.glHasExtension("WGL_EXT_swap_control", wgl_ext.supported_extensions.?)) {
             wgl_ext.SwapIntervalEXT = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglSwapIntervalEXT",
             ));
+
+            if (gl.glHasExtension("WGL_EXT_swap_control_tear", wgl_ext.supported_extensions.?)) {
+                wgl_ext.EXT_swap_control_tear = true;
+            }
         }
 
         if (gl.glHasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
@@ -488,7 +491,7 @@ pub const GLContext = struct {
     glrc: win32.HGLRC,
     owner: win32.HWND,
     driver: struct {
-        name: [*:0]const u8,
+        hardware: [*:0]const u8,
         vendor: [*:0]const u8,
         version: [*:0]const u8,
     },
@@ -531,7 +534,7 @@ pub const GLContext = struct {
             .glrc = rc.?,
             .owner = window,
             .driver = .{
-                .name = rend,
+                .hardware = rend,
                 .vendor = vend,
                 .version = ver,
             },
@@ -557,11 +560,27 @@ pub const GLContext = struct {
         return success;
     }
 
-    pub fn setSwapIntervals(intrvl: i32) bool {
-        if (wgl_ext.EXT_swap_control and intrvl > 0) {
-            return wgl_ext.SwapIntervalEXT.?(intrvl) == win32.TRUE;
+    pub fn setSwapIntervals(_: *const Self, interval: gl.SwapInterval) bool {
+        if (wgl_ext.SwapIntervalEXT) |func| {
+            if (interval == .Adaptive and wgl_ext.EXT_swap_control_tear == false) {
+                return false;
+            }
+            const interval_int = @intFromEnum(interval);
+            return func(interval_int) == win32.TRUE;
         }
         return false;
+    }
+
+    pub inline fn getVendorName(self: *const Self) [*:0]const u8 {
+        return self.driver.vendor;
+    }
+
+    pub inline fn getHardwareName(self: *const Self) [*:0]const u8 {
+        return self.driver.hardware;
+    }
+
+    pub inline fn getDriverVersion(self: *const Self) [*:0]const u8 {
+        return self.driver.version;
     }
 };
 

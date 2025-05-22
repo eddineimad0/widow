@@ -1032,7 +1032,7 @@ pub const Window = struct {
     pub fn setTitle(
         self: *const Self,
         new_title: []const u8,
-    )   error{OutOfMemory,InvalidUtf8}!void {
+    ) error{ OutOfMemory, InvalidUtf8 }!void {
         const wide_title = try utils.utf8ToWideZ(self.ctx.allocator, new_title);
         defer self.ctx.allocator.free(wide_title);
         _ = win32_gfx.SetWindowTextW(self.handle, wide_title);
@@ -1209,7 +1209,6 @@ pub const Window = struct {
                 // For non resizalble window we change
                 // monitor resoultion
                 if (!self.data.flags.is_resizable) {
-
                     const size = self.getClientSize();
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = size.width,
