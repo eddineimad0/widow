@@ -746,7 +746,7 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
                     .{window.data.id},
                 );
             }
-            const event = common.event.createRedrawEvent(window.data.id);
+            const event = common.event.createRePaintEvent(window.data.id);
             window.sendEvent(&event);
         },
 

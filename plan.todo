@@ -17,7 +17,6 @@
     [x] fix: memory leak when quitting in fullscreen mode.
     [x] fix: the closest videomode choice isn't accurate.
     [x] feature: disable screen saver on fullscreen
-    [] WM_PAINT: is usless when using events (callbacks is better for it)
 # Linux
 [x] replace utils function with available zig std library replacements.
 - X11
