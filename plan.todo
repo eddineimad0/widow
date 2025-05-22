@@ -8,7 +8,7 @@
     [x] opengl context info log
     [] ALT-F4 events handeling ?
     [] window Display changing events
-    [1] BUG: opengl swapinterval code doesn't accept correct values.
+    [x] BUG: opengl swapinterval code doesn't accept correct values.
     [x] allocator migration to unamanged
     [x] use dequeue as events queue
 # Win32

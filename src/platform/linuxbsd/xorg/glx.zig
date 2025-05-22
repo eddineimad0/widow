@@ -213,10 +213,10 @@ pub const glx_api = struct {
 
 var __glx_module: ?*anyopaque = null;
 
-pub const glx_ext_api = struct {
+pub const glx_ext = struct {
     var supported_extensions: [:0]const u8 = "";
     var ARB_create_context: bool = false;
-    var EXT_swap_control: bool = false;
+    var EXT_swap_control_tear: bool = false;
     var ARB_multisample: bool = false;
     var ARB_framebuffer_sRGB: bool = false;
     var EXT_framebuffer_sRGB: bool = false;
@@ -302,51 +302,52 @@ pub fn initGLX(driver: *const X11Driver) (unix.ModuleError || GLXError)!void {
 
     const extensions = glx_api.glXQueryExtensionsString(driver.handles.xdisplay, driver.handles.default_screen);
 
-    glx_ext_api.supported_extensions = mem.span(extensions);
+    glx_ext.supported_extensions = mem.span(extensions);
 
-    if (gl.glHasExtension("GLX_EXT_swap_control", glx_ext_api.supported_extensions)) {
-        glx_ext_api.glXSwapIntervalEXT =
+    if (gl.glHasExtension("GLX_EXT_swap_control", glx_ext.supported_extensions)) {
+        glx_ext.glXSwapIntervalEXT =
             @ptrCast(glLoaderFunc("glXSwapIntervalEXT"));
 
-        if (glx_ext_api.glXSwapIntervalEXT) |_|
-            glx_ext_api.EXT_swap_control = true;
+        if (gl.glHasExtension("GLX_EXT_swap_control_tear", glx_ext.supported_extensions)) {
+            glx_ext.EXT_swap_control_tear = true;
+        }
     }
 
-    if (gl.glHasExtension("GLX_ARB_multisample", glx_ext_api.supported_extensions))
-        glx_ext_api.ARB_multisample = true;
+    if (gl.glHasExtension("GLX_ARB_multisample", glx_ext.supported_extensions))
+        glx_ext.ARB_multisample = true;
 
-    if (gl.glHasExtension("GLX_ARB_framebuffer_sRGB", glx_ext_api.supported_extensions))
-        glx_ext_api.ARB_framebuffer_sRGB = true;
+    if (gl.glHasExtension("GLX_ARB_framebuffer_sRGB", glx_ext.supported_extensions))
+        glx_ext.ARB_framebuffer_sRGB = true;
 
-    if (gl.glHasExtension("GLX_EXT_framebuffer_sRGB", glx_ext_api.supported_extensions))
-        glx_ext_api.EXT_framebuffer_sRGB = true;
+    if (gl.glHasExtension("GLX_EXT_framebuffer_sRGB", glx_ext.supported_extensions))
+        glx_ext.EXT_framebuffer_sRGB = true;
 
-    if (gl.glHasExtension("GLX_ARB_create_context", glx_ext_api.supported_extensions)) {
-        glx_ext_api.glXCreateContextAttribsARB =
+    if (gl.glHasExtension("GLX_ARB_create_context", glx_ext.supported_extensions)) {
+        glx_ext.glXCreateContextAttribsARB =
             @ptrCast(glLoaderFunc("glXCreateContextAttribsARB"));
 
-        if (glx_ext_api.glXCreateContextAttribsARB) |_|
-            glx_ext_api.ARB_create_context = true;
+        if (glx_ext.glXCreateContextAttribsARB) |_|
+            glx_ext.ARB_create_context = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_robustness", glx_ext_api.supported_extensions)) {
-        glx_ext_api.ARB_create_context_robustness = true;
+    if (gl.glHasExtension("GLX_ARB_create_context_robustness", glx_ext.supported_extensions)) {
+        glx_ext.ARB_create_context_robustness = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_profile", glx_ext_api.supported_extensions)) {
-        glx_ext_api.ARB_create_context_profile = true;
+    if (gl.glHasExtension("GLX_ARB_create_context_profile", glx_ext.supported_extensions)) {
+        glx_ext.ARB_create_context_profile = true;
     }
 
-    if (gl.glHasExtension("GLX_EXT_create_context_es2_profile", glx_ext_api.supported_extensions)) {
-        glx_ext_api.EXT_create_context_es2_profile = true;
+    if (gl.glHasExtension("GLX_EXT_create_context_es2_profile", glx_ext.supported_extensions)) {
+        glx_ext.EXT_create_context_es2_profile = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_no_error", glx_ext_api.supported_extensions)) {
-        glx_ext_api.ARB_create_context_no_error = true;
+    if (gl.glHasExtension("GLX_ARB_create_context_no_error", glx_ext.supported_extensions)) {
+        glx_ext.ARB_create_context_no_error = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_context_flush_control", glx_ext_api.supported_extensions)) {
-        glx_ext_api.ARB_context_flush_control = true;
+    if (gl.glHasExtension("GLX_ARB_context_flush_control", glx_ext.supported_extensions)) {
+        glx_ext.ARB_context_flush_control = true;
     }
 }
 
@@ -438,7 +439,7 @@ fn createGLContext(
         return GLXError.UnsupportedFBConfig;
     };
 
-    if (glx_ext_api.ARB_create_context) {
+    if (glx_ext.ARB_create_context) {
         if (cfg.accel.opengl.ver.major > 1 or cfg.accel.opengl.ver.minor > 0) {
             gl_attrib_list[0] = GLX_CONTEXT_MAJOR_VERSION_ARB;
             gl_attrib_list[1] = cfg.accel.opengl.ver.major;
@@ -454,7 +455,7 @@ fn createGLContext(
         gl_attrib_list[6] = 0;
         gl_attrib_list[7] = 0;
 
-        glx_rc = glx_ext_api.glXCreateContextAttribsARB.?(
+        glx_rc = glx_ext.glXCreateContextAttribsARB.?(
             driver.handles.xdisplay,
             fb_cfg,
             null,
@@ -564,12 +565,16 @@ pub const GLContext = struct {
         return true;
     }
 
-    pub fn setSwapIntervals(self: *const Self, intrvl: i32) bool {
-        if (glx_ext_api.EXT_swap_control and glx_ext_api.glXSwapIntervalEXT != null) {
-            glx_ext_api.glXSwapIntervalEXT.?(
+    pub fn setSwapIntervals(self: *const Self, interval: gl.SwapInterval) bool {
+        if (glx_ext.glXSwapIntervalEXT) |func| {
+            if (interval == .Adaptive and glx_ext.EXT_swap_control_tear == false) {
+                return false;
+            }
+            const interval_int = @intFromEnum(interval);
+            func(
                 self.x_display,
                 self.glwndw,
-                @intCast(intrvl),
+                interval_int,
             );
             return true;
         }
