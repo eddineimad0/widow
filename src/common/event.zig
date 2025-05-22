@@ -20,7 +20,7 @@ pub const EventType = enum(u8) {
     MouseEnter, // The mouse entered the client area of the window.
     MouseExit, // The mouse exited the client area of the window.
     FileDrop, // Some file was released in the window area.
-    RedrawRequest, // Request from the system to redraw the window's client area.
+    RePaintRequest, // Request from the system to repaint the window's client area.
     WindowFocus, // True/False if the window got keyboard focus.
     WindowResize, // The window client area size was changed.
     WindowMove, // The window has been moved, the Point2D struct specify the
@@ -72,7 +72,7 @@ pub const Event = union(EventType) {
     MouseEnter: WindowId,
     MouseExit: WindowId,
     FileDrop: WindowId,
-    RedrawRequest: WindowId,
+    RePaintRequest: WindowId,
     WindowFocus: FocusEvent,
     WindowResize: ResizeEvent,
     WindowMove: MoveEvent,
@@ -120,8 +120,8 @@ pub inline fn createDropFileEvent(window_id: WindowId) Event {
     return .{ .FileDrop = window_id };
 }
 
-pub inline fn createRedrawEvent(window_id: WindowId) Event {
-    return .{ .RedrawRequest = window_id };
+pub inline fn createRePaintEvent(window_id: WindowId) Event {
+    return .{ .RePaintRequest = window_id };
 }
 
 pub inline fn createFocusEvent(window_id: WindowId, focus: bool) Event {
@@ -218,8 +218,8 @@ pub inline fn createCharEvent(
 
 pub const EventQueue = struct {
     queue: Deque(Event),
-    allocator:mem.Allocator,
-    initial_capacity:usize,
+    allocator: mem.Allocator,
+    initial_capacity: usize,
     const Self = @This();
 
     /// initializes an event Queue For the window.
@@ -227,9 +227,9 @@ pub const EventQueue = struct {
     /// # parameters
     /// 'allocator': used for the queue's heap allocations.
     /// 'initial_capacity': the initial capacity of the queue, shouldn't be zero.
-    pub fn init(allocator: std.mem.Allocator,initial_capacity:usize) (mem.Allocator.Error||error{CapacityZero})!Self {
+    pub fn init(allocator: std.mem.Allocator, initial_capacity: usize) (mem.Allocator.Error || error{CapacityZero})!Self {
         return .{
-            .queue = try Deque(Event).init(allocator,initial_capacity),
+            .queue = try Deque(Event).init(allocator, initial_capacity),
             .allocator = allocator,
             .initial_capacity = initial_capacity,
         };
@@ -247,7 +247,7 @@ pub const EventQueue = struct {
 
     pub fn popEvent(self: *Self, event: *Event) bool {
         const ok = self.queue.popFront(event);
-        if(!ok and self.queue.getCapacity() > 4 * self.initial_capacity){
+        if (!ok and self.queue.getCapacity() > 4 * self.initial_capacity) {
             // can only fail due to allocation failure, if so ignore
             _ = self.queue.shrinkCapacity(self.allocator, self.initial_capacity) catch true;
         }
