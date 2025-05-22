@@ -498,7 +498,7 @@ pub const GLContext = struct {
     glwndw: GLXWindow,
     owner: libx11.Window,
     driver: struct {
-        name: [*:0]const u8,
+        hardware: [*:0]const u8,
         vendor: [*:0]const u8,
         version: [*:0]const u8,
     },
@@ -539,7 +539,7 @@ pub const GLContext = struct {
             .glwndw = glx_wndw,
             .owner = window,
             .driver = .{
-                .name = rend,
+                .hardware = rend,
                 .vendor = vend,
                 .version = ver,
             },
@@ -574,6 +574,18 @@ pub const GLContext = struct {
             return true;
         }
         return false;
+    }
+
+    pub inline fn getVendorName(self: *const Self) [*:0]const u8 {
+        return self.driver.vendor;
+    }
+
+    pub inline fn getHardwareName(self: *const Self) [*:0]const u8 {
+        return self.driver.hardware;
+    }
+
+    pub inline fn getDriverVersion(self: *const Self) [*:0]const u8 {
+        return self.driver.version;
     }
 };
 

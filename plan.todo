@@ -5,10 +5,10 @@
     [] redo the tests.
     [] should singletons (driver, keymap, ...) be thread-local ?
     [] should the event queue be moved to the context ?
-    [] opengl context info log
-    [] ALT-F4 events handeling
+    [x] opengl context info log
+    [] ALT-F4 events handeling ?
     [] window Display changing events
-    [] BUG: opengl swapinterval code doesn't accept correct values.
+    [1] BUG: opengl swapinterval code doesn't accept correct values.
     [x] allocator migration to unamanged
     [x] use dequeue as events queue
 # Win32
@@ -23,6 +23,6 @@
 - X11
     [x] finish display wrapper.
     [x] implement fullscreen for windows.
-        [x] creating a window with the fullscreen flag doesn't work (fuck x11)
+        [x] creating a window with the fullscreen flag doesn't work
     [x] finish raw motion input.
     [x] drag and drop is always on fix it.
