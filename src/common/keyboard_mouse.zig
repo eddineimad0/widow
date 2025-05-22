@@ -268,6 +268,8 @@ pub const MouseButton = enum(u8) {
 /// on Windows keeping track of the keyboard state allow
 /// us to emit release events for keys that are not emitted by
 /// the OS.
+/// TODO: this structure should be moved somewhere else
+/// currently it's only been used by windows implementation
 pub const InputState = struct {
     keys: [ScanCode.COUNT]KeyState,
     mouse_buttons: [MouseButton.COUNT]MouseButtonState,

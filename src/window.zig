@@ -53,8 +53,8 @@ pub const WindowBuilder = struct {
                 .input = common.keyboard_mouse.InputState.init(),
             },
             .fbcfg = .{
-                .depth_bits =  24,
-                .stencil_bits =  8,
+                .depth_bits = 24,
+                .stencil_bits = 8,
 
                 .color_bits = .{
                     .red_bits = 8,
@@ -70,7 +70,7 @@ pub const WindowBuilder = struct {
                     .alpha_bits = 0,
                 },
 
-                .flags= .{
+                .flags = .{
                     .double_buffered = true,
                     .sRGB = true,
                     .stereo = false,
@@ -476,7 +476,7 @@ pub const Window = struct {
     /// # Errors
     /// 'OutOfMemory': function could fail due to memory allocation.
     /// 'InvalidUtf8': function could fail if the new_title isn't a valid utf-8 string
-    pub inline fn setTitle(self: *Self, new_title: []const u8) error{OutOfMemory,InvalidUtf8}!void {
+    pub inline fn setTitle(self: *Self, new_title: []const u8) error{ OutOfMemory, InvalidUtf8 }!void {
         return self.impl.setTitle(new_title);
     }
 
@@ -850,25 +850,6 @@ pub const Window = struct {
         self: *Self,
     ) !platform.GLContext {
         return self.impl.getGLContext();
-    }
-
-    /// Returns the state of the `key` for the current window.
-    /// the possible state values are *.Pressed* or *.Released* .
-    pub inline fn getKeyState(
-        self: *const Self,
-        key: common.keyboard_mouse.ScanCode,
-    ) common.keyboard_mouse.KeyState {
-        std.debug.assert(key != .Unknown);
-        return self.impl.data.input.keys[@intCast(@intFromEnum(key))];
-    }
-
-    /// Returns the state of the button `btn` for the current window.
-    /// the possible state values are *.Pressed* or *.Released* .
-    pub inline fn getMouseBtnState(
-        self: *const Self,
-        btn: common.keyboard_mouse.MouseButton,
-    ) common.keyboard_mouse.MouseButtonState {
-        return self.impl.data.input.mouse_buttons[@intFromEnum(btn)];
     }
 
     /// Activate or deactivate raw mouse input for the window,

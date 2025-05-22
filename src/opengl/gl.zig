@@ -16,6 +16,12 @@ pub const GLConfig = struct {
     profile: GLProfile,
 };
 
+pub const SwapInterval = enum(i8) {
+    Adaptive = -1,
+    Immediate = 0,
+    Synced = 1,
+};
+
 /// Returns true if the `target` extension is in the `ext_list` string
 pub fn glHasExtension(target: [*:0]const u8, ext_list: [:0]const u8) bool {
     var haystack = ext_list;

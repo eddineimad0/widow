@@ -36,7 +36,6 @@ inline fn handleButtonRelease(e: *const libx11.XButtonEvent, window: *Window) vo
         },
     };
 
-    window.data.input.mouse_buttons[@intFromEnum(button)] = .Released;
     const ev = common.event.createMouseButtonEvent(
         window.data.id,
         button,
@@ -53,7 +52,6 @@ inline fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void
 
     const button_event = switch (e.button) {
         libx11.Button1 => ev: {
-            window.data.input.mouse_buttons[@intFromEnum(kbd_mouse.MouseButton.Left)] = .Pressed;
             break :ev common.event.createMouseButtonEvent(
                 window.data.id,
                 kbd_mouse.MouseButton.Left,
@@ -62,7 +60,6 @@ inline fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void
             );
         },
         libx11.Button2 => ev: {
-            window.data.input.mouse_buttons[@intFromEnum(kbd_mouse.MouseButton.Middle)] = .Pressed;
             break :ev common.event.createMouseButtonEvent(
                 window.data.id,
                 kbd_mouse.MouseButton.Middle,
@@ -71,7 +68,6 @@ inline fn handleButtonPress(e: *const libx11.XButtonEvent, window: *Window) void
             );
         },
         libx11.Button3 => ev: {
-            window.data.input.mouse_buttons[@intFromEnum(kbd_mouse.MouseButton.Right)] = .Pressed;
             break :ev common.event.createMouseButtonEvent(
                 window.data.id,
                 kbd_mouse.MouseButton.Right,
@@ -201,8 +197,8 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         }
 
         std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
-        const accept:c_long = if(w.x11.xdnd_allow and w.x11.xdnd_req.format != libx11.None) 1 else 0;
-        const action = if(accept == 1) drvr.ewmh.XdndActionCopy else libx11.None;
+        const accept: c_long = if (w.x11.xdnd_allow and w.x11.xdnd_req.format != libx11.None) 1 else 0;
+        const action = if (accept == 1) drvr.ewmh.XdndActionCopy else libx11.None;
         var reply = libx11.XEvent{
             .xclient = libx11.XClientMessageEvent{
                 .type = libx11.ClientMessage,
