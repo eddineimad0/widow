@@ -299,8 +299,8 @@ pub fn mainWindowProc(
             const wheel_delta = scroll / @as(f64, win32_gfx.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
-                wheel_delta,
                 0.0,
+                wheel_delta,
             );
             return 0;
         },
@@ -317,8 +317,8 @@ pub fn mainWindowProc(
             const wheel_delta = -(scroll) / @as(f64, win32_gfx.WHEEL_DELTA);
             msg_handler.mouseWheelMSGHandler(
                 window,
-                0.0,
                 wheel_delta,
+                0.0,
             );
             return 0;
         },
