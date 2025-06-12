@@ -162,8 +162,8 @@ pub fn main() !void {
                     // This event holds the Wheel (horizontal or vertical) that was scrolled and by how much (delta).
                     std.debug.print("Window #{}\nvertical wheel:{d} horizontal wheel:{d}\n", .{
                         scroll.window_id,
-                        scroll.x_offset,
                         scroll.y_offset,
+                        scroll.x_offset,
                     });
                 },
                 EventType.MouseEnter => |window_id| {
