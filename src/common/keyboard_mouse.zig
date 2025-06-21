@@ -240,7 +240,7 @@ pub const ScanCode = enum(i32) {
     PrevTrack, // The |<< key
     PlayPause, // The play/pause key
     // END
-    const COUNT: u32 = @intCast(@intFromEnum(ScanCode.PlayPause) -
+    pub const COUNT: u32 = @intCast(@intFromEnum(ScanCode.PlayPause) -
         @intFromEnum(ScanCode.Unknown));
 };
 
@@ -259,7 +259,7 @@ pub const MouseButton = enum(u8) {
     Middle, // Middle Mouse Button.
     ExtraButton1, // Additional Mouse Button 1 (backward navigation).
     ExtraButton2, // Additional Mouse Button 2 (forward navigation).
-    const COUNT = @intFromEnum(MouseButton.ExtraButton2) -
+    pub const COUNT = @intFromEnum(MouseButton.ExtraButton2) -
         @intFromEnum(MouseButton.Left);
 };
 
