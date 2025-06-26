@@ -13,6 +13,7 @@ pub const GLConfig = struct {
         major: u8,
         minor: u8,
     },
+    is_debug: bool,
     profile: GLProfile,
 };
 
