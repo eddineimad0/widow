@@ -83,6 +83,7 @@ pub const WindowBuilder = struct {
                             .minor = 1,
                         },
                         .profile = .Core,
+                        .is_debug = false,
                     },
                 },
             },
