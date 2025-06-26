@@ -22,6 +22,8 @@ const WGL_CONTEXT_MINOR_VERSION_ARB = 0x2092;
 const WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
 const WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x00000001;
 const WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB = 0x00000002;
+const WGL_CONTEXT_FLAGS_ARB = 0x2094;
+const WGL_CONTEXT_DEBUG_BIT_ARB = 0x00000001;
 const GL_ARRAY_BUFFER = 0x8892;
 const GL_STATIC_DRAW = 0x88E4;
 const GL_FRAGMENT_SHADER = 0x8B30;
@@ -294,153 +296,155 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
     var pfd: win32_gl.PIXELFORMATDESCRIPTOR = undefined;
 
     const dc = win32_gfx.GetDC(window);
+    const helper = struct {
+        pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
+            debug.assert(idx.* < list.len);
+            list[idx.*] = attrib;
+            list[idx.* + 1] = val;
+            idx.* += 2;
+        }
+    };
 
     if (wgl_ext.ARB_pixel_format) {
-        const helper = struct {
-            pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
-                debug.assert(idx.* < list.len);
-                list[idx.*] = attrib;
-                list[idx.* + 1] = val;
-                idx.* += 2;
-            }
-        };
 
-        // Support for OpenGL rendering.
-        helper.setAttribute(&pfd_attrib_list, &index, WGL_SUPPORT_OPENGL_ARB, 1);
+        // pfd_attrib_list
+        {
+            // Support for OpenGL rendering.
+            helper.setAttribute(&pfd_attrib_list, &index, WGL_SUPPORT_OPENGL_ARB, 1);
 
-        // Support for rendering to a window.
-        helper.setAttribute(&pfd_attrib_list, &index, WGL_DRAW_TO_WINDOW_ARB, 1);
+            // Support for rendering to a window.
+            helper.setAttribute(&pfd_attrib_list, &index, WGL_DRAW_TO_WINDOW_ARB, 1);
 
-        // Specifiy color bits count.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_COLOR_BITS_ARB,
-            @as(c_int, cfg.color_bits.red_bits) + cfg.color_bits.blue_bits +
+            // Specifiy color bits count.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_COLOR_BITS_ARB,
+                @as(c_int, cfg.color_bits.red_bits) + cfg.color_bits.blue_bits +
+                    cfg.color_bits.green_bits,
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_RED_BITS_ARB,
+                cfg.color_bits.red_bits,
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_GREEN_BITS_ARB,
                 cfg.color_bits.green_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_RED_BITS_ARB,
-            cfg.color_bits.red_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_GREEN_BITS_ARB,
-            cfg.color_bits.green_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_BLUE_BITS_ARB,
-            cfg.color_bits.blue_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ALPHA_BITS_ARB,
-            cfg.color_bits.alpha_bits,
-        );
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_BLUE_BITS_ARB,
+                cfg.color_bits.blue_bits,
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ALPHA_BITS_ARB,
+                cfg.color_bits.alpha_bits,
+            );
 
-        // Specifiy accum bits count.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCUM_BITS_ARB,
-            @as(c_int, cfg.accum_bits.red_bits) + cfg.accum_bits.blue_bits +
+            // Specifiy accum bits count.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCUM_BITS_ARB,
+                @as(c_int, cfg.accum_bits.red_bits) + cfg.accum_bits.blue_bits +
+                    cfg.accum_bits.green_bits,
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCUM_RED_BITS_ARB,
+                cfg.accum_bits.red_bits,
+            );
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCUM_GREEN_BITS_ARB,
                 cfg.accum_bits.green_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCUM_RED_BITS_ARB,
-            cfg.accum_bits.red_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCUM_GREEN_BITS_ARB,
-            cfg.accum_bits.green_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCUM_BLUE_BITS_ARB,
-            cfg.accum_bits.blue_bits,
-        );
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCUM_ALPHA_BITS_ARB,
-            cfg.accum_bits.alpha_bits,
-        );
-
-        // Support for hardware acceleration.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_ACCELERATION_ARB,
-            WGL_FULL_ACCELERATION_ARB,
-        );
-
-        if (cfg.flags.double_buffered) {
-            // Support for double buffer.
+            );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
-                WGL_DOUBLE_BUFFER_ARB,
-                1,
+                WGL_ACCUM_BLUE_BITS_ARB,
+                cfg.accum_bits.blue_bits,
             );
-        }
-
-        // Stencil bits
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_STENCIL_BITS_ARB,
-            cfg.stencil_bits,
-        );
-
-        // Support for var bit depth buffer.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_DEPTH_BITS_ARB,
-            cfg.depth_bits,
-        );
-
-        // Support for swapping front and back buffer.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_SWAP_METHOD_ARB,
-            WGL_SWAP_EXCHANGE_ARB,
-        );
-
-        if (cfg.flags.stereo) {
-            // color buffer has left/right pairs
-            helper.setAttribute(&pfd_attrib_list, &index, WGL_STEREO_ARB, 1);
-        }
-
-        if (cfg.flags.sRGB) {
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
-                WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB,
-                1,
+                WGL_ACCUM_ALPHA_BITS_ARB,
+                cfg.accum_bits.alpha_bits,
+            );
+
+            // Support for hardware acceleration.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_ACCELERATION_ARB,
+                WGL_FULL_ACCELERATION_ARB,
+            );
+
+            if (cfg.flags.double_buffered) {
+                // Support for double buffer.
+                helper.setAttribute(
+                    &pfd_attrib_list,
+                    &index,
+                    WGL_DOUBLE_BUFFER_ARB,
+                    1,
+                );
+            }
+
+            // Stencil bits
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_STENCIL_BITS_ARB,
+                cfg.stencil_bits,
+            );
+
+            // Support for var bit depth buffer.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_DEPTH_BITS_ARB,
+                cfg.depth_bits,
+            );
+
+            // Support for swapping front and back buffer.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_SWAP_METHOD_ARB,
+                WGL_SWAP_EXCHANGE_ARB,
+            );
+
+            if (cfg.flags.stereo) {
+                // color buffer has left/right pairs
+                helper.setAttribute(&pfd_attrib_list, &index, WGL_STEREO_ARB, 1);
+            }
+
+            if (cfg.flags.sRGB) {
+                helper.setAttribute(
+                    &pfd_attrib_list,
+                    &index,
+                    WGL_FRAMEBUFFER_SRGB_CAPABLE_ARB,
+                    1,
+                );
+            }
+
+            // Support for the RGBA pixel type.
+            helper.setAttribute(
+                &pfd_attrib_list,
+                &index,
+                WGL_PIXEL_TYPE_ARB,
+                WGL_TYPE_RGBA_ARB,
             );
         }
-
-        // Support for the RGBA pixel type.
-        helper.setAttribute(
-            &pfd_attrib_list,
-            &index,
-            WGL_PIXEL_TYPE_ARB,
-            WGL_TYPE_RGBA_ARB,
-        );
-
         // Null terminate the attribute list.
         pfd_attrib_list[index] = 0;
 
@@ -469,20 +473,32 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
         return win32_gl.wglCreateContext(dc);
     }
 
-    // Set the version of OpenGL in the attribute list.
-    gl_attrib_list[0] = WGL_CONTEXT_MAJOR_VERSION_ARB;
-    gl_attrib_list[1] = cfg.accel.opengl.ver.major;
-    gl_attrib_list[2] = WGL_CONTEXT_MINOR_VERSION_ARB;
-    gl_attrib_list[3] = cfg.accel.opengl.ver.minor;
-    gl_attrib_list[4] = WGL_CONTEXT_PROFILE_MASK_ARB;
+    // gl_attrib_list
+    {
+        index = 0;
+        helper.setAttribute(&gl_attrib_list, &index, WGL_CONTEXT_MAJOR_VERSION_ARB, cfg.accel.opengl.ver.major);
+        helper.setAttribute(&gl_attrib_list, &index, WGL_CONTEXT_MINOR_VERSION_ARB, cfg.accel.opengl.ver.minor);
+        helper.setAttribute(
+            &gl_attrib_list,
+            &index,
+            WGL_CONTEXT_PROFILE_MASK_ARB,
+            if (cfg.accel.opengl.profile == .Core)
+                WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+            else
+                WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        );
 
-    // Set the OpenGL profile.
-    gl_attrib_list[5] = if (cfg.accel.opengl.profile == .Core)
-        WGL_CONTEXT_CORE_PROFILE_BIT_ARB
-    else
-        WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+        var flag: c_int = 0;
+        if (cfg.accel.opengl.is_debug) {
+            flag |= WGL_CONTEXT_DEBUG_BIT_ARB;
+        }
 
-    gl_attrib_list[6] = 0;
+        if (flag != 0) {
+            helper.setAttribute(&gl_attrib_list, &index, WGL_CONTEXT_FLAGS_ARB, flag);
+        }
+
+        gl_attrib_list[index] = 0;
+    }
 
     return wgl_ext.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
 }
