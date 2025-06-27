@@ -365,16 +365,17 @@ pub fn chooseVisualGLX(driver: *const X11Driver, fb_cfg: *const common.fb.FBConf
     return false;
 }
 
+const helper = struct {
+    pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
+        debug.assert(idx.* < list.len);
+        list[idx.*] = attrib;
+        list[idx.* + 1] = val;
+        idx.* += 2;
+    }
+};
+
 fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLXFBConfig {
     var attribs: [64]c_int = mem.zeroes([64]c_int);
-    const helper = struct {
-        pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
-            debug.assert(idx.* < list.len);
-            list[idx.*] = attrib;
-            list[idx.* + 1] = val;
-            idx.* += 2;
-        }
-    };
     var idx: usize = 0;
     helper.setAttribute(&attribs, &idx, GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR);
     helper.setAttribute(&attribs, &idx, GLX_RENDER_TYPE, GLX_RGBA_BIT);
@@ -434,6 +435,7 @@ fn createGLContext(
 ) (GLXError || unix.ModuleError)!?GLXContext {
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
+    var index: usize = 0;
 
     const fb_cfg = chooseFBConfig(driver, cfg) orelse {
         return GLXError.UnsupportedFBConfig;
@@ -441,19 +443,29 @@ fn createGLContext(
 
     if (glx_ext.ARB_create_context) {
         if (cfg.accel.opengl.ver.major > 1 or cfg.accel.opengl.ver.minor > 0) {
-            gl_attrib_list[0] = GLX_CONTEXT_MAJOR_VERSION_ARB;
-            gl_attrib_list[1] = cfg.accel.opengl.ver.major;
-            gl_attrib_list[2] = GLX_CONTEXT_MINOR_VERSION_ARB;
-            gl_attrib_list[3] = cfg.accel.opengl.ver.minor;
+            helper.setAttribute(&gl_attrib_list, &index, GLX_CONTEXT_MAJOR_VERSION_ARB, cfg.accel.opengl.ver.major);
+            helper.setAttribute(&gl_attrib_list, &index, GLX_CONTEXT_MINOR_VERSION_ARB, cfg.accel.opengl.ver.minor);
         }
-        gl_attrib_list[4] = GLX_CONTEXT_PROFILE_MASK_ARB;
-        gl_attrib_list[5] = if (cfg.accel.opengl.profile == .Core)
-            GLX_CONTEXT_CORE_PROFILE_BIT_ARB
-        else
-            GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+        helper.setAttribute(
+            &gl_attrib_list,
+            &index,
+            GLX_CONTEXT_PROFILE_MASK_ARB,
+            if (cfg.accel.opengl.profile == .Core)
+                GLX_CONTEXT_CORE_PROFILE_BIT_ARB
+            else
+                GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        );
 
-        gl_attrib_list[6] = 0;
-        gl_attrib_list[7] = 0;
+        var flag: c_int = 0;
+        if (cfg.accel.opengl.is_debug) {
+            flag |= GLX_CONTEXT_DEBUG_BIT_ARB;
+        }
+
+        if (flag != 0) {
+            helper.setAttribute(&gl_attrib_list, &index, GLX_CONTEXT_FLAGS_ARB, flag);
+        }
+
+        helper.setAttribute(&gl_attrib_list, &index, 0, 0);
 
         glx_rc = glx_ext.glXCreateContextAttribsARB.?(
             driver.handles.xdisplay,
