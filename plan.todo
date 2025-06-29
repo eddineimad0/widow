@@ -11,6 +11,9 @@
     [x] BUG: opengl swapinterval code doesn't accept correct values.
     [x] allocator migration to unamanged
     [x] use dequeue as events queue
+    [] getMonitorId(window)
+    [] notifyMonitorChange event
+    [] getMonitorRefreshRate()
 # Win32
     [x] Finish the display wrapper.
     [x] display wrapper need to be updated through hidden window events
