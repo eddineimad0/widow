@@ -104,7 +104,7 @@ pub fn createNativeCursor(
             CursorShape.Default => libx11.XC_left_ptr,
         };
 
-        cursor_handle = libx11.XCreateFontCursor(
+        cursor_handle = libx11.dyn_api.XCreateFontCursor(
             driver.handles.xdisplay,
             cursor_shape,
         );
@@ -125,7 +125,7 @@ pub fn createNativeCursor(
 
 pub fn destroyCursorIcon(x_display: *libx11.Display, cursor: *CursorHints) void {
     if (cursor.icon != 0) {
-        _ = libx11.XFreeCursor(x_display, cursor.icon);
+        _ = libx11.dyn_api.XFreeCursor(x_display, cursor.icon);
         cursor.icon = 0;
     }
 }
@@ -134,7 +134,7 @@ pub fn undoCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: l
     switch (cursor.mode) {
         .Captured, .Hidden => {
             unCaptureCursor(driver.handles.xdisplay);
-            _ = libx11.XUndefineCursor(driver.handles.xdisplay, window);
+            _ = libx11.dyn_api.XUndefineCursor(driver.handles.xdisplay, window);
         },
         else => {},
     }
@@ -160,21 +160,21 @@ pub fn applyCursorHints(driver: *const X11Driver, cursor: *CursorHints, window: 
         },
     };
 
-    _ = libx11.XDefineCursor(driver.handles.xdisplay, window, cursor_icon);
+    _ = libx11.dyn_api.XDefineCursor(driver.handles.xdisplay, window, cursor_icon);
     driver.flushXRequests();
 }
 
 pub fn unCaptureCursor(
     x_display: *libx11.Display,
 ) void {
-    libx11.XUngrabPointer(
+    libx11.dyn_api.XUngrabPointer(
         x_display,
         libx11.CurrentTime,
     );
 }
 
 pub fn captureCursor(x_display: *libx11.Display, w: libx11.Window) void {
-    const retv = libx11.XGrabPointer(
+    const retv = libx11.dyn_api.XGrabPointer(
         x_display,
         w,
         libx11.True,

@@ -229,48 +229,48 @@ pub const XRRCrtcGamma = extern struct {
 };
 
 // Functions signatures.
-pub const XRRAllocGammaProc = *const fn (size: c_int) callconv(.C) ?*XRRCrtcGamma;
-pub const XRRFreeGammaProc = *const fn (gamma: *XRRCrtcGamma) callconv(.C) void;
-pub const XRRFreeCrtcInfoProc = *const fn (crtcInfo: *XRRCrtcInfo) callconv(.C) void;
-pub const XRRFreeOutputInfoProc = *const fn (outputInfo: *XRROutputInfo) callconv(.C) void;
-pub const XRRFreeScreenResourcesProc = *const fn (resources: *XRRScreenResources) callconv(.C) void;
+pub const XRRAllocGammaProc = *const fn (size: c_int) callconv(.c) ?*XRRCrtcGamma;
+pub const XRRFreeGammaProc = *const fn (gamma: *XRRCrtcGamma) callconv(.c) void;
+pub const XRRFreeCrtcInfoProc = *const fn (crtcInfo: *XRRCrtcInfo) callconv(.c) void;
+pub const XRRFreeOutputInfoProc = *const fn (outputInfo: *XRROutputInfo) callconv(.c) void;
+pub const XRRFreeScreenResourcesProc = *const fn (resources: *XRRScreenResources) callconv(.c) void;
 pub const XRRGetCrtcInfoProc = *const fn (
     dpy: *types.Display,
     resources: ?*XRRScreenResources,
     crtc: RRCrtc,
-) callconv(.C) *XRRCrtcInfo;
+) callconv(.c) *XRRCrtcInfo;
 pub const XRRGetOutputInfoProc = *const fn (
     dpy: *types.Display,
     resources: *XRRScreenResources,
     output: RROutput,
-) callconv(.C) *XRROutputInfo;
+) callconv(.c) *XRROutputInfo;
 pub const XRRGetOutputPrimaryProc = *const fn (
     dpy: *types.Display,
     window: types.Window,
-) callconv(.C) RROutput;
+) callconv(.c) RROutput;
 pub const XRRGetScreenResourcesCurrentProc = *const fn (
     dpy: *types.Display,
     window: types.Window,
-) callconv(.C) *XRRScreenResources;
+) callconv(.c) *XRRScreenResources;
 pub const XRRGetScreenResourcesProc = *const fn (
     dpy: *types.Display,
     window: types.Window,
-) callconv(.C) *XRRScreenResources;
+) callconv(.c) *XRRScreenResources;
 pub const XRRQueryExtensionProc = *const fn (
     dpy: *types.Display,
     event_base_return: *c_int,
     error_base_return: *c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XRRQueryVersionProc = *const fn (
     dpy: *types.Display,
     major_version_return: *c_int,
     minor_version_return: *c_int,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 pub const XRRSelectInputProc = *const fn (
     dpy: *types.Display,
     window: types.Window,
     mask: c_int,
-) callconv(.C) void;
+) callconv(.c) void;
 pub const XRRSetCrtcConfigProc = *const fn (
     dpy: *types.Display,
     resources: *XRRScreenResources,
@@ -282,12 +282,12 @@ pub const XRRSetCrtcConfigProc = *const fn (
     rotation: Rotation,
     outputs: *RROutput,
     noutputs: c_int,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 pub const XRRSetCrtcGammaProc = *const fn (
     dpy: *types.Display,
     crtc: RRCrtc,
     gamma: *XRRCrtcGamma,
-) callconv(.C) void;
-pub const XRRUpdateConfigurationProc = *const fn (event: *types.XEvent) callconv(.C) c_int;
-pub const XRRGetCrtcGammaSizeProc = *const fn (dpy: *types.Display, crtc: RRCrtc) callconv(.C) c_int;
-pub const XRRGetCrtcGammaProc = *const fn (dpy: *types.Display, crtc: RRCrtc) callconv(.C) *XRRCrtcGamma;
+) callconv(.c) void;
+pub const XRRUpdateConfigurationProc = *const fn (event: *types.XEvent) callconv(.c) c_int;
+pub const XRRGetCrtcGammaSizeProc = *const fn (dpy: *types.Display, crtc: RRCrtc) callconv(.c) c_int;
+pub const XRRGetCrtcGammaProc = *const fn (dpy: *types.Display, crtc: RRCrtc) callconv(.c) *XRRCrtcGamma;

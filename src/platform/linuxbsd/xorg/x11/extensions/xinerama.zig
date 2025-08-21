@@ -10,18 +10,18 @@ pub const XineramaScreenInfo = extern struct {
 };
 
 // Functions Signature.
-pub const XineramaIsActiveProc = *const fn (dpy: *types.Display) callconv(.C) types.Bool;
+pub const XineramaIsActiveProc = *const fn (dpy: *types.Display) callconv(.c) types.Bool;
 pub const XineramaQueryExtension = *const fn (
     dpy: *types.Display,
     event_base_return: *c_int,
     error_base_return: *c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XineramaQueryVersion = *const fn (
     dpy: *types.Display,
     version_major: *c_int,
     version_minor: *c_int,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 pub const XineramaQueryScreens = *const fn (
     dpy: *types.Display,
     number: *c_int,
-) callconv(.C) ?[*]XineramaScreenInfo;
+) callconv(.c) ?[*]XineramaScreenInfo;

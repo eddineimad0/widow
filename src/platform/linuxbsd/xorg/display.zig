@@ -24,7 +24,7 @@ pub const DisplayError = error{
 /// from the video mode infos
 /// Note:
 /// if the a frequency value can't be calcluated it returns 0;
-inline fn calculateDisplayFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
+inline fn calculateDisplayFrequency(mode_info: *const x11ext.xrandr.XRRModeInfo) u16 {
     // If the dot clock is zero, then all of the timing
     // parameters and flags are not used,
     if (mode_info.dotClock == 0) {
@@ -40,11 +40,11 @@ inline fn calculateDisplayFrequency(mode_info: *const x11ext.XRRModeInfo) u16 {
 /// Fills the output parameters from the video mode info
 fn videoModeFromRRMode(
     driver: *const X11Driver,
-    mode: *const x11ext.XRRModeInfo,
+    mode: *const x11ext.xrandr.XRRModeInfo,
     rotated: bool,
     output: *VideoMode,
 ) bool {
-    if (mode.modeFlags & x11ext.RR_Interlace != 0) {
+    if (mode.modeFlags & x11ext.xrandr.RR_Interlace != 0) {
         return false;
     }
     if (rotated) {
@@ -68,11 +68,11 @@ fn videoModeFromRRMode(
 fn pollVideoModes(
     allocator: mem.Allocator,
     driver: *const X11Driver,
-    screens_res: *const x11ext.XRRScreenResources,
-    output_info: *const x11ext.XRROutputInfo,
+    screens_res: *const x11ext.xrandr.XRRScreenResources,
+    output_info: *const x11ext.xrandr.XRROutputInfo,
     rotated: bool,
     modes_arry: *ArrayList(VideoMode),
-    ids_arry: *ArrayList(x11ext.RRMode),
+    ids_arry: *ArrayList(x11ext.xrandr.RRMode),
 ) Allocator.Error!void {
     const n_modes: usize = @intCast(output_info.nmode);
     try modes_arry.ensureTotalCapacity(allocator, n_modes);
@@ -82,7 +82,7 @@ fn pollVideoModes(
 
     var videomode: VideoMode = undefined;
     for (0..n_modes) |i| {
-        var modes_info: ?*x11ext.XRRModeInfo = null;
+        var modes_info: ?*x11ext.xrandr.XRRModeInfo = null;
         // Find the mode infos.
         for (0..@intCast(screens_res.nmode)) |j| {
             if (screens_res.modes[j].id == output_info.modes[i]) {
@@ -118,7 +118,7 @@ fn pollVideoModes(
 }
 
 /// Querys the x server for the current connected screens.
-fn getScreenRessources(driver: *const X11Driver) *x11ext.XRRScreenResources {
+fn getScreenRessources(driver: *const X11Driver) *x11ext.xrandr.XRRScreenResources {
     return if (driver.extensions.xrandr.is_v1point3)
         // Faster than XRRGetScreenResources.
         driver.extensions.xrandr.XRRGetScreenResourcesCurrent(
@@ -150,7 +150,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         displays.deinit(allocator);
     }
 
-    var screens: ?[*]x11ext.XineramaScreenInfo = null;
+    var screens: ?[*]x11ext.xinerama.XineramaScreenInfo = null;
     var n_screens: i32 = 0;
     if (driver.extensions.xinerama.is_active) {
         screens = driver.extensions.xinerama.QueryScreens(
@@ -167,8 +167,8 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             screens_res,
             screens_res.outputs[i],
         );
-        if (output_info.connection != x11ext.RR_Connected or
-            output_info.crtc == x11ext.RRCrtc_None)
+        if (output_info.connection != x11ext.xrandr.RR_Connected or
+            output_info.crtc == x11ext.xrandr.RRCrtc_None)
         {
             // Skip if the output isn't connected or isn't drawing
             // from any video buffer(crtc);
@@ -203,9 +203,9 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         // Copy the display name.
         // in case of an error the dislay 'deinit' should free the name.
         const name_len = utils.strZLen(output_info.name);
-        var name_src_slice:[]const u8 = undefined;
-        name_src_slice.ptr  = output_info.name;
-        name_src_slice.len  = name_len;
+        var name_src_slice: []const u8 = undefined;
+        name_src_slice.ptr = output_info.name;
+        name_src_slice.len = name_len;
         const name = try allocator.alloc(u8, name_len);
         @memcpy(name, name_src_slice);
 
@@ -214,7 +214,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             .name = name,
             .output = screens_res.outputs[i],
             .xinerama_index = xinerama_index,
-            .orig_video_mode = x11ext.RRMode_None,
+            .orig_video_mode = x11ext.xrandr.RRMode_None,
             .modes = .empty,
             .modes_ids = .empty,
         };
@@ -225,8 +225,8 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             driver,
             screens_res,
             output_info,
-            (crtc_info.rotation == x11ext.RR_Rotate_90 or
-                crtc_info.rotation == x11ext.RR_Rotate_270),
+            (crtc_info.rotation == x11ext.xrandr.RR_Rotate_90 or
+                crtc_info.rotation == x11ext.xrandr.RR_Rotate_270),
             &d.modes,
             &d.modes_ids,
         );
@@ -247,11 +247,11 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
 /// Encapsulate the necessary infos for a monitor.
 pub const Display = struct {
     modes: ArrayList(common.video_mode.VideoMode), // All the VideoModes that the monitor support.
-    modes_ids: ArrayList(x11ext.RRMode),
+    modes_ids: ArrayList(x11ext.xrandr.RRMode),
     name: []u8,
-    adapter: x11ext.RRCrtc,
-    output: x11ext.RROutput,
-    orig_video_mode: x11ext.RRMode, // Keeps track of any mode changes we made.
+    adapter: x11ext.xrandr.RRCrtc,
+    output: x11ext.xrandr.RROutput,
+    orig_video_mode: x11ext.xrandr.RRMode, // Keeps track of any mode changes we made.
     xinerama_index: i32,
 
     const Self = @This();
@@ -279,7 +279,7 @@ pub const Display = struct {
         );
         defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
-        var mode_info: ?*x11ext.XRRModeInfo = null;
+        var mode_info: ?*x11ext.xrandr.XRRModeInfo = null;
         // Find the mode infos.
         for (0..@intCast(res.nmode)) |j| {
             if (res.modes[j].id == ci.mode) {
@@ -291,8 +291,8 @@ pub const Display = struct {
             _ = videoModeFromRRMode(
                 driver,
                 mi,
-                (ci.rotation == x11ext.RR_Rotate_90 or
-                    ci.rotation == x11ext.RR_Rotate_270),
+                (ci.rotation == x11ext.xrandr.RR_Rotate_90 or
+                    ci.rotation == x11ext.xrandr.RR_Rotate_270),
                 output,
             );
         }
@@ -363,7 +363,7 @@ pub const Display = struct {
         );
         defer driver.extensions.xrandr.XRRFreeCrtcInfo(ci);
 
-        if (self.orig_video_mode == x11ext.RRMode_None) {
+        if (self.orig_video_mode == x11ext.xrandr.RRMode_None) {
             self.orig_video_mode = ci.mode;
         }
 
@@ -379,14 +379,14 @@ pub const Display = struct {
             ci.outputs,
             ci.noutput,
         );
-        if (result != x11ext.RRSetConfigSuccess) {
+        if (result != x11ext.xrandr.RRSetConfigSuccess) {
             return DisplayError.VideoModeChangeFailed;
         }
     }
 
     /// Restores the original video mode.
     fn restoreOrignalVideoMode(self: *Self, driver: *const X11Driver) void {
-        if (self.orig_video_mode == x11ext.RRMode_None) {
+        if (self.orig_video_mode == x11ext.xrandr.RRMode_None) {
             return;
         }
         const sr = getScreenRessources(driver);
@@ -411,7 +411,7 @@ pub const Display = struct {
             ci.outputs,
             ci.noutput,
         );
-        self.orig_video_mode = x11ext.RRMode_None;
+        self.orig_video_mode = x11ext.xrandr.RRMode_None;
     }
 
     pub fn debugInfos(self: *const Self, print_video_modes: bool) void {
@@ -446,7 +446,7 @@ pub const DisplayManager = struct {
         allocator: mem.Allocator,
         driver: *const X11Driver,
     ) (mem.Allocator.Error || DisplayError)!Self {
-        var self:Self =  .{
+        var self: Self = .{
             .displays = try pollDisplays(allocator, driver),
             .driver = driver,
             .screen_saver_profile = undefined,
@@ -517,7 +517,7 @@ pub const DisplayManager = struct {
         }
     }
 
-    pub fn setScreenSaver(self:*Self, on:bool) void {
+    pub fn setScreenSaver(self: *Self, on: bool) void {
         if (!on) {
             _ = libx11.XGetScreenSaver(
                 self.driver.handles.xdisplay,
@@ -534,7 +534,7 @@ pub const DisplayManager = struct {
                 libx11.DontPreferBlanking,
                 libx11.DontAllowExposures,
             );
-        }else{
+        } else {
             _ = libx11.XSetScreenSaver(
                 self.driver.handles.xdisplay,
                 self.screen_saver_profile.timout,

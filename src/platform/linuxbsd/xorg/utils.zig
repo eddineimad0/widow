@@ -24,7 +24,6 @@ pub inline fn strZEquals(
     return (std.mem.orderZ(u8, a, b) == std.math.Order.eq);
 }
 
-
 pub const WindowPropError = error{
     BadPropType,
     PropNotFound,
@@ -41,7 +40,7 @@ pub fn x11WindowProperty(
     var actual_format: c_int = undefined;
     var nitems: c_ulong = 0;
     var bytes_after: c_ulong = undefined;
-    const result = libx11.XGetWindowProperty(
+    const result = libx11.dyn_api.XGetWindowProperty(
         display,
         w,
         property,

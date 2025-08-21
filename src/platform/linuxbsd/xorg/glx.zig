@@ -5,7 +5,7 @@ const libx11 = @import("x11/xlib.zig");
 const gl = @import("opengl");
 const mem = std.mem;
 const debug = std.debug;
-const unix = common.unix;
+const so = common.unix.so;
 const X11Driver = @import("driver.zig").X11Driver;
 
 pub const GLX_SO_NAMES = switch (builtin.target.os.tag) {
@@ -240,50 +240,50 @@ pub const glx_ext = struct {
     ) callconv(.C) ?GLXContext = null;
 };
 
-pub fn initGLX(driver: *const X11Driver) (unix.ModuleError || GLXError)!void {
+pub fn initGLX(driver: *const X11Driver) (so.ModuleError || GLXError)!void {
     if (__glx_module != null) {
         return;
     }
 
     for (GLX_SO_NAMES) |name| {
-        __glx_module = unix.loadPosixModule(name);
+        __glx_module = so.loadPosixModule(name);
         if (__glx_module) |_| {
             break;
         }
     }
 
     if (__glx_module) |m| {
-        glx_api.glXGetFBConfigs = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigs") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXChooseFBConfig = @ptrCast(unix.moduleSymbol(m, "glXChooseFBConfig") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetFBConfigAttrib = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigAttrib") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetClientString = @ptrCast(unix.moduleSymbol(m, "glXGetClientString") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryExtension = @ptrCast(unix.moduleSymbol(m, "glXQueryExtension") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryExtensionsString = @ptrCast(unix.moduleSymbol(m, "glXQueryExtensionsString") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryVersion = @ptrCast(unix.moduleSymbol(m, "glXQueryVersion") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXCreateNewContext = @ptrCast(unix.moduleSymbol(m, "glXCreateNewContext") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXDestroyContext = @ptrCast(unix.moduleSymbol(m, "glXDestroyContext") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXCreateWindow = @ptrCast(unix.moduleSymbol(m, "glXCreateWindow") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXDestroyWindow = @ptrCast(unix.moduleSymbol(m, "glXDestroyWindow") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXMakeCurrent = @ptrCast(unix.moduleSymbol(m, "glXMakeCurrent") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXSwapBuffers = @ptrCast(unix.moduleSymbol(m, "glXSwapBuffers") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetVisualFromFBConfig = @ptrCast(unix.moduleSymbol(m, "glXGetVisualFromFBConfig") orelse
-            return unix.ModuleError.UndefinedSymbol);
+        glx_api.glXGetFBConfigs = @ptrCast(so.moduleSymbol(m, "glXGetFBConfigs") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXChooseFBConfig = @ptrCast(so.moduleSymbol(m, "glXChooseFBConfig") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetFBConfigAttrib = @ptrCast(so.moduleSymbol(m, "glXGetFBConfigAttrib") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetClientString = @ptrCast(so.moduleSymbol(m, "glXGetClientString") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryExtension = @ptrCast(so.moduleSymbol(m, "glXQueryExtension") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryExtensionsString = @ptrCast(so.moduleSymbol(m, "glXQueryExtensionsString") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryVersion = @ptrCast(so.moduleSymbol(m, "glXQueryVersion") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXCreateNewContext = @ptrCast(so.moduleSymbol(m, "glXCreateNewContext") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXDestroyContext = @ptrCast(so.moduleSymbol(m, "glXDestroyContext") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXCreateWindow = @ptrCast(so.moduleSymbol(m, "glXCreateWindow") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXDestroyWindow = @ptrCast(so.moduleSymbol(m, "glXDestroyWindow") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXMakeCurrent = @ptrCast(so.moduleSymbol(m, "glXMakeCurrent") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXSwapBuffers = @ptrCast(so.moduleSymbol(m, "glXSwapBuffers") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetVisualFromFBConfig = @ptrCast(so.moduleSymbol(m, "glXGetVisualFromFBConfig") orelse
+            return so.ModuleError.UndefinedSymbol);
 
-        glx_api.glXGetProcAddress = @ptrCast(unix.moduleSymbol(m, "glXGetProcAddress"));
-        glx_api.glXGetProcAddressARB = @ptrCast(unix.moduleSymbol(m, "glXGetProcAddressARB"));
+        glx_api.glXGetProcAddress = @ptrCast(so.moduleSymbol(m, "glXGetProcAddress"));
+        glx_api.glXGetProcAddressARB = @ptrCast(so.moduleSymbol(m, "glXGetProcAddressARB"));
     } else {
         return GLXError.ModuleNotFound;
     }
@@ -432,7 +432,7 @@ fn createGLContext(
     w: libx11.Window,
     cfg: *const common.fb.FBConfig,
     glx_wndw: *GLXWindow,
-) (GLXError || unix.ModuleError)!?GLXContext {
+) (GLXError || so.ModuleError)!?GLXContext {
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
     var index: usize = 0;
@@ -522,7 +522,7 @@ pub const GLContext = struct {
         var glx_wndw: GLXWindow = 0;
         const rc = createGLContext(driver, window, cfg, &glx_wndw) catch |err| {
             switch (err) {
-                unix.ModuleError.NotFound, unix.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
+                so.ModuleError.NotFound, so.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
                 else => return @as(GLXError, @errorCast(err)),
             }
         };
@@ -612,7 +612,7 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
     } else if (glx_api.glXGetProcAddressARB) |proc| {
         return proc(symbol_name);
     } else if (__glx_module) |m| {
-        return unix.moduleSymbol(m, symbol_name);
+        return so.moduleSymbol(m, symbol_name);
     } else {
         return null;
     }

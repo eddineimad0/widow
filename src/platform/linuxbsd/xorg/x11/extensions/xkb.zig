@@ -1198,7 +1198,7 @@ pub const XkbDescRec = extern struct {
 pub const XkbLibraryVersionProc = *const fn (
     lib_major_in_out: ?*c_int,
     lib_minor_in_out: ?*c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XkbQueryExtensionProc = *const fn (
     dpy: ?*types.Display,
     opcode_rtrn: ?*c_int,
@@ -1206,62 +1206,62 @@ pub const XkbQueryExtensionProc = *const fn (
     error_rtrn: ?*c_int,
     major_in_out: ?*c_int,
     minor_in_out: ?*c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XkbGetDetectableAutorepeatProc = *const fn (
     display: ?*types.Display,
     supported_rtrn: ?*types.Bool,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XkbSetDetectableAutorepeatProc = *const fn (
     display: ?*types.Display,
     detectable: types.Bool,
     supported_rtrn: ?*types.Bool,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;
 pub const XkbGetStateProc = *const fn (
     display: ?*types.Display,
     device_spec: c_uint,
     state_return: ?*XkbStateRec,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 pub const XkbGetNamesProc = *const fn (
     display: ?*types.Display,
     which: c_uint,
     Xkb: ?*XkbDescRec,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 pub const XkbGetKeyboardProc = *const fn (
     display: ?*types.Display,
     which: c_uint,
     device_spec: c_uint,
-) callconv(.C) ?*XkbDescRec;
+) callconv(.c) ?*XkbDescRec;
 pub const XkbFreeKeyboardProc = *const fn (
     xkb: ?*XkbDescRec,
     which: c_uint,
     free_all: types.Bool,
-) callconv(.C) void;
+) callconv(.c) void;
 pub const XkbGetMapProc = *const fn (
     display: ?*types.Display,
     which: c_uint,
     device_spec: c_uint,
-) callconv(.C) ?*XkbDescRec;
+) callconv(.c) ?*XkbDescRec;
 pub const XkbFreeClientMapProc = *const fn (
     xkb: ?*XkbDescRec,
     which: c_uint,
     free_all: types.Bool,
-) callconv(.C) void;
+) callconv(.c) void;
 pub const XkbFreeNamesProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
     free_map: types.Bool,
-) callconv(.C) void;
-pub const XkbAllocKeyboardProc = *const fn () callconv(.C) ?*XkbDescRec;
+) callconv(.c) void;
+pub const XkbAllocKeyboardProc = *const fn () callconv(.c) ?*XkbDescRec;
 pub const XkbKeycodeToKeysymProc = *const fn (
     display: ?*types.Display,
     kc: types.KeyCode,
     group: c_uint,
     level: c_uint,
-) callconv(.C) types.KeySym;
+) callconv(.c) types.KeySym;
 pub const XkbSelectEventDetailsProc = *const fn (
     display: ?*types.Display,
     device_spec: c_uint,
     event_type: c_uint,
     bits_to_change: c_ulong,
     values_for_bits: c_ulong,
-) callconv(.C) types.Bool;
+) callconv(.c) types.Bool;

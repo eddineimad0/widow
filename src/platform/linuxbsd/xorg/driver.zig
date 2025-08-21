@@ -24,26 +24,26 @@ const X11Handles = struct {
 };
 
 const XRRInterface = struct {
-    XRRGetScreenResourcesCurrent: x11ext.XRRGetScreenResourcesCurrentProc,
-    XRRGetScreenResources: x11ext.XRRGetScreenResourcesProc,
-    XRRFreeScreenResources: x11ext.XRRFreeScreenResourcesProc,
-    XRRGetCrtcInfo: x11ext.XRRGetCrtcInfoProc,
-    XRRFreeCrtcInfo: x11ext.XRRFreeCrtcInfoProc,
-    XRRGetOutputInfo: x11ext.XRRGetOutputInfoProc,
-    XRRFreeOutputInfo: x11ext.XRRFreeOutputInfoProc,
-    XRRGetOutputPrimary: x11ext.XRRGetOutputPrimaryProc,
-    XRRQueryVersion: x11ext.XRRQueryVersionProc,
-    XRRQueryExtension: x11ext.XRRQueryExtensionProc,
-    XRRSetCrtcConfig: x11ext.XRRSetCrtcConfigProc,
-    XRRSelectInput: x11ext.XRRSelectInputProc,
-    XRRUpdateConfiguration: x11ext.XRRUpdateConfigurationProc,
+    XRRGetScreenResourcesCurrent: x11ext.xrandr.XRRGetScreenResourcesCurrentProc,
+    XRRGetScreenResources: x11ext.xrandr.XRRGetScreenResourcesProc,
+    XRRFreeScreenResources: x11ext.xrandr.XRRFreeScreenResourcesProc,
+    XRRGetCrtcInfo: x11ext.xrandr.XRRGetCrtcInfoProc,
+    XRRFreeCrtcInfo: x11ext.xrandr.XRRFreeCrtcInfoProc,
+    XRRGetOutputInfo: x11ext.xrandr.XRRGetOutputInfoProc,
+    XRRFreeOutputInfo: x11ext.xrandr.XRRFreeOutputInfoProc,
+    XRRGetOutputPrimary: x11ext.xrandr.XRRGetOutputPrimaryProc,
+    XRRQueryVersion: x11ext.xrandr.XRRQueryVersionProc,
+    XRRQueryExtension: x11ext.xrandr.XRRQueryExtensionProc,
+    XRRSetCrtcConfig: x11ext.xrandr.XRRSetCrtcConfigProc,
+    XRRSelectInput: x11ext.xrandr.XRRSelectInputProc,
+    XRRUpdateConfiguration: x11ext.xrandr.XRRUpdateConfigurationProc,
     event_code: c_int,
     is_v1point3: bool,
 };
 
 const XrmInterface = struct {
-    IsActive: x11ext.XineramaIsActiveProc,
-    QueryScreens: x11ext.XineramaQueryScreens,
+    IsActive: x11ext.xinerama.XineramaIsActiveProc,
+    QueryScreens: x11ext.xinerama.XineramaQueryScreens,
     is_active: bool,
 };
 
@@ -54,17 +54,17 @@ const XkbInterface = struct {
 };
 
 const XcursorInterface = struct {
-    XcursorImageCreate: x11ext.XcursorImageCreateProc,
-    XcursorImageDestroy: x11ext.XcursorImageDestroyProc,
-    XcursorLibraryLoadImage: x11ext.XcursorLibraryLoadImageProc,
-    XcursorGetTheme: x11ext.XcursorGetThemeProc,
-    XcursorGetDefaultSize: x11ext.XcursorGetDefaultSizeProc,
-    XcursorImageLoadCursor: x11ext.XcursorImageLoadCursorProc,
+    XcursorImageCreate: x11ext.xcursor.XcursorImageCreateProc,
+    XcursorImageDestroy: x11ext.xcursor.XcursorImageDestroyProc,
+    XcursorLibraryLoadImage: x11ext.xcursor.XcursorLibraryLoadImageProc,
+    XcursorGetTheme: x11ext.xcursor.XcursorGetThemeProc,
+    XcursorGetDefaultSize: x11ext.xcursor.XcursorGetDefaultSizeProc,
+    XcursorImageLoadCursor: x11ext.xcursor.XcursorImageLoadCursorProc,
 };
 
 const Xi2Interface = struct {
-    XIQueryVersion: x11ext.XIQueryVersionProc,
-    XISelectEvents: x11ext.XISelectEventsProc,
+    XIQueryVersion: x11ext.xi2.XIQueryVersionProc,
+    XISelectEvents: x11ext.xi2.XISelectEventsProc,
     maj_opcode: c_int,
     event_base: c_int,
     error_base: c_int,

@@ -191,11 +191,11 @@ pub const XIQueryVersionProc = *const fn (
     display: ?*types.Display,
     maj_version: *c_int,
     min_version: *c_int,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
 
 pub const XISelectEventsProc = *const fn (
     display: ?*types.Display,
     win: types.Window,
     masks: [*]XIEventMask,
     num_masks: c_int,
-) callconv(.C) types.Status;
+) callconv(.c) types.Status;
