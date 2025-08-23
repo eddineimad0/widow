@@ -87,48 +87,48 @@ pub const EXECUTION_STATE = packed struct(win32.DWORD) {
 //---------------------------
 // Functions
 //---------------------------
-pub extern "kernel32" fn FreeLibrary(hLibModule: win32.HMODULE) callconv(win32.WINAPI) win32.BOOL;
+pub extern "kernel32" fn FreeLibrary(hLibModule: win32.HMODULE) callconv(.winapi) win32.BOOL;
 
 pub extern "kernel32" fn GetProcAddress(
     hModule: win32.HMODULE,
     lpProcName: [*:0]const u8,
-) callconv(win32.WINAPI) ?win32.FARPROC;
+) callconv(.winapi) ?win32.FARPROC;
 
 pub extern "kernel32" fn LoadLibraryA(
     lpLibFileName: [*:0]const u8,
-) callconv(win32.WINAPI) ?win32.HMODULE;
+) callconv(.winapi) ?win32.HMODULE;
 
-pub extern "kernel32" fn GetLastError() callconv(win32.WINAPI) win32.DWORD;
-pub extern "kernel32" fn SetLastError(dwErrCode: win32.DWORD) callconv(win32.WINAPI) void;
+pub extern "kernel32" fn GetLastError() callconv(.winapi) win32.DWORD;
+pub extern "kernel32" fn SetLastError(dwErrCode: win32.DWORD) callconv(.winapi) void;
 pub extern "kernel32" fn GetModuleFileNameW(
     hModule: ?win32.HMODULE,
     lpFilename: win32.LPWSTR,
     nSize: win32.DWORD,
-) callconv(win32.WINAPI) win32.DWORD;
+) callconv(.winapi) win32.DWORD;
 pub extern "kernel32" fn GetCurrentDirectoryW(
     nBufferLength: win32.DWORD,
     lpBuffer: ?win32.LPWSTR,
-) callconv(win32.WINAPI) win32.DWORD;
+) callconv(.winapi) win32.DWORD;
 pub extern "kernel32" fn GetComputerNameA(
     lpBuffer: win32.LPSTR,
     nSize: *win32.DWORD,
-) callconv(win32.WINAPI) win32.BOOL;
-pub extern "kernel32" fn GetLargePageMinimum() callconv(win32.WINAPI) win32.SIZE_T;
+) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn GetLargePageMinimum() callconv(.winapi) win32.SIZE_T;
 
 pub extern "kernel32" fn GetModuleHandleExW(
     dwFlags: win32.DWORD,
     lpModuleName: win32.LPCWSTR,
     phModule: ?win32.HMODULE,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "kernel32" fn VerSetConditionMask(
     ConditionMask: u64,
     TypeMask: VER_FLAGS,
     Condition: u8,
-) callconv(@import("std").os.windows.WINAPI) u64;
+) callconv(.winapi) u64;
 
 
 pub extern "kernel32" fn SetThreadExecutionState(
   esFlags:EXECUTION_STATE
-) callconv(@import("std").os.windows.WINAPI) EXECUTION_STATE;
+) callconv(.winapi) EXECUTION_STATE;
 

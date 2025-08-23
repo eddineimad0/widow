@@ -28,7 +28,7 @@ fn EnumMonitorProc(
     _: ?win32.HDC,
     _: ?*win32.RECT,
     lparam: win32.LPARAM,
-) callconv(win32.WINAPI) win32.BOOL {
+) callconv(.winapi) win32.BOOL {
     const ulparam: usize = @intCast(lparam);
     const data: *LparamTuple = @ptrFromInt(ulparam);
     // the EnumDisplayMonitor function will return the handles of all monitors
