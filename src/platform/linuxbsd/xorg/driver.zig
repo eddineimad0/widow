@@ -218,9 +218,9 @@ pub const X11Driver = struct {
         defer driver_guard.unlock();
         if (!Self.g_init) {
             const g_instance = &Self.globl_instance;
-            _ = libx11.XInitThreads();
+            _ = libx11.dyn_api.XInitThreads();
             // Open a connection to the X server.
-            g_instance.handles.xdisplay = libx11.XOpenDisplay(null) orelse {
+            g_instance.handles.xdisplay = libx11.dyn_api.XOpenDisplay(null) orelse {
                 return XConnectionError.ConnectionFailed;
             };
             // Grab the default screen(monitor) and the root window on it.
@@ -243,7 +243,7 @@ pub const X11Driver = struct {
             }
 
             g_instance.readSystemGlobalDPI();
-            g_instance.pid = unix.getpid();
+            g_instance.pid = unix.process.getpid();
 
             // Create hidden cursor
             var curs_img = g_instance.extensions.xcursor.XcursorImageCreate(
@@ -280,7 +280,7 @@ pub const X11Driver = struct {
         defer Self.driver_guard.unlock();
         if (Self.g_init) {
             Self.g_init = false;
-            _ = libx11.XCloseDisplay(globl_instance.handles.xdisplay);
+            _ = libx11.dyn_api.XCloseDisplay(globl_instance.handles.xdisplay);
             globl_instance.unloadXExtensions();
         }
     }
@@ -288,49 +288,49 @@ pub const X11Driver = struct {
     fn loadXExtensions(self: *Self) XConnectionError!void {
         var base_event_code: c_int = undefined;
         var base_error_code: c_int = undefined;
-        self.handles.xrandr = unix.loadPosixModule(
+        self.handles.xrandr = unix.so.loadPosixModule(
             libx11.XORG_LIBS_NAME[libx11.LIB_XRANDR_SONAME_INDEX],
         );
 
         if (self.handles.xrandr) |handle| {
             self.extensions.xrandr.XRRGetCrtcInfo = @ptrCast(
-                unix.moduleSymbol(handle, "XRRGetCrtcInfo"),
+                unix.so.moduleSymbol(handle, "XRRGetCrtcInfo"),
             );
             self.extensions.xrandr.XRRFreeCrtcInfo = @ptrCast(
-                unix.moduleSymbol(handle, "XRRFreeCrtcInfo"),
+                unix.so.moduleSymbol(handle, "XRRFreeCrtcInfo"),
             );
             self.extensions.xrandr.XRRGetOutputInfo = @ptrCast(
-                unix.moduleSymbol(handle, "XRRGetOutputInfo"),
+                unix.so.moduleSymbol(handle, "XRRGetOutputInfo"),
             );
             self.extensions.xrandr.XRRFreeOutputInfo = @ptrCast(
-                unix.moduleSymbol(handle, "XRRFreeOutputInfo"),
+                unix.so.moduleSymbol(handle, "XRRFreeOutputInfo"),
             );
             self.extensions.xrandr.XRRGetOutputPrimary = @ptrCast(
-                unix.moduleSymbol(handle, "XRRGetOutputPrimary"),
+                unix.so.moduleSymbol(handle, "XRRGetOutputPrimary"),
             );
             self.extensions.xrandr.XRRGetScreenResourcesCurrent = @ptrCast(
-                unix.moduleSymbol(handle, "XRRGetScreenResourcesCurrent"),
+                unix.so.moduleSymbol(handle, "XRRGetScreenResourcesCurrent"),
             );
             self.extensions.xrandr.XRRGetScreenResources = @ptrCast(
-                unix.moduleSymbol(handle, "XRRGetScreenResources"),
+                unix.so.moduleSymbol(handle, "XRRGetScreenResources"),
             );
             self.extensions.xrandr.XRRFreeScreenResources = @ptrCast(
-                unix.moduleSymbol(handle, "XRRFreeScreenResources"),
+                unix.so.moduleSymbol(handle, "XRRFreeScreenResources"),
             );
             self.extensions.xrandr.XRRQueryVersion = @ptrCast(
-                unix.moduleSymbol(handle, "XRRQueryVersion"),
+                unix.so.moduleSymbol(handle, "XRRQueryVersion"),
             );
             self.extensions.xrandr.XRRQueryExtension = @ptrCast(
-                unix.moduleSymbol(handle, "XRRQueryExtension"),
+                unix.so.moduleSymbol(handle, "XRRQueryExtension"),
             );
             self.extensions.xrandr.XRRSetCrtcConfig = @ptrCast(
-                unix.moduleSymbol(handle, "XRRSetCrtcConfig"),
+                unix.so.moduleSymbol(handle, "XRRSetCrtcConfig"),
             );
             self.extensions.xrandr.XRRSelectInput = @ptrCast(
-                unix.moduleSymbol(handle, "XRRSelectInput"),
+                unix.so.moduleSymbol(handle, "XRRSelectInput"),
             );
             self.extensions.xrandr.XRRUpdateConfiguration = @ptrCast(
-                unix.moduleSymbol(handle, "XRRUpdateConfiguration"),
+                unix.so.moduleSymbol(handle, "XRRUpdateConfiguration"),
             );
             var minor: i32 = 0;
             var major: i32 = 0;
@@ -350,7 +350,7 @@ pub const X11Driver = struct {
             self.extensions.xrandr.XRRSelectInput(
                 self.handles.xdisplay,
                 self.handles.root_window,
-                x11ext.RROutputChangeNotifyMask,
+                x11ext.xrandr.RROutputChangeNotifyMask,
             );
         } else {
             std.log.err("[X11]: XRandR library not found.\n", .{});
@@ -358,15 +358,15 @@ pub const X11Driver = struct {
             return XConnectionError.XRandRNotFound;
         }
 
-        self.handles.xinerama = unix.loadPosixModule(
+        self.handles.xinerama = unix.so.loadPosixModule(
             libx11.XORG_LIBS_NAME[libx11.LIB_XINERAMA_SONAME_INDEX],
         );
         if (self.handles.xinerama) |handle| {
             self.extensions.xinerama.IsActive = @ptrCast(
-                unix.moduleSymbol(handle, "XineramaIsActive").?,
+                unix.so.moduleSymbol(handle, "XineramaIsActive").?,
             );
             self.extensions.xinerama.QueryScreens = @ptrCast(
-                unix.moduleSymbol(handle, "XineramaQueryScreens").?,
+                unix.so.moduleSymbol(handle, "XineramaQueryScreens").?,
             );
             self.extensions.xinerama.is_active = (self.extensions.xinerama.IsActive(self.handles.xdisplay) != 0);
         } else {
@@ -376,7 +376,7 @@ pub const X11Driver = struct {
         var xkb_major: c_int = 1;
         var xkb_minor: c_int = 0;
         var opcode: c_int = undefined;
-        self.extensions.xkb.is_available = libx11.XkbQueryExtension(
+        self.extensions.xkb.is_available = libx11.dyn_api.XkbQueryExtension(
             self.handles.xdisplay,
             &opcode,
             &base_event_code,
@@ -389,66 +389,66 @@ pub const X11Driver = struct {
             self.extensions.xkb.event_code = base_event_code;
             // enable key auto repeat.
             var auto_repeat_support: libx11.Bool = libx11.False;
-            _ = libx11.XkbGetDetectableAutoRepeat(
+            _ = libx11.dyn_api.XkbGetDetectableAutoRepeat(
                 self.handles.xdisplay,
                 &auto_repeat_support,
             );
             self.extensions.xkb.is_auto_repeat_detectable = auto_repeat_support == libx11.True;
             if (self.extensions.xkb.is_auto_repeat_detectable) {
-                _ = libx11.XkbSetDetectableAutoRepeat(
+                _ = libx11.dyn_api.XkbSetDetectableAutoRepeat(
                     self.handles.xdisplay,
                     libx11.True,
                     null,
                 );
             }
             // select events to receive.
-            _ = libx11.XkbSelectEventDetails(
+            _ = libx11.dyn_api.XkbSelectEventDetails(
                 self.handles.xdisplay,
-                x11ext.XkbUseCoreKbd,
-                x11ext.XkbStateNotify,
-                x11ext.XkbAllStateComponentsMask,
-                x11ext.XkbGroupStateMask,
+                x11ext.xkb.XkbUseCoreKbd,
+                x11ext.xkb.XkbStateNotify,
+                x11ext.xkb.XkbAllStateComponentsMask,
+                x11ext.xkb.XkbGroupStateMask,
             );
         }
 
-        self.handles.xcursor = unix.loadPosixModule(
+        self.handles.xcursor = unix.so.loadPosixModule(
             libx11.XORG_LIBS_NAME[libx11.LIB_XCURSOR_SONAME_INDEX],
         );
 
         if (self.handles.xcursor) |h| {
             self.extensions.xcursor.XcursorImageCreate = @ptrCast(
-                unix.moduleSymbol(h, "XcursorImageCreate").?,
+                unix.so.moduleSymbol(h, "XcursorImageCreate").?,
             );
             self.extensions.xcursor.XcursorImageDestroy = @ptrCast(
-                unix.moduleSymbol(h, "XcursorImageDestroy").?,
+                unix.so.moduleSymbol(h, "XcursorImageDestroy").?,
             );
             self.extensions.xcursor.XcursorLibraryLoadImage = @ptrCast(
-                unix.moduleSymbol(h, "XcursorLibraryLoadImage").?,
+                unix.so.moduleSymbol(h, "XcursorLibraryLoadImage").?,
             );
             self.extensions.xcursor.XcursorGetTheme = @ptrCast(
-                unix.moduleSymbol(h, "XcursorGetTheme").?,
+                unix.so.moduleSymbol(h, "XcursorGetTheme").?,
             );
             self.extensions.xcursor.XcursorGetDefaultSize = @ptrCast(
-                unix.moduleSymbol(h, "XcursorGetDefaultSize").?,
+                unix.so.moduleSymbol(h, "XcursorGetDefaultSize").?,
             );
             self.extensions.xcursor.XcursorImageLoadCursor = @ptrCast(
-                unix.moduleSymbol(h, "XcursorImageLoadCursor").?,
+                unix.so.moduleSymbol(h, "XcursorImageLoadCursor").?,
             );
         }
 
-        self.handles.xi2 = unix.loadPosixModule(
+        self.handles.xi2 = unix.so.loadPosixModule(
             libx11.XORG_LIBS_NAME[libx11.LIB_XINPUT2_SONAME_INDEX],
         );
 
         if (self.handles.xi2) |h| {
             self.extensions.xi2.XIQueryVersion = @ptrCast(
-                unix.moduleSymbol(h, "XIQueryVersion").?,
+                unix.so.moduleSymbol(h, "XIQueryVersion").?,
             );
             self.extensions.xi2.XISelectEvents = @ptrCast(
-                unix.moduleSymbol(h, "XISelectEvents").?,
+                unix.so.moduleSymbol(h, "XISelectEvents").?,
             );
 
-            const active = libx11.XQueryExtension(
+            const active = libx11.dyn_api.XQueryExtension(
                 self.handles.xdisplay,
                 "XInputExtension",
                 &self.extensions.xi2.maj_opcode,
@@ -491,14 +491,14 @@ pub const X11Driver = struct {
 
         // if we fail dpi will default to 96.
         var dpi: f32 = utils.DEFAULT_SCREEN_DPI;
-        libx11.XrmInitialize();
-        const res_str = libx11.XResourceManagerString(self.handles.xdisplay);
+        libx11.dyn_api.XrmInitialize();
+        const res_str = libx11.dyn_api.XResourceManagerString(self.handles.xdisplay);
         if (res_str) |s| {
-            const db = libx11.XrmGetStringDatabase(s);
-            defer libx11.XrmDestroyDatabase(db);
+            const db = libx11.dyn_api.XrmGetStringDatabase(s);
+            defer libx11.dyn_api.XrmDestroyDatabase(db);
             var value_type: ?[*:0]const u8 = null;
             var value: libx11.XrmValue = undefined;
-            _ = libx11.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &value_type, &value);
+            _ = libx11.dyn_api.XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &value_type, &value);
             if (value_type) |t| {
                 if (utils.strZEquals(t, "String")) {
                     var src: []const u8 = undefined;
@@ -522,65 +522,65 @@ pub const X11Driver = struct {
         self: *const Self,
         handler: ?*const libx11.XErrorHandlerFunc,
     ) ?*const libx11.XErrorHandlerFunc {
-        libx11.XSync(self.handles.xdisplay, libx11.False);
-        return libx11.XSetErrorHandler(handler);
+        libx11.dyn_api.XSync(self.handles.xdisplay, libx11.False);
+        return libx11.dyn_api.XSetErrorHandler(handler);
     }
 
     fn initEWMH(self: *Self) void {
         self.ewmh.UTF8_STRING =
-            libx11.XInternAtom(self.handles.xdisplay, "UTF8_STRING", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "UTF8_STRING", libx11.False);
 
         self.ewmh.XdndAware =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndAware", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndAware", libx11.False);
         self.ewmh.XdndEnter =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndEnter", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndEnter", libx11.False);
         self.ewmh.XdndPosition =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndPosition", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndPosition", libx11.False);
         self.ewmh.XdndStatus =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndStatus", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndStatus", libx11.False);
         self.ewmh.XdndActionCopy =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndActionCopy", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndActionCopy", libx11.False);
         self.ewmh.XdndDrop =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndDrop", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndDrop", libx11.False);
         self.ewmh.XdndFinished =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndFinished", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndFinished", libx11.False);
         self.ewmh.XdndSelection =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndSelection", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndSelection", libx11.False);
         self.ewmh.XdndTypeList =
-            libx11.XInternAtom(self.handles.xdisplay, "XdndTypeList", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "XdndTypeList", libx11.False);
         self.ewmh.text_uri_list =
-            libx11.XInternAtom(self.handles.xdisplay, "text/uri-list", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "text/uri-list", libx11.False);
 
         self.ewmh.WM_PROTOCOLS =
-            libx11.XInternAtom(self.handles.xdisplay, "WM_PROTOCOLS", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "WM_PROTOCOLS", libx11.False);
         self.ewmh.WM_STATE =
-            libx11.XInternAtom(self.handles.xdisplay, "WM_STATE", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "WM_STATE", libx11.False);
         self.ewmh.WM_DELETE_WINDOW =
-            libx11.XInternAtom(self.handles.xdisplay, "WM_DELETE_WINDOW", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "WM_DELETE_WINDOW", libx11.False);
         self.ewmh._NET_SUPPORTED =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTED", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTED", libx11.False);
         self.ewmh._NET_SUPPORTING_WM_CHECK =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTING_WM_CHECK", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_SUPPORTING_WM_CHECK", libx11.False);
         self.ewmh._NET_WM_ICON =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON", libx11.False);
         self.ewmh._NET_WM_PING =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PING", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_PING", libx11.False);
         self.ewmh._NET_WM_PID =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_PID", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_PID", libx11.False);
         self.ewmh._NET_WM_NAME =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_NAME", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_NAME", libx11.False);
         self.ewmh._NET_WM_ICON_NAME =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON_NAME", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_ICON_NAME", libx11.False);
         self.ewmh._NET_WM_BYPASS_COMPOSITOR =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_BYPASS_COMPOSITOR", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_BYPASS_COMPOSITOR", libx11.False);
         self.ewmh._NET_WM_WINDOW_OPACITY =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_WINDOW_OPACITY", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_WINDOW_OPACITY", libx11.False);
         self.ewmh._MOTIF_WM_HINTS =
-            libx11.XInternAtom(self.handles.xdisplay, "_MOTIF_WM_HINTS", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_MOTIF_WM_HINTS", libx11.False);
         self.ewmh._NET_WM_VISIBLE_NAME =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_NAME", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_NAME", libx11.False);
         self.ewmh._NET_WM_VISIBLE_ICON_NAME =
-            libx11.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_ICON_NAME", libx11.False);
+            libx11.dyn_api.XInternAtom(self.handles.xdisplay, "_NET_WM_VISIBLE_ICON_NAME", libx11.False);
 
         self.checkWindowManagerEwmhSupport();
         if (!self.ewmh.is_wm_emwh) {
@@ -600,7 +600,7 @@ pub const X11Driver = struct {
         if (atom_count == 0) {
             return;
         }
-        defer _ = libx11.XFree(supported.?);
+        defer _ = libx11.dyn_api.XFree(supported.?);
 
         const REQUIRE_WM_SUPPORT = [_][*:0]const u8{
             "_NET_WM_STATE",
@@ -620,7 +620,7 @@ pub const X11Driver = struct {
         };
 
         inline for (REQUIRE_WM_SUPPORT) |atom_name| {
-            const needle = libx11.XInternAtom(
+            const needle = libx11.dyn_api.XInternAtom(
                 self.handles.xdisplay,
                 atom_name,
                 libx11.False,
@@ -633,7 +633,7 @@ pub const X11Driver = struct {
             );
         }
 
-        Self.CUSTOM_CLIENT_ERR = libx11.XInternAtom(
+        Self.CUSTOM_CLIENT_ERR = libx11.dyn_api.XInternAtom(
             self.handles.xdisplay,
             "CUSTOM_CLIENT_ERR",
             libx11.False,
@@ -657,7 +657,7 @@ pub const X11Driver = struct {
         };
 
         std.debug.assert(window_ptr != null);
-        defer _ = libx11.XFree(window_ptr.?);
+        defer _ = libx11.dyn_api.XFree(window_ptr.?);
 
         // on success the window_ptr points to the id of the
         // child window created by the window manager.
@@ -682,7 +682,7 @@ pub const X11Driver = struct {
         _ = self.setXErrorHandler(prev_handler);
 
         std.debug.assert(child_window_ptr != null);
-        defer _ = libx11.XFree(child_window_ptr.?);
+        defer _ = libx11.dyn_api.XFree(child_window_ptr.?);
 
         if (window_ptr.?.* != child_window_ptr.?.*) {
             // breaks the rules.
@@ -697,7 +697,7 @@ pub const X11Driver = struct {
     /// to the x server.
     /// doesn't block since it use XFlush.
     pub inline fn flushXRequests(self: *const Self) void {
-        _ = libx11.XFlush(self.handles.xdisplay);
+        _ = libx11.dyn_api.XFlush(self.handles.xdisplay);
     }
 
     /// Attempts to read an event from the event queue without blocking
@@ -705,10 +705,10 @@ pub const X11Driver = struct {
     /// returns true if the event parameter was populated,
     /// false otherwise.
     pub inline fn nextXEvent(self: *const Self, e: *libx11.XEvent) bool {
-        if (libx11.XQLength(self.handles.xdisplay) == 0) {
+        if (libx11.dyn_api.XQLength(self.handles.xdisplay) == 0) {
             return false;
         }
-        _ = libx11.XNextEvent(self.handles.xdisplay, e);
+        _ = libx11.dyn_api.XNextEvent(self.handles.xdisplay, e);
         return true;
     }
 
@@ -718,7 +718,7 @@ pub const X11Driver = struct {
         destination: libx11.Window,
     ) void {
         // https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#idm45717752103616
-        _ = libx11.XSendEvent(
+        _ = libx11.dyn_api.XSendEvent(
             self.handles.xdisplay,
             destination,
             libx11.False,
@@ -733,7 +733,7 @@ pub const X11Driver = struct {
         window_id: libx11.Window,
         data: [*]u8,
     ) bool {
-        return (libx11.XSaveContext(
+        return (libx11.dyn_api.XSaveContext(
             self.handles.xdisplay,
             window_id,
             self.handles.xcontext,
@@ -745,7 +745,7 @@ pub const X11Driver = struct {
         self: *const Self,
         window_id: libx11.Window,
     ) bool {
-        return (libx11.XDeleteContext(
+        return (libx11.dyn_api.XDeleteContext(
             self.handles.xdisplay,
             window_id,
             self.handles.xcontext,
@@ -757,7 +757,7 @@ pub const X11Driver = struct {
         window_id: libx11.Window,
     ) ?[*]u8 {
         var data_return: ?[*]u8 = null;
-        const result = libx11.XFindContext(
+        const result = libx11.dyn_api.XFindContext(
             self.handles.xdisplay,
             window_id,
             self.handles.xcontext,
@@ -801,7 +801,7 @@ fn X11ErrorFilter(comptime filtered_error_code: u8) type {
         pub fn filter(
             display: ?*libx11.Display,
             err: *libx11.XErrorEvent,
-        ) callconv(.C) c_int {
+        ) callconv(.c) c_int {
             const x11cntxt = X11Driver.singleton();
             if (x11cntxt.handles.xdisplay != display or
                 err.error_code == filtered_error_code)

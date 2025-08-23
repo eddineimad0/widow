@@ -1,4 +1,4 @@
-const types = @import("../types.zig");
+const libx11 = @import("../xlib.zig");
 
 pub const XcursorBool = c_int;
 pub const XcursorUInt = u32;
@@ -23,10 +23,10 @@ pub const XcursorImages = extern struct {
 };
 
 pub const XcursorCursors = extern struct {
-    dpy: *types.Display,
+    dpy: *libx11.Display,
     ref: c_int,
     ncursor: c_int,
-    cursors: ?[*]types.Cursor,
+    cursors: ?[*]libx11.Cursor,
 };
 
 pub const XcursorAnimate = extern struct {
@@ -54,12 +54,12 @@ pub const XcursorLibraryLoadImageProc = *const fn (
     size: c_int,
 ) callconv(.c) ?*XcursorImage;
 pub const XcursorGetThemeProc = *const fn (
-    dpy: ?*types.Display,
+    dpy: ?*libx11.Display,
 ) callconv(.c) ?[*:0]const u8;
 pub const XcursorGetDefaultSizeProc = *const fn (
-    dpy: ?*types.Display,
+    dpy: ?*libx11.Display,
 ) callconv(.c) c_int;
 pub const XcursorImageLoadCursorProc = *const fn (
-    dpy: ?*types.Display,
+    dpy: ?*libx11.Display,
     image: ?*const XcursorImage,
 ) callconv(.c) c_ulong;

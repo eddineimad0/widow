@@ -49,7 +49,7 @@ pub const Window = struct {
         },
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
-        windowed_area:common.geometry.Rect,
+        windowed_area: common.geometry.Rect,
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
@@ -130,14 +130,12 @@ pub const Window = struct {
             self.setDecorated(false);
         }
 
-
         if (self.data.flags.is_fullscreen) {
-            _ = libx11.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
+            _ = libx11.dyn_api.XMapRaised(ctx.driver.handles.xdisplay, self.handle);
             const ok = waitForWindowVisibility(ctx.driver.handles.xdisplay, self.handle);
             self.data.flags.is_fullscreen = false;
             if (!ok or !self.setFullscreen(true)) return WindowError.CreateFail;
-        }else{
-
+        } else {
             if (self.data.flags.is_visible) {
                 self.show();
 
@@ -146,7 +144,6 @@ pub const Window = struct {
                 }
             }
         }
-
 
         return self;
     }
@@ -157,8 +154,8 @@ pub const Window = struct {
         self.ev_queue = null;
         if (self.data.flags.is_fullscreen) _ = self.setFullscreen(false);
         self.setCursorMode(.Normal);
-        _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
-        _ = libx11.XDestroyWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = libx11.dyn_api.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = libx11.dyn_api.XDestroyWindow(self.ctx.driver.handles.xdisplay, self.handle);
         _ = self.ctx.driver.removeFromXContext(self.handle);
         self.freeDroppedFiles();
         self.handle = 0;
@@ -215,7 +212,7 @@ pub const Window = struct {
 
     pub fn waitEvent(self: *Self) WindowError!void {
         // indefinetly wait
-        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay,-1);
+        const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay, -1);
         debug.assert(ok);
         try self.processEvents();
     }
@@ -223,7 +220,7 @@ pub const Window = struct {
     /// Waits for an event or the timeout interval elapses.
     pub fn waitEventTimeout(self: *Self, timeout: u32) WindowError!bool {
         const ok = waitOnX11Socket(self.ctx.driver.handles.xdisplay, timeout);
-        if(ok){
+        if (ok) {
             try self.processEvents();
         }
         return ok;
@@ -233,7 +230,7 @@ pub const Window = struct {
     pub fn show(self: *Self) void {
         std.debug.assert(self.handle != 0);
         const drvr = self.ctx.driver;
-        _ = libx11.XMapWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = libx11.dyn_api.XMapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         drvr.flushXRequests();
         self.data.flags.is_visible = true;
     }
@@ -242,7 +239,7 @@ pub const Window = struct {
     pub fn hide(self: *Self) void {
         std.debug.assert(self.handle != 0);
         const drvr = self.ctx.driver;
-        _ = libx11.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
+        _ = libx11.dyn_api.XUnmapWindow(self.ctx.driver.handles.xdisplay, self.handle);
         drvr.flushXRequests();
         self.data.flags.is_visible = false;
     }
@@ -276,11 +273,11 @@ pub const Window = struct {
             return;
         }
 
-        const size_hints = libx11.XAllocSizeHints();
+        const size_hints = libx11.dyn_api.XAllocSizeHints();
         if (size_hints) |hints| {
-            defer _ = libx11.XFree(hints);
+            defer _ = libx11.dyn_api.XFree(hints);
             var supplied: c_long = 0;
-            _ = libx11.XGetWMNormalHints(
+            _ = libx11.dyn_api.XGetWMNormalHints(
                 self.ctx.driver.handles.xdisplay,
                 self.handle,
                 hints,
@@ -314,7 +311,7 @@ pub const Window = struct {
                 hints.max_width = self.data.client_area.size.width;
                 hints.max_height = self.data.client_area.size.height;
             }
-            _ = libx11.XSetWMNormalHints(
+            _ = libx11.dyn_api.XSetWMNormalHints(
                 self.ctx.driver.handles.xdisplay,
                 self.handle,
                 @ptrCast(hints),
@@ -338,7 +335,7 @@ pub const Window = struct {
                     .serial = 0,
                     .send_event = 0,
                     .data = .{ .l = [5]c_long{
-                        if(self.data.flags.is_fullscreen) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
+                        if (self.data.flags.is_fullscreen) _NET_WM_STATE_ADD else _NET_WM_STATE_REMOVE,
                         @intCast(self.ctx.driver.ewmh._NET_WM_STATE_FULLSCREEN),
                         0,
                         0,
@@ -412,8 +409,8 @@ pub const Window = struct {
             };
             drvr.sendXEvent(&ev, drvr.windowManagerId());
         } else {
-            libx11.XRaiseWindow(drvr.handles.xdisplay, self.handle);
-            libx11.XSetInputFocus(
+            libx11.dyn_api.XRaiseWindow(drvr.handles.xdisplay, self.handle);
+            libx11.dyn_api.XSetInputFocus(
                 drvr.handles.xdisplay,
                 self.handle,
                 libx11.RevertToParent,
@@ -432,7 +429,7 @@ pub const Window = struct {
     /// to the specified screen coordinates.
     pub fn setClientPosition(self: *const Self, x: i32, y: i32) void {
         const drvr = self.ctx.driver;
-        _ = libx11.XMoveWindow(
+        _ = libx11.dyn_api.XMoveWindow(
             drvr.handles.xdisplay,
             self.handle,
             @intCast(x),
@@ -453,7 +450,7 @@ pub const Window = struct {
     pub fn getClientSize(self: *const Self) common.geometry.RectSize {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = self.ctx.driver;
-        _ = libx11.XGetWindowAttributes(
+        _ = libx11.dyn_api.XGetWindowAttributes(
             drvr.handles.xdisplay,
             self.handle,
             &attribs,
@@ -485,7 +482,7 @@ pub const Window = struct {
             self.updateSizeHints();
         }
 
-        _ = libx11.XResizeWindow(
+        _ = libx11.dyn_api.XResizeWindow(
             drvr.handles.xdisplay,
             self.handle,
             @intCast(size.width),
@@ -605,7 +602,7 @@ pub const Window = struct {
         motif_hints.flags = MWM_HINTS_DECORATIONS;
         motif_hints.decorations = if (value) MWM_DECOR_ALL else 0;
 
-        libx11.XChangeProperty(
+        libx11.dyn_api.XChangeProperty(
             drvr.handles.xdisplay,
             self.handle,
             drvr.ewmh._MOTIF_WM_HINTS,
@@ -651,7 +648,7 @@ pub const Window = struct {
     /// Minimizes the window.
     pub fn minimize(self: *Self) void {
         const drvr = self.ctx.driver;
-        _ = libx11.XIconifyWindow(
+        _ = libx11.dyn_api.XIconifyWindow(
             drvr.handles.xdisplay,
             self.handle,
             drvr.handles.default_screen,
@@ -704,7 +701,7 @@ pub const Window = struct {
         else
             drvr.ewmh._NET_WM_VISIBLE_ICON_NAME;
 
-        libx11.XChangeProperty(
+        libx11.dyn_api.XChangeProperty(
             drvr.handles.xdisplay,
             self.handle,
             name_atom,
@@ -715,7 +712,7 @@ pub const Window = struct {
             @intCast(new_title.len),
         );
 
-        libx11.XChangeProperty(
+        libx11.dyn_api.XChangeProperty(
             drvr.handles.xdisplay,
             self.handle,
             icon_atom,
@@ -750,7 +747,7 @@ pub const Window = struct {
             return WindowError.BadTitle;
         };
 
-        defer _ = libx11.XFree(data);
+        defer _ = libx11.dyn_api.XFree(data);
         const window_title = try allocator.alloc(u8, data_len);
         @memcpy(window_title, data);
         return window_title;
@@ -771,11 +768,11 @@ pub const Window = struct {
             libx11.XA_CARDINAL,
             @ptrCast(&value),
         ) catch return 1.0;
-        if(value)|v|{
-            defer _ = libx11.XFree(v);
-            const curr_opacity:f64 =  (@as(f64, @floatFromInt(v.*)) / @as(f64, @floatFromInt(OPAQUE)));
+        if (value) |v| {
+            defer _ = libx11.dyn_api.XFree(v);
+            const curr_opacity: f64 = (@as(f64, @floatFromInt(v.*)) / @as(f64, @floatFromInt(OPAQUE)));
             return @floatCast(curr_opacity);
-        }else{
+        } else {
             return 1.0;
         }
     }
@@ -792,15 +789,15 @@ pub const Window = struct {
 
         if (value == @as(f64, 1.0)) {
             // it's faster to just delete the property.
-            libx11.XDeleteProperty(
+            libx11.dyn_api.XDeleteProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh._NET_WM_WINDOW_OPACITY,
             );
         } else {
             const OPAQUE = @as(u32, 0xFFFFFFFF);
-            const alpha: libx11.XID = @intFromFloat(@as(f64,value) * @as(f64, @floatFromInt(OPAQUE)));
-            libx11.XChangeProperty(
+            const alpha: libx11.XID = @intFromFloat(@as(f64, value) * @as(f64, @floatFromInt(OPAQUE)));
+            libx11.dyn_api.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh._NET_WM_WINDOW_OPACITY,
@@ -821,37 +818,34 @@ pub const Window = struct {
     ) bool {
         const drvr = self.ctx.driver;
         var display_area: common.geometry.Rect = undefined;
-        var new_window_area:*common.geometry.Rect = &display_area;
+        var new_window_area: *common.geometry.Rect = &display_area;
 
         if (self.data.flags.is_fullscreen != value) {
-
             const d = self.ctx.display_mgr.findWindowDisplay(self) catch return false;
             d.getFullArea(&display_area, drvr);
 
             if (value) {
-
                 if (!self.data.flags.is_resizable) {
-
-                    const size_hints = libx11.XAllocSizeHints();
+                    const size_hints = libx11.dyn_api.XAllocSizeHints();
                     if (size_hints) |hints| {
-                        defer _ = libx11.XFree(hints);
+                        defer _ = libx11.dyn_api.XFree(hints);
                         var supplied: c_long = 0;
-                        _ = libx11.XGetWMNormalHints(
+                        _ = libx11.dyn_api.XGetWMNormalHints(
                             self.ctx.driver.handles.xdisplay,
                             self.handle,
                             hints,
                             &supplied,
                         );
 
-                        hints.flags &= ~(@as(@TypeOf(hints.flags),libx11.PMinSize) |
-                        @as(@TypeOf(hints.flags),libx11.PMaxSize));
+                        hints.flags &= ~(@as(@TypeOf(hints.flags), libx11.PMinSize) |
+                            @as(@TypeOf(hints.flags), libx11.PMaxSize));
 
-                        _ = libx11.XSetWMNormalHints(
+                        _ = libx11.dyn_api.XSetWMNormalHints(
                             self.ctx.driver.handles.xdisplay,
                             self.handle,
                             @ptrCast(hints),
                         );
-                    }else{
+                    } else {
                         return false;
                     }
 
@@ -864,9 +858,9 @@ pub const Window = struct {
                     }) catch return false;
                 }
 
-
                 if (drvr.extensions.xinerama.is_active and
-                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0)
+                {
                     var event = libx11.XEvent{
                         .xclient = libx11.XClientMessageEvent{
                             .type = libx11.ClientMessage,
@@ -891,15 +885,13 @@ pub const Window = struct {
                 self.x11.windowed_area = self.data.client_area;
 
                 self.ctx.display_mgr.setScreenSaver(false);
-
             } else {
-
                 self.ctx.display_mgr.setDisplayVideoMode(d, null) catch unreachable;
 
                 if (drvr.extensions.xinerama.is_active and
-                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0) {
-
-                    libx11.XDeleteProperty(
+                    drvr.ewmh._NET_WM_FULLSCREEN_MONITORS != 0)
+                {
+                    libx11.dyn_api.XDeleteProperty(
                         drvr.handles.xdisplay,
                         self.handle,
                         drvr.ewmh._NET_WM_FULLSCREEN_MONITORS,
@@ -912,12 +904,12 @@ pub const Window = struct {
 
             self.data.flags.is_fullscreen = value;
             self.updateSizeHints();
-            if (!self.updateStyles()){
+            if (!self.updateStyles()) {
                 self.data.flags.is_fullscreen = !value;
                 return false;
             }
 
-            _ = libx11.XMoveResizeWindow(
+            _ = libx11.dyn_api.XMoveResizeWindow(
                 drvr.handles.xdisplay,
                 self.handle,
                 new_window_area.top_left.x,
@@ -946,7 +938,7 @@ pub const Window = struct {
 
         if (accepted) {
             debug.assert(self.x11.xdnd_req.paths.capacity == 0 and self.x11.xdnd_req.paths.items.len == 0);
-            libx11.XChangeProperty(
+            libx11.dyn_api.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh.XdndAware,
@@ -957,7 +949,7 @@ pub const Window = struct {
                 1,
             );
         } else {
-            libx11.XDeleteProperty(
+            libx11.dyn_api.XDeleteProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh.XdndAware,
@@ -975,7 +967,7 @@ pub const Window = struct {
     /// Frees the allocated memory used to hold the file(s) path(s).
     pub fn freeDroppedFiles(self: *Self) void {
         if (self.x11.xdnd_req.raw_data) |rd| {
-            _ = libx11.XFree(@constCast(rd));
+            _ = libx11.dyn_api.XFree(@constCast(rd));
         }
         if (self.x11.xdnd_req.paths.capacity != 0) {
             self.x11.xdnd_req.paths.clearAndFree(self.ctx.allocator);
@@ -989,7 +981,7 @@ pub const Window = struct {
         var root_x: c_int, var root_y: c_int = .{ undefined, undefined };
         var win_x: c_int, var win_y: c_int = .{ undefined, undefined };
         var mask: c_uint = undefined;
-        _ = libx11.XQueryPointer(
+        _ = libx11.dyn_api.XQueryPointer(
             drvr.handles.xdisplay,
             self.handle,
             &root,
@@ -1007,7 +999,7 @@ pub const Window = struct {
     pub fn setCursorPosition(self: *Self, x: i32, y: i32) void {
         self.x11.cursor.pos = .{ .x = x, .y = y };
         const drvr = self.ctx.driver;
-        _ = libx11.XWarpPointer(
+        _ = libx11.dyn_api.XWarpPointer(
             drvr.handles.xdisplay,
             libx11.None,
             self.handle,
@@ -1112,7 +1104,7 @@ pub const Window = struct {
                     (@as(c_long, p[(4 * i) + 1]) << 8) |
                     @as(c_long, p[(4 * i) + 2]));
             }
-            libx11.XChangeProperty(
+            libx11.dyn_api.XChangeProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh._NET_WM_ICON,
@@ -1123,7 +1115,7 @@ pub const Window = struct {
                 @intCast(2 + pixl_data_size),
             );
         } else {
-            libx11.XDeleteProperty(
+            libx11.dyn_api.XDeleteProperty(
                 drvr.handles.xdisplay,
                 self.handle,
                 drvr.ewmh._NET_WM_ICON,
@@ -1185,7 +1177,7 @@ pub const Window = struct {
         ) catch return false;
 
         if (extents) |ex| {
-            defer _ = libx11.XFree(@ptrCast(ex));
+            defer _ = libx11.dyn_api.XFree(@ptrCast(ex));
             if (length != 4) {
                 return false;
             }
@@ -1293,7 +1285,7 @@ fn createPlatformWindow(
     );
 
     attribs.event_mask = EVENT_MASK;
-    attribs.colormap = libx11.XCreateColormap(
+    attribs.colormap = libx11.dyn_api.XCreateColormap(
         driver.handles.xdisplay,
         driver.windowManagerId(),
         visual,
@@ -1305,7 +1297,7 @@ fn createPlatformWindow(
         window_size.scaleBy(driver.g_screen_scale);
     }
 
-    const handle = libx11.XCreateWindow(
+    const handle = libx11.dyn_api.XCreateWindow(
         driver.handles.xdisplay,
         driver.windowManagerId(),
         data.client_area.top_left.x,
@@ -1342,14 +1334,14 @@ fn setInitialWindowPropeties(
         driver.ewmh._NET_WM_PING,
     };
 
-    _ = libx11.XSetWMProtocols(
+    _ = libx11.dyn_api.XSetWMProtocols(
         driver.handles.xdisplay,
         window,
         &protocols,
         protocols.len,
     );
 
-    libx11.XChangeProperty(
+    libx11.dyn_api.XChangeProperty(
         driver.handles.xdisplay,
         window,
         driver.ewmh._NET_WM_PID,
@@ -1364,7 +1356,7 @@ fn setInitialWindowPropeties(
     if (driver.ewmh._NET_WM_WINDOW_TYPE != 0 and
         driver.ewmh._NET_WM_WINDOW_TYPE_NORMAL != 0)
     {
-        libx11.XChangeProperty(
+        libx11.dyn_api.XChangeProperty(
             driver.handles.xdisplay,
             window,
             driver.ewmh._NET_WM_WINDOW_TYPE,
@@ -1377,17 +1369,17 @@ fn setInitialWindowPropeties(
     }
 
     // WMHints.
-    var hints = libx11.XAllocWMHints() orelse return WindowError.CreateFail;
-    defer _ = libx11.XFree(hints);
+    var hints = libx11.dyn_api.XAllocWMHints() orelse return WindowError.CreateFail;
+    defer _ = libx11.dyn_api.XFree(hints);
     hints.flags = libx11.StateHint;
     hints.initial_state = libx11.NormalState;
-    _ = libx11.XSetWMHints(driver.handles.xdisplay, window, @ptrCast(hints));
+    _ = libx11.dyn_api.XSetWMHints(driver.handles.xdisplay, window, @ptrCast(hints));
 
     // resizablitity
-    var size_hints = libx11.XAllocSizeHints() orelse
+    var size_hints = libx11.dyn_api.XAllocSizeHints() orelse
         return WindowError.CreateFail;
 
-    defer _ = libx11.XFree(size_hints);
+    defer _ = libx11.dyn_api.XFree(size_hints);
     size_hints.flags |= libx11.PWinGravity;
     size_hints.win_gravity = libx11.StaticGravity;
 
@@ -1404,34 +1396,33 @@ fn setInitialWindowPropeties(
         size_hints.min_height = window_size.height;
     }
 
-    if(data.client_area.top_left.x != Window.WINDOW_DEFAULT_POSITION.x and
-        data.client_area.top_left.y != Window.WINDOW_DEFAULT_POSITION.y
-    ){
+    if (data.client_area.top_left.x != Window.WINDOW_DEFAULT_POSITION.x and
+        data.client_area.top_left.y != Window.WINDOW_DEFAULT_POSITION.y)
+    {
         size_hints.x = data.client_area.top_left.x;
         size_hints.y = data.client_area.top_left.y;
         size_hints.flags |= libx11.PPosition;
     }
 
-    _ = libx11.XSetWMNormalHints(
+    _ = libx11.dyn_api.XSetWMNormalHints(
         driver.handles.xdisplay,
         window,
         @ptrCast(size_hints),
     );
 
     // WMClassHints
-    var class_hints = libx11.XAllocClassHint() orelse
+    var class_hints = libx11.dyn_api.XAllocClassHint() orelse
         return WindowError.CreateFail;
-    defer _ = libx11.XFree(class_hints);
+    defer _ = libx11.dyn_api.XFree(class_hints);
     class_hints.res_name = bopts.X11_RES_NAME.ptr;
     class_hints.res_class = bopts.X11_CLASS_NAME.ptr;
 
-    _ = libx11.XSetClassHint(
+    _ = libx11.dyn_api.XSetClassHint(
         driver.handles.xdisplay,
         window,
         @ptrCast(class_hints),
     );
 }
-
 
 pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window {
     const window = driver.findInXContext(window_id);
@@ -1439,14 +1430,14 @@ pub fn windowFromId(driver: *const X11Driver, window_id: libx11.Window) ?*Window
 }
 
 pub inline fn enableRawMouseMotion(driver: *const X11Driver) bool {
-    const MASK_LEN = comptime x11ext.XIMaskLen(x11ext.XI_RawMotion);
+    const MASK_LEN = comptime x11ext.xi2.XIMaskLen(x11ext.xi2.XI_RawMotion);
     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
-    var ev_mask = x11ext.XIEventMask{
-        .deviceid = x11ext.XIAllMasterDevices,
+    var ev_mask = x11ext.xi2.XIEventMask{
+        .deviceid = x11ext.xi2.XIAllMasterDevices,
         .mask_len = MASK_LEN,
         .mask = &mask,
     };
-    x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
+    x11ext.xi2.XISetMask(&mask, x11ext.xi2.XI_RawMotion);
     return driver.extensions.xi2.XISelectEvents(
         driver.handles.xdisplay,
         driver.windowManagerId(),
@@ -1458,12 +1449,12 @@ pub inline fn enableRawMouseMotion(driver: *const X11Driver) bool {
 pub inline fn disableRawMouseMotion(driver: *const X11Driver) bool {
     const MASK_LEN = 1;
     var mask: [MASK_LEN]u8 = [1]u8{0} ** MASK_LEN;
-    var ev_mask = x11ext.XIEventMask{
-        .deviceid = x11ext.XIAllMasterDevices,
+    var ev_mask = x11ext.xi2.XIEventMask{
+        .deviceid = x11ext.xi2.XIAllMasterDevices,
         .mask_len = MASK_LEN,
         .mask = &mask,
     };
-    x11ext.XISetMask(&mask, x11ext.XI_RawMotion);
+    x11ext.xi2.XISetMask(&mask, x11ext.xi2.XI_RawMotion);
     return driver.extensions.xi2.XISelectEvents(
         driver.handles.xdisplay,
         driver.windowManagerId(),
@@ -1472,14 +1463,14 @@ pub inline fn disableRawMouseMotion(driver: *const X11Driver) bool {
     ) == libx11.Success;
 }
 
-fn waitOnX11Socket(display:*libx11.Display,timeout:i64) bool {
+fn waitOnX11Socket(display: *libx11.Display, timeout: i64) bool {
     const timeout_ns = timeout * std.time.ns_per_ms;
     var ready: u32 = 0;
     // start by flushing and checking for available events.
-    while (libx11.XPending(display) == 0) {
-        if (unix.poll(
+    while (libx11.dyn_api.XPending(display) == 0) {
+        if (unix.poll.poll(
             libx11.ConnectionNumber(display),
-            unix.PollFlag.IORead,
+            unix.poll.PollFlag.IORead,
             timeout_ns,
             &ready,
         ) == false) {
@@ -1490,14 +1481,14 @@ fn waitOnX11Socket(display:*libx11.Display,timeout:i64) bool {
     return true;
 }
 
-inline fn isNextEventType(display: *libx11.Display, window_id:libx11.Window, event_type:c_int) bool {
-    var e:libx11.XEvent = undefined;
-    return libx11.XCheckTypedWindowEvent(display,window_id,event_type,&e) == libx11.True;
+inline fn isNextEventType(display: *libx11.Display, window_id: libx11.Window, event_type: c_int) bool {
+    var e: libx11.XEvent = undefined;
+    return libx11.dyn_api.XCheckTypedWindowEvent(display, window_id, event_type, &e) == libx11.True;
 }
 
-fn waitForWindowVisibility(display: *libx11.Display, window_id:libx11.Window) bool {
-    while(!isNextEventType(display, window_id, libx11.VisibilityNotify)){
-        if(!waitOnX11Socket(display, 250)){
+fn waitForWindowVisibility(display: *libx11.Display, window_id: libx11.Window) bool {
+    while (!isNextEventType(display, window_id, libx11.VisibilityNotify)) {
+        if (!waitOnX11Socket(display, 250)) {
             return false;
         }
     }

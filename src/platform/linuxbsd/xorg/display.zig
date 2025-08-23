@@ -237,7 +237,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
     }
     driver.extensions.xrandr.XRRFreeScreenResources(screens_res);
     if (screens) |scrns| {
-        _ = libx11.XFree(scrns);
+        _ = libx11.dyn_api.XFree(scrns);
     }
     // Shrink and free.
     displays.shrinkAndFree(allocator, displays.items.len);
@@ -451,7 +451,7 @@ pub const DisplayManager = struct {
             .driver = driver,
             .screen_saver_profile = undefined,
         };
-        _ = libx11.XGetScreenSaver(
+        _ = libx11.dyn_api.XGetScreenSaver(
             self.driver.handles.xdisplay,
             &self.screen_saver_profile.timout,
             &self.screen_saver_profile.interval,
@@ -519,7 +519,7 @@ pub const DisplayManager = struct {
 
     pub fn setScreenSaver(self: *Self, on: bool) void {
         if (!on) {
-            _ = libx11.XGetScreenSaver(
+            _ = libx11.dyn_api.XGetScreenSaver(
                 self.driver.handles.xdisplay,
                 &self.screen_saver_profile.timout,
                 &self.screen_saver_profile.interval,
@@ -527,7 +527,7 @@ pub const DisplayManager = struct {
                 &self.screen_saver_profile.allow_exposures,
             );
 
-            _ = libx11.XSetScreenSaver(
+            _ = libx11.dyn_api.XSetScreenSaver(
                 self.driver.handles.xdisplay,
                 0,
                 0,
@@ -535,7 +535,7 @@ pub const DisplayManager = struct {
                 libx11.DontAllowExposures,
             );
         } else {
-            _ = libx11.XSetScreenSaver(
+            _ = libx11.dyn_api.XSetScreenSaver(
                 self.driver.handles.xdisplay,
                 self.screen_saver_profile.timout,
                 self.screen_saver_profile.interval,

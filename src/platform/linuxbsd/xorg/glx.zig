@@ -123,70 +123,70 @@ pub const glx_api = struct {
         display: ?*libx11.Display,
         screen: c_int,
         nelements: *c_int,
-    ) callconv(.C) ?[*]GLXFBConfig;
+    ) callconv(.c) ?[*]GLXFBConfig;
     const glXChooseFBConfigProc = *const fn (
         display: ?*libx11.Display,
         screen: c_int,
         attrib_list: [*]const c_int,
         nelements: *c_int,
-    ) callconv(.C) ?[*]GLXFBConfig;
+    ) callconv(.c) ?[*]GLXFBConfig;
     const glXGetFBConfigAttribProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         attribute: c_int,
         value: *c_int,
-    ) callconv(.C) c_int;
+    ) callconv(.c) c_int;
     const glXGetClientStringProc = *const fn (
         display: ?*libx11.Display,
         name: c_int,
-    ) callconv(.C) [*:0]const u8;
+    ) callconv(.c) [*:0]const u8;
     const glXQueryExtensionProc = *const fn (
         display: ?*libx11.Display,
         error_base: *c_int,
         event_base: *c_int,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXQueryExtensionsStringProc = *const fn (
         display: ?*libx11.Display,
         screen: c_int,
-    ) callconv(.C) [*:0]const u8;
+    ) callconv(.c) [*:0]const u8;
     const glXQueryVersionProc = *const fn (
         display: ?*libx11.Display,
         major: *c_int,
         minor: *c_int,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXDestroyContextProc = *const fn (
         display: ?*libx11.Display,
         ctx: GLXContext,
-    ) callconv(.C) void;
+    ) callconv(.c) void;
     const glXDestroyWindowProc = *const fn (
         display: ?*libx11.Display,
         window: GLXWindow,
-    ) callconv(.C) void;
+    ) callconv(.c) void;
     const glXCreateWindowProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         window: libx11.Window,
         attrib_list: ?[*]const c_int,
-    ) callconv(.C) GLXWindow;
+    ) callconv(.c) GLXWindow;
     const glXCreateNewContextProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         render_type: c_int,
         share_list: ?GLXContext,
         direct: libx11.Bool,
-    ) callconv(.C) ?GLXContext;
+    ) callconv(.c) ?GLXContext;
     const glXMakeCurrentProc = *const fn (
         display: ?*libx11.Display,
         drawable: GLXDrawable,
         ctx: GLXContext,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXSwapBuffersProc = *const fn (
         display: ?*libx11.Display,
         drawable: GLXDrawable,
-    ) callconv(.C) void;
-    const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.C) ?*libx11.XVisualInfo;
-    const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
-    const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
+    ) callconv(.c) void;
+    const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.c) ?*libx11.XVisualInfo;
+    const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
+    const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
 
     var glXGetFBConfigs: glXGetFBConfigsProc = undefined;
     var glXChooseFBConfig: glXChooseFBConfigProc = undefined;
@@ -230,14 +230,14 @@ pub const glx_ext = struct {
         dpy: ?*libx11.Display,
         drawable: GLXDrawable,
         interval: c_int,
-    ) callconv(.C) void = null;
+    ) callconv(.c) void = null;
     var glXCreateContextAttribsARB: ?*const fn (
         dpy: ?*libx11.Display,
         config: GLXFBConfig,
         share_context: ?GLXContext,
         direct: libx11.Bool,
         attrib_list: [*]const c_int,
-    ) callconv(.C) ?GLXContext = null;
+    ) callconv(.c) ?GLXContext = null;
 };
 
 pub fn initGLX(driver: *const X11Driver) (so.ModuleError || GLXError)!void {
@@ -356,7 +356,7 @@ pub fn chooseVisualGLX(driver: *const X11Driver, fb_cfg: *const common.fb.FBConf
     if (glx_fb_cfg) |cfg| {
         const result = glx_api.glXGetVisualFromFBConfig(driver.handles.xdisplay, cfg);
         if (result) |r| {
-            defer _ = libx11.XFree(@ptrCast(r));
+            defer _ = libx11.dyn_api.XFree(@ptrCast(r));
             vis.* = r.visual orelse return false;
             depth.* = r.depth;
             return true;
@@ -410,14 +410,14 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     );
 
     if (fb_configs != null and configs_count > 0) {
-        defer _ = libx11.XFree(@ptrCast(fb_configs.?));
+        defer _ = libx11.dyn_api.XFree(@ptrCast(fb_configs.?));
         for (0..@as(usize, @intCast(configs_count))) |i| {
             const visual = glx_api.glXGetVisualFromFBConfig(
                 driver.handles.xdisplay,
                 fb_configs.?[i],
             );
             if (visual) |vi| {
-                _ = libx11.XFree(vi);
+                _ = libx11.dyn_api.XFree(vi);
                 return fb_configs.?[i];
             } else {
                 continue;
@@ -533,7 +533,7 @@ pub const GLContext = struct {
 
         _ = glx_api.glXMakeCurrent(driver.handles.xdisplay, glx_wndw, rc.?);
 
-        var glGetString: ?*const fn (pname: u32) callconv(.C) ?[*:0]const u8 = null;
+        var glGetString: ?*const fn (pname: u32) callconv(.c) ?[*:0]const u8 = null;
         glGetString = @ptrCast(glLoaderFunc("glGetString"));
         var vend: [*:0]const u8 = undefined;
         var rend: [*:0]const u8 = undefined;
