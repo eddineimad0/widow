@@ -1003,7 +1003,7 @@ pub const WNDPROC = *const fn (
     param1: u32,
     param2: win32.WPARAM,
     param3: win32.LPARAM,
-) callconv(win32.WINAPI) win32.LRESULT;
+) callconv(.winapi) win32.LRESULT;
 
 pub const WNDCLASSEXW = extern struct {
     cbSize: u32,
@@ -1195,7 +1195,7 @@ pub const MONITORENUMPROC = *const fn (
     param1: ?win32.HDC,
     param2: ?*win32.RECT,
     param3: win32.LPARAM,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub const GDI_IMAGE_TYPE = enum(u32) {
     BITMAP = 0,
@@ -1572,24 +1572,24 @@ pub extern "user32" fn SetWindowPos(
     cx: i32,
     cy: i32,
     uFlags: SET_WINDOW_POS_FLAGS,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn IsIconic(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetSystemMetrics(
     nIndex: SYSTEM_METRICS_INDEX,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "user32" fn DefWindowProcW(
     hWnd: ?win32.HWND,
     Msg: u32,
     wParam: win32.WPARAM,
     lParam: win32.LPARAM,
-) callconv(win32.WINAPI) win32.LRESULT;
+) callconv(.winapi) win32.LRESULT;
 
-pub extern "user32" fn GetMessageTime() callconv(win32.WINAPI) i32;
+pub extern "user32" fn GetMessageTime() callconv(.winapi) i32;
 
 pub extern "user32" fn PeekMessageW(
     lpMsg: ?*MSG,
@@ -1597,47 +1597,47 @@ pub extern "user32" fn PeekMessageW(
     wMsgFilterMin: u32,
     wMsgFilterMax: u32,
     wRemoveMsg: PEEK_MESSAGE_REMOVE_TYPE,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetWindowRect(
     hWnd: ?win32.HWND,
     lpRect: ?*win32.RECT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetClientRect(
     hWnd: ?win32.HWND,
     lpRect: ?*win32.RECT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn ClipCursor(
     lpRect: ?*const win32.RECT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetCursorPos(
     X: i32,
     Y: i32,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetCursorPos(
     lpPoint: ?*win32.POINT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn ChangeWindowMessageFilterEx(
     hwnd: ?win32.HWND,
     message: u32,
     action: WINDOW_MESSAGE_FILTER_ACTION,
     pChangeFilterStruct: ?*CHANGEFILTERSTRUCT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn TranslateMessage(
     lpMsg: ?*const MSG,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn DispatchMessageW(
     lpMsg: ?*const MSG,
-) callconv(win32.WINAPI) win32.LRESULT;
+) callconv(.winapi) win32.LRESULT;
 
-pub extern "user32" fn WaitMessage() callconv(win32.WINAPI) win32.LRESULT;
+pub extern "user32" fn WaitMessage() callconv(.winapi) win32.LRESULT;
 
 pub extern "user32" fn MsgWaitForMultipleObjects(
     nCount: u32,
@@ -1645,71 +1645,71 @@ pub extern "user32" fn MsgWaitForMultipleObjects(
     fWaitAll: win32.BOOL,
     dwMilliseconds: u32,
     dwWakeMask: QUEUE_STATUS_FLAGS,
-) callconv(win32.WINAPI) u32;
+) callconv(.winapi) u32;
 
 pub extern "user32" fn FlashWindowEx(
     pfwi: ?*FLASHWINFO,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SendMessageW(
     hWnd: ?win32.HWND,
     Msg: u32,
     wParam: win32.WPARAM,
     lParam: win32.LPARAM,
-) callconv(win32.WINAPI) win32.LRESULT;
+) callconv(.winapi) win32.LRESULT;
 
 pub extern "user32" fn GetClassLongPtrW(
     hWnd: ?win32.HWND,
     nIndex: GET_CLASS_LONG_INDEX,
-) callconv(win32.WINAPI) usize;
+) callconv(.winapi) usize;
 
 pub extern "user32" fn RegisterClassExW(
     unnamedParam1: ?*const WNDCLASSEXW,
-) callconv(win32.WINAPI) u16;
+) callconv(.winapi) u16;
 
 pub extern "user32" fn UnregisterClassW(
     lpClassName: ?win32.LPCWSTR,
     hInstance: ?win32.HINSTANCE,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn PostMessageW(
     hWnd: ?win32.HWND,
     Msg: win32.UINT,
     wParam: win32.WPARAM,
     lParam: win32.LPARAM,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn EnumDisplaySettingsExW(
     lpszDeviceName: ?[*:0]const u16,
     iModeNum: u32,
     lpDevMode: ?*DEVMODEW,
     dwFlags: u32,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetMonitorInfoW(
     hMonitor: ?HMONITOR,
     lpmi: ?*MONITORINFO,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn EnumDisplayMonitors(
     hdc: ?win32.HDC,
     lprcClip: ?*win32.RECT,
     lpfnEnum: ?MONITORENUMPROC,
     dwData: win32.LPARAM,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn EnumDisplayDevicesW(
     lpDevice: ?[*:0]const u16,
     iDevNum: u32,
     lpDisplayDevice: ?*DISPLAY_DEVICEW,
     dwFlags: u32,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn EnumDisplaySettingsW(
     lpszDeviceName: ?[*:0]const u16,
     iModeNum: win32.DWORD,
     lpDevMode: ?*DEVMODEW,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn ChangeDisplaySettingsExW(
     lpszDeviceName: ?[*:0]const u16,
@@ -1717,26 +1717,26 @@ pub extern "user32" fn ChangeDisplaySettingsExW(
     hwnd: ?win32.HWND,
     dwflags: CDS_TYPE,
     lParam: ?*anyopaque,
-) callconv(win32.WINAPI) DISP_CHANGE;
+) callconv(.winapi) DISP_CHANGE;
 
 pub extern "user32" fn GetDC(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?win32.HDC;
+) callconv(.winapi) ?win32.HDC;
 
 pub extern "gdi32" fn GetDeviceCaps(
     hdc: ?win32.HDC,
     index: GET_DEVICE_CAPS_INDEX,
-) callconv(@import("std").os.windows.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "user32" fn ReleaseDC(
     hWnd: ?win32.HWND,
     hDC: ?win32.HDC,
-) callconv(@import("std").os.windows.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "user32" fn MonitorFromWindow(
     hwnd: ?win32.HWND,
     dwFlags: MONITOR_FROM_FLAGS,
-) callconv(win32.WINAPI) ?HMONITOR;
+) callconv(.winapi) ?HMONITOR;
 
 pub extern "user32" fn LoadImageW(
     hInst: ?win32.HINSTANCE,
@@ -1745,7 +1745,7 @@ pub extern "user32" fn LoadImageW(
     cx: i32,
     cy: i32,
     fuLoad: IMAGE_FLAGS,
-) callconv(win32.WINAPI) ?win32.HANDLE;
+) callconv(.winapi) ?win32.HANDLE;
 
 pub extern "gdi32" fn CreateDIBSection(
     hdc: ?win32.HDC,
@@ -1754,11 +1754,11 @@ pub extern "gdi32" fn CreateDIBSection(
     ppvBits: ?*?*anyopaque,
     hSection: ?win32.HANDLE,
     offset: u32,
-) callconv(win32.WINAPI) ?HBITMAP;
+) callconv(.winapi) ?HBITMAP;
 
 pub extern "gdi32" fn DeleteObject(
     ho: ?HGDIOBJ,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "gdi32" fn CreateBitmap(
     nWidth: i32,
@@ -1766,19 +1766,19 @@ pub extern "gdi32" fn CreateBitmap(
     nPlanes: u32,
     nBitCount: u32,
     lpBits: ?*const anyopaque,
-) callconv(win32.WINAPI) ?HBITMAP;
+) callconv(.winapi) ?HBITMAP;
 
 pub extern "user32" fn CreateIconIndirect(
     piconinfo: ?*ICONINFO,
-) callconv(win32.WINAPI) ?win32.HICON;
+) callconv(.winapi) ?win32.HICON;
 
 pub extern "user32" fn DestroyCursor(
     hCursor: ?win32.HCURSOR,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn DestroyIcon(
     hIcon: ?win32.HICON,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn LoadImageA(
     hInst: ?win32.HINSTANCE,
@@ -1787,7 +1787,7 @@ pub extern "user32" fn LoadImageA(
     cx: i32,
     cy: i32,
     fuLoad: IMAGE_FLAGS,
-) callconv(win32.WINAPI) ?win32.HANDLE;
+) callconv(.winapi) ?win32.HANDLE;
 
 pub extern "user32" fn CreateWindowExW(
     dwExStyle: WINDOW_EX_STYLE,
@@ -1802,101 +1802,101 @@ pub extern "user32" fn CreateWindowExW(
     hMenu: ?win32.HMENU,
     hInstance: ?win32.HINSTANCE,
     lpParam: ?*anyopaque,
-) callconv(win32.WINAPI) ?win32.HWND;
+) callconv(.winapi) ?win32.HWND;
 
 pub extern "user32" fn ShowWindow(
     hWnd: ?win32.HWND,
     nCmdShow: SHOW_WINDOW_CMD,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn DestroyWindow(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetPropW(
     hWnd: ?win32.HWND,
     lpString: ?[*:0]const u16,
     hData: ?win32.HANDLE,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetPropW(
     hWnd: ?win32.HWND,
     lpString: ?[*:0]const u16,
-) callconv(win32.WINAPI) ?win32.HANDLE;
+) callconv(.winapi) ?win32.HANDLE;
 
 pub extern "user32" fn ClientToScreen(
     hWnd: ?win32.HWND,
     lpPoint: ?*win32.POINT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn AdjustWindowRectEx(
     lpRect: ?*win32.RECT,
     dwStyle: WINDOW_STYLE,
     bMenu: win32.BOOL,
     dwExStyle: WINDOW_EX_STYLE,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn LoadCursorW(
     hInstance: ?win32.HINSTANCE,
     lpCursorName: ?[*:0]align(1) const u16,
-) callconv(win32.WINAPI) ?win32.HCURSOR;
+) callconv(.winapi) ?win32.HCURSOR;
 
 pub extern "user32" fn SetCursor(
     hCursor: ?win32.HCURSOR,
-) callconv(win32.WINAPI) ?win32.HCURSOR;
+) callconv(.winapi) ?win32.HCURSOR;
 
 pub extern "user32" fn BringWindowToTop(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?win32.HCURSOR;
+) callconv(.winapi) ?win32.HCURSOR;
 
 pub extern "user32" fn SetForegroundWindow(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?win32.HCURSOR;
+) callconv(.winapi) ?win32.HCURSOR;
 
 pub extern "user32" fn GetWindowLongPtrW(
     hWnd: ?win32.HWND,
     nIndex: WINDOW_LONG_PTR_INDEX,
-) callconv(win32.WINAPI) isize;
+) callconv(.winapi) isize;
 
 pub extern "user32" fn SetWindowLongPtrW(
     hWnd: ?win32.HWND,
     nIndex: WINDOW_LONG_PTR_INDEX,
     dwNewLong: isize,
-) callconv(win32.WINAPI) isize;
+) callconv(.winapi) isize;
 
 pub extern "user32" fn ScreenToClient(
     hWnd: ?win32.HWND,
     lpPoint: ?*win32.POINT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetWindowTextW(
     hWnd: ?win32.HWND,
     lpString: ?[*:0]const u16,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn GetWindowTextW(
     hWnd: ?win32.HWND,
     lpString: [*:0]u16,
     nMaxCount: i32,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "user32" fn GetWindowTextLengthW(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "user32" fn GetLayeredWindowAttributes(
     hwnd: ?win32.HWND,
     pcrKey: ?*u32,
     pbAlpha: ?*u8,
     pdwFlags: ?*LAYERED_WINDOW_ATTRIBUTES_FLAGS,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetLayeredWindowAttributes(
     hwnd: ?win32.HWND,
     crKey: u32,
     bAlpha: u8,
     dwFlags: LAYERED_WINDOW_ATTRIBUTES_FLAGS,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn MoveWindow(
     hWnd: ?win32.HWND,
@@ -1905,10 +1905,10 @@ pub extern "user32" fn MoveWindow(
     nWidth: i32,
     nHeight: i32,
     bRepaint: win32.BOOL,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn OffsetRect(
     lprc: ?*win32.RECT,
     dx: i32,
     dy: i32,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;

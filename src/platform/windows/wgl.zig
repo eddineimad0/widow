@@ -99,7 +99,7 @@ const wgl_ext = struct {
         nMaxFormats: win32.UINT,
         piFormats: ?[*]c_int,
         nNumFormats: *win32.UINT,
-    ) callconv(win32.WINAPI) win32.BOOL = null;
+    ) callconv(.winapi) win32.BOOL = null;
 
     var GetPixelFormatAttribivARB: ?*const fn (
         hdc: ?win32.HDC,
@@ -108,21 +108,21 @@ const wgl_ext = struct {
         nAttributes: win32.UINT,
         piAttributes: ?[*]c_int,
         piValues: ?[*]c_int,
-    ) callconv(win32.WINAPI) win32.BOOL = null;
+    ) callconv(.winapi) win32.BOOL = null;
 
     var CreateContextAttribsARB: ?*const fn (
         hdc: ?win32.HDC,
         hShareContext: ?win32.HGLRC,
         attribList: ?[*]c_int,
-    ) callconv(win32.WINAPI) ?win32.HGLRC = null;
+    ) callconv(.winapi) ?win32.HGLRC = null;
 
     var SwapIntervalEXT: ?*const fn (
         interval: c_int,
-    ) callconv(win32.WINAPI) win32.BOOL = null;
+    ) callconv(.winapi) win32.BOOL = null;
 
     var GetExtensionsStringARB: ?*const fn (
         hdc: ?win32.HDC,
-    ) callconv(win32.WINAPI) ?[*:0]const u8 = null;
+    ) callconv(.winapi) ?[*:0]const u8 = null;
 
     var supported_extensions: ?[:0]const u8 = null;
     var ARB_pixel_format: bool = false;
@@ -534,7 +534,7 @@ pub const GLContext = struct {
         var rend: [*:0]const u8 = undefined;
         var ver: [*:0]const u8 = undefined;
 
-        var glGetString: ?*const fn (name: u32) callconv(@import("std").os.windows.WINAPI) ?[*:0]const u8 = null;
+        var glGetString: ?*const fn (name: u32) callconv(.winapi) ?[*:0]const u8 = null;
         glGetString = @ptrCast(glLoaderFunc("glGetString"));
         if (glGetString) |func| {
             const GL_UNKOWN_VENDOR = "Vendor_Unknown";

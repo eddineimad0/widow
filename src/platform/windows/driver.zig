@@ -41,33 +41,33 @@ const Win32Handles = struct {
 const OptionalApi = struct {
     // Types
     // Functions
-    const SetProcessDPIAwareProc = *const fn () callconv(win32.WINAPI) win32.BOOL;
+    const SetProcessDPIAwareProc = *const fn () callconv(.winapi) win32.BOOL;
     const RtlVerifyVersionInfoProc = *const fn (
         VersionInfo: *krnl32.OSVERSIONINFOEXW,
         TypeMask: u32,
         ConditionMask: u64,
-    ) callconv(win32.WINAPI) win32.NTSTATUS;
+    ) callconv(.winapi) win32.NTSTATUS;
     const SetProcessDpiAwarenessProc = *const fn (
         win32_gfx.PROCESS_DPI_AWARENESS,
-    ) callconv(win32.WINAPI) win32.HRESULT;
+    ) callconv(.winapi) win32.HRESULT;
     pub const SetProcessDpiAwarenessContextProc = *const fn (
         win32_gfx.DPI_AWARENESS_CONTEXT,
-    ) callconv(win32.WINAPI) win32.HRESULT;
-    const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
-    const GetDpiForWindowProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
+    ) callconv(.winapi) win32.HRESULT;
+    const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(.winapi) win32.BOOL;
+    const GetDpiForWindowProc = *const fn (win32.HWND) callconv(.winapi) win32.DWORD;
     const GetDpiForMonitorProc = *const fn (
         win32_gfx.HMONITOR,
         win32_gfx.MONITOR_DPI_TYPE,
         *u32,
         *u32,
-    ) callconv(win32.WINAPI) win32.HRESULT;
+    ) callconv(.winapi) win32.HRESULT;
     const AdjustWindowRectExForDpiProc = *const fn (
         *win32.RECT,
         u32,
         i32,
         u32,
         u32,
-    ) callconv(win32.WINAPI) win32.BOOL;
+    ) callconv(.winapi) win32.BOOL;
 
     // RtlVerifyVersionInfo is guaranteed to be on all NT versions
     RtlVerifyVersionInfo: RtlVerifyVersionInfoProc,
