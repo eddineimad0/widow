@@ -51,7 +51,6 @@ pub const createWidowContext = platform.createWidowContext;
 /// the resources.
 pub const destroyWidowContext = platform.destroyWidowContext;
 
-
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);
     std.testing.refAllDeclsRecursive(platform);

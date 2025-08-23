@@ -13,13 +13,13 @@ pub extern "shell32" fn DragQueryFileW(
     iFile: u32,
     lpszFile: ?[*:0]u16,
     cch: u32,
-) callconv(win32.WINAPI) u32;
+) callconv(.winapi) u32;
 
 pub extern "shell32" fn DragFinish(
     hDrop: ?HDROP,
-) callconv(win32.WINAPI) void;
+) callconv(.winapi) void;
 
 pub extern "shell32" fn DragAcceptFiles(
     hWnd: ?win32.HWND,
     fAccept: win32.BOOL,
-) callconv(win32.WINAPI) void;
+) callconv(.winapi) void;

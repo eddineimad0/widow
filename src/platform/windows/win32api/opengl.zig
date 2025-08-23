@@ -118,46 +118,46 @@ pub const PIXELFORMATDESCRIPTOR = extern struct {
 pub extern "gdi32" fn ChoosePixelFormat(
     hdc: ?win32.HDC,
     ppfd: ?*const PIXELFORMATDESCRIPTOR,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "gdi32" fn DescribePixelFormat(
     hdc: ?win32.HDC,
     iPixelFormat: PFD_PIXEL_TYPE,
     nBytes: u32,
     ppfd: ?*PIXELFORMATDESCRIPTOR,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "gdi32" fn GetPixelFormat(
     hdc: ?win32.HDC,
-) callconv(win32.WINAPI) i32;
+) callconv(.winapi) i32;
 
 pub extern "gdi32" fn SetPixelFormat(
     hdc: ?win32.HDC,
     format: i32,
     ppfd: ?*const PIXELFORMATDESCRIPTOR,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "opengl32" fn wglCreateContext(
     param0: ?win32.HDC,
-) callconv(win32.WINAPI) ?win32.HGLRC;
+) callconv(.winapi) ?win32.HGLRC;
 
 pub extern "opengl32" fn wglDeleteContext(
     param0: ?win32.HGLRC,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
-pub extern "opengl32" fn wglGetCurrentContext() callconv(win32.WINAPI) ?win32.HGLRC;
+pub extern "opengl32" fn wglGetCurrentContext() callconv(.winapi) ?win32.HGLRC;
 
-pub extern "opengl32" fn wglGetCurrentDC() callconv(win32.WINAPI) ?win32.HDC;
+pub extern "opengl32" fn wglGetCurrentDC() callconv(.winapi) ?win32.HDC;
 
 pub extern "opengl32" fn wglGetProcAddress(
     param0: ?[*:0]const u8,
-) callconv(win32.WINAPI) ?win32.PROC;
+) callconv(.winapi) ?win32.PROC;
 
 pub extern "opengl32" fn wglMakeCurrent(
     param0: ?win32.HDC,
     param1: ?win32.HGLRC,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "gdi32" fn SwapBuffers(
     param0: ?win32.HDC,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;

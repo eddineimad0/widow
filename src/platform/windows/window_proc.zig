@@ -18,7 +18,7 @@ pub fn helperWindowProc(
     msg: win32.DWORD,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(win32.WINAPI) isize {
+) callconv(.winapi) isize {
     switch (msg) {
         win32_gfx.WM_DISPLAYCHANGE => {
             // Monitor the window_msg.WM_DISPLAYCHANGE notification
@@ -63,7 +63,7 @@ pub fn mainWindowProc(
     msg: win32.DWORD,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(win32.WINAPI) isize {
+) callconv(.winapi) isize {
     const window_ref_prop = win32_gfx.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
     if (window_ref_prop == null) {
         if (msg == win32_gfx.WM_NCCREATE) {
