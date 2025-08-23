@@ -56,8 +56,6 @@ pub fn main() !void {
     // closes the window when done.
     defer mywindow.deinit();
 
-
-
     _ = mywindow.setEventQueue(&ev_queue);
 
     event_loop: while (true) {
@@ -91,7 +89,7 @@ pub fn main() !void {
 
 ## Minimum Zig Version
 
-✅ [0.14.0](https://ziglang.org/documentation/0.14.0/)
+✅ [0.15.1](https://ziglang.org/documentation/0.15.1/)
 The main branch will stick to stable zig releases.
 
 ## Dependecies
