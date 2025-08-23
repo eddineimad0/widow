@@ -1,4 +1,4 @@
-const types = @import("../types.zig");
+const libx11 = @import("../xlib.zig");
 
 pub const XI_2_Major = 2;
 pub const XI_2_Minor = 0;
@@ -173,11 +173,11 @@ pub const XIValuatorState = extern struct {
 pub const XIRawEvent = extern struct {
     type: c_int, // GenericEvent
     serial: c_ulong, // # of last request processed by server
-    send_event: types.Bool, // true if this came from a SendEvent request
-    display: ?*types.Display, // Display the event was read from
+    send_event: libx11.Bool, // true if this came from a SendEvent request
+    display: ?*libx11.Display, // Display the event was read from
     extension: c_int, // XI extension offset
     evtype: c_int, // XI_RawKeyPress, XI_RawKeyRelease, etc.
-    time: types.Time,
+    time: libx11.Time,
     deviceid: c_int,
     sourceid: c_int, // Bug: Always 0. https://bugs.freedesktop.org//show_bug.cgi?id=34240
     detail: c_int,
@@ -188,14 +188,14 @@ pub const XIRawEvent = extern struct {
 
 // Functions
 pub const XIQueryVersionProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     maj_version: *c_int,
     min_version: *c_int,
-) callconv(.C) types.Status;
+) callconv(.c) libx11.Status;
 
 pub const XISelectEventsProc = *const fn (
-    display: ?*types.Display,
-    win: types.Window,
+    display: ?*libx11.Display,
+    win: libx11.Window,
     masks: [*]XIEventMask,
     num_masks: c_int,
-) callconv(.C) types.Status;
+) callconv(.c) libx11.Status;

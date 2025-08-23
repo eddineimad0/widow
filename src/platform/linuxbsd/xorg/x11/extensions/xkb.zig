@@ -1,4 +1,4 @@
-const types = @import("../types.zig");
+const libx11 = @import("../xlib.zig");
 
 // Constants
 pub const XkbMaxLegalKeyCode = 255;
@@ -123,8 +123,8 @@ pub const XkbAnyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
     send_event: bool,
-    display: ?*types.Display,
-    time: types.Time,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_uint,
 };
@@ -132,9 +132,9 @@ pub const XkbAnyEvent = extern struct {
 pub const XkbNewKeyboardNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     old_device: c_int,
@@ -150,23 +150,23 @@ pub const XkbNewKeyboardNotifyEvent = extern struct {
 pub const XkbMapNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed: c_uint,
     flags: c_uint,
     first_type: c_int,
     num_types: c_int,
-    min_key_code: types.KeyCode,
-    max_key_code: types.KeyCode,
-    first_key_sym: types.KeyCode,
-    first_key_act: types.KeyCode,
-    first_key_bahavior: types.KeyCode,
-    first_key_explicit: types.KeyCode,
-    first_modmap_key: types.KeyCode,
-    first_vmodmap_key: types.KeyCode,
+    min_key_code: libx11.KeyCode,
+    max_key_code: libx11.KeyCode,
+    first_key_sym: libx11.KeyCode,
+    first_key_act: libx11.KeyCode,
+    first_key_bahavior: libx11.KeyCode,
+    first_key_explicit: libx11.KeyCode,
+    first_modmap_key: libx11.KeyCode,
+    first_vmodmap_key: libx11.KeyCode,
     num_key_syms: c_int,
     num_key_acts: c_int,
     num_key_behaviors: c_int,
@@ -179,9 +179,9 @@ pub const XkbMapNotifyEvent = extern struct {
 pub const XkbStateNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed: c_uint,
@@ -199,7 +199,7 @@ pub const XkbStateNotifyEvent = extern struct {
     lookup_mods: u8,
     compat_lookup_mods: u8,
     ptr_buttons: c_int,
-    keycode: types.KeyCode,
+    keycode: libx11.KeyCode,
     event_type: i8,
     req_major: i8,
     req_minor: i8,
@@ -208,16 +208,16 @@ pub const XkbStateNotifyEvent = extern struct {
 pub const XkbControlsNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed_ctrls: c_uint,
     enabled_ctrls: c_uint,
     enabled_ctrl_changes: c_uint,
     num_groups: c_int,
-    keycode: types.KeyCode,
+    keycode: libx11.KeyCode,
     event_type: i8,
     req_major: i8,
     req_minor: i8,
@@ -226,9 +226,9 @@ pub const XkbControlsNotifyEvent = extern struct {
 pub const XkbIndicatorNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed: c_uint,
@@ -238,9 +238,9 @@ pub const XkbIndicatorNotifyEvent = extern struct {
 pub const XkbNamesNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed: c_uint,
@@ -260,9 +260,9 @@ pub const XkbNamesNotifyEvent = extern struct {
 pub const XkbCompatMapNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     changed_groups: c_uint,
@@ -274,9 +274,9 @@ pub const XkbCompatMapNotifyEvent = extern struct {
 pub const XkbBellNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     percent: c_int,
@@ -284,22 +284,22 @@ pub const XkbBellNotifyEvent = extern struct {
     duration: c_int,
     bell_class: c_int,
     bell_id: c_int,
-    name: types.Atom,
-    window: types.Window,
-    event_only: types.Bool,
+    name: libx11.Atom,
+    window: libx11.Window,
+    event_only: libx11.Bool,
 };
 
 pub const XkbActionMessageEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
-    keycode: types.KeyCode,
-    press: types.Bool,
-    key_event_follows: types.Bool,
+    keycode: libx11.KeyCode,
+    press: libx11.Bool,
+    key_event_follows: libx11.Bool,
     group: c_int,
     mods: c_uint,
     message: [XkbActionMessageLength + 1]i8,
@@ -308,9 +308,9 @@ pub const XkbActionMessageEvent = extern struct {
 pub const XkbAccessXNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     detail: c_int,
@@ -322,9 +322,9 @@ pub const XkbAccessXNotifyEvent = extern struct {
 pub const XkbExtensionDeviceNotifyEvent = extern struct {
     type: c_int,
     serial: c_ulong,
-    send_event: types.Bool,
-    display: ?*types.Display,
-    time: types.Time,
+    send_event: libx11.Bool,
+    display: ?*libx11.Display,
+    time: libx11.Time,
     xkb_type: c_int,
     device: c_int,
     reason: c_uint,
@@ -352,7 +352,7 @@ pub const XkbEvent = extern union {
     message: XkbActionMessageEvent,
     device: XkbExtensionDeviceNotifyEvent,
     new_kbd: XkbNewKeyboardNotifyEvent,
-    core: types.XEvent,
+    core: libx11.XEvent,
 };
 
 pub const XkbStateRec = extern struct {
@@ -674,7 +674,7 @@ pub const XkbKTMapEntryRec = extern struct {
     //   unsigned char   level;       /* shift level if modifiers match  mods */
     //   XkbModsRec      mods;        /* mods needed for this level to be
     //                                   selected */
-    active: types.Bool,
+    active: libx11.Bool,
     level: u8,
     mods: XkbModsRec,
 };
@@ -700,8 +700,8 @@ pub const XkbKeyTypeRec = extern struct {
     map_count: u8,
     map: ?[*]XkbKTMapEntryRec,
     preserve: ?*XkbModsRec,
-    name: types.Atom,
-    level_names: ?[*]types.Atom,
+    name: libx11.Atom,
+    level_names: ?[*]libx11.Atom,
 };
 
 pub const XkbSymMapRec = extern struct {
@@ -731,7 +731,7 @@ pub const XkbClientMapRec = extern struct {
     types: ?[*]XkbKeyTypeRec,
     size_syms: c_ushort,
     num_syms: c_ushort,
-    syms: ?[*]types.KeySym,
+    syms: ?[*]libx11.KeySym,
     key_sym_map: ?*XkbSymMapRec,
     modmap: ?*u8,
 };
@@ -789,14 +789,14 @@ pub const XkbNamesRec = extern struct {
     // unsigned char      num_key_aliases;  /* number of keys in the
     //                                          key_aliases array */
     // unsigned short     num_rg;      /* number of radio groups */
-    keycodes: types.Atom,
-    geometry: types.Atom,
-    symbols: types.Atom,
-    types: types.Atom,
-    compat: types.Atom,
-    vmods: [XkbNumVirtualMods]types.Atom,
-    indicators: [XkbNumIndicators]types.Atom,
-    groups: [XkbNumKbdGroups]types.Atom,
+    keycodes: libx11.Atom,
+    geometry: libx11.Atom,
+    symbols: libx11.Atom,
+    types: libx11.Atom,
+    compat: libx11.Atom,
+    vmods: [XkbNumVirtualMods]libx11.Atom,
+    indicators: [XkbNumIndicators]libx11.Atom,
+    groups: [XkbNumKbdGroups]libx11.Atom,
     keys: ?[*]XkbKeyNameRec,
     key_aliases: ?[*]XkbKeyAliasRec,
     num_keys: u8,
@@ -811,7 +811,7 @@ pub const XkbSymInterpretRec = extern struct {
     // unsigned char   mods;         /* modifier bits, correspond to eight real modifiers */
     // unsigned char   virtual_mod;  /* 1 modifier to add to key virtual mod map */
     // XkbAnyAction    act;          /* action to bind to symbol position on key */
-    sym: types.KeySym,
+    sym: libx11.KeySym,
     flags: u8,
     match: u8,
     mods: u8,
@@ -885,7 +885,7 @@ pub const XkbShapeRec = extern struct {
     // XkbOutlinePtr     approx;         /* pointer into the array to the approximating outline */
     // XkbOutlinePtr     primary;        /* pointer into the array to the primary outline */
     // XkbBoundsRec      bounds;         /* bounding box for the shape; encompasses all outlines */
-    name: types.Atom,
+    name: libx11.Atom,
     num_outlines: c_ushort,
     sz_outlines: c_ushort,
     outlines: ?[*]XkbOutlineRec,
@@ -932,7 +932,7 @@ pub const XkbOverlayRec = extern struct {
     // unsigned short    sz_rows;        /* size of the rows array */
     // XkbOverlayRowPtr  rows;           /* array of rows in the overlay */
     // XkbBoundsPtr      bounds;         /* bounding box for the overlay */
-    name: types.Atom,
+    name: libx11.Atom,
     section_under: ?*XkbSectionRec,
     num_rows: c_ushort,
     sz_rows: c_ushort,
@@ -976,7 +976,7 @@ pub const XkbSectionRec = extern struct {
     // XkbDoodadPtr    doodads;       /* section doodads array */
     // XkbBoundsRec    bounds;        /* bounding box for the section, before rotation*/
     // XkbOverlayPtr   overlays;      /* section overlays array */
-    name: types.Atom,
+    name: libx11.Atom,
     priority: u8,
     top: c_short,
     left: c_short,
@@ -1009,7 +1009,7 @@ pub const XkbDoodadRec = extern union {
 };
 
 pub const XkbAnyDoodadRec = extern union {
-    name: types.Atom,
+    name: libx11.Atom,
     type: u8,
     priority: u8,
     top: c_short,
@@ -1028,7 +1028,7 @@ pub const XkbShapeDoodadRec = extern struct {
     // short      angle;               /* angle of rotation, clockwise, in 1/10 degrees */
     // unsigned short      color_ndx;  /* doodad color */
     // unsigned short      shape_ndx;  /* doodad shape */
-    name: types.Atom,
+    name: libx11.Atom,
     type: u8,
     priority: u8,
     top: c_short,
@@ -1051,7 +1051,7 @@ pub const XkbTextDoodadRec = extern struct {
     // unsigned short  color_ndx;    /* doodad color */
     // char *           text;        /* doodad text */
     // char *           font;        /* arbitrary font name for doodad text */
-    name: types.Atom,
+    name: libx11.Atom,
     type: u8,
     priority: u8,
     top: c_short,
@@ -1074,7 +1074,7 @@ pub const XkbIndicatorDoodadRec = extern struct {
     // unsigned short shape_ndx;     /* doodad shape */
     // unsigned short on_color_ndx;  /* color for doodad if indicator is on */
     // unsigned short off_color_ndx; /* color for doodad if indicator is off */
-    name: types.Atom,
+    name: libx11.Atom,
     type: u8,
     priority: u8,
     top: c_short,
@@ -1095,7 +1095,7 @@ pub const XkbLogoDoodadRec = extern struct {
     // unsigned short      color_ndx;  /* doodad color */
     // unsigned short      shape_ndx;  /* doodad shape */
     // char *      logo_name;          /* text for logo */
-    name: types.Atom,
+    name: libx11.Atom,
     type: u8,
     priority: u8,
     top: c_short,
@@ -1132,7 +1132,7 @@ pub const XkbGeometryRec = extern struct {
     // XkbSectionPtr       sections;        /* sections array */
     // XkbDoodadPtr        doodads;         /* doodads array */
     // XkbKeyAliasPtr      key_aliases;     /* key aliases array */
-    name: types.Atom,
+    name: libx11.Atom,
     width_mm: c_ushort,
     height_mm: c_ushort,
     label_font: [*:0]u8,
@@ -1180,11 +1180,11 @@ pub const XkbDescRec = extern struct {
     // */
     //       XkbGeometryPtr                  geom;            /* physical geometry of
     // keyboard */
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     flags: c_ushort,
     device_spec: c_ushort,
-    min_key_code: types.KeyCode,
-    max_key_code: types.KeyCode,
+    min_key_code: libx11.KeyCode,
+    max_key_code: libx11.KeyCode,
     ctrls: ?*XkbControlsRec,
     server: ?*XkbServerMapRec,
     map: ?*XkbClientMapRec,
@@ -1198,70 +1198,70 @@ pub const XkbDescRec = extern struct {
 pub const XkbLibraryVersionProc = *const fn (
     lib_major_in_out: ?*c_int,
     lib_minor_in_out: ?*c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) libx11.Bool;
 pub const XkbQueryExtensionProc = *const fn (
-    dpy: ?*types.Display,
+    dpy: ?*libx11.Display,
     opcode_rtrn: ?*c_int,
     event_rtrn: ?*c_int,
     error_rtrn: ?*c_int,
     major_in_out: ?*c_int,
     minor_in_out: ?*c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) libx11.Bool;
 pub const XkbGetDetectableAutorepeatProc = *const fn (
-    display: ?*types.Display,
-    supported_rtrn: ?*types.Bool,
-) callconv(.C) types.Bool;
+    display: ?*libx11.Display,
+    supported_rtrn: ?*libx11.Bool,
+) callconv(.c) libx11.Bool;
 pub const XkbSetDetectableAutorepeatProc = *const fn (
-    display: ?*types.Display,
-    detectable: types.Bool,
-    supported_rtrn: ?*types.Bool,
-) callconv(.C) types.Bool;
+    display: ?*libx11.Display,
+    detectable: libx11.Bool,
+    supported_rtrn: ?*libx11.Bool,
+) callconv(.c) libx11.Bool;
 pub const XkbGetStateProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     device_spec: c_uint,
     state_return: ?*XkbStateRec,
-) callconv(.C) types.Status;
+) callconv(.c) libx11.Status;
 pub const XkbGetNamesProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     which: c_uint,
     Xkb: ?*XkbDescRec,
-) callconv(.C) types.Status;
+) callconv(.c) libx11.Status;
 pub const XkbGetKeyboardProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     which: c_uint,
     device_spec: c_uint,
-) callconv(.C) ?*XkbDescRec;
+) callconv(.c) ?*XkbDescRec;
 pub const XkbFreeKeyboardProc = *const fn (
     xkb: ?*XkbDescRec,
     which: c_uint,
-    free_all: types.Bool,
-) callconv(.C) void;
+    free_all: libx11.Bool,
+) callconv(.c) void;
 pub const XkbGetMapProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     which: c_uint,
     device_spec: c_uint,
-) callconv(.C) ?*XkbDescRec;
+) callconv(.c) ?*XkbDescRec;
 pub const XkbFreeClientMapProc = *const fn (
     xkb: ?*XkbDescRec,
     which: c_uint,
-    free_all: types.Bool,
-) callconv(.C) void;
+    free_all: libx11.Bool,
+) callconv(.c) void;
 pub const XkbFreeNamesProc = *const fn (
     Xkb: ?*XkbDescRec,
     which: c_uint,
-    free_map: types.Bool,
-) callconv(.C) void;
-pub const XkbAllocKeyboardProc = *const fn () callconv(.C) ?*XkbDescRec;
+    free_map: libx11.Bool,
+) callconv(.c) void;
+pub const XkbAllocKeyboardProc = *const fn () callconv(.c) ?*XkbDescRec;
 pub const XkbKeycodeToKeysymProc = *const fn (
-    display: ?*types.Display,
-    kc: types.KeyCode,
+    display: ?*libx11.Display,
+    kc: libx11.KeyCode,
     group: c_uint,
     level: c_uint,
-) callconv(.C) types.KeySym;
+) callconv(.c) libx11.KeySym;
 pub const XkbSelectEventDetailsProc = *const fn (
-    display: ?*types.Display,
+    display: ?*libx11.Display,
     device_spec: c_uint,
     event_type: c_uint,
     bits_to_change: c_ulong,
     values_for_bits: c_ulong,
-) callconv(.C) types.Bool;
+) callconv(.c) libx11.Bool;

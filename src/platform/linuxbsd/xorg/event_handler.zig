@@ -175,7 +175,7 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         if (support_extra_types != 0 and
             @intFromPtr(extra_types) != @intFromPtr(&e.data.l[2]))
         {
-            _ = libx11.XFree(@constCast(extra_types));
+            _ = libx11.dyn_api.XFree(@constCast(extra_types));
             if (w.x11.xdnd_req.format == libx11.None) {
                 // check the request atoms.
                 extra_types_count = 3;
@@ -217,7 +217,7 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
                 } },
             },
         };
-        _ = libx11.XSendEvent(
+        _ = libx11.dyn_api.XSendEvent(
             drvr.handles.xdisplay,
             @intCast(e.data.l[0]),
             libx11.False,
@@ -230,7 +230,7 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         var x: c_int, var y: c_int = .{ 0, 0 };
         var child: libx11.Window = 0;
 
-        _ = libx11.XTranslateCoordinates(
+        _ = libx11.dyn_api.XTranslateCoordinates(
             drvr.handles.xdisplay,
             drvr.windowManagerId(),
             w.handle,
@@ -256,7 +256,7 @@ inline fn handleClientMessage(e: *const libx11.XClientMessageEvent, w: *Window) 
         }
         std.debug.assert(w.x11.xdnd_req.src == e.data.l[0]);
         if (w.x11.xdnd_req.format != libx11.None) {
-            libx11.XConvertSelection(
+            libx11.dyn_api.XConvertSelection(
                 drvr.handles.xdisplay,
                 drvr.ewmh.XdndSelection,
                 @intCast(w.x11.xdnd_req.format),
@@ -313,7 +313,7 @@ inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
             );
             window.sendEvent(&event);
             var keysym: libx11.KeySym = 0;
-            _ = libx11.XLookupString(@constCast(ev), null, 0, &keysym, null);
+            _ = libx11.dyn_api.XLookupString(@constCast(ev), null, 0, &keysym, null);
             if (km.lookupKeyCharacter(keysym)) |codepoint| {
                 if (opts.LOG_PLATFORM_EVENTS) {
                     std.log.info(
@@ -340,12 +340,12 @@ inline fn handleKeyPress(ev: *const libx11.XKeyEvent, window: *Window) void {
                 // extension we can simulate it by reading ahead in the event queue
                 // and setting an autorepeat threshold for wich we can ignore key release
                 // events.
-                if (libx11.XEventsQueued(
+                if (libx11.dyn_api.XEventsQueued(
                     driver.handles.xdisplay,
                     libx11.QueuedAfterReading,
                 ) != 0) {
                     var next_xevent: libx11.XEvent = undefined;
-                    _ = libx11.XPeekEvent(driver.handles.xdisplay, &next_xevent);
+                    _ = libx11.dyn_api.XPeekEvent(driver.handles.xdisplay, &next_xevent);
                     if (next_xevent.type == libx11.KeyPress and
                         next_xevent.xkey.window == ev.window and
                         next_xevent.xkey.keycode == ev.keycode and
@@ -402,7 +402,7 @@ inline fn handleXSelection(e: *const libx11.XSelectionEvent, window: *Window) vo
     if (dropped_data) |data| {
         if (window.x11.xdnd_req.raw_data) |rd| {
             // free old file URI list.
-            _ = libx11.XFree(@constCast(rd));
+            _ = libx11.dyn_api.XFree(@constCast(rd));
         }
         window.x11.xdnd_req.raw_data = data;
 
@@ -486,7 +486,7 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
         ) catch return;
 
         if (state) |s| {
-            defer _ = libx11.XFree(@ptrCast(state));
+            defer _ = libx11.dyn_api.XFree(@ptrCast(state));
             window.data.flags.is_minimized = s.state == libx11.IconicState;
         }
         const event = common.event.createMinimizeEvent(window.data.id);
@@ -502,7 +502,7 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
         ) catch return;
 
         if (state) |s| {
-            defer _ = libx11.XFree(@ptrCast(state));
+            defer _ = libx11.dyn_api.XFree(@ptrCast(state));
             var maximized = false;
             for (0..count) |i| {
                 if (s[i] == drvr.ewmh._NET_WM_STATE_MAXIMIZED_VERT or
@@ -524,21 +524,21 @@ inline fn handlePropertyNotify(e: *const libx11.XPropertyEvent, window: *Window)
 
 inline fn handleGenericEvent(ev: *libx11.XGenericEventCookie, ctx: *const WidowContext) void {
     if (ctx.driver.extensions.xi2.is_v2point0 and
-        libx11.XGetEventData(ctx.driver.handles.xdisplay, ev) == libx11.True and
+        libx11.dyn_api.XGetEventData(ctx.driver.handles.xdisplay, ev) == libx11.True and
         ev.extension == ctx.driver.extensions.xi2.maj_opcode and
-        ev.evtype == x11ext.XI_RawMotion)
+        ev.evtype == x11ext.xi2.XI_RawMotion)
     {
-        defer libx11.XFreeEventData(ctx.driver.handles.xdisplay, ev);
+        defer libx11.dyn_api.XFreeEventData(ctx.driver.handles.xdisplay, ev);
 
-        const raw_ev: *x11ext.XIRawEvent = @ptrCast(@alignCast(ev.data));
+        const raw_ev: *x11ext.xi2.XIRawEvent = @ptrCast(@alignCast(ev.data));
         if (raw_ev.valuators.mask_len != 0 and ctx.raw_mouse_motion_window != null) {
             var read_indx: u32 = 0;
             var dx: f64, var dy: f64 = .{ 0.0, 0.0 };
-            if (x11ext.XIMaskIsSet(raw_ev.valuators.mask, 0)) {
+            if (x11ext.xi2.XIMaskIsSet(raw_ev.valuators.mask, 0)) {
                 dx += raw_ev.raw_values[read_indx];
                 read_indx += 1;
             }
-            if (x11ext.XIMaskIsSet(raw_ev.valuators.mask, 1)) {
+            if (x11ext.xi2.XIMaskIsSet(raw_ev.valuators.mask, 1)) {
                 dy += raw_ev.raw_values[read_indx];
             }
 

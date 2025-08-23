@@ -1,4 +1,4 @@
-const types = @import("../types.zig");
+const libx11 = @import("../xlib.zig");
 
 pub const XcursorBool = c_int;
 pub const XcursorUInt = u32;
@@ -23,10 +23,10 @@ pub const XcursorImages = extern struct {
 };
 
 pub const XcursorCursors = extern struct {
-    dpy: *types.Display,
+    dpy: *libx11.Display,
     ref: c_int,
     ncursor: c_int,
-    cursors: ?[*]types.Cursor,
+    cursors: ?[*]libx11.Cursor,
 };
 
 pub const XcursorAnimate = extern struct {
@@ -36,30 +36,30 @@ pub const XcursorAnimate = extern struct {
 
 pub const XcursorFile = extern struct {
     closure: ?*anyopaque,
-    read: *const fn (file: ?*@This(), buf: ?[*]u8, len: c_int) callconv(.C) c_int,
-    write: *const fn (file: ?*@This(), buf: ?[*]u8, len: c_int) callconv(.C) c_int,
-    seek: *const fn (file: ?*@This(), offset: c_long, whence: c_int) callconv(.C) c_int,
+    read: *const fn (file: ?*@This(), buf: ?[*]u8, len: c_int) callconv(.c) c_int,
+    write: *const fn (file: ?*@This(), buf: ?[*]u8, len: c_int) callconv(.c) c_int,
+    seek: *const fn (file: ?*@This(), offset: c_long, whence: c_int) callconv(.c) c_int,
 };
 
 pub const XcursorImageCreateProc = *const fn (
     width: c_int,
     height: c_int,
-) callconv(.C) ?*XcursorImage;
+) callconv(.c) ?*XcursorImage;
 pub const XcursorImageDestroyProc = *const fn (
     image: *XcursorImage,
-) callconv(.C) void;
+) callconv(.c) void;
 pub const XcursorLibraryLoadImageProc = *const fn (
     name: [*:0]const u8,
     theme: [*:0]const u8,
     size: c_int,
-) callconv(.C) ?*XcursorImage;
+) callconv(.c) ?*XcursorImage;
 pub const XcursorGetThemeProc = *const fn (
-    dpy: ?*types.Display,
-) callconv(.C) ?[*:0]const u8;
+    dpy: ?*libx11.Display,
+) callconv(.c) ?[*:0]const u8;
 pub const XcursorGetDefaultSizeProc = *const fn (
-    dpy: ?*types.Display,
-) callconv(.C) c_int;
+    dpy: ?*libx11.Display,
+) callconv(.c) c_int;
 pub const XcursorImageLoadCursorProc = *const fn (
-    dpy: ?*types.Display,
+    dpy: ?*libx11.Display,
     image: ?*const XcursorImage,
-) callconv(.C) c_ulong;
+) callconv(.c) c_ulong;

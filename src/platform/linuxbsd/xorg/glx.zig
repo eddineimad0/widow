@@ -5,7 +5,7 @@ const libx11 = @import("x11/xlib.zig");
 const gl = @import("opengl");
 const mem = std.mem;
 const debug = std.debug;
-const unix = common.unix;
+const so = common.unix.so;
 const X11Driver = @import("driver.zig").X11Driver;
 
 pub const GLX_SO_NAMES = switch (builtin.target.os.tag) {
@@ -123,70 +123,70 @@ pub const glx_api = struct {
         display: ?*libx11.Display,
         screen: c_int,
         nelements: *c_int,
-    ) callconv(.C) ?[*]GLXFBConfig;
+    ) callconv(.c) ?[*]GLXFBConfig;
     const glXChooseFBConfigProc = *const fn (
         display: ?*libx11.Display,
         screen: c_int,
         attrib_list: [*]const c_int,
         nelements: *c_int,
-    ) callconv(.C) ?[*]GLXFBConfig;
+    ) callconv(.c) ?[*]GLXFBConfig;
     const glXGetFBConfigAttribProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         attribute: c_int,
         value: *c_int,
-    ) callconv(.C) c_int;
+    ) callconv(.c) c_int;
     const glXGetClientStringProc = *const fn (
         display: ?*libx11.Display,
         name: c_int,
-    ) callconv(.C) [*:0]const u8;
+    ) callconv(.c) [*:0]const u8;
     const glXQueryExtensionProc = *const fn (
         display: ?*libx11.Display,
         error_base: *c_int,
         event_base: *c_int,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXQueryExtensionsStringProc = *const fn (
         display: ?*libx11.Display,
         screen: c_int,
-    ) callconv(.C) [*:0]const u8;
+    ) callconv(.c) [*:0]const u8;
     const glXQueryVersionProc = *const fn (
         display: ?*libx11.Display,
         major: *c_int,
         minor: *c_int,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXDestroyContextProc = *const fn (
         display: ?*libx11.Display,
         ctx: GLXContext,
-    ) callconv(.C) void;
+    ) callconv(.c) void;
     const glXDestroyWindowProc = *const fn (
         display: ?*libx11.Display,
         window: GLXWindow,
-    ) callconv(.C) void;
+    ) callconv(.c) void;
     const glXCreateWindowProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         window: libx11.Window,
         attrib_list: ?[*]const c_int,
-    ) callconv(.C) GLXWindow;
+    ) callconv(.c) GLXWindow;
     const glXCreateNewContextProc = *const fn (
         display: ?*libx11.Display,
         config: GLXFBConfig,
         render_type: c_int,
         share_list: ?GLXContext,
         direct: libx11.Bool,
-    ) callconv(.C) ?GLXContext;
+    ) callconv(.c) ?GLXContext;
     const glXMakeCurrentProc = *const fn (
         display: ?*libx11.Display,
         drawable: GLXDrawable,
         ctx: GLXContext,
-    ) callconv(.C) libx11.Bool;
+    ) callconv(.c) libx11.Bool;
     const glXSwapBuffersProc = *const fn (
         display: ?*libx11.Display,
         drawable: GLXDrawable,
-    ) callconv(.C) void;
-    const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.C) ?*libx11.XVisualInfo;
-    const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
-    const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.C) ?*anyopaque;
+    ) callconv(.c) void;
+    const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.c) ?*libx11.XVisualInfo;
+    const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
+    const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
 
     var glXGetFBConfigs: glXGetFBConfigsProc = undefined;
     var glXChooseFBConfig: glXChooseFBConfigProc = undefined;
@@ -230,60 +230,60 @@ pub const glx_ext = struct {
         dpy: ?*libx11.Display,
         drawable: GLXDrawable,
         interval: c_int,
-    ) callconv(.C) void = null;
+    ) callconv(.c) void = null;
     var glXCreateContextAttribsARB: ?*const fn (
         dpy: ?*libx11.Display,
         config: GLXFBConfig,
         share_context: ?GLXContext,
         direct: libx11.Bool,
         attrib_list: [*]const c_int,
-    ) callconv(.C) ?GLXContext = null;
+    ) callconv(.c) ?GLXContext = null;
 };
 
-pub fn initGLX(driver: *const X11Driver) (unix.ModuleError || GLXError)!void {
+pub fn initGLX(driver: *const X11Driver) (so.ModuleError || GLXError)!void {
     if (__glx_module != null) {
         return;
     }
 
     for (GLX_SO_NAMES) |name| {
-        __glx_module = unix.loadPosixModule(name);
+        __glx_module = so.loadPosixModule(name);
         if (__glx_module) |_| {
             break;
         }
     }
 
     if (__glx_module) |m| {
-        glx_api.glXGetFBConfigs = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigs") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXChooseFBConfig = @ptrCast(unix.moduleSymbol(m, "glXChooseFBConfig") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetFBConfigAttrib = @ptrCast(unix.moduleSymbol(m, "glXGetFBConfigAttrib") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetClientString = @ptrCast(unix.moduleSymbol(m, "glXGetClientString") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryExtension = @ptrCast(unix.moduleSymbol(m, "glXQueryExtension") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryExtensionsString = @ptrCast(unix.moduleSymbol(m, "glXQueryExtensionsString") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXQueryVersion = @ptrCast(unix.moduleSymbol(m, "glXQueryVersion") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXCreateNewContext = @ptrCast(unix.moduleSymbol(m, "glXCreateNewContext") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXDestroyContext = @ptrCast(unix.moduleSymbol(m, "glXDestroyContext") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXCreateWindow = @ptrCast(unix.moduleSymbol(m, "glXCreateWindow") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXDestroyWindow = @ptrCast(unix.moduleSymbol(m, "glXDestroyWindow") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXMakeCurrent = @ptrCast(unix.moduleSymbol(m, "glXMakeCurrent") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXSwapBuffers = @ptrCast(unix.moduleSymbol(m, "glXSwapBuffers") orelse
-            return unix.ModuleError.UndefinedSymbol);
-        glx_api.glXGetVisualFromFBConfig = @ptrCast(unix.moduleSymbol(m, "glXGetVisualFromFBConfig") orelse
-            return unix.ModuleError.UndefinedSymbol);
+        glx_api.glXGetFBConfigs = @ptrCast(so.moduleSymbol(m, "glXGetFBConfigs") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXChooseFBConfig = @ptrCast(so.moduleSymbol(m, "glXChooseFBConfig") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetFBConfigAttrib = @ptrCast(so.moduleSymbol(m, "glXGetFBConfigAttrib") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetClientString = @ptrCast(so.moduleSymbol(m, "glXGetClientString") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryExtension = @ptrCast(so.moduleSymbol(m, "glXQueryExtension") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryExtensionsString = @ptrCast(so.moduleSymbol(m, "glXQueryExtensionsString") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXQueryVersion = @ptrCast(so.moduleSymbol(m, "glXQueryVersion") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXCreateNewContext = @ptrCast(so.moduleSymbol(m, "glXCreateNewContext") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXDestroyContext = @ptrCast(so.moduleSymbol(m, "glXDestroyContext") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXCreateWindow = @ptrCast(so.moduleSymbol(m, "glXCreateWindow") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXDestroyWindow = @ptrCast(so.moduleSymbol(m, "glXDestroyWindow") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXMakeCurrent = @ptrCast(so.moduleSymbol(m, "glXMakeCurrent") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXSwapBuffers = @ptrCast(so.moduleSymbol(m, "glXSwapBuffers") orelse
+            return so.ModuleError.UndefinedSymbol);
+        glx_api.glXGetVisualFromFBConfig = @ptrCast(so.moduleSymbol(m, "glXGetVisualFromFBConfig") orelse
+            return so.ModuleError.UndefinedSymbol);
 
-        glx_api.glXGetProcAddress = @ptrCast(unix.moduleSymbol(m, "glXGetProcAddress"));
-        glx_api.glXGetProcAddressARB = @ptrCast(unix.moduleSymbol(m, "glXGetProcAddressARB"));
+        glx_api.glXGetProcAddress = @ptrCast(so.moduleSymbol(m, "glXGetProcAddress"));
+        glx_api.glXGetProcAddressARB = @ptrCast(so.moduleSymbol(m, "glXGetProcAddressARB"));
     } else {
         return GLXError.ModuleNotFound;
     }
@@ -356,7 +356,7 @@ pub fn chooseVisualGLX(driver: *const X11Driver, fb_cfg: *const common.fb.FBConf
     if (glx_fb_cfg) |cfg| {
         const result = glx_api.glXGetVisualFromFBConfig(driver.handles.xdisplay, cfg);
         if (result) |r| {
-            defer _ = libx11.XFree(@ptrCast(r));
+            defer _ = libx11.dyn_api.XFree(@ptrCast(r));
             vis.* = r.visual orelse return false;
             depth.* = r.depth;
             return true;
@@ -410,14 +410,14 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     );
 
     if (fb_configs != null and configs_count > 0) {
-        defer _ = libx11.XFree(@ptrCast(fb_configs.?));
+        defer _ = libx11.dyn_api.XFree(@ptrCast(fb_configs.?));
         for (0..@as(usize, @intCast(configs_count))) |i| {
             const visual = glx_api.glXGetVisualFromFBConfig(
                 driver.handles.xdisplay,
                 fb_configs.?[i],
             );
             if (visual) |vi| {
-                _ = libx11.XFree(vi);
+                _ = libx11.dyn_api.XFree(vi);
                 return fb_configs.?[i];
             } else {
                 continue;
@@ -432,7 +432,7 @@ fn createGLContext(
     w: libx11.Window,
     cfg: *const common.fb.FBConfig,
     glx_wndw: *GLXWindow,
-) (GLXError || unix.ModuleError)!?GLXContext {
+) (GLXError || so.ModuleError)!?GLXContext {
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
     var index: usize = 0;
@@ -522,7 +522,7 @@ pub const GLContext = struct {
         var glx_wndw: GLXWindow = 0;
         const rc = createGLContext(driver, window, cfg, &glx_wndw) catch |err| {
             switch (err) {
-                unix.ModuleError.NotFound, unix.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
+                so.ModuleError.NotFound, so.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
                 else => return @as(GLXError, @errorCast(err)),
             }
         };
@@ -533,7 +533,7 @@ pub const GLContext = struct {
 
         _ = glx_api.glXMakeCurrent(driver.handles.xdisplay, glx_wndw, rc.?);
 
-        var glGetString: ?*const fn (pname: u32) callconv(.C) ?[*:0]const u8 = null;
+        var glGetString: ?*const fn (pname: u32) callconv(.c) ?[*:0]const u8 = null;
         glGetString = @ptrCast(glLoaderFunc("glGetString"));
         var vend: [*:0]const u8 = undefined;
         var rend: [*:0]const u8 = undefined;
@@ -612,7 +612,7 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
     } else if (glx_api.glXGetProcAddressARB) |proc| {
         return proc(symbol_name);
     } else if (__glx_module) |m| {
-        return unix.moduleSymbol(m, symbol_name);
+        return so.moduleSymbol(m, symbol_name);
     } else {
         return null;
     }

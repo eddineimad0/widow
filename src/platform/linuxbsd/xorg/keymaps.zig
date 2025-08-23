@@ -1397,23 +1397,23 @@ fn initKeyCodeTable(driver: *const X11Driver, keycode_lookup_table: []KeyCode) v
     var min_scancode: c_int = 0;
     var max_scancode: c_int = 0;
     if (driver.extensions.xkb.is_available) {
-        const kbd_desc = libx11.XkbGetMap(
+        const kbd_desc = libx11.dyn_api.XkbGetMap(
             driver.handles.xdisplay,
             0,
-            x11ext.XkbUseCoreKbd,
+            x11ext.xkb.XkbUseCoreKbd,
         );
         if (kbd_desc) |desc| {
-            defer libx11.XkbFreeKeyboard(desc, 0, libx11.True);
-            _ = libx11.XkbGetNames(
+            defer libx11.dyn_api.XkbFreeKeyboard(desc, 0, libx11.True);
+            _ = libx11.dyn_api.XkbGetNames(
                 driver.handles.xdisplay,
-                x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
+                x11ext.xkb.XkbKeyNamesMask | x11ext.xkb.XkbKeyAliasesMask,
                 desc,
             );
             min_scancode = desc.min_key_code;
             max_scancode = desc.max_key_code;
-            defer libx11.XkbFreeNames(
+            defer libx11.dyn_api.XkbFreeNames(
                 desc,
-                x11ext.XkbKeyNamesMask | x11ext.XkbKeyAliasesMask,
+                x11ext.xkb.XkbKeyNamesMask | x11ext.xkb.XkbKeyAliasesMask,
                 libx11.True,
             );
             for (desc.min_key_code..(@as(u32, @intCast(desc.max_key_code)) + 1)) |i| {
@@ -1423,14 +1423,14 @@ fn initKeyCodeTable(driver: *const X11Driver, keycode_lookup_table: []KeyCode) v
             }
         }
     } else {
-        _ = libx11.XDisplayKeycodes(
+        _ = libx11.dyn_api.XDisplayKeycodes(
             driver.handles.xdisplay,
             &min_scancode,
             &max_scancode,
         );
     }
     var keysym_size: c_int = 0;
-    const keysym_array = libx11.XGetKeyboardMapping(
+    const keysym_array = libx11.dyn_api.XGetKeyboardMapping(
         driver.handles.xdisplay,
         @intCast(min_scancode),
         max_scancode - min_scancode + 1,
@@ -1440,7 +1440,7 @@ fn initKeyCodeTable(driver: *const X11Driver, keycode_lookup_table: []KeyCode) v
     const max: u32 = @intCast(max_scancode);
     const size: u32 = @intCast(keysym_size);
     if (keysym_array) |array| {
-        defer _ = libx11.XFree(array);
+        defer _ = libx11.dyn_api.XFree(array);
         for (min..(max + 1)) |scancode| {
             if (keycode_lookup_table[scancode] != KeyCode.Unknown) {
                 // don't modify what we already mapped.
