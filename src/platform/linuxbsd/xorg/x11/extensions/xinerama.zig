@@ -1,4 +1,4 @@
-const types = @import("../types.zig");
+const libx11 = @import("../xlib.zig");
 
 // Types
 pub const XineramaScreenInfo = extern struct {
@@ -10,18 +10,18 @@ pub const XineramaScreenInfo = extern struct {
 };
 
 // Functions Signature.
-pub const XineramaIsActiveProc = *const fn (dpy: *types.Display) callconv(.C) types.Bool;
+pub const XineramaIsActiveProc = *const fn (dpy: *libx11.Display) callconv(.c) libx11.Bool;
 pub const XineramaQueryExtension = *const fn (
-    dpy: *types.Display,
+    dpy: *libx11.Display,
     event_base_return: *c_int,
     error_base_return: *c_int,
-) callconv(.C) types.Bool;
+) callconv(.c) libx11.Bool;
 pub const XineramaQueryVersion = *const fn (
-    dpy: *types.Display,
+    dpy: *libx11.Display,
     version_major: *c_int,
     version_minor: *c_int,
-) callconv(.C) types.Status;
+) callconv(.c) libx11.Status;
 pub const XineramaQueryScreens = *const fn (
-    dpy: *types.Display,
+    dpy: *libx11.Display,
     number: *c_int,
-) callconv(.C) ?[*]XineramaScreenInfo;
+) callconv(.c) ?[*]XineramaScreenInfo;

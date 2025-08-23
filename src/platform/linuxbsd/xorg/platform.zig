@@ -2,8 +2,7 @@ const std = @import("std");
 const display = @import("display.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
-const dyn_x11 = @import("x11/dynamic.zig");
-const unix = @import("common").unix;
+const so = @import("common").unix.so;
 const driver = @import("driver.zig");
 
 const mem = std.mem;
@@ -41,11 +40,11 @@ pub const WidowContext = struct {
     }
 };
 
-pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || unix.ModuleError ||
+pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || so.ModuleError ||
     display.DisplayError ||
     driver.XConnectionError)!*WidowContext {
-    dyn_x11.initDynamicApi() catch |e| {
-        std.log.err("[X11] {s}\n", .{unix.moduleErrorMsg()});
+    libx11.initDynamicApi() catch |e| {
+        std.log.err("[X11] {s}\n", .{so.moduleErrorMsg()});
         return e;
     };
     const ctx = try a.create(WidowContext);

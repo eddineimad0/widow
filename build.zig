@@ -25,13 +25,13 @@ pub fn build(b: *std.Build) !void {
         prepareCompileOptions(b),
     );
 
-    makeExamplesStep(b,target,optimize, widow);
+    makeExamplesStep(b, target, optimize, widow);
 
     makeTestStep(b, widow);
 }
 
 fn detectDispalyTarget(
-    b:*std.Build,
+    b: *std.Build,
     target: *const std.Build.ResolvedTarget,
 ) DisplayProtocol {
     const SESSION_TYPE_X11: [*:0]const u8 = "x11";
@@ -45,12 +45,12 @@ fn detectDispalyTarget(
                 "widow_linux_display_protocol",
                 "Specify the target display protocol to compile for, this option is linux only.",
             );
-            if(display_target) |dt|{
+            if (display_target) |dt| {
                 switch (dt) {
                     .Xorg => break :unix .Xorg,
                     .Wayland => break :unix .Wayland,
                 }
-            }else{
+            } else {
                 // need to determine what display server is being used
                 const display_session_type = std.process.getEnvVarOwned(
                     b.allocator,
@@ -79,7 +79,7 @@ fn detectDispalyTarget(
 fn createWidowModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
-    optimize:std.builtin.OptimizeMode,
+    optimize: std.builtin.OptimizeMode,
     display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
@@ -189,13 +189,7 @@ fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
     return options;
 }
 
-
-
-fn makeExamplesStep(b:*std.Build,
-target:std.Build.ResolvedTarget,
-optimize:std.builtin.OptimizeMode,
-widow_module:*std.Build.Module) void {
-
+fn makeExamplesStep(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, widow_module: *std.Build.Module) void {
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
@@ -207,11 +201,12 @@ widow_module:*std.Build.Module) void {
     for (examples) |example_name| {
         const example = b.addExecutable(.{
             .name = example_name,
-            .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
-
 
         example.root_module.addImport("widow", widow_module);
 
@@ -237,11 +232,9 @@ widow_module:*std.Build.Module) void {
         example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
-
 }
 
-fn makeTestStep(b: *std.Build, widow_module:*std.Build.Module) void {
-
+fn makeTestStep(b: *std.Build, widow_module: *std.Build.Module) void {
     const test_step = b.step("test", "run all unit tests");
 
     const widow_test = b.addTest(.{

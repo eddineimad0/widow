@@ -1,5 +1,5 @@
-pub usingnamespace @import("xrandr.zig");
-pub usingnamespace @import("xinerama.zig");
-pub usingnamespace @import("xkb.zig");
-pub usingnamespace @import("xcursor.zig");
-pub usingnamespace @import("xi2.zig");
+pub const xrandr = @import("xrandr.zig");
+pub const xinerama = @import("xinerama.zig");
+pub const xkb = @import("xkb.zig");
+pub const xcursor = @import("xcursor.zig");
+pub const xi2 = @import("xi2.zig");
