@@ -1,12 +1,11 @@
 ## Introduction
 
-Widow is a simple windowing library written in zig.
+Widow is a simple library for creating rendering windows and reading inputs written in zig.
 
 ## Supported Platforms
 
-Currently Widow supports windows Os.
-Support for Linux isn't complete yet and still in work,
-and there is no current plan to support any other platforms.
+Currently Widow supports windows Os and Linux (x11).
+there is no current plan to support any other platforms.
 
 ## Examples
 
@@ -91,7 +90,7 @@ pub fn main() !void {
 
 ## Minimum Zig Version
 
-✅ [0.14.0](https://ziglang.org/documentation/0.14.0/)
+✅ [0.15.1](https://ziglang.org/documentation/0.15.1/)
 The main branch will stick to stable zig releases.
 
 ## Dependecies
