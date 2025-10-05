@@ -1480,8 +1480,6 @@ pub const KeyMaps = struct {
     };
 
     pub fn initSingleton(driver: *const X11Driver) *const Self {
-        @branchHint(.cold);
-
         Self.sing_guard.lock();
         defer sing_guard.unlock();
         if (!Self.sing_init) {
@@ -1495,7 +1493,6 @@ pub const KeyMaps = struct {
     }
 
     fn deinitSingleton() void {
-        @branchHint(.cold);
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
         if (Self.sing_init) {
