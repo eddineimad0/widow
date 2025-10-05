@@ -120,8 +120,6 @@ pub const Win32Driver = struct {
     const Self = @This();
 
     pub fn initSingleton() Win32DriverError!*const Self {
-        @branchHint(.cold);
-
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
 
