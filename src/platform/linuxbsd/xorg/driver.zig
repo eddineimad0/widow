@@ -212,8 +212,6 @@ pub const X11Driver = struct {
     const Self = @This();
 
     pub fn initSingleton() XConnectionError!*const Self {
-        @branchHint(.cold);
-
         Self.driver_guard.lock();
         defer driver_guard.unlock();
         if (!Self.g_init) {
@@ -275,7 +273,6 @@ pub const X11Driver = struct {
     /// effectively crashing any window that hasn't been destroyed yet.
     /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
     fn deinitSingleton() void {
-        @branchHint(.cold);
         Self.driver_guard.lock();
         defer Self.driver_guard.unlock();
         if (Self.g_init) {
