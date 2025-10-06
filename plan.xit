@@ -1,0 +1,30 @@
+General
+[x] Widow Context init need to be easier and more secure (less error prone)
+[ ] redo the tests.
+[ ] should singletons (driver, keymap, ...) be thread-local ?
+[ ] should the event queue be moved to the context ?
+[x] opengl context info log
+[ ] window Display changing events
+[x] BUG: opengl swapinterval code doesn't accept correct values.
+[x] allocator migration to unamanged
+[x] use dequeue as events queue
+[ ] getMonitorId(window)
+[ ] notifyMonitorChange event
+[ ] getMonitorRefreshRate()
+
+Win32
+[x] Finish the display wrapper.
+[x] display wrapper need to be updated through hidden window events
+[x] fix: memory leak when quitting in fullscreen mode.
+[x] fix: the closest videomode choice isn't accurate.
+[x] feature: disable screen saver on fullscreen
+
+Linux
+[x] replace utils function with available zig std library replacements.
+
+X11
+[x] finish display wrapper.
+[x] implement fullscreen for windows.
+[ ] creating a window with the fullscreen flag doesn't work
+[x] finish raw motion input.
+[x] drag and drop is always on fix it.
