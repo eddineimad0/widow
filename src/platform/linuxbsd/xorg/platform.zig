@@ -15,6 +15,7 @@ pub const Window = @import("window.zig").Window;
 pub const WindowError = @import("window.zig").WindowError;
 
 pub const GLContext = @import("glx.zig").GLContext;
+pub const BlitContext = @import("window.zig").BlitContext;
 pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
 
 pub const WidowContext = struct {

@@ -3222,6 +3222,22 @@ pub const dyn_api = struct {
         values: ?*XGCValues,
     ) callconv(.c) GC;
 
+    const XFreeGCProc = *const fn (
+        display: ?*Display,
+        gc: GC,
+    ) callconv(.c) void;
+
+    const XGetVisualInfoProc = *const fn (
+        display: ?*Display,
+        vinfo_mask: *c_long,
+        vinfo_template: *XVisualInfo,
+        nitems_return: *c_int,
+    ) callconv(.c) ?*XVisualInfo;
+
+    const XVisualIDFromVisualProc = *const fn (
+        visual: ?*Visual,
+    ) callconv(.c) ?*XVisualInfo;
+
     const XCreateImageProc = *const fn (
         display: ?*Display,
         visual: Visual,
@@ -3234,6 +3250,21 @@ pub const dyn_api = struct {
         bitmap_pad: c_int,
         bytes_per_line: c_int,
     ) callconv(.c) ?*XImage;
+
+    const XPutImageProc = *const fn (
+        display: ?*Display,
+        d: Drawable,
+        gc: GC,
+        image: *XImage,
+        src_x: c_int,
+        src_y: c_int,
+        dest_x: c_int,
+        dest_y: c_int,
+        width: c_uint,
+        height: c_uint,
+    ) callconv(.c) void;
+
+    const XDestroyImageProc = *const fn (image: *XImage) callconv(.c) void;
 
     // function pointers
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
@@ -3344,7 +3375,12 @@ pub const dyn_api = struct {
     pub var XTranslateCoordinates: XTranslateCoordinatesProc = undefined;
 
     pub var XCreateGC: XCreateGCProc = undefined;
+    pub var XFreeGC: XFreeGCProc = undefined;
+    pub var XGetVisualInfo: XGetVisualInfoProc = undefined;
+    pub var XVisualIDFromVisual: XVisualIDFromVisualProc = undefined;
     pub var XCreateImage: XCreateImageProc = undefined;
+    pub var XPutImage: XPutImageProc = undefined;
+    pub var XDestroyImage: XDestroyImageProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

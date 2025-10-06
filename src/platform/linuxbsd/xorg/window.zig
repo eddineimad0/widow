@@ -33,6 +33,133 @@ pub const WindowError = error{
     VisualNone,
 };
 
+pub const BlitContext = struct {
+    xdisplay: *libx11.Display,
+    drawable: *Window,
+    framebuffer: []u8,
+    const Self = @This();
+
+    pub fn init(w: *Window) mem.Allocator.Error!Self {
+        debug.assert(w.x11.visual != null);
+        debug.assert(w.x11.gc == null);
+        debug.assert(w.x11.ximage == null);
+
+        var gcv: libx11.XGCValues = undefined;
+        { // GC creation
+            gcv.graphics_exposures = libx11.False;
+            w.x11.gc = libx11.dyn_api.XCreateGC(
+                w.ctx.driver.handles.xdisplay,
+                w.handle,
+                libx11.GCGraphicsExposures,
+                &gcv,
+            );
+            if (w.x11.gc == null) {
+                @panic("TODO fail path can't create graphics context");
+            }
+        }
+
+        var vinfo: libx11.XVisualInfo = undefined;
+        { // visual info
+
+            vinfo.visualid = libx11.dyn_api.XVisualIDFromVisual(w.x11.visual);
+            var num_visuals: c_int = 0;
+            const vi = libx11.dyn_api.XGetVisualInfo(
+                w.ctx.driver.handles.xdisplay,
+                libx11.VisualIDMask,
+                &vinfo,
+                &num_visuals,
+            );
+
+            if (vi == null) {
+                @panic("TODO fail path cant get visual info");
+            }
+
+            vinfo = vi.?.*;
+            _ = libx11.dyn_api.XFree(@ptrCast(vi.?));
+
+            if (vinfo.class == libx11.DirectColor or vinfo.class == libx11.TrueColor) {
+                if (vinfo.depth != 32) {
+                    @panic("Unsupported");
+                }
+            } else {
+                @panic("Unsupported");
+            }
+        }
+
+        const cl_sz = w.getClientSize();
+        const BYTES_PER_PIXEL = 4; // TODO: Grab this from the visuals
+        const stride: u32 = @as(u32, @intCast(cl_sz.width)) * BYTES_PER_PIXEL;
+        const stride_padded = (stride + 3) & ~3;
+        const pixels = try w.ctx.allocator.alloc(
+            u8,
+            @as(u32, @intCast(cl_sz)) * stride_padded,
+        );
+        w.x11.ximage = libx11.dyn_api.XCreateImage(
+            w.ctx.driver.handles.xdisplay,
+            w.x11.visual,
+            vinfo.depth,
+            libx11.ZPixmap,
+            0,
+            pixels.ptr,
+            @intCast(cl_sz.width),
+            @intCast(cl_sz.height),
+            32,
+            0,
+        );
+
+        if (w.x11.ximage == null) {
+            @panic("TODO fail path cant create ximage");
+        }
+        w.x11.ximage.?.byte_order = libx11.LSBFirst;
+
+        return Self{
+            .xdisplay = w.ctx.driver.handles.xdisplay,
+            .drawable = w,
+            .framebuffer = pixels,
+        };
+    }
+
+    pub fn blit(self: *Self) void {
+        debug.assert(self.drawable.x11.ximage != null);
+        debug.assert(self.drawable.x11.gc != null);
+
+        const cl_sz = self.drawable.getClientSize();
+
+        libx11.dyn_api.XPutImage(
+            self.ctx.driver.handles.xdisplay,
+            self.drawable.handle,
+            self.drawable.x11.gc.?,
+            self.drawable.x11.ximage.?,
+            0,
+            0,
+            0,
+            0,
+            @intCast(cl_sz.width),
+            @intCast(cl_sz.height),
+        );
+
+        libx11.dyn_api.XSync(
+            self.xdisplay,
+            libx11.False,
+        );
+    }
+
+    pub fn deinit(self: *Self) void {
+        debug.assert(self.ximage != null);
+        debug.assert(self.gc != null);
+        debug.assert(
+            self.frame_buffer.ptr == self.drawable.x11.ximage.?.data,
+        );
+
+        self.drawable.ctx.allocator.free(self.framebuffer);
+        self.drawable.x11.ximage.?.data = null;
+        libx11.dyn_api.XDestroyImage(self.drawable.x11.ximage.?);
+        self.drawable.x11.ximage = null;
+        libx11.dyn_api.XFreeGC(self.xdisplay, self.drawable.x11.gc.?);
+        self.drawable.x11.gc = null;
+    }
+};
+
 pub const Window = struct {
     ev_queue: ?*common.event.EventQueue,
     ctx: *WidowContext,

@@ -39,10 +39,16 @@ pub const Window = @import("window.zig").Window;
 pub const WindowHandle = platform.WindowHandle;
 pub const DisplayHandle = platform.DisplayHandle;
 
+pub const WidowContext = platform.WidowContext;
+
+pub const DrawSurface = union {
+    software: platform.BlitContext,
+    opengl: platform.GLContext,
+};
+
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
-pub const WidowContext = platform.WidowContext;
 pub const createWidowContext = platform.createWidowContext;
 
 /// destroys and frees the resources used by the platform context.
