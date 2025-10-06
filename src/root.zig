@@ -42,6 +42,7 @@ pub const DisplayHandle = platform.DisplayHandle;
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
+pub const WidowContext = platform.WidowContext;
 pub const createWidowContext = platform.createWidowContext;
 
 /// destroys and frees the resources used by the platform context.
@@ -50,7 +51,6 @@ pub const createWidowContext = platform.createWidowContext;
 /// undefined behaviour, alternatively you could not call it and let the os clean up
 /// the resources.
 pub const destroyWidowContext = platform.destroyWidowContext;
-
 
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);

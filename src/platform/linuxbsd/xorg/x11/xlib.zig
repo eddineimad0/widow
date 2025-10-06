@@ -36,7 +36,7 @@ pub const XPointer = ?[*]u8;
 pub const XExtData = extern struct {
     number: c_int,
     next: ?[*]XExtData,
-    free_private: ?*fn (?[*]XExtData) callconv(.c) c_int,
+    free_private: ?*const fn (?[*]XExtData) callconv(.c) c_int,
     private_data: XPointer,
 };
 
@@ -80,6 +80,59 @@ pub const Screen = extern struct {
     root_input_mask: c_long,
 };
 
+pub const XGCValues = extern struct {
+    function: c_int, // logical operation
+    plane_mask: c_ulong, // plane mask
+    foreground: c_ulong, // foreground pixel
+    background: c_ulong, // background pixel
+    line_width: c_int, // line width (in pixels)
+    line_style: c_int, // LineSolid, LineOnOffDash, LineDoubleDash
+    cap_style: c_int, // CapNotLast, CapButt, CapRound, CapProjecting,
+    join_style: c_int, // JoinMiter, JoinRound, JoinBevel
+    fill_style: c_int, // FillSolid, FillTiled, FillStippled FillOpaqueStippled
+    fill_rule: c_int, // EvenOddRule, WindingRule
+    arc_mode: c_int, // ArcChord, ArcPieSlice
+    tile: Pixmap, // tile pixmap for tiling operations
+    stipple: Pixmap, // stipple 1 plane pixmap for stippling
+    ts_x_origin: c_int, // offset for tile or stipple operations
+    ts_y_origin: c_int,
+    font: Font, // default text font for text operations
+    subwindow_mode: c_int, // ClipByChildren, IncludeInferiors
+    graphics_exposures: Bool, // boolean, should exposures be generated
+    clip_x_origin: c_int, // origin for clipping
+    clip_y_origin: c_int,
+    clip_mask: Pixmap, // bitmap clipping; other calls for rects
+    dash_offset: c_int, // patterned/dashed line information
+    dashes: u8,
+};
+
+pub const XImage = extern struct {
+    width: c_int, // size of image
+    height: c_int,
+    xoffset: c_int, // number of pixels offset in x diretion
+    format: c_int, // XYBitmap, XYPixmap, ZPixmap
+    data: ?[*]u8, // pointer to image data
+    byte_order: c_int, // data byte rder LSBFirst, MSBFirst
+    bitmap_unit: c_int, // quant of scanline 8, 16, 32
+    bitmap_bit_order: c_int, // LSBFirst, MSBFirst
+    bitmap_pad: c_int, // 8, 16 32 either XY or ZPixmap
+    depth: c_int, // depth of image
+    bytes_per_line: c_int, // accelerator to next scanline
+    bits_per_pixel: c_int, // bits per pixel (ZPixmap)
+    red_mask: c_ulong, // bits in z arrangement
+    green_mask: c_ulong,
+    blue_mask: c_ulong,
+    obdata: XPointer, // hook for the object routines to hang on
+    f: extern struct { // image manipulation routines
+        create_image: *const fn () callconv(.c) ?*XImage,
+        destroy_image: *const fn () callconv(.c) c_int,
+        get_pixel: *const fn () callconv(.c) c_ulong,
+        put_pixel: *const fn () callconv(.c) c_int,
+        sub_image: *const fn () callconv(.c) ?*XImage,
+        add_pixel: *const fn () callconv(.c) c_int,
+    },
+};
+
 pub const ScreenFormat = extern struct {
     ext_data: ?[*]XExtData,
     depth: c_int,
@@ -99,7 +152,7 @@ pub const _XPrivDisplay = extern struct {
     private4: XID,
     private5: XID,
     private6: c_int,
-    resource_alloc: ?*fn (?*_XDisplay) callconv(.c) XID,
+    resource_alloc: ?*const fn (?*_XDisplay) callconv(.c) XID,
     byte_order: c_int,
     bitmap_unit: c_int,
     bitmap_pad: c_int,
@@ -119,7 +172,7 @@ pub const _XPrivDisplay = extern struct {
     private14: XPointer,
     max_request_size: c_uint,
     db: ?*_XrmHashBucketRec,
-    private15: ?*fn (?*_XDisplay) callconv(.c) c_int,
+    private15: ?*const fn (?*_XDisplay) callconv(.c) c_int,
     display_name: ?[*]u8,
     default_screen: c_int,
     nscreens: c_int,
@@ -3162,6 +3215,26 @@ pub const dyn_api = struct {
         first_error_code: *c_int,
     ) callconv(.c) Bool;
 
+    const XCreateGCProc = *const fn (
+        display: ?*Display,
+        d: Drawable,
+        valuemask: c_ulong,
+        values: ?*XGCValues,
+    ) callconv(.c) GC;
+
+    const XCreateImageProc = *const fn (
+        display: ?*Display,
+        visual: Visual,
+        depth: c_uint,
+        format: c_int,
+        offset: c_int,
+        data: ?[*]u8,
+        width: c_uint,
+        height: c_uint,
+        bitmap_pad: c_int,
+        bytes_per_line: c_int,
+    ) callconv(.c) ?*XImage;
+
     // function pointers
     pub var XOpenDisplay: XOpenDisplayProc = undefined;
     pub var XCloseDisplay: XCloseDisplayProc = undefined;
@@ -3269,6 +3342,9 @@ pub const dyn_api = struct {
     pub var XQueryExtension: XQueryExtensionProc = undefined;
 
     pub var XTranslateCoordinates: XTranslateCoordinatesProc = undefined;
+
+    pub var XCreateGC: XCreateGCProc = undefined;
+    pub var XCreateImage: XCreateImageProc = undefined;
 };
 
 var __libx11_module: ?*anyopaque = null;

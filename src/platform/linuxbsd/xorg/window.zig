@@ -50,6 +50,9 @@ pub const Window = struct {
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
         windowed_area: common.geometry.Rect,
+        visual: ?*libx11.Visual,
+        gc: libx11.GC,
+        ximage: ?*libx11.XImage,
     },
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
@@ -87,10 +90,13 @@ pub const Window = struct {
             },
             .xdnd_allow = false,
             .windowed_area = data.client_area,
+            .gc = null,
+            .ximage = null,
+            .visual = null,
         };
         self.ctx = ctx;
 
-        // X11 won't let us change the visual and depth later so decide now.
+        //NOTE:  X11 won't let us change the visual and depth later so decide now.
         var visual: ?*libx11.Visual = null;
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
@@ -113,6 +119,7 @@ pub const Window = struct {
         }
 
         self.handle = try createPlatformWindow(ctx.driver, data, visual, depth);
+        self.x11.visual = visual;
         self.data.id = if (id) |ident| ident else @intCast(self.handle);
 
         if (!ctx.driver.addToXContext(self.handle, @ptrCast(self))) {
@@ -1220,6 +1227,63 @@ pub const Window = struct {
                 return WindowError.GLError;
             },
             else => return WindowError.UnsupportedRenderBackend,
+        }
+    }
+
+    const DrawContext = struct {};
+    pub fn createDrawContext(self: *Self) WindowError!DrawContext {
+        switch (self.fb_cfg.accel) {
+            .none => {
+                var gcv: libx11.XGCValues = undefined;
+                var vinfo: libx11.XVisualInfo = undefined;
+
+                gcv.graphics_exposures = libx11.False;
+                self.x11.gc = libx11.dyn_api.XCreateGC(
+                    self.ctx.driver.handles.xdisplay,
+                    self.handle,
+                    libx11.GCGraphicsExposures,
+                    &gcv,
+                );
+                if (self.x11.gc == null) {
+                    @panic("TODO fail path can't create graphics context");
+                }
+
+                if (libx11.dyn_api.XGetVisualInfoFromVisual(
+                    self.ctx.driver.handles.xdisplay,
+                    self.x11.visual,
+                    &vinfo,
+                ) < 0) {
+                    @panic("TODO fail path cant get visual info");
+                }
+                const cl_sz = self.getClientSize();
+                const BYTES_PER_PIXEL = 4; // TODO: Grab this from the visuals
+                const stride: u32 = @as(u32, @intCast(cl_sz.width)) * BYTES_PER_PIXEL;
+                const stride_padded = (stride + 3) & ~3;
+                const pixels = try self.ctx.allocator.alloc(
+                    u8,
+                    @as(u32, @intCast(cl_sz)) * stride_padded,
+                );
+                self.x11.ximage = libx11.dyn_api.XCreateImage(
+                    self.ctx.driver.handles.xdisplay,
+                    self.x11.visual,
+                    vinfo.depth,
+                    libx11.ZPixmap,
+                    0,
+                    pixels.ptr,
+                    @intCast(cl_sz.width),
+                    @intCast(cl_sz.height),
+                    32,
+                    0,
+                );
+
+                if (self.x11.ximage == null) {
+                    @panic("TODO fail path cant create ximage");
+                }
+                self.x11.ximage.?.byte_order = libx11.LSBFirst;
+            },
+            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
+                return WindowError.GLError;
+            },
         }
     }
 

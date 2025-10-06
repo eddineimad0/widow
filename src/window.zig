@@ -845,6 +845,22 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
+    //==================
+    // Draw routines
+    //=================
+
+    pub inline fn createDrawContext(self: *Self) void {
+        self.impl.createDrawContext();
+    }
+
+    /// Copies a framebuffer to the window client area
+    pub inline fn blitFramebuffer(
+        self: *Self,
+        data: anytype,
+    ) void {
+        self.impl.blitFramebuffer(data);
+    }
+
     /// Initializes an opengl rendering context for the window and returns
     /// it. the context creation can be customized through the `cfg` struct
     pub inline fn initGLContext(
