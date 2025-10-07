@@ -4,9 +4,12 @@ const win32_gfx = @import("win32api/graphics.zig");
 const win32_krnl = @import("win32api/kernel32.zig");
 const utils = @import("utils.zig");
 const wndw = @import("window.zig");
+
 const mem = std.mem;
 const debug = std.debug;
 const win32 = std.os.windows;
+const unicode = std.unicode;
+
 const VideoMode = common.video_mode.VideoMode;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const ArrayList = std.ArrayListUnmanaged;
@@ -101,15 +104,11 @@ fn pollDisplays(
     display_adapter.cb = @sizeOf(win32_gfx.DISPLAY_DEVICEW);
     var i: u32 = 0;
     while (true) : (i += 1) {
-        if (win32_gfx.EnumDisplayDevicesW(null, i, &display_adapter, 0) == 0) {
-            // End of enumeration.
-            break;
-        }
+        if (win32_gfx.EnumDisplayDevicesW(null, i, &display_adapter, 0) == 0)
+            break; // End of enumeration.
 
-        if (display_adapter.StateFlags & win32_gfx.DISPLAY_DEVICE_ACTIVE == 0) {
-            // Skip non active adapters.
-            continue;
-        }
+        if (display_adapter.StateFlags & win32_gfx.DISPLAY_DEVICE_ACTIVE == 0)
+            continue; // Skip non active adapters.
 
         var j: u32 = 0;
         while (true) : (j += 1) {
@@ -123,21 +122,19 @@ fn pollDisplays(
                 break;
             }
 
-            if (display_device.StateFlags & win32_gfx.DISPLAY_DEVICE_ACTIVE == 0) {
-                // Skip non active displays.
-                continue;
-            }
+            if (display_device.StateFlags & win32_gfx.DISPLAY_DEVICE_ACTIVE == 0)
+                continue; // Skip non active displays.
 
             // Get the handle for the monitor.
-            const handle = querySystemHandle(&display_adapter.DeviceName) orelse {
+            const handle = querySystemHandle(&display_adapter.DeviceName) orelse
                 return DisplayError.MissingHandle;
-            };
 
             var display = try Display.init(
                 allocator,
                 handle,
                 display_adapter.DeviceName,
                 display_device.DeviceName,
+                display_device.StateFlags & win32_gfx.DISPLAY_DEVICE_PRIMARY_DEVICE != 0,
             );
             errdefer display.deinit(allocator);
 
@@ -196,9 +193,8 @@ fn pollVideoModes(
 
         // Skip duplicate modes.
         for (modes.items) |*video_mode| {
-            if (mode.equals(video_mode)) {
+            if (mode.equals(video_mode))
                 continue :main_loop;
-            }
         }
 
         try modes.append(allocator, mode);
@@ -215,6 +211,7 @@ pub const Display = struct {
     adapter: [32]u16, // Wide encoded Name of the display adapter(gpu) used by the display.
     name: []u8, // Name assigned to the display
     curr_video: usize, // the index of the currently active videomode.
+    is_primary: bool,
 
     // the original(registry setting of the dispaly video mode)
     // is always saved at index 0 of the `modes` ArrayList.
@@ -227,16 +224,16 @@ pub const Display = struct {
         handle: win32_gfx.HMONITOR,
         adapter_name: [32]u16,
         device_name: [32]u16,
+        primary: bool,
     ) mem.Allocator.Error!Self {
-
         // Enumerate all "possible" video modes.
         var modes = try pollVideoModes(allocator, &adapter_name);
         errdefer modes.deinit(allocator);
 
-        const display_name = utils.wideZToUtf8(allocator, &device_name) catch {
+        const display_name = utils.wideZToUtf8(allocator, &device_name) catch
             return mem.Allocator.Error.OutOfMemory;
-        };
-        errdefer allocator.free(display_name);
+
+        errdefer unreachable;
 
         return .{
             .handle = handle,
@@ -244,6 +241,7 @@ pub const Display = struct {
             .adapter = adapter_name,
             .name = display_name,
             .curr_video = REGISTRY_VIDEOMODE_INDEX,
+            .is_primary = primary,
         };
     }
 
@@ -409,19 +407,20 @@ pub const Display = struct {
 pub const DisplayManager = struct {
     displays: ArrayList(Display),
     expected_video_change: bool, // For skipping unnecessary updates.
-    orig_thread_exec_state:win32_krnl.EXECUTION_STATE,
+    orig_thread_exec_state: win32_krnl.EXECUTION_STATE,
 
     const Self = @This();
-    pub const WINDOW_PROP = std.unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
+    pub const WINDOW_PROP = unicode.utf8ToUtf16LeStringLiteral("Widow Display Manager");
 
     pub fn init(allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!Self {
-        var self:Self =  .{
+        var self: Self = .{
             .expected_video_change = false,
             .displays = try pollDisplays(allocator),
             .orig_thread_exec_state = undefined,
         };
 
-        self.orig_thread_exec_state = win32_krnl.SetThreadExecutionState(.{.CONTINUOUS = 1});
+        self.orig_thread_exec_state =
+            win32_krnl.SetThreadExecutionState(.{ .CONTINUOUS = 1 });
         _ = win32_krnl.SetThreadExecutionState(self.orig_thread_exec_state);
 
         return self;
@@ -506,10 +505,13 @@ pub const DisplayManager = struct {
         self.expected_video_change = false;
     }
 
-    pub fn setScreenSaver(self:*Self,on:bool)void{
-        if(!on){
-            self.orig_thread_exec_state = win32_krnl.SetThreadExecutionState(.{.CONTINUOUS = 1,.DISPLAY_REQUIRED = 1,});
-        }else{
+    pub fn setScreenSaver(self: *Self, on: bool) void {
+        if (!on) {
+            self.orig_thread_exec_state = win32_krnl.SetThreadExecutionState(.{
+                .CONTINUOUS = 1,
+                .DISPLAY_REQUIRED = 1,
+            });
+        } else {
             _ = win32_krnl.SetThreadExecutionState(self.orig_thread_exec_state);
         }
     }

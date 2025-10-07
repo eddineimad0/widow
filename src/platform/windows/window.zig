@@ -311,10 +311,22 @@ fn createPlatformWindow(
     return window_handle;
 }
 
+pub const BlitContext = struct {};
+
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
-    icon: icon.Icon,
+    dc: win32.HDC,
     dropped_files: std.ArrayListUnmanaged([]const u8),
+    input: struct {
+        sticky_keys: struct {
+            l_shift: common.keyboard_mouse.KeyState,
+            r_shift: common.keyboard_mouse.KeyState,
+            l_super: common.keyboard_mouse.KeyState,
+            r_super: common.keyboard_mouse.KeyState,
+        },
+        mouse_buttons: [common.keyboard_mouse.MouseButton.COUNT]common.keyboard_mouse.MouseButtonState,
+    },
+    icon: icon.Icon,
     cursor: icon.CursorHints,
     prev_frame: common.geometry.Rect, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
@@ -370,6 +382,8 @@ pub const Window = struct {
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
 
         self.win32 = WindowWin32Data{
+            .dc = win32_gfx.GetDC(self.handle) orelse
+                return WindowError.CreateFailed,
             .cursor = icon.CursorHints{
                 .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
@@ -389,6 +403,15 @@ pub const Window = struct {
             .prev_frame = .{
                 .size = .{ .width = 0, .height = 0 },
                 .top_left = .{ .x = 0, .y = 0 },
+            },
+            .input = .{
+                .sticky_keys = .{
+                    .l_shift = .Released,
+                    .r_shift = .Released,
+                    .l_super = .Released,
+                    .r_super = .Released,
+                },
+                .mouse_buttons = .{ .Released, .Released, .Released, .Released },
             },
         };
 
@@ -495,12 +518,10 @@ pub const Window = struct {
 
         // Fullscreen
         if (self.data.flags.is_fullscreen) {
-            self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            if (!self.setFullscreen(true)) {
-                return WindowError.CreateFailed;
-            }
+            self.data.flags.is_fullscreen = false;
+            _ = self.setFullscreen(true);
         }
 
         return self;
@@ -542,7 +563,8 @@ pub const Window = struct {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
-                const disp = self.ctx.display_mgr.findWindowDisplay(self) catch break :null_exit;
+                const disp = self.ctx.display_mgr.findWindowDisplay(self) catch
+                    break :null_exit;
                 dpi = disp.displayDPI(self.ctx.driver);
             }
         }
@@ -893,10 +915,7 @@ pub const Window = struct {
             if (self.data.max_size) |*max_size| {
                 // the min size shouldn't be superior to the max size.
                 if (max_size.width < size.width or max_size.height < size.height) {
-                    std.log.err(
-                        "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
-                        .{ size.width, size.height, max_size.width, max_size.height },
-                    );
+                    debug.assert(false);
                     return;
                 }
             }
@@ -1042,7 +1061,7 @@ pub const Window = struct {
     pub inline fn getTitle(
         self: *const Self,
         allocator: mem.Allocator,
-    ) (WindowError || mem.Allocator.Error)![]u8 {
+    ) mem.Allocator.Error![]u8 {
         // This length doesn't take into account the null character
         // so add it when allocating.
         const wide_title_len = win32_gfx.GetWindowTextLengthW(self.handle);
@@ -1066,7 +1085,7 @@ pub const Window = struct {
             };
             return slice;
         }
-        return WindowError.NoTitle;
+        return &.{};
     }
 
     /// Returns the window's current opacity
@@ -1099,7 +1118,7 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn setOpacity(self: *Self, value: f32) bool {
+    pub fn setOpacity(self: *const Self, value: f32) bool {
         var ex_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
             win32_gfx.GWL_EXSTYLE,
@@ -1267,14 +1286,11 @@ pub const Window = struct {
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
-    pub fn getDroppedFiles(self: *const Self) [][]const u8 {
+    pub inline fn getDroppedFiles(self: *const Self) [][]const u8 {
         return self.win32.dropped_files.items;
     }
 
-    pub inline fn setDragAndDrop(
-        self: *Self,
-        accepted: bool,
-    ) void {
+    pub fn setDragAndDrop(self: *Self, accepted: bool) void {
         if (accepted == self.win32.allow_drag_n_drop) {
             return;
         }
@@ -1289,7 +1305,7 @@ pub const Window = struct {
     }
 
     /// Frees the allocated memory used to hold the file(s) path(s).
-    pub inline fn freeDroppedFiles(self: *Self) void {
+    pub fn freeDroppedFiles(self: *Self) void {
         // Avoid double free, important since the client can call this directly.
         if (self.win32.dropped_files.capacity == 0) {
             return;
@@ -1377,13 +1393,8 @@ pub const Window = struct {
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) WindowError!void {
-        const new_cursor = icon.createNativeCursor(cursor_shape) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+    ) void {
+        const new_cursor = icon.createNativeCursor(cursor_shape);
         icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1421,7 +1432,7 @@ pub const Window = struct {
                 const ls = self.getClientSize();
                 const ps = self.getClientPixelSize();
                 std.debug.print(
-                    "size with dpi scaling (w:{},h:{}) | size without dpi scaling (w:{},h:{})\n",
+                    "client size with dpi scaling (w:{},h:{}) | client size without dpi scaling (w:{},h:{})\n",
                     .{
                         ps.width,
                         ps.height,

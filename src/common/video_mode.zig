@@ -21,7 +21,7 @@ pub const VideoMode = struct {
     }
 
     /// Checks for equality between 2 VideoModes
-    pub fn equals(self: *const Self, other: *const Self) bool {
+    pub inline fn equals(self: *const Self, other: *const Self) bool {
         return (self.width == other.width and
             self.height == other.height and
             self.color_depth == other.color_depth and

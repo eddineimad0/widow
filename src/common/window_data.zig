@@ -23,5 +23,4 @@ pub const WindowData = struct {
     min_size: ?geometry.RectSize, // The minimum limits of the window's size.
     max_size: ?geometry.RectSize, // The maximum limits of the window's size.
     flags: WindowFlags,
-    input: InputState, // Both the keyboard and mouse buttons states.
 };

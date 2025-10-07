@@ -227,7 +227,10 @@ pub const EventQueue = struct {
     /// # parameters
     /// 'allocator': used for the queue's heap allocations.
     /// 'initial_capacity': the initial capacity of the queue, shouldn't be zero.
-    pub fn init(allocator: std.mem.Allocator, initial_capacity: usize) (mem.Allocator.Error || error{CapacityZero})!Self {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        initial_capacity: usize,
+    ) (mem.Allocator.Error || error{CapacityZero})!Self {
         return .{
             .queue = try Deque(Event).init(allocator, initial_capacity),
             .allocator = allocator,

@@ -9,7 +9,7 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, null);
     defer widow.destroyWidowContext(allocator, ctx);
 
     var ev_queue = try EventQueue.init(allocator, 256);
@@ -92,7 +92,7 @@ pub fn main() !void {
                             mywindows[key.window_id].queueCloseEvent();
                         }
                         if (key.keycode == .D) {
-                            mywindows[key.window_id].debugInfos(true, true);
+                            mywindows[key.window_id].printDebugInfo(true, true);
                         }
                         if (key.keycode == .P) {
                             std.debug.print(

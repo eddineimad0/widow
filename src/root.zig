@@ -1,6 +1,5 @@
 const std = @import("std");
 const common = @import("common");
-const gl = @import("opengl");
 const platform = @import("platform");
 
 // Exports
@@ -54,5 +53,4 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);
     std.testing.refAllDeclsRecursive(platform);
-    std.testing.refAllDeclsRecursive(gl);
 }

@@ -39,7 +39,7 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, null);
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to
@@ -52,7 +52,7 @@ pub fn main() !void {
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
         .withSize(640, 480)
-        .withDPIAware(false)
+        .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
         .build(ctx, null) catch |err| {

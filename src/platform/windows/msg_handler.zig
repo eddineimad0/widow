@@ -55,9 +55,12 @@ pub inline fn keyMSGHandler(
     else
         common.keyboard_mouse.KeyState.Released;
 
-    if (scancode != common.keyboard_mouse.ScanCode.Unknown) {
-        // Update the key state array.
-        window.data.input.keys[@intCast(@intFromEnum(scancode))] = action;
+    switch (scancode) {
+        .LShift => window.win32.input.sticky_keys.l_shift = action,
+        .RShift => window.win32.input.sticky_keys.r_shift = action,
+        .LSuper => window.win32.input.sticky_keys.l_super = action,
+        .RSuper => window.win32.input.sticky_keys.r_super = action,
+        else => {},
     }
 
     // Printscreen key only reports a release action.
@@ -108,11 +111,11 @@ pub inline fn mouseUpMSGHandler(
     window.sendEvent(&event);
 
     // Update window's input state.
-    window.data.input.mouse_buttons[@intFromEnum(button)] = .Released;
+    window.win32.input.mouse_buttons[@intFromEnum(button)] = .Released;
 
     // Release Capture if all keys are released.
     var any_button_pressed = false;
-    for (&window.data.input.mouse_buttons) |*action| {
+    for (&window.win32.input.mouse_buttons) |*action| {
         if (action.* == common.keyboard_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
@@ -129,7 +132,7 @@ pub inline fn mouseDownMSGHandler(
     wparam: win32.WPARAM,
 ) void {
     var any_button_pressed = false;
-    for (&window.data.input.mouse_buttons) |*action| {
+    for (&window.win32.input.mouse_buttons) |*action| {
         if (action.* == common.keyboard_mouse.KeyState.Pressed) {
             any_button_pressed = true;
             break;
@@ -165,7 +168,7 @@ pub inline fn mouseDownMSGHandler(
     );
 
     window.sendEvent(&event);
-    window.data.input.mouse_buttons[@intFromEnum(button)] = .Pressed;
+    window.win32.input.mouse_buttons[@intFromEnum(button)] = .Pressed;
 }
 
 pub inline fn mouseWheelMSGHandler(

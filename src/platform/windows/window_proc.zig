@@ -692,6 +692,9 @@ pub fn mainWindowProc(
             if (window.data.flags.has_raw_mouse != true or window.win32.cursor.mode != .Hidden) {
                 return 0;
             }
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a WM_INPUT event\n", .{window.data.id});
+            }
 
             const ulparam: usize = @bitCast(lparam);
             const raw_input: win32_input.HRAWINPUT = @ptrFromInt(ulparam);

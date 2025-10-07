@@ -112,44 +112,83 @@ pub fn clearStickyKeys(window: *wndw.Window) void {
     // Windows doesn't emit a keyup event for the modifiers and this causes
     // confusion and misinput for the user.
     // Solution clean the key_state and queue the necessary events at every event poll.
-    const codes = comptime [4]ScanCode{
-        ScanCode.LShift,
-        ScanCode.RShift,
-        ScanCode.LMeta,
-        ScanCode.RMeta,
-    };
 
-    const virtual_keys = comptime [4]win32_input.VIRTUAL_KEY{
-        win32_input.VK_LSHIFT,
-        win32_input.VK_RSHIFT,
-        win32_input.VK_LWIN,
-        win32_input.VK_RWIN,
-    };
-
-    const virtual_codes = comptime [4]KeyCode{
-        KeyCode.Shift,
-        KeyCode.Shift,
-        KeyCode.Meta,
-        KeyCode.Meta,
-    };
-
-    for (0..4) |index| {
-        if (window.data.input.keys[@intCast(@intFromEnum(codes[index]))] == KeyState.Pressed) {
-            const is_key_up = !isBitSet(
-                win32_input.GetKeyState(virtual_keys[index]),
-                15,
+    if (window.win32.input.sticky_keys.l_shift == KeyState.Pressed) {
+        const is_key_up = !isBitSet(
+            win32_input.GetKeyState(
+                win32_input.VK_LSHIFT,
+            ),
+            15,
+        );
+        if (is_key_up) {
+            window.win32.input.sticky_keys.l_shift = KeyState.Released;
+            const fake_event = event.createKeyboardEvent(
+                window.data.id,
+                .Shift,
+                ScanCode.LShift,
+                KeyState.Released,
+                getKeyModifiers(),
             );
-            if (is_key_up) {
-                window.data.input.keys[@intCast(@intFromEnum(codes[index]))] = KeyState.Released;
-                const fake_event = event.createKeyboardEvent(
-                    window.data.id,
-                    virtual_codes[index],
-                    codes[index],
-                    KeyState.Released,
-                    getKeyModifiers(),
-                );
-                window.sendEvent(&fake_event);
-            }
+            window.sendEvent(&fake_event);
+        }
+    }
+    if (window.win32.input.sticky_keys.r_shift == KeyState.Pressed) {
+        const is_key_up = !isBitSet(
+            win32_input.GetKeyState(
+                win32_input.VK_RSHIFT,
+            ),
+            15,
+        );
+        if (is_key_up) {
+            window.win32.input.sticky_keys.r_shift = KeyState.Released;
+            const fake_event = event.createKeyboardEvent(
+                window.data.id,
+                .Shift,
+                ScanCode.RShift,
+                KeyState.Released,
+                getKeyModifiers(),
+            );
+            window.sendEvent(&fake_event);
+        }
+    }
+
+    if (window.win32.input.sticky_keys.l_super == KeyState.Pressed) {
+        const is_key_up = !isBitSet(
+            win32_input.GetKeyState(
+                win32_input.VK_LWIN,
+            ),
+            15,
+        );
+        if (is_key_up) {
+            window.win32.input.sticky_keys.l_super = KeyState.Released;
+            const fake_event = event.createKeyboardEvent(
+                window.data.id,
+                .Super,
+                ScanCode.LSuper,
+                KeyState.Released,
+                getKeyModifiers(),
+            );
+            window.sendEvent(&fake_event);
+        }
+    }
+
+    if (window.win32.input.sticky_keys.r_super == KeyState.Pressed) {
+        const is_key_up = !isBitSet(
+            win32_input.GetKeyState(
+                win32_input.VK_RWIN,
+            ),
+            15,
+        );
+        if (is_key_up) {
+            window.win32.input.sticky_keys.r_super = KeyState.Released;
+            const fake_event = event.createKeyboardEvent(
+                window.data.id,
+                .Super,
+                ScanCode.RSuper,
+                KeyState.Released,
+                getKeyModifiers(),
+            );
+            window.sendEvent(&fake_event);
         }
     }
 }

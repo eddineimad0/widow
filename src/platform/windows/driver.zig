@@ -39,8 +39,6 @@ const Win32Handles = struct {
 /// Holds pointer to functions that are not
 /// supported in all windows NT versions.
 const OptionalApi = struct {
-    // Types
-    // Functions
     const SetProcessDPIAwareProc = *const fn () callconv(.winapi) win32.BOOL;
     const RtlVerifyVersionInfoProc = *const fn (
         VersionInfo: *krnl32.OSVERSIONINFOEXW,
@@ -164,15 +162,14 @@ pub const Win32Driver = struct {
 
             // Declare Process DPI Awareness.
             if (globl_instance.hints.is_win10b1703_or_above) {
-                _ = globl_instance.opt_func.SetProcessDpiAwarenessContext.?(
-                    win32_gfx.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-                );
+                if (globl_instance.opt_func.SetProcessDpiAwarenessContext) |f|
+                    _ = f(win32_gfx.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             } else if (globl_instance.hints.is_win8point1_or_above) {
-                _ = globl_instance.opt_func.SetProcessDpiAwareness.?(
-                    win32_gfx.PROCESS_PER_MONITOR_DPI_AWARE,
-                );
+                if (globl_instance.opt_func.SetProcessDpiAwareness) |f|
+                    _ = f(win32_gfx.PROCESS_PER_MONITOR_DPI_AWARE);
             } else if (globl_instance.hints.is_win_vista_or_above) {
-                _ = globl_instance.opt_func.SetProcessDPIAware.?();
+                if (globl_instance.opt_func.SetProcessDPIAware) |f|
+                    _ = f();
             }
 
             Self.g_init = true;
@@ -370,6 +367,10 @@ fn registerMainClass(
         opts.WIN32_WNDCLASS_NAME,
     );
 
+    // even if an icon name was provided
+    // loading the image might fail
+    // in this case leave hIcon set to null
+    // for default Application icon.
     if (opts.WIN32_ICON_RES_NAME) |icon_name| {
         window_class.hIcon = @ptrCast(win32_gfx.LoadImageW(
             hinstance,
@@ -380,9 +381,6 @@ fn registerMainClass(
             @bitCast(win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
-
-    // even if an icon name was provided loading the image might fail
-    // in this case leave hIcon set to null for default Application icon.
 
     const class = win32_gfx.RegisterClassExW(&window_class);
     if (class == 0) {

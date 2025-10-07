@@ -58,7 +58,7 @@ pub const KeyCode = enum(i32) {
     Control, // The Control key (left or right)
     Shift, // The Shift key (left or right)
     Alt, // The Alt key (left or right)
-    Meta, // The OS specific key (left or right): window (Windows and Linux), apple (MacOS X), ...
+    Super, // The OS specific key (left or right): window (Windows and Linux), apple (MacOS X), ...
     LBracket, // The [ and { key
     RBracket, // The ] and } key
     Semicolon, // The ; and : key
@@ -167,11 +167,11 @@ pub const ScanCode = enum(i32) {
     LControl, // The left Control key
     LShift, // The left Shift key
     LAlt, // The left Alt key
-    LMeta, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    LSuper, // The left OS specific key: window (Windows and Linux), apple (MacOS X), ...
     RControl, // The right Control key
     RShift, // The right Shift key
     RAlt, // The right Alt key
-    RMeta, // The right OS specific key: window (Windows and Linux), apple (MacOS X), ...
+    RSuper, // The right OS specific key: window (Windows and Linux), apple (MacOS X), ...
     LBracket, // The [ and { key
     RBracket, // The ] and } key
     Semicolon, // The ; and : key
@@ -261,25 +261,6 @@ pub const MouseButton = enum(u8) {
     ExtraButton2, // Additional Mouse Button 2 (forward navigation).
     pub const COUNT = @intFromEnum(MouseButton.ExtraButton2) -
         @intFromEnum(MouseButton.Left);
-};
-
-/// Holds the keyboard and mouse input state for each window.
-/// # Win32
-/// on Windows keeping track of the keyboard state allow
-/// us to emit release events for keys that are not emitted by
-/// the OS.
-/// TODO: this structure should be moved somewhere else
-/// currently it's only been used by windows implementation
-pub const InputState = struct {
-    keys: [ScanCode.COUNT]KeyState,
-    mouse_buttons: [MouseButton.COUNT]MouseButtonState,
-    const Self = @This();
-    pub fn init() Self {
-        return Self{
-            .keys = [1]KeyState{KeyState.Released} ** ScanCode.COUNT,
-            .mouse_buttons = [1]MouseButtonState{MouseButtonState.Released} ** MouseButton.COUNT,
-        };
-    }
 };
 
 const WindowId = usize;

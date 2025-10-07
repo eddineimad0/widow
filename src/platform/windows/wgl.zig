@@ -1,7 +1,6 @@
 const std = @import("std");
 const common = @import("common");
 const dynlib = @import("dynlib.zig");
-const gl = @import("opengl");
 const win32_gl = @import("win32api/opengl.zig");
 const win32_gfx = @import("win32api/graphics.zig");
 const win32_macros = @import("win32api/macros.zig");
@@ -255,7 +254,7 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
     if (extensions) |exts| {
         wgl_ext.supported_extensions = mem.span(exts);
 
-        if (gl.glHasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
+        if (common.fb.glHasExtension("WGL_ARB_pixel_format", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_pixel_format = true;
             wgl_ext.ChoosePixelFormatARB = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglChoosePixelFormatARB",
@@ -265,17 +264,17 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
             ));
         }
 
-        if (gl.glHasExtension("WGL_EXT_swap_control", wgl_ext.supported_extensions.?)) {
+        if (common.fb.glHasExtension("WGL_EXT_swap_control", wgl_ext.supported_extensions.?)) {
             wgl_ext.SwapIntervalEXT = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglSwapIntervalEXT",
             ));
 
-            if (gl.glHasExtension("WGL_EXT_swap_control_tear", wgl_ext.supported_extensions.?)) {
+            if (common.fb.glHasExtension("WGL_EXT_swap_control_tear", wgl_ext.supported_extensions.?)) {
                 wgl_ext.EXT_swap_control_tear = true;
             }
         }
 
-        if (gl.glHasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
+        if (common.fb.glHasExtension("WGL_ARB_create_context", wgl_ext.supported_extensions.?)) {
             wgl_ext.ARB_create_context = true;
             wgl_ext.CreateContextAttribsARB = @ptrCast(win32_gl.wglGetProcAddress(
                 "wglCreateContextAttribsARB",
@@ -576,7 +575,7 @@ pub const GLContext = struct {
         return success;
     }
 
-    pub fn setSwapIntervals(_: *const Self, interval: gl.SwapInterval) bool {
+    pub fn setSwapIntervals(_: *const Self, interval: common.fb.SwapInterval) bool {
         if (wgl_ext.SwapIntervalEXT) |func| {
             if (interval == .Adaptive and wgl_ext.EXT_swap_control_tear == false) {
                 return false;

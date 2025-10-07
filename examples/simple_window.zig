@@ -11,7 +11,7 @@ pub fn main() !void {
 
     // first we need to preform some platform specific initialization.
     // and build a context for the current platform.
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, null);
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to
@@ -28,6 +28,7 @@ pub fn main() !void {
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
+        .withEventQueue(&ev_queue)
         .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -36,7 +37,7 @@ pub fn main() !void {
     // closes the window when done.
     defer mywindow.deinit();
 
-    _ = mywindow.setEventQueue(&ev_queue);
+    mywindow.printDebugInfo(true, true);
 
     event_loop: while (true) {
         // sleeps until an event is posted.

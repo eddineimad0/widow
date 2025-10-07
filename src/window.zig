@@ -8,9 +8,10 @@ const EventQueue = common.event.EventQueue;
 const WidowContext = platform.WidowContext;
 
 pub const WindowBuilder = struct {
+    title: []const u8,
+    ev_queue: ?*EventQueue,
     attribs: common.window_data.WindowData,
     fbcfg: common.fb.FBConfig,
-    title: []const u8,
     const Self = @This();
 
     /// Creates a window builder instance.
@@ -25,6 +26,7 @@ pub const WindowBuilder = struct {
     pub fn init() Self {
         return Self{
             .title = "",
+            .ev_queue = null,
             // Defalut attributes
             .attribs = common.window_data.WindowData{
                 .id = 0,
@@ -50,7 +52,6 @@ pub const WindowBuilder = struct {
                     .is_dpi_aware = false,
                     .has_raw_mouse = false,
                 },
-                .input = common.keyboard_mouse.InputState.init(),
             },
             .fbcfg = .{
                 .depth_bits = 24,
@@ -101,13 +102,14 @@ pub const WindowBuilder = struct {
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn build(self: *Self, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
-        const w = Window.init(
+        var w = try Window.init(
             ctx,
             id,
             self.title,
             &self.attribs,
             &self.fbcfg,
         );
+        if (self.ev_queue) |q| _ = w.setEventQueue(q);
         return w;
     }
 
@@ -234,6 +236,14 @@ pub const WindowBuilder = struct {
         self.fbcfg = cfg.*;
         return self;
     }
+
+    /// Specify the event queue where window event will be posted
+    /// # Parameters
+    /// `ev_queue`: a pointer to an event queue struct
+    pub fn withEventQueue(self: *Self, ev_queue: *EventQueue) *Self {
+        self.ev_queue = ev_queue;
+        return self;
+    }
 };
 
 pub const Window = struct {
@@ -251,7 +261,7 @@ pub const Window = struct {
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
-    fn init(
+    inline fn init(
         ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
@@ -833,8 +843,8 @@ pub const Window = struct {
     pub inline fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) !void {
-        try self.impl.setNativeCursorIcon(cursor_shape);
+    ) void {
+        self.impl.setNativeCursorIcon(cursor_shape);
     }
 
     /// Returns the descriptor or handle used by the platform to
@@ -864,7 +874,7 @@ pub const Window = struct {
 
     // Prints some debug information to stdout.
     // if compiled in non Debug mode it does nothing.
-    pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
+    pub fn printDebugInfo(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG_BUILD) {
             self.impl.debugInfos(size, flags);
         }

@@ -7,6 +7,7 @@ const macros = @import("macros.zig");
 // Constants
 //========================
 pub const DISPLAY_DEVICE_ACTIVE = @as(u32, 1);
+pub const DISPLAY_DEVICE_PRIMARY_DEVICE = @as(u32, 4);
 pub const DM_BITSPERPEL = @as(i32, 262144);
 pub const DM_PELSWIDTH = @as(i32, 524288);
 pub const DM_PELSHEIGHT = @as(i32, 1048576);
