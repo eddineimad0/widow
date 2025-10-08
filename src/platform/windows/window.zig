@@ -313,7 +313,154 @@ fn createPlatformWindow(
     return window_handle;
 }
 
-pub const BlitContext = struct {};
+pub const BlitContext = struct {
+    window: *const Window,
+    mem_dc: win32.HDC,
+    mem_bitmap: win32_gfx.HBITMAP,
+    backbuffer: []u32,
+    px_fmt_info: common.pixel.PixelFormatInfo,
+
+    const Self = @This();
+
+    pub fn init(w: *const Window) !Self {
+        const hbm = win32_gfx.CreateCompatibleBitmap(
+            w.win32.dc,
+            1,
+            1,
+        );
+
+        const info_mem = try w.ctx.allocator.alignedAlloc(
+            u8,
+            .@"4",
+            @sizeOf(win32_gfx.BITMAPINFOHEADER) + (256 * @sizeOf(win32_gfx.RGBQUAD)),
+        );
+        defer w.ctx.allocator.free(info_mem);
+        @memset(info_mem, 0);
+        const info: *win32_gfx.BITMAPINFO = @ptrCast(@alignCast(info_mem.ptr));
+        info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
+
+        _ = win32_gfx.GetDIBits(
+            w.win32.dc,
+            hbm,
+            0,
+            0,
+            null,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+        );
+        _ = win32_gfx.GetDIBits(
+            w.win32.dc,
+            hbm,
+            0,
+            0,
+            null,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+        );
+        _ = win32_gfx.DeleteObject(hbm);
+
+        var sz: common.window_data.WindowSize = undefined;
+        w.getClientSize(&sz);
+        var bits_per_pixel: u16 = 0;
+        var rmask: u32, var gmask: u32, var bmask: u32, var amask: u32 = .{ 0, 0, 0, 0 };
+
+        var px_fmt: common.pixel.PixelFormat = .Unknown;
+        if (info.bmiHeader.biCompression == win32_gfx.BI_BITFIELDS) {
+            bits_per_pixel = info.bmiHeader.biPlanes * info.bmiHeader.biBitCount;
+            if (bits_per_pixel != 32) {}
+            const mask: []u32 = @ptrCast(@alignCast(info_mem[info.bmiHeader.biSize..]));
+            rmask = mask[0];
+            gmask = mask[1];
+            bmask = mask[2];
+            amask = 0;
+            px_fmt = common.pixel.getPixelFormat(bits_per_pixel, rmask, gmask, bmask, amask);
+        }
+
+        if (px_fmt == .Unknown) {
+            // use XRGB with 8 bits for each channel, and let window handle conversion
+            @memset(info_mem, 0);
+            info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
+            info.bmiHeader.biPlanes = 1;
+            info.bmiHeader.biBitCount = 32;
+            info.bmiHeader.biCompression = win32_gfx.BI_RGB;
+            bits_per_pixel = 32;
+            rmask = 0x00ff0000;
+            gmask = 0x0000ff00;
+            bmask = 0x000000ff;
+            amask = 0;
+        }
+
+        var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
+        common.pixel.getPixelFormatInfo(
+            @intCast(bits_per_pixel),
+            rmask,
+            gmask,
+            bmask,
+            amask,
+            &px_fmt_info,
+        );
+
+        var pitch: u32 = @as(u32, @intCast(sz.physical_width)) * px_fmt_info.bytes_per_pixel;
+        pitch = (pitch + 3) & ~@as(u32, 3); // padding
+        info.bmiHeader.biWidth = sz.physical_width;
+        info.bmiHeader.biHeight = -sz.physical_height;
+        info.bmiHeader.biSizeImage = @as(u32, @intCast(sz.physical_height)) * pitch;
+
+        var pixels: ?*anyopaque = null;
+        const mdc = win32_gfx.CreateCompatibleDC(w.win32.dc).?; // guarnteed to succeed.
+        const mbmp = win32_gfx.CreateDIBSection(
+            w.win32.dc,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+            &pixels,
+            null,
+            0,
+        );
+
+        if (mbmp == null) {
+            @panic("TODO:Failure point");
+        }
+        _ = win32_gfx.SelectObject(mdc, mbmp.?);
+
+        var buffer: []u32 = &.{};
+        buffer.ptr = @ptrCast(@alignCast(pixels.?));
+        buffer.len = info.bmiHeader.biSizeImage / 4;
+
+        return .{
+            .window = w,
+            .mem_dc = mdc,
+            .mem_bitmap = mbmp.?,
+            .px_fmt_info = px_fmt_info,
+            .backbuffer = buffer,
+        };
+    }
+
+    pub fn blit(self: *const Self) void {
+        // PERF: it's probably faster to just update regions of the window
+        // than bliting the entire window each frame
+        var sz: common.window_data.WindowSize = undefined;
+        self.window.getClientSize(&sz);
+        const success = win32_gfx.BitBlt(
+            self.window.win32.dc,
+            0,
+            0,
+            sz.physical_width,
+            sz.physical_height,
+            self.mem_dc,
+            0,
+            0,
+            win32_gfx.SRCCOPY,
+        );
+        debug.assert(success != 0);
+    }
+
+    pub fn deinit(self: *const Self) void {
+        var success = win32_gfx.DeleteDC(self.mem_dc);
+        debug.assert(success != 0);
+        success = win32_gfx.DeleteObject(self.mem_bitmap);
+        debug.assert(success != 0);
+    }
+};
 
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
@@ -1431,6 +1578,9 @@ pub const Window = struct {
     }
 
     pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
+        const ctx = BlitContext.init(self) catch return WindowError.GLError;
+        @memset(ctx.backbuffer, 0);
+        ctx.blit();
         switch (self.fb_cfg.accel) {
             .opengl => return wgl.GLContext.init(self.handle, self.ctx.driver, &self.fb_cfg) catch {
                 return WindowError.GLError;
