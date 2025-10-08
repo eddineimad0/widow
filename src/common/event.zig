@@ -8,7 +8,9 @@ const KeyModifiers = kbd_mouse.KeyModifiers;
 const MouseButtonEvent = kbd_mouse.MouseButtonEvent;
 const ScrollEvent = kbd_mouse.ScrollEvent;
 const Deque = @import("deque.zig").Deque;
-const WindowId = usize;
+const WindowId = @import("window_data.zig").WindowId;
+const WindowDpiInfo = @import("window_data.zig").WindowDpiInfo;
+const WindowSize = @import("window_data.zig").WindowSize;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -29,14 +31,13 @@ pub const EventType = enum(u8) {
     MouseButton, // A certain Mouse button action(press or release) was performed while the mouse is over the client area.
     Keyboard, // A certain Keyboard key action(press or release) was performed.
     MouseScroll, // One of the mouse wheels(vertical,horizontal) was scrolled.
-    DPIChange, // DPI change due to the window being dragged to another monitor.
+    DpiChange, // DPI change due to the window being dragged to another monitor.
     Character, // The key pressed by the user generated a character.
 };
 
 pub const ResizeEvent = struct {
     window_id: WindowId,
-    width: i32, // new client width,
-    height: i32, // new client height,
+    new_size: WindowSize,
 };
 
 pub const MoveEvent = struct {
@@ -45,10 +46,9 @@ pub const MoveEvent = struct {
     y: i32, // new y coordinate of the top left corner
 };
 
-pub const DPIChangeEvent = struct {
+pub const DpiChangeEvent = struct {
     window_id: WindowId,
-    dpi: u32, // new display dpi
-    scaler: f64,
+    dpi_info: WindowDpiInfo,
 };
 
 pub const CharacterEvent = struct {
@@ -80,7 +80,7 @@ pub const Event = union(EventType) {
     MouseButton: MouseButtonEvent,
     Keyboard: KeyEvent,
     MouseScroll: ScrollEvent,
-    DPIChange: DPIChangeEvent,
+    DpiChange: DpiChangeEvent,
     Character: CharacterEvent,
 };
 
@@ -131,12 +131,13 @@ pub inline fn createFocusEvent(window_id: WindowId, focus: bool) Event {
     } };
 }
 
-pub inline fn createResizeEvent(window_id: WindowId, width: i32, height: i32) Event {
-    return .{ .WindowResize = ResizeEvent{
-        .window_id = window_id,
-        .width = width,
-        .height = height,
-    } };
+pub inline fn createResizeEvent(window_id: WindowId, sz: *const WindowSize) Event {
+    return .{
+        .WindowResize = ResizeEvent{
+            .window_id = window_id,
+            .new_size = sz.*,
+        },
+    };
 }
 
 pub inline fn createMoveEvent(window_id: WindowId, x: i32, y: i32, is_mouse: bool) Event {
@@ -196,11 +197,19 @@ pub inline fn createScrollEvent(
     } };
 }
 
-pub inline fn createDPIEvent(window_id: WindowId, new_dpi: u32, new_scale: f64) Event {
-    return .{ .DPIChange = DPIChangeEvent{
+pub inline fn createDpiEvent(
+    window_id: WindowId,
+    new_dpi_x: f64,
+    new_dpi_y: f64,
+    new_scale_factor: f64,
+) Event {
+    return .{ .DpiChange = DpiChangeEvent{
         .window_id = window_id,
-        .dpi = new_dpi,
-        .scaler = new_scale,
+        .dpi_info = .{
+            .dpi_x = new_dpi_x,
+            .dpi_y = new_dpi_y,
+            .scale_factor = new_scale_factor,
+        },
     } };
 }
 

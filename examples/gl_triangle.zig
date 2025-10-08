@@ -55,6 +55,7 @@ pub fn main() !void {
         .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
+        .withResize(true)
         .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -80,8 +81,8 @@ pub fn main() !void {
 
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
-    const client_size = mywindow.getClientPixelSize();
-    gl.Viewport(0, 0, client_size.width, client_size.height);
+    const client_size = mywindow.getClientSize();
+    gl.Viewport(0, 0, client_size.physical_width, client_size.physical_height);
 
     const vertx_shader = try loadVertexShader(VERTEX_SHADER_SRC);
     const frag_shader = try loadFragShader(FRAG_SHADER_SRC);
@@ -114,8 +115,18 @@ pub fn main() !void {
                         }
                     }
                 },
-                EventType.WindowResize => |*new_size| {
-                    gl.Viewport(0, 0, new_size.width, new_size.height);
+                EventType.WindowResize => |*ev| {
+                    std.debug.print(
+                        "Window logical size (w:{}xh:{})\t physical size (w:{}xh:{})\t scale factor {}\n",
+                        .{
+                            ev.new_size.logical_width,
+                            ev.new_size.logical_height,
+                            ev.new_size.physical_width,
+                            ev.new_size.physical_height,
+                            ev.new_size.scale,
+                        },
+                    );
+                    gl.Viewport(0, 0, ev.new_size.physical_width, ev.new_size.physical_height);
                 },
                 else => continue,
             }

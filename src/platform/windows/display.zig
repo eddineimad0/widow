@@ -4,6 +4,7 @@ const win32_gfx = @import("win32api/graphics.zig");
 const win32_krnl = @import("win32api/kernel32.zig");
 const utils = @import("utils.zig");
 const wndw = @import("window.zig");
+const build_options = @import("build-options");
 
 const mem = std.mem;
 const debug = std.debug;
@@ -467,7 +468,10 @@ pub const DisplayManager = struct {
 
     /// Returns a refrence to the Monitor occupied by the window.
     pub fn findWindowDisplay(self: *Self, window: *const wndw.Window) !*Display {
-        const display_handle = win32_gfx.MonitorFromWindow(window.handle, win32_gfx.MONITOR_FROM_FLAGS.NEAREST);
+        const display_handle = win32_gfx.MonitorFromWindow(
+            window.handle,
+            win32_gfx.MONITOR_FROM_FLAGS.NEAREST,
+        );
         // Find the monitor.
         var target: ?*Display = null;
         for (self.displays.items) |*d| {
@@ -478,10 +482,12 @@ pub const DisplayManager = struct {
         }
 
         const display = target orelse {
-            std.log.err(
-                "[DisplayManager]: Display not found, requested handle={*} ,requesting window={d}",
-                .{ display_handle, window.data.id },
-            );
+            if (build_options.LOG_PLATFORM_EVENTS) {
+                std.log.err(
+                    "[DisplayManager]: Display not found, requested handle={*} ,requesting window={d}",
+                    .{ display_handle, window.data.id },
+                );
+            }
             return DisplayError.NotFound;
         };
 

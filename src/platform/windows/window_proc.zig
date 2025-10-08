@@ -364,8 +364,9 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a DPICHANGED event\n", .{window.data.id});
             }
             const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const new_dpi = win32_macros.loWord(wparam);
-            const scale = @as(f64, @floatFromInt(new_dpi)) / win32_gfx.USER_DEFAULT_SCREEN_DPI_F;
+            const new_dpi_x = win32_macros.loWord(wparam);
+            const new_dpi_y = win32_macros.hiWord(wparam);
+            const scale = @as(f64, @floatFromInt(new_dpi_x)) / win32_gfx.USER_DEFAULT_SCREEN_DPI_F;
             const flags = win32_gfx.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
@@ -385,7 +386,12 @@ pub fn mainWindowProc(
                 suggested_rect.bottom - suggested_rect.top,
                 flags,
             );
-            const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
+            const event = common.event.createDpiEvent(
+                window.data.id,
+                @floatFromInt(new_dpi_x),
+                @floatFromInt(new_dpi_y),
+                scale,
+            );
             window.sendEvent(&event);
             return 0;
         },
@@ -482,10 +488,17 @@ pub fn mainWindowProc(
 
             // For windows that allows resizing by dragging it's edges,
             // this message is received multiple times during the resize process
+            var sz = common.window_data.WindowSize{
+                .logical_width = 0,
+                .logical_height = 0,
+                .scale = 0,
+                .physical_width = 0,
+                .physical_height = 0,
+            };
+            window.getClientSize(&sz);
             const event = common.event.createResizeEvent(
                 window.data.id,
-                new_width,
-                new_height,
+                &sz,
             );
             window.sendEvent(&event);
 

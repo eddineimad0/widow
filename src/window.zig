@@ -4,6 +4,8 @@ const platform = @import("platform");
 const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
+const WindowDpiInfo = common.window_data.WindowDpiInfo;
+const WindowSize = common.window_data.WindowSize;
 const EventQueue = common.event.EventQueue;
 const WidowContext = platform.WidowContext;
 
@@ -372,22 +374,22 @@ pub const Window = struct {
         self.impl.setClientPosition(x, y);
     }
 
-    /// Returns the size in logical pixels of the window's client area.
+    /// Returns the size measurments in logical and physical pixels
+    /// of the window's client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
-    pub inline fn getClientSize(self: *const Self) common.geometry.RectSize {
-        return self.impl.getClientSize();
-    }
-
-    /// Returns the size in physical pixels of the window's client area.
-    /// # Notes
-    /// The client area is the content of the window, excluding the title
-    /// bar and borders. If the window allows dpi scaling the returned
-    /// size might be diffrent from the logical size.
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return self.impl.getClientPixelSize();
+    pub inline fn getClientSize(self: *const Self) WindowSize {
+        var sz = WindowSize{
+            .logical_width = 0,
+            .logical_height = 0,
+            .scale = 0,
+            .physical_width = 0,
+            .physical_height = 0,
+        };
+        self.impl.getClientSize(&sz);
+        return sz;
     }
 
     /// Changes the client size of the window.
@@ -657,6 +659,17 @@ pub const Window = struct {
         return self.impl.data.flags.is_fullscreen;
     }
 
+    /// Returns true if the cursor is hovering on the window,
+    /// i.e the cursor is inside the window area.
+    /// # Notes
+    /// If you want to automatically be notified
+    /// of cursor entering and exiting the window area.
+    /// you can track the `EventType.MouseEnter`
+    /// and `EventType.MouseExit` events.
+    pub inline fn isHovered(self: *const Self) bool {
+        return self.impl.data.flags.cursor_in_client;
+    }
+
     /// Returns the scale factor that maps logical pixels to real(physical) pixels.
     /// This value depends on which monitor the system considers the window
     /// to be on.
@@ -672,10 +685,16 @@ pub const Window = struct {
     /// it should drawn with 128 physical pixels for it to appear good.
     /// `EventType.DPIChange` can be tracked to monitor changes in the dpi,
     /// and the scale factor.
-    pub fn getContentScale(self: *const Self) f64 {
-        var scale: f64 = undefined;
-        _ = self.impl.getScalingDPI(&scale);
-        return scale;
+    pub fn getDpiInfo(self: *const Self) WindowDpiInfo {
+        var scale: f64 = 0;
+        var dpi_x: f64 = 0;
+        var dpi_y: f64 = 0;
+        self.impl.getDpi(&dpi_x, &dpi_y, &scale);
+        return WindowDpiInfo{
+            .dpi_x = dpi_x,
+            .dpi_y = dpi_y,
+            .scale_factor = scale,
+        };
     }
 
     /// Returns the 2D virtual desktop coordinates of the mouse cursor,
@@ -686,17 +705,6 @@ pub const Window = struct {
     /// and the x axis pointing to the right
     pub inline fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         return self.impl.getCursorPosition();
-    }
-
-    /// Returns true if the cursor is hovering on the window,
-    /// i.e the cursor is inside the window area.
-    /// # Notes
-    /// If you want to automatically be notified
-    /// of cursor entering and exiting the window area.
-    /// you can track the `EventType.MouseEnter`
-    /// and `EventType.MouseExit` events.
-    pub inline fn isHovered(self: *const Self) bool {
-        return self.impl.data.flags.cursor_in_client;
     }
 
     /// Changes the position of the cursor relative

@@ -85,8 +85,17 @@ pub fn main() !void {
                     std.debug.print("Window position (x:{},y:{})\n", .{ pos.x, pos.y });
                 },
 
-                EventType.WindowResize => |*sz| {
-                    std.debug.print("Window size (w:{},h:{})\n", .{ sz.width, sz.height });
+                EventType.WindowResize => |*ev| {
+                    std.debug.print(
+                        "Window logical size (w:{}xh:{})\t physical size (w:{}xh:{})\t scale factor {}\n",
+                        .{
+                            ev.new_size.logical_width,
+                            ev.new_size.logical_height,
+                            ev.new_size.physical_width,
+                            ev.new_size.physical_height,
+                            ev.new_size.scale,
+                        },
+                    );
                 },
 
                 EventType.WindowFocus => |foc_ev| {

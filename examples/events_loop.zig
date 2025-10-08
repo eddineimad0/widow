@@ -58,7 +58,7 @@ pub fn main() !void {
                 // MouseMove => The mouse position (relative to the client area's top left corner) changed.
                 // MouseEnter => The mouse entered the client area of the window.
                 // MouseExit => The mouse exited the client area of the window.
-                // DPIChange => DPI change due to the window being dragged to another monitor.
+                // DpiChange => DPI change due to the window being dragged to another monitor.
                 // Character => The key pressed by the user generated a character.
                 // RePaintRequest => Request from the system to repaint the window's client area.
 
@@ -93,6 +93,12 @@ pub fn main() !void {
                         }
                         if (key.keycode == .D) {
                             mywindows[key.window_id].printDebugInfo(true, true);
+                        }
+                        if (key.keycode == .T) {
+                            std.debug.print(
+                                "DPI info:{}\n",
+                                .{mywindows[key.window_id].getDpiInfo()},
+                            );
                         }
                         if (key.keycode == .P) {
                             std.debug.print(
@@ -189,13 +195,14 @@ pub fn main() !void {
                     }
                     std.debug.print("By window #{}\n", .{focus_event.window_id});
                 },
-                EventType.DPIChange => |*dpi_event| {
+                EventType.DpiChange => |*dpi_event| {
                     // This event holds the new window dpi and the scaler to be used when drawing
                     // to the screen.
-                    std.debug.print("Window #{} New DPI {}, new Scaler {}\n", .{
+                    std.debug.print("Window #{} New DPI ({},{}), new Scaler {}\n", .{
                         dpi_event.window_id,
-                        dpi_event.dpi,
-                        dpi_event.scaler,
+                        dpi_event.dpi_info.dpi_x,
+                        dpi_event.dpi_info.dpi_y,
+                        dpi_event.dpi_info.scale_factor,
                     });
                 },
                 EventType.WindowMaximize => |window_id| {
@@ -227,8 +234,8 @@ pub fn main() !void {
                 EventType.WindowResize => |*resize_event| {
                     // This event holds the new physical(dpi scaled) client width and height.
                     std.debug.print("new client width:{} | new client height:{} of window #{}\n", .{
-                        resize_event.width,
-                        resize_event.height,
+                        resize_event.new_size.physical_width,
+                        resize_event.new_size.physical_height,
                         resize_event.window_id,
                     });
                 },

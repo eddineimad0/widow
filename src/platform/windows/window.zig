@@ -9,6 +9,8 @@ const wgl = @import("wgl.zig");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
+const build_options = @import("build-options");
+
 const mem = std.mem;
 const debug = std.debug;
 const FBConfig = common.fb.FBConfig;
@@ -438,8 +440,9 @@ pub const Window = struct {
                 .right = self.data.client_area.size.width,
                 .bottom = self.data.client_area.size.height,
             };
-            var dpi_scale: f64 = undefined;
-            const dpi = self.getScalingDPI(&dpi_scale);
+            var dpi_scale: f64 = 0;
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, &dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
             const fwidth: f64 = @floatFromInt(client_rect.right);
             const fheight: f64 = @floatFromInt(client_rect.bottom);
@@ -451,7 +454,7 @@ pub const Window = struct {
                 &client_rect,
                 style,
                 ex_style,
-                dpi,
+                @intFromFloat(dpi_x),
             );
 
             var window_rect: win32.RECT = undefined;
@@ -557,22 +560,21 @@ pub const Window = struct {
         _ = win32_input.SetFocus(self.handle);
     }
 
-    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
+    pub fn getDpi(self: *const Self, dpi_x: ?*f64, dpi_y: ?*f64, scaler: ?*f64) void {
         var dpi: u32 = win32_gfx.USER_DEFAULT_SCREEN_DPI;
-        null_exit: {
+        err_exit: {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
                 const disp = self.ctx.display_mgr.findWindowDisplay(self) catch
-                    break :null_exit;
+                    break :err_exit;
                 dpi = disp.displayDPI(self.ctx.driver);
             }
         }
-        if (scaler) |s| {
-            const fdpi: f64 = @floatFromInt(dpi);
-            s.* = (fdpi / win32_gfx.USER_DEFAULT_SCREEN_DPI_F);
-        }
-        return dpi;
+        const fdpi: f64 = @floatFromInt(dpi);
+        if (scaler) |s| s.* = (fdpi / win32_gfx.USER_DEFAULT_SCREEN_DPI_F);
+        if (dpi_x) |x| x.* = fdpi;
+        if (dpi_y) |y| y.* = fdpi;
     }
 
     /// the window should belong to the thread calling this function.
@@ -695,10 +697,11 @@ pub const Window = struct {
         rect.right = new_area.size.width + rect.left;
         rect.bottom = new_area.size.height + rect.top;
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
-            self.getScalingDPI(null)
-        else
-            null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) blk: {
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, null);
+            break :blk @intFromFloat(dpi_x);
+        } else null;
 
         adjustWindowRect(
             self.ctx.driver,
@@ -796,7 +799,11 @@ pub const Window = struct {
             .bottom = self.data.client_area.size.height,
         };
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.getScalingDPI(null) else null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) blk: {
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, null);
+            break :blk @intFromFloat(dpi_x);
+        } else null;
 
         adjustWindowRect(
             self.ctx.driver,
@@ -825,26 +832,22 @@ pub const Window = struct {
         );
     }
 
-    /// Returns the Pixel size of the window's client area
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return common.geometry.RectSize{
-            .width = self.data.client_area.size.width,
-            .height = self.data.client_area.size.height,
-        };
-    }
-
     /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
+        out.physical_width = (client_size.width);
+        out.physical_height = (client_size.height);
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
-            const dpi: f64 = @floatFromInt(self.getScalingDPI(null));
-            const r_scaler = (win32_gfx.USER_DEFAULT_SCREEN_DPI_F / dpi);
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, &out.scale);
+            const r_scaler = (win32_gfx.USER_DEFAULT_SCREEN_DPI_F / dpi_x);
             client_size.scaleBy(r_scaler);
         }
-        return client_size;
+        out.logical_width = (client_size.width);
+        out.logical_height = (client_size.height);
     }
 
     /// Sets the new (width,height) of the window's client area
@@ -852,8 +855,10 @@ pub const Window = struct {
         if (!self.data.flags.is_fullscreen) {
             var dpi: ?u32 = null;
             if (self.data.flags.is_dpi_aware) {
-                var scaler: f64 = undefined;
-                dpi = self.getScalingDPI(&scaler);
+                var scaler: f64 = 0;
+                var dpi_x: f64 = 0;
+                self.getDpi(&dpi_x, null, &scaler);
+                dpi = @intFromFloat(dpi_x);
                 size.scaleBy(scaler);
             }
 
@@ -915,14 +920,19 @@ pub const Window = struct {
             if (self.data.max_size) |*max_size| {
                 // the min size shouldn't be superior to the max size.
                 if (max_size.width < size.width or max_size.height < size.height) {
-                    debug.assert(false);
+                    if (build_options.LOG_PLATFORM_EVENTS) {
+                        std.log.err(
+                            "[Window] Specified minimum size(w:{},h:{}) is more than the maximum size(w:{},h:{})\n",
+                            .{ min_size.width, min_size.height, size.width, size.height },
+                        );
+                    }
                     return;
                 }
             }
 
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.getScalingDPI(&scaler);
+                self.getDpi(null, null, &scaler);
                 size.scaleBy(scaler);
             }
 
@@ -971,16 +981,18 @@ pub const Window = struct {
             if (self.data.min_size) |*min_size| {
                 // the max size should be superior or equal to the min size.
                 if (size.width < min_size.width or size.height < min_size.height) {
-                    std.log.err(
-                        "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
-                        .{ size.width, size.height, min_size.width, min_size.height },
-                    );
+                    if (build_options.LOG_PLATFORM_EVENTS) {
+                        std.log.err(
+                            "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
+                            .{ size.width, size.height, min_size.width, min_size.height },
+                        );
+                    }
                     return;
                 }
             }
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.getScalingDPI(&scaler);
+                self.getDpi(null, null, &scaler);
                 size.scaleBy(scaler);
             }
             self.data.max_size = size;
@@ -1179,12 +1191,14 @@ pub const Window = struct {
             .bottom = 0,
         };
 
+        var dpi_x: f64 = 0;
+        self.getDpi(&dpi_x, null, null);
         adjustWindowRect(
             self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
-            self.getScalingDPI(null),
+            @intFromFloat(dpi_x),
         );
 
         switch (edge) {
@@ -1228,10 +1242,11 @@ pub const Window = struct {
                 // For non resizalble window we change
                 // monitor resoultion
                 if (!self.data.flags.is_resizable) {
-                    const size = self.getClientSize();
+                    var size: common.window_data.WindowSize = undefined;
+                    self.getClientSize(&size);
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
-                        .width = size.width,
-                        .height = size.height,
+                        .width = @intCast(size.logical_width),
+                        .height = @intCast(size.logical_height),
                         // INFO: These 2 are hardcoded for now
                         .frequency = 60,
                         .color_depth = 32,
@@ -1429,15 +1444,15 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const ls = self.getClientSize();
-                const ps = self.getClientPixelSize();
+                var cl_size: common.window_data.WindowSize = undefined;
+                self.getClientSize(&cl_size);
                 std.debug.print(
                     "client size with dpi scaling (w:{},h:{}) | client size without dpi scaling (w:{},h:{})\n",
                     .{
-                        ps.width,
-                        ps.height,
-                        ls.width,
-                        ls.height,
+                        cl_size.physical_width,
+                        cl_size.physical_height,
+                        cl_size.logical_width,
+                        cl_size.logical_height,
                     },
                 );
                 const ws = windowSize(self.handle);

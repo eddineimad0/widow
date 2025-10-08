@@ -13,7 +13,6 @@ pub const IS_DEBUG_BUILD = builtin.mode == .Debug;
 const queue = @import("queue.zig");
 const deque = @import("deque.zig");
 
-
 test "common_module_tests" {
     const std = @import("std");
     const testing = std.testing;
