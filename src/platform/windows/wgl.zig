@@ -6,10 +6,12 @@ const win32_gfx = @import("win32api/graphics.zig");
 const win32_macros = @import("win32api/macros.zig");
 
 const mem = std.mem;
+const io = std.io;
 const debug = std.debug;
 const win32 = std.os.windows;
 const Win32Driver = @import("driver.zig").Win32Driver;
 const FBConfig = common.fb.FBConfig;
+const Win32Canvas = @import("window.zig").Win32Canvas;
 
 const WGLError = error{
     PFDNoMatch,
@@ -556,26 +558,26 @@ pub const GLContext = struct {
         };
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub inline fn deinit(self: *const Self) void {
         _ = win32_gl.wglMakeCurrent(null, null);
         _ = win32_gl.wglDeleteContext(self.glrc);
     }
 
-    pub fn makeCurrent(self: *const Self) bool {
+    pub inline fn makeCurrent(self: *const Self) bool {
         const wdc = win32_gfx.GetDC(self.owner);
         const success = win32_gl.wglMakeCurrent(wdc, self.glrc) == win32.TRUE;
         _ = win32_gfx.ReleaseDC(self.owner, wdc);
         return success;
     }
 
-    pub fn swapBuffers(self: *const Self) bool {
+    pub inline fn swapBuffers(self: *const Self) bool {
         const wdc = win32_gfx.GetDC(self.owner);
         const success = win32_gl.SwapBuffers(wdc) == win32.TRUE;
         _ = win32_gfx.ReleaseDC(self.owner, wdc);
         return success;
     }
 
-    pub fn setSwapIntervals(_: *const Self, interval: common.fb.SwapInterval) bool {
+    pub fn setSwapInterval(_: *const Self, interval: common.fb.SwapInterval) bool {
         if (wgl_ext.SwapIntervalEXT) |func| {
             if (interval == .Adaptive and wgl_ext.EXT_swap_control_tear == false) {
                 return false;
@@ -584,18 +586,6 @@ pub const GLContext = struct {
             return func(interval_int) == win32.TRUE;
         }
         return false;
-    }
-
-    pub inline fn getVendorName(self: *const Self) [*:0]const u8 {
-        return self.driver.vendor;
-    }
-
-    pub inline fn getHardwareName(self: *const Self) [*:0]const u8 {
-        return self.driver.hardware;
-    }
-
-    pub inline fn getDriverVersion(self: *const Self) [*:0]const u8 {
-        return self.driver.version;
     }
 };
 
@@ -621,4 +611,39 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
         }
     }
     return symbol_ptr;
+}
+
+//===========================
+// opengl rendering hooks
+//============================
+
+pub fn glSwapBuffers(ctx: *anyopaque) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.swapBuffers();
+}
+
+pub fn glSetSwapInterval(ctx: *anyopaque, interval: common.fb.SwapInterval) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.setSwapInterval(interval);
+}
+
+pub fn glMakeCurrent(ctx: *anyopaque) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.makeCurrent();
+}
+
+pub fn glGetDriverInfo(ctx: *anyopaque, wr: *io.Writer) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    wr.print("Driver: {s}, for Hardware: {s}, Made by: {s}", .{
+        c.gl_ctx.driver.version,
+        c.gl_ctx.driver.hardware,
+        c.gl_ctx.driver.vendor,
+    }) catch return false;
+    return true;
+}
+
+pub fn glDestroyCanvas(ctx: *anyopaque) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.gl_ctx.deinit();
+    c.* = .{ .invalid = {} };
 }

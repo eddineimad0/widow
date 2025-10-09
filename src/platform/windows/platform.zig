@@ -1,4 +1,5 @@
 const std = @import("std");
+const common = @import("common");
 const display = @import("display.zig");
 const driver = @import("driver.zig");
 const wndw = @import("window.zig");
@@ -6,6 +7,7 @@ const win32_gfx = @import("win32api/graphics.zig");
 const win32 = std.os.windows;
 
 const mem = std.mem;
+const dbg = std.debug;
 const io = std.io;
 
 pub const Window = wndw.Window;
@@ -15,7 +17,6 @@ pub const WindowError = wndw.WindowError;
 pub const DisplayHandle = win32_gfx.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
-pub const GLContext = @import("wgl.zig").GLContext;
 pub const glLoaderFunc = @import("wgl.zig").glLoaderFunc;
 
 pub const WidowContext = struct {
@@ -73,26 +74,31 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     a.destroy(ctx);
 }
 
-pub fn getPrimaryDisplay(ctx: *WidowContext) DisplayHandle {
-    // TODO:
-    _ = ctx;
+pub inline fn getPrimaryDisplay(ctx: *const WidowContext) ?DisplayHandle {
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.is_primary) {
+            return d.handle;
+        }
+    }
+    return null;
 }
 
-pub fn getDisplayFromWindow(ctx: *WidowContext, w: *Window) DisplayHandle {
-    // TODO:
-    _ = ctx;
-    _ = w;
+pub inline fn getDisplayFromWindow(ctx: *WidowContext, w: *Window) ?DisplayHandle {
+    const d = ctx.display_mgr.findWindowDisplay(w) catch return null;
+    return d.handle;
 }
 
-const DisplayInfo = struct {
-    name: []u8,
-    video_mode: anyopaque,
-};
-
-pub fn getDisplayInfo(ctx: *WidowContext, d: DisplayHandle) DisplayInfo {
-    // TODO:
-    _ = ctx;
-    _ = d;
+pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_mode.DisplayInfo) bool {
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.handle == h) {
+            d.getCurrentVideoMode(&info.video_mode);
+            info.name_len = d.name.len;
+            dbg.assert(info.name_len <= info.name.len);
+            @memcpy(info.name[0..info.name_len], d.name);
+            return true;
+        }
+    }
+    return false;
 }
 
 test "platform_unit_test" {

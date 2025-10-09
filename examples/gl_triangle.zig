@@ -67,15 +67,18 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var gl_ctx = try mywindow.initGLContext();
-    defer gl_ctx.deinit();
-    std.debug.print(
-        "Hardware: {s}, Driver: {s}, Made by: {s}\n",
-        .{ gl_ctx.getHardwareName(), gl_ctx.getDriverVersion(), gl_ctx.getVendorName() },
-    );
-    _ = gl_ctx.makeCurrent();
-    const ok = gl_ctx.setSwapIntervals(.Synced);
-    std.debug.print("VSync={s}\n", .{if (ok) "ON" else "OFF"});
+    var gl_canvas = try mywindow.createCanvas();
+    defer gl_canvas.deinit();
+    var pbuff: [1024]u8 = undefined;
+    var p_wr = std.io.Writer.fixed(&pbuff);
+    const success = gl_canvas.getDriverInfo(&p_wr);
+    if (success) {
+        std.debug.print("{s}\n", .{p_wr.buffered()});
+    }
+    std.debug.print("Render API:{s}\n", .{gl_canvas.getDriverName()});
+    _ = gl_canvas.makeCurrent();
+    const ok = gl_canvas.setSwapInterval(.Synced);
+    std.debug.print("VSync:{s}\n", .{if (ok) "ON" else "OFF"});
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
@@ -135,7 +138,7 @@ pub fn main() !void {
         gl.ClearColor(0.2, 0.3, 0.3, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
         try drawTriangle();
-        _ = gl_ctx.swapBuffers();
+        _ = gl_canvas.swapBuffers();
     }
 }
 

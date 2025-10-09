@@ -74,3 +74,9 @@ pub const VideoMode = struct {
         return best_index;
     }
 };
+
+pub const DisplayInfo = struct {
+    name: [128]u8,
+    name_len: usize,
+    video_mode: VideoMode,
+};

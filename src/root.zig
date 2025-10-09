@@ -30,13 +30,13 @@ pub const opengl = struct {
     /// opengl functions after creating an opengl
     /// rendering context.
     pub const loaderFunc = platform.glLoaderFunc;
-    pub const GLContext = platform.GLContext;
 };
 
 pub const WindowBuilder = @import("window.zig").WindowBuilder;
 pub const Window = @import("window.zig").Window;
 pub const WindowHandle = platform.WindowHandle;
 pub const DisplayHandle = platform.DisplayHandle;
+pub const WidowContext = platform.WidowContext;
 
 /// initialize a platform context.
 /// this should be the first function you call before
@@ -49,6 +49,13 @@ pub const createWidowContext = platform.createWidowContext;
 /// undefined behaviour, alternatively you could not call it and let the os clean up
 /// the resources.
 pub const destroyWidowContext = platform.destroyWidowContext;
+
+// WARN: because Displays(monitors) can be unplugged at any
+// moment by the user from the system. the identifiers returned
+// by these functions may get invalidated at any moment, so use with caution
+pub const getPrimaryDisplay = platform.getPrimaryDisplay;
+pub const getDisplayFromWindow = platform.getDisplayFromWindow;
+pub const getDisplayInfo = platform.getDisplayInfo;
 
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);

@@ -12,6 +12,7 @@ const display = @import("display.zig");
 const build_options = @import("build-options");
 
 const mem = std.mem;
+const io = std.io;
 const debug = std.debug;
 const FBConfig = common.fb.FBConfig;
 const win32 = std.os.windows;
@@ -26,6 +27,7 @@ pub const WindowError = error{
     OutOfMemory,
     BadIcon,
     GLError,
+    CanvasBad, // TODO: better error
 };
 
 /// We'll use this type to pass data to the `CreateWindowExW` function.
@@ -314,10 +316,13 @@ fn createPlatformWindow(
 }
 
 pub const BlitContext = struct {
-    window: *const Window,
+    drawable: win32.HDC,
     mem_dc: win32.HDC,
     mem_bitmap: win32_gfx.HBITMAP,
     backbuffer: []u32,
+    width: u32,
+    height: u32,
+    pitch: u32,
     px_fmt_info: common.pixel.PixelFormatInfo,
 
     const Self = @This();
@@ -427,25 +432,24 @@ pub const BlitContext = struct {
         buffer.len = info.bmiHeader.biSizeImage / 4;
 
         return .{
-            .window = w,
+            .drawable = w.win32.dc,
             .mem_dc = mdc,
             .mem_bitmap = mbmp.?,
             .px_fmt_info = px_fmt_info,
+            .width = @intCast(sz.physical_width),
+            .height = @intCast(sz.physical_height),
+            .pitch = pitch,
             .backbuffer = buffer,
         };
     }
 
-    pub fn blit(self: *const Self) void {
-        // PERF: it's probably faster to just update regions of the window
-        // than bliting the entire window each frame
-        var sz: common.window_data.WindowSize = undefined;
-        self.window.getClientSize(&sz);
+    pub inline fn blit(self: *const Self) void {
         const success = win32_gfx.BitBlt(
-            self.window.win32.dc,
+            self.drawable,
             0,
             0,
-            sz.physical_width,
-            sz.physical_height,
+            @intCast(self.width),
+            @intCast(self.height),
             self.mem_dc,
             0,
             0,
@@ -454,7 +458,7 @@ pub const BlitContext = struct {
         debug.assert(success != 0);
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub inline fn deinit(self: *const Self) void {
         var success = win32_gfx.DeleteDC(self.mem_dc);
         debug.assert(success != 0);
         success = win32_gfx.DeleteObject(self.mem_bitmap);
@@ -484,6 +488,18 @@ pub const WindowWin32Data = struct {
     allow_drag_n_drop: bool,
 };
 
+pub const Win32CanvasTag = enum {
+    invalid,
+    blt_ctx,
+    gl_ctx,
+};
+
+pub const Win32Canvas = union(Win32CanvasTag) {
+    invalid: void,
+    blt_ctx: BlitContext,
+    gl_ctx: wgl.GLContext,
+};
+
 pub const Window = struct {
     ctx: *WidowContext,
     ev_queue: ?*common.event.EventQueue,
@@ -491,6 +507,7 @@ pub const Window = struct {
     data: WindowData,
     win32: WindowWin32Data,
     fb_cfg: FBConfig,
+    canvas: Win32Canvas,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
         .x = win32_gfx.CW_USEDEFAULT,
@@ -563,6 +580,8 @@ pub const Window = struct {
                 .mouse_buttons = .{ .Released, .Released, .Released, .Released },
             },
         };
+
+        self.canvas = .{ .invalid = {} };
 
         // Process inital events.
         // these events aren't reported.
@@ -678,6 +697,13 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        if (@as(Win32CanvasTag, self.canvas) != .invalid and common.IS_DEBUG_BUILD) {
+            // The window is being destroyed
+            // but a rendering canvas is still active
+            // panic to stop the program from being in an invalid state
+            @panic("the window canvas should be destroyed before calling deinit on the window");
+        }
+
         self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
@@ -1577,15 +1603,49 @@ pub const Window = struct {
         }
     }
 
-    pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
-        const ctx = BlitContext.init(self) catch return WindowError.GLError;
-        @memset(ctx.backbuffer, 0);
-        ctx.blit();
+    pub fn createCanvas(self: *Self) WindowError!common.fb.Canvas {
         switch (self.fb_cfg.accel) {
-            .opengl => return wgl.GLContext.init(self.handle, self.ctx.driver, &self.fb_cfg) catch {
-                return WindowError.GLError;
+            .software => {
+                if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{ .blt_ctx = BlitContext.init(self) catch return WindowError.CanvasBad };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = swSwapBuffers,
+                        .setSwapInterval = swSetSwapInterval,
+                        .getSoftwareBuffer = swGetSoftwareBuffer,
+                        .getDriverInfo = swGetDriverInfo,
+                        .deinit = swDestroyCanvas,
+                    },
+                    .render_backend = .software,
+                };
+                return c;
             },
-            else => return WindowError.GLError,
+            .opengl => {
+                if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{
+                        .gl_ctx = wgl.GLContext.init(
+                            self.handle,
+                            self.ctx.driver,
+                            &self.fb_cfg,
+                        ) catch
+                            return WindowError.GLError,
+                    };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = wgl.glSwapBuffers,
+                        .makeCurrent = wgl.glMakeCurrent,
+                        .setSwapInterval = wgl.glSetSwapInterval,
+                        .getDriverInfo = wgl.glGetDriverInfo,
+                        .deinit = wgl.glDestroyCanvas,
+                    },
+                    .render_backend = .opengl,
+                };
+                return c;
+            },
         }
     }
 
@@ -1650,4 +1710,44 @@ pub inline fn disableRawMouseMotion() bool {
     };
     const ret = win32_input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
     return ret == win32.TRUE;
+}
+
+//===========================
+// Software rendering hooks
+//============================
+
+fn swSwapBuffers(ctx: *anyopaque) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.blit();
+    return true;
+}
+pub fn swSetSwapInterval(_: *anyopaque, _: common.fb.SwapInterval) bool {
+    return true;
+}
+
+fn swGetSoftwareBuffer(
+    ctx: *anyopaque,
+    pixels: *[]u32,
+    w: *u32,
+    h: *u32,
+    pitch: *u32,
+) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    w.* = c.blt_ctx.width;
+    h.* = c.blt_ctx.height;
+    pitch.* = c.blt_ctx.pitch;
+    pixels.* = c.blt_ctx.backbuffer;
+}
+
+fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {
+    _ = wr.write("Software renderer using BitBlt win32 api") catch
+        return false;
+
+    return true;
+}
+
+fn swDestroyCanvas(ctx: *anyopaque) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.deinit();
+    c.* = .{ .invalid = {} };
 }

@@ -863,12 +863,11 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
-    /// Initializes an opengl rendering context for the window and returns
-    /// it. the context creation can be customized through the `cfg` struct
-    pub inline fn initGLContext(
-        self: *Self,
-    ) !platform.GLContext {
-        return self.impl.getGLContext();
+    /// Initializes a canvas for rendering graphics to the window
+    /// the canvas framebuffer configuration and what api it uses (software,opengl)
+    /// is decided by the framebuffer configuration used to create the window.
+    pub inline fn createCanvas(self: *Self) !common.fb.Canvas {
+        return self.impl.createCanvas();
     }
 
     /// Activate or deactivate raw mouse input for the window,
