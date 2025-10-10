@@ -51,7 +51,7 @@ pub const WindowBuilder = struct {
                     .is_focused = false,
                     .is_fullscreen = false,
                     .cursor_in_client = false,
-                    .is_dpi_aware = false,
+                    .is_dpi_aware = true,
                     .has_raw_mouse = false,
                 },
             },
@@ -215,7 +215,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Specify whether the window size should be scaled by the Display's Dpi.
-    /// scaling is not applied by default.
+    /// scaling is applied by default.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDPIAware(self: *Self, value: bool) *Self {
@@ -673,7 +673,7 @@ pub const Window = struct {
     /// Returns the scale factor that maps logical pixels to real(physical) pixels.
     /// This value depends on which monitor the system considers the window
     /// to be on.
-    /// The content scale factor is the ratio between the window's current DPI
+    /// The content scale factor is the ratio between the window's monitor DPI
     /// and the platform's default DPI
     /// e.g: On my windows laptop with a 120 DPI monitor this function returns
     /// 1.25(120/96)

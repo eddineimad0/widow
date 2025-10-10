@@ -5,7 +5,6 @@ const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-// BUG: win32: on fullscreen the logical size is wrong
 // TODO: platform error reporting
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
@@ -20,7 +19,7 @@ pub fn main() !void {
     var builder = widow.WindowBuilder.init();
     var mywindow = builder.withTitle("Software rendered Window")
         .withSize(640, 480)
-        .withDPIAware(true)
+        // .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
         .withResize(true)
@@ -73,6 +72,7 @@ pub fn main() !void {
     success = sw_canvas.getSoftwareBuffer(&pixels, &w, &h, &pitch);
     std.debug.print("Software framebuffer:({}x{}) with pitch:{}\n", .{ w, h, pitch });
 
+    std.debug.print("DPI Info:{}\n", .{mywindow.getDpiInfo()});
     event_loop: while (true) {
         try mywindow.pollEvents();
 

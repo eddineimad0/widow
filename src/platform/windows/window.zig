@@ -1025,6 +1025,7 @@ pub const Window = struct {
         };
         out.physical_width = (client_size.width);
         out.physical_height = (client_size.height);
+        out.scale = 1.0;
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
             var dpi_x: f64 = 0;
             self.getDpi(&dpi_x, null, &out.scale);
