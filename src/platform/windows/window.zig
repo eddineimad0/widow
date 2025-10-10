@@ -316,10 +316,12 @@ fn createPlatformWindow(
 }
 
 pub const BlitContext = struct {
+    const INFO_SIZE = @divExact(@sizeOf(win32_gfx.BITMAPINFOHEADER) + (256 * @sizeOf(win32_gfx.RGBQUAD)), 4);
     drawable: win32.HDC,
     mem_dc: win32.HDC,
     mem_bitmap: win32_gfx.HBITMAP,
     backbuffer: []u32,
+    info_mem: [INFO_SIZE]u32,
     width: u32,
     height: u32,
     pitch: u32,
@@ -328,24 +330,34 @@ pub const BlitContext = struct {
     const Self = @This();
 
     pub fn init(w: *const Window) !Self {
+        var s = Self{
+            .drawable = w.win32.dc,
+            .backbuffer = &.{},
+            .width = 0,
+            .height = 0,
+            .pitch = 0,
+            .info_mem = undefined,
+            .mem_dc = undefined,
+            .mem_bitmap = undefined,
+            .px_fmt_info = undefined,
+        };
+        var sz: common.window_data.WindowSize = undefined;
+        w.getClientSize(&sz);
+        s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
+        return s;
+    }
+
+    pub inline fn makeNewSoftwareBuffer(self: *Self, width: i32, height: i32) void {
         const hbm = win32_gfx.CreateCompatibleBitmap(
-            w.win32.dc,
+            self.drawable,
             1,
             1,
         );
-
-        const info_mem = try w.ctx.allocator.alignedAlloc(
-            u8,
-            .@"4",
-            @sizeOf(win32_gfx.BITMAPINFOHEADER) + (256 * @sizeOf(win32_gfx.RGBQUAD)),
-        );
-        defer w.ctx.allocator.free(info_mem);
-        @memset(info_mem, 0);
-        const info: *win32_gfx.BITMAPINFO = @ptrCast(@alignCast(info_mem.ptr));
+        @memset(&self.info_mem, 0);
+        const info: *win32_gfx.BITMAPINFO = @ptrCast(@alignCast(&self.info_mem[0]));
         info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
-
         _ = win32_gfx.GetDIBits(
-            w.win32.dc,
+            self.drawable,
             hbm,
             0,
             0,
@@ -354,7 +366,7 @@ pub const BlitContext = struct {
             win32_gfx.DIB_RGB_COLORS,
         );
         _ = win32_gfx.GetDIBits(
-            w.win32.dc,
+            self.drawable,
             hbm,
             0,
             0,
@@ -364,16 +376,19 @@ pub const BlitContext = struct {
         );
         _ = win32_gfx.DeleteObject(hbm);
 
-        var sz: common.window_data.WindowSize = undefined;
-        w.getClientSize(&sz);
         var bits_per_pixel: u16 = 0;
-        var rmask: u32, var gmask: u32, var bmask: u32, var amask: u32 = .{ 0, 0, 0, 0 };
+        var rmask: u32, var gmask: u32, var bmask: u32, var amask: u32 = .{
+            0,
+            0,
+            0,
+            0,
+        };
 
         var px_fmt: common.pixel.PixelFormat = .Unknown;
         if (info.bmiHeader.biCompression == win32_gfx.BI_BITFIELDS) {
             bits_per_pixel = info.bmiHeader.biPlanes * info.bmiHeader.biBitCount;
             if (bits_per_pixel != 32) {}
-            const mask: []u32 = @ptrCast(@alignCast(info_mem[info.bmiHeader.biSize..]));
+            const mask: []u32 = self.info_mem[info.bmiHeader.biSize..];
             rmask = mask[0];
             gmask = mask[1];
             bmask = mask[2];
@@ -383,7 +398,7 @@ pub const BlitContext = struct {
 
         if (px_fmt == .Unknown) {
             // use XRGB with 8 bits for each channel, and let window handle conversion
-            @memset(info_mem, 0);
+            @memset(&self.info_mem, 0);
             info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
             info.bmiHeader.biPlanes = 1;
             info.bmiHeader.biBitCount = 32;
@@ -405,16 +420,16 @@ pub const BlitContext = struct {
             &px_fmt_info,
         );
 
-        var pitch: u32 = @as(u32, @intCast(sz.physical_width)) * px_fmt_info.bytes_per_pixel;
+        var pitch: u32 = @as(u32, @intCast(width)) * px_fmt_info.bytes_per_pixel;
         pitch = (pitch + 3) & ~@as(u32, 3); // padding
-        info.bmiHeader.biWidth = sz.physical_width;
-        info.bmiHeader.biHeight = -sz.physical_height;
-        info.bmiHeader.biSizeImage = @as(u32, @intCast(sz.physical_height)) * pitch;
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biSizeImage = @as(u32, @intCast(height)) * pitch;
 
         var pixels: ?*anyopaque = null;
-        const mdc = win32_gfx.CreateCompatibleDC(w.win32.dc).?; // guarnteed to succeed.
+        const mdc = win32_gfx.CreateCompatibleDC(self.drawable).?; // guarnteed to succeed.
         const mbmp = win32_gfx.CreateDIBSection(
-            w.win32.dc,
+            self.drawable,
             info,
             win32_gfx.DIB_RGB_COLORS,
             &pixels,
@@ -431,16 +446,13 @@ pub const BlitContext = struct {
         buffer.ptr = @ptrCast(@alignCast(pixels.?));
         buffer.len = info.bmiHeader.biSizeImage / 4;
 
-        return .{
-            .drawable = w.win32.dc,
-            .mem_dc = mdc,
-            .mem_bitmap = mbmp.?,
-            .px_fmt_info = px_fmt_info,
-            .width = @intCast(sz.physical_width),
-            .height = @intCast(sz.physical_height),
-            .pitch = pitch,
-            .backbuffer = buffer,
-        };
+        self.mem_dc = mdc;
+        self.mem_bitmap = mbmp.?;
+        self.backbuffer = buffer;
+        self.width = @intCast(width);
+        self.height = @intCast(height);
+        self.pitch = pitch;
+        self.px_fmt_info = px_fmt_info;
     }
 
     pub inline fn blit(self: *const Self) void {
@@ -1615,6 +1627,7 @@ pub const Window = struct {
                         .swapBuffers = swSwapBuffers,
                         .setSwapInterval = swSetSwapInterval,
                         .getSoftwareBuffer = swGetSoftwareBuffer,
+                        .updateSoftwareBuffer = swUpdateSoftwareBuffer,
                         .getDriverInfo = swGetDriverInfo,
                         .deinit = swDestroyCanvas,
                     },
@@ -1739,8 +1752,17 @@ fn swGetSoftwareBuffer(
     pixels.* = c.blt_ctx.backbuffer;
 }
 
+fn swUpdateSoftwareBuffer(
+    ctx: *anyopaque,
+    w: i32,
+    h: i32,
+) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.makeNewSoftwareBuffer(w, h);
+}
+
 fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {
-    _ = wr.write("Software renderer using BitBlt win32 api") catch
+    _ = wr.writeAll("Software renderer using BitBlt win32 api") catch
         return false;
 
     return true;

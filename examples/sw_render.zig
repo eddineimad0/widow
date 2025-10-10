@@ -5,7 +5,7 @@ const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-// TOOD: resize framebuffer on resize
+// BUG: win32: on fullscreen the logical size is wrong
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
@@ -98,7 +98,7 @@ pub fn main() !void {
                 },
                 EventType.WindowResize => |*ev| {
                     std.debug.print(
-                        "Window logical size (w:{}xh:{})\t physical size (w:{}xh:{})\t scale factor {}\n",
+                        "Window logical size (wxh={}x{})\t physical size (wxh={}x{})\t scale factor {}\n",
                         .{
                             ev.new_size.logical_width,
                             ev.new_size.logical_height,
@@ -107,6 +107,14 @@ pub fn main() !void {
                             ev.new_size.scale,
                         },
                     );
+                    success = sw_canvas.updateSoftwareBuffer(
+                        ev.new_size.physical_width,
+                        ev.new_size.physical_height,
+                    );
+                    std.debug.assert(success == true);
+                    success = sw_canvas.getSoftwareBuffer(&pixels, &w, &h, &pitch);
+                    std.debug.assert(success == true);
+                    std.debug.print("Software framebuffer:({}x{}) with pitch:{}\n", .{ w, h, pitch });
                 },
                 else => continue,
             }

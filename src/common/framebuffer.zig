@@ -62,6 +62,11 @@ pub const Canvas = struct {
             h: *u32,
             pitch: *u32,
         ) void = null,
+        updateSoftwareBuffer: ?*const fn (
+            ctx: *anyopaque,
+            w: i32,
+            h: i32,
+        ) void = null,
         makeCurrent: ?*const fn (ctx: *anyopaque) bool = null,
         setSwapInterval: *const fn (ctx: *anyopaque, intrvl: SwapInterval) bool,
     },
@@ -73,6 +78,9 @@ pub const Canvas = struct {
         self._vtable.deinit(self.ctx);
     }
 
+    /// signal to canvas driver/rendering backend to copy the backbuffer
+    /// into the window framebuffer
+    /// returns true on success, false on failure
     pub inline fn swapBuffers(self: *const Self) bool {
         return self._vtable.swapBuffers(self.ctx);
     }
@@ -81,10 +89,18 @@ pub const Canvas = struct {
         return self._vtable.setSwapInterval(self.ctx, intrvl);
     }
 
+    /// write details about the canvas driver/rendering backend.
+    /// for hardware backends such as OpenGL this includes hardware name,
+    /// hardware vendor name and also the kernel driver version running on the platform.
+    /// returns false if the writer ran out of space, otherwise returns true.
+    /// # Parameters:
+    /// 'wr': the writer into which the details string is written
     pub inline fn getDriverInfo(self: *Self, wr: *io.Writer) bool {
         return self._vtable.getDriverInfo(self.ctx, wr);
     }
 
+    /// Returns a string identifier of the canvas driver/rendering backend
+    /// possible return values = ["Software","OpenGL"]
     pub inline fn getDriverName(self: *const Self) [*:0]const u8 {
         return switch (self.render_backend) {
             .software => "Software",
@@ -99,6 +115,16 @@ pub const Canvas = struct {
         return false;
     }
 
+    /// This function is for software canvas driver/rendering backend only.
+    /// it returns the software framebuffer used for the window + the canvas
+    /// width, height and pitch/stride i.e number of bytes in one row or scanline
+    /// of the framebuffer.
+    /// returns false on all non software backends
+    /// # Parameters
+    /// `pixels`: pointer to the variable that receives the framebuffer slice,
+    /// `width`: pointer to the variable that receives the width,
+    /// `height`: pointer to the variable that receives the height,
+    /// `pitch`: pointer to the framebuffer pitch/stride,
     pub inline fn getSoftwareBuffer(
         self: *const Self,
         pixels: *[]u32,
@@ -108,6 +134,30 @@ pub const Canvas = struct {
     ) bool {
         if (self._vtable.getSoftwareBuffer) |f| {
             f(self.ctx, pixels, width, height, pitch);
+            return true;
+        }
+        return false;
+    }
+
+    /// This function is for software canvas driver/rendering backend only.
+    /// it attempt to resize the software framebuffer used for the window.
+    /// returns false on all non software backends
+    /// # WARNING
+    /// on success, values previously returned by *getSoftwareBuffer*
+    /// are invalidated even if the width and height parameters are the same
+    /// as the previous returned values.
+    /// in short each time you call this call *getSoftwareBuffer* after to avoid
+    /// crashing.
+    /// # Parameters
+    /// `width`: new width of the framebuffer,
+    /// `height`: new height of the framebuffer,
+    pub inline fn updateSoftwareBuffer(
+        self: *const Self,
+        width: i32,
+        height: i32,
+    ) bool {
+        if (self._vtable.updateSoftwareBuffer) |f| {
+            f(self.ctx, width, height);
             return true;
         }
         return false;

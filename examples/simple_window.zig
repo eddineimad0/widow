@@ -27,7 +27,6 @@ pub fn main() !void {
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
-        .withDecoration(true)
         .withEventQueue(&ev_queue)
         .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
