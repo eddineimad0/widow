@@ -165,19 +165,19 @@ pub const PixelFormatInfo = struct {
         loss: u8,
         shift: u8,
     },
+    bits_per_pixel: u16,
     bytes_per_pixel: u8,
-    bits_per_pixel: u8,
 };
 
 //============
 // Functions
 //============
 pub fn getPixelFormat(
-    bits_per_pixel: u32,
     rmask: u32,
     gmask: u32,
     bmask: u32,
     amask: u32,
+    bits_per_pixel: u16,
 ) PixelFormat {
     switch (bits_per_pixel) {
         16 => {
@@ -280,11 +280,11 @@ pub fn getPixelFormat(
 }
 
 pub fn getPixelFormatInfo(
-    bits_per_pixel: u8,
     rmask: u32,
     gmask: u32,
     bmask: u32,
     amask: u32,
+    bits_per_pixel: u16,
     out: *PixelFormatInfo,
 ) void {
     const bytes_per_pixel = ((bits_per_pixel - 1) / 8) + 1;
@@ -329,7 +329,7 @@ pub fn getPixelFormatInfo(
     }
 
     out.* = .{
-        .fmt = getPixelFormat(bits_per_pixel, rmask, gmask, bmask, amask),
+        .fmt = getPixelFormat(rmask, gmask, bmask, amask, bits_per_pixel),
         .red = .{
             .mask = rmask,
             .loss = rloss,
@@ -350,7 +350,7 @@ pub fn getPixelFormatInfo(
             .loss = aloss,
             .shift = ashift,
         },
-        .bytes_per_pixel = bytes_per_pixel,
+        .bytes_per_pixel = @intCast(bytes_per_pixel),
         .bits_per_pixel = bits_per_pixel,
     };
 }

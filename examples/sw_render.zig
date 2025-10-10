@@ -6,6 +6,7 @@ const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 // BUG: win32: on fullscreen the logical size is wrong
+// TODO: platform error reporting
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
@@ -27,13 +28,13 @@ pub fn main() !void {
         .withFrameBuffer(&.{
             .depth_bits = 24,
             .stencil_bits = 8,
-            .color_bits = .{
+            .color = .{
                 .red_bits = 8,
                 .green_bits = 8,
                 .blue_bits = 8,
                 .alpha_bits = 8,
             },
-            .accum_bits = .{
+            .accum = .{
                 .red_bits = 0,
                 .green_bits = 0,
                 .blue_bits = 0,
@@ -65,6 +66,7 @@ pub fn main() !void {
         std.debug.print("{s}\n", .{p_wr.buffered()});
     }
     std.debug.print("Render API:{s}\n", .{sw_canvas.getDriverName()});
+    std.debug.print("Framebuffer pixel format :{t}\n", .{sw_canvas.fb_format_info.fmt});
 
     var pixels: []u32 = &.{};
     var w: u32, var h: u32, var pitch: u32 = .{ 0, 0, 0 };

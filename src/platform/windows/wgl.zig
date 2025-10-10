@@ -146,22 +146,22 @@ fn fillPFDstruct(pfd: *win32_gl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) voi
     }
     pfd.iPixelType = win32_gl.PFD_TYPE_RGBA;
     pfd.iLayerType = win32_gl.PFD_MAIN_PLANE;
-    pfd.cColorBits = @as(u8, cfg.color_bits.red_bits) + cfg.color_bits.green_bits +
-        cfg.color_bits.blue_bits;
-    pfd.cRedBits = cfg.color_bits.red_bits;
+    pfd.cColorBits = @as(u8, cfg.color.red_bits) + cfg.color.green_bits +
+        cfg.color.blue_bits;
+    pfd.cRedBits = cfg.color.red_bits;
     pfd.cRedShift = 0;
-    pfd.cGreenBits = cfg.color_bits.green_bits;
+    pfd.cGreenBits = cfg.color.green_bits;
     pfd.cGreenShift = 0;
-    pfd.cBlueBits = cfg.color_bits.blue_bits;
+    pfd.cBlueBits = cfg.color.blue_bits;
     pfd.cBlueShift = 0;
-    pfd.cAlphaBits = cfg.color_bits.alpha_bits;
+    pfd.cAlphaBits = cfg.color.alpha_bits;
     pfd.cAlphaShift = 0;
-    pfd.cAccumBits = @as(u8, cfg.accum_bits.red_bits) + cfg.accum_bits.green_bits +
-        cfg.accum_bits.blue_bits + cfg.accum_bits.alpha_bits;
-    pfd.cAccumRedBits = cfg.accum_bits.red_bits;
-    pfd.cAccumGreenBits = cfg.accum_bits.green_bits;
-    pfd.cAccumBlueBits = cfg.accum_bits.blue_bits;
-    pfd.cAccumAlphaBits = cfg.accum_bits.alpha_bits;
+    pfd.cAccumBits = @as(u8, cfg.accum.red_bits) + cfg.accum.green_bits +
+        cfg.accum.blue_bits + cfg.accum.alpha_bits;
+    pfd.cAccumRedBits = cfg.accum.red_bits;
+    pfd.cAccumGreenBits = cfg.accum.green_bits;
+    pfd.cAccumBlueBits = cfg.accum.blue_bits;
+    pfd.cAccumAlphaBits = cfg.accum.alpha_bits;
     pfd.cDepthBits = cfg.depth_bits;
     pfd.cStencilBits = cfg.stencil_bits;
     pfd.cAuxBuffers = 0;
@@ -171,9 +171,7 @@ fn fillPFDstruct(pfd: *win32_gl.PIXELFORMATDESCRIPTOR, cfg: *const FBConfig) voi
     pfd.dwDamageMask = 0;
 }
 
-fn createTempContext(
-    window: win32.HWND,
-) WGLError!win32.HGLRC {
+fn createTempContext(window: win32.HWND) WGLError!win32.HGLRC {
     var pfd = mem.zeroes(win32_gl.PIXELFORMATDESCRIPTOR);
     pfd.nSize = @sizeOf(win32_gl.PIXELFORMATDESCRIPTOR);
     pfd.nVersion = 1;
@@ -287,16 +285,20 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
     return true;
 }
 
-fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
+fn createGLContext(
+    window: win32.HWND,
+    cfg: *const FBConfig,
+    pxfmt_info: *common.pixel.PixelFormatInfo,
+) ?win32.HGLRC {
     var pfd_attrib_list: [48]c_int = undefined;
     var gl_attrib_list: [16]c_int = undefined;
     var pfd_fattrib_list = [1]f32{0};
     var pixel_format = [1]c_int{0};
     var format_count: u32 = 0;
     var index: usize = 0;
-    var pfd: win32_gl.PIXELFORMATDESCRIPTOR = undefined;
+    var pfd = mem.zeroes(win32_gl.PIXELFORMATDESCRIPTOR);
 
-    const dc = win32_gfx.GetDC(window);
+    const dc = win32_gfx.GetDC(window); // TODO: we really only need the dc
     const helper = struct {
         pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
             debug.assert(idx.* < list.len);
@@ -321,32 +323,32 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
                 &pfd_attrib_list,
                 &index,
                 WGL_COLOR_BITS_ARB,
-                @as(c_int, cfg.color_bits.red_bits) + cfg.color_bits.blue_bits +
-                    cfg.color_bits.green_bits,
+                @as(c_int, cfg.color.red_bits) + cfg.color.blue_bits +
+                    cfg.color.green_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_RED_BITS_ARB,
-                cfg.color_bits.red_bits,
+                cfg.color.red_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_GREEN_BITS_ARB,
-                cfg.color_bits.green_bits,
+                cfg.color.green_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_BLUE_BITS_ARB,
-                cfg.color_bits.blue_bits,
+                cfg.color.blue_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_ALPHA_BITS_ARB,
-                cfg.color_bits.alpha_bits,
+                cfg.color.alpha_bits,
             );
 
             // Specifiy accum bits count.
@@ -354,32 +356,31 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
                 &pfd_attrib_list,
                 &index,
                 WGL_ACCUM_BITS_ARB,
-                @as(c_int, cfg.accum_bits.red_bits) + cfg.accum_bits.blue_bits +
-                    cfg.accum_bits.green_bits,
+                @as(c_int, cfg.getAccumulatorDepth()),
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_ACCUM_RED_BITS_ARB,
-                cfg.accum_bits.red_bits,
+                cfg.accum.red_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_ACCUM_GREEN_BITS_ARB,
-                cfg.accum_bits.green_bits,
+                cfg.accum.green_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_ACCUM_BLUE_BITS_ARB,
-                cfg.accum_bits.blue_bits,
+                cfg.accum.blue_bits,
             );
             helper.setAttribute(
                 &pfd_attrib_list,
                 &index,
                 WGL_ACCUM_ALPHA_BITS_ARB,
-                cfg.accum_bits.alpha_bits,
+                cfg.accum.alpha_bits,
             );
 
             // Support for hardware acceleration.
@@ -461,6 +462,56 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
             fillPFDstruct(&pfd, cfg);
             pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
         }
+        var ok = win32_gl.DescribePixelFormat(dc, pixel_format[0], @sizeOf(@TypeOf(pfd)), &pfd);
+        // NOTE: DescribePixelFormat will fail if pixel_format[0] is an index into group 4 (non displayable pixel format)
+        // however using WGL_DRAW_TO_WINDOW_ARB flag help us avoid this group
+        debug.assert(ok != 0);
+        if (ok == 0) {
+            var pfd_g_attribs = [8]c_int{
+                WGL_RED_BITS_ARB,
+                WGL_RED_SHIFT_ARB,
+                WGL_GREEN_BITS_ARB,
+                WGL_GREEN_SHIFT_ARB,
+                WGL_BLUE_BITS_ARB,
+                WGL_BLUE_SHIFT_ARB,
+                WGL_ALPHA_BITS_ARB,
+                WGL_ALPHA_SHIFT_ARB,
+            };
+            var pfd_g_values = [8]c_int{
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            };
+            // failed run it back through arb ext
+
+            ok = if (wgl_ext.GetPixelFormatAttribivARB) |f|
+                f(
+                    dc,
+                    pixel_format[0],
+                    0,
+                    8,
+                    &pfd_g_attribs,
+                    &pfd_g_values,
+                )
+            else
+                win32.FALSE;
+
+            debug.assert(ok == win32.TRUE);
+
+            pfd.cRedBits = @intCast(pfd_g_values[0]);
+            pfd.cRedShift = @intCast(pfd_g_values[1]);
+            pfd.cGreenBits = @intCast(pfd_g_values[2]);
+            pfd.cGreenShift = @intCast(pfd_g_values[3]);
+            pfd.cBlueBits = @intCast(pfd_g_values[4]);
+            pfd.cBlueShift = @intCast(pfd_g_values[5]);
+            pfd.cAlphaBits = @intCast(pfd_g_values[6]);
+            pfd.cAlphaShift = @intCast(pfd_g_values[7]);
+        }
     } else {
         fillPFDstruct(&pfd, cfg);
         pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
@@ -501,6 +552,23 @@ fn createGLContext(window: win32.HWND, cfg: *const FBConfig) ?win32.HGLRC {
         gl_attrib_list[index] = 0;
     }
 
+    { // fill the pixel format info param
+        // WARN: make sure any pfd member you use here is previously initialized in the branching control above
+        const rmask: u32 = ((@as(u32, 1) << @truncate(pfd.cRedBits)) - 1) << @truncate(pfd.cRedShift);
+        const gmask: u32 = ((@as(u32, 1) << @truncate(pfd.cGreenBits)) - 1) << @truncate(pfd.cGreenShift);
+        const bmask: u32 = ((@as(u32, 1) << @truncate(pfd.cBlueBits)) - 1) << @truncate(pfd.cBlueShift);
+        const amask: u32 = ((@as(u32, 1) << @truncate(pfd.cAlphaBits)) - 1) << @truncate(pfd.cAlphaShift);
+        const bits_per_pixel: u16 = @as(u16, pfd.cRedBits) + pfd.cGreenBits + pfd.cBlueBits + pfd.cAlphaBits;
+        common.pixel.getPixelFormatInfo(
+            rmask,
+            gmask,
+            bmask,
+            amask,
+            bits_per_pixel,
+            pxfmt_info,
+        );
+    }
+
     return wgl_ext.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
 }
 
@@ -512,6 +580,7 @@ pub const GLContext = struct {
         vendor: [*:0]const u8,
         version: [*:0]const u8,
     },
+    px_fmt_info: common.pixel.PixelFormatInfo,
     const Self = @This();
 
     pub fn init(window: win32.HWND, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
@@ -523,7 +592,8 @@ pub const GLContext = struct {
             wgl_ext.loaded = loadGLExtensions(driver);
         }
 
-        const rc = createGLContext(window, cfg);
+        var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
+        const rc = createGLContext(window, cfg, &px_fmt_info);
         if (rc == null) {
             return WGLError.NoRC;
         }
@@ -555,6 +625,7 @@ pub const GLContext = struct {
                 .vendor = vend,
                 .version = ver,
             },
+            .px_fmt_info = px_fmt_info,
         };
     }
 

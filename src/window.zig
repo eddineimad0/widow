@@ -59,14 +59,14 @@ pub const WindowBuilder = struct {
                 .depth_bits = 24,
                 .stencil_bits = 8,
 
-                .color_bits = .{
+                .color = .{
                     .red_bits = 8,
                     .green_bits = 8,
                     .blue_bits = 8,
                     .alpha_bits = 8,
                 },
 
-                .accum_bits = .{
+                .accum = .{
                     .red_bits = 0,
                     .green_bits = 0,
                     .blue_bits = 0,

@@ -393,7 +393,7 @@ pub const BlitContext = struct {
             gmask = mask[1];
             bmask = mask[2];
             amask = 0;
-            px_fmt = common.pixel.getPixelFormat(bits_per_pixel, rmask, gmask, bmask, amask);
+            px_fmt = common.pixel.getPixelFormat(rmask, gmask, bmask, amask, bits_per_pixel);
         }
 
         if (px_fmt == .Unknown) {
@@ -412,11 +412,11 @@ pub const BlitContext = struct {
 
         var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
         common.pixel.getPixelFormatInfo(
-            @intCast(bits_per_pixel),
             rmask,
             gmask,
             bmask,
             amask,
+            bits_per_pixel,
             &px_fmt_info,
         );
 
@@ -1631,6 +1631,7 @@ pub const Window = struct {
                         .getDriverInfo = swGetDriverInfo,
                         .deinit = swDestroyCanvas,
                     },
+                    .fb_format_info = self.canvas.blt_ctx.px_fmt_info,
                     .render_backend = .software,
                 };
                 return c;
@@ -1655,6 +1656,7 @@ pub const Window = struct {
                         .getDriverInfo = wgl.glGetDriverInfo,
                         .deinit = wgl.glDestroyCanvas,
                     },
+                    .fb_format_info = self.canvas.gl_ctx.px_fmt_info,
                     .render_backend = .opengl,
                 };
                 return c;

@@ -1,4 +1,5 @@
 const std = @import("std");
+const px = @import("pixel.zig");
 const mem = std.mem;
 const io = std.io;
 
@@ -13,14 +14,14 @@ pub const FBAccelration = union(RenderApi) {
 };
 
 pub const FBConfig = struct {
-    color_bits: packed struct(u16) {
+    color: packed struct(u16) {
         red_bits: u4,
         green_bits: u4,
         blue_bits: u4,
         alpha_bits: u4,
     },
 
-    accum_bits: packed struct(u16) {
+    accum: packed struct(u16) {
         red_bits: u4,
         green_bits: u4,
         blue_bits: u4,
@@ -39,13 +40,23 @@ pub const FBConfig = struct {
     },
 
     const Self = @This();
+
     pub inline fn getColorDepth(self: *const Self) u16 {
-        var cdepth: u8 = 0;
-        cdepth += self.red_bits;
-        cdepth += self.green_bits;
-        cdepth += self.blue_bits;
-        cdepth += self.alpha_bits;
+        var cdepth: u16 = 0;
+        cdepth += self.color.red_bits;
+        cdepth += self.color.green_bits;
+        cdepth += self.color.blue_bits;
+        cdepth += self.color.alpha_bits;
         return cdepth;
+    }
+
+    pub inline fn getAccumulatorDepth(self: *const Self) u16 {
+        var adepth: u16 = 0;
+        adepth += self.accum.red_bits;
+        adepth += self.accum.green_bits;
+        adepth += self.accum.blue_bits;
+        adepth += self.accum.alpha_bits;
+        return adepth;
     }
 };
 
@@ -70,6 +81,7 @@ pub const Canvas = struct {
         makeCurrent: ?*const fn (ctx: *anyopaque) bool = null,
         setSwapInterval: *const fn (ctx: *anyopaque, intrvl: SwapInterval) bool,
     },
+    fb_format_info: px.PixelFormatInfo,
     render_backend: RenderApi,
 
     const Self = @This();
