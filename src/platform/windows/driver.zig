@@ -250,10 +250,9 @@ pub const Win32Driver = struct {
         return Self.WINDOW_CLASS_NAME;
     }
 
-    /// !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
+    /// WARNING: Calling this function Unregister the main WNDCLASS effectively crashing any window
     /// that hasn't been destroyed yet.
-    /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
-    fn deinitSingleton() void {
+    pub fn deinitSingleton() void {
         if (Self.g_init) {
             Self.g_init = false;
 

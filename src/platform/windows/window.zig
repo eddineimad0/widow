@@ -23,11 +23,9 @@ const WidowContext = @import("platform.zig").WidowContext;
 
 pub const WindowError = error{
     CreateFailed,
-    NoTitle,
-    OutOfMemory,
     BadIcon,
-    GLError,
-    CanvasBad, // TODO: better error
+    OutOfMemory,
+    CanvasImpossible,
 };
 
 /// We'll use this type to pass data to the `CreateWindowExW` function.
@@ -55,31 +53,6 @@ pub const WM_ERROR_REPORT: u32 = win32_gfx.WM_USER + 1;
 
 // Define window property name
 pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
-
-pub fn createHiddenWindow(
-    title: [:0]const u16,
-    driver: *const Win32Driver,
-) WindowError!win32.HWND {
-    const helper_window = win32_gfx.CreateWindowExW(
-        @bitCast(@as(u32, 0)),
-        win32_macros.MAKEINTATOM(driver.handles.helper_class),
-        title,
-        @bitCast(@as(u32, 0)),
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        null,
-        null,
-        driver.handles.hinstance,
-        null,
-    ) orelse {
-        return WindowError.CreateFailed;
-    };
-
-    _ = win32_gfx.ShowWindow(helper_window, win32_gfx.SW_HIDE);
-    return helper_window;
-}
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -329,7 +302,7 @@ pub const BlitContext = struct {
 
     const Self = @This();
 
-    pub fn init(w: *const Window) !Self {
+    pub fn init(w: *const Window) WindowError!Self {
         var s = Self{
             .drawable = w.win32.dc,
             .backbuffer = &.{},
@@ -343,11 +316,14 @@ pub const BlitContext = struct {
         };
         var sz: common.window_data.WindowSize = undefined;
         w.getClientSize(&sz);
-        s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
+        const ok = s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
+        if (!ok) {
+            return WindowError.CanvasImpossible;
+        }
         return s;
     }
 
-    pub inline fn makeNewSoftwareBuffer(self: *Self, width: i32, height: i32) void {
+    pub inline fn makeNewSoftwareBuffer(self: *Self, width: i32, height: i32) bool {
         const hbm = win32_gfx.CreateCompatibleBitmap(
             self.drawable,
             1,
@@ -438,7 +414,7 @@ pub const BlitContext = struct {
         );
 
         if (mbmp == null) {
-            @panic("TODO:Failure point");
+            return false;
         }
         _ = win32_gfx.SelectObject(mdc, mbmp.?);
 
@@ -453,6 +429,7 @@ pub const BlitContext = struct {
         self.height = @intCast(height);
         self.pitch = pitch;
         self.px_fmt_info = px_fmt_info;
+        return true;
     }
 
     pub inline fn blit(self: *const Self) void {
@@ -1283,6 +1260,7 @@ pub const Window = struct {
             };
             return slice;
         }
+        // it is fine to call free on this
         return &.{};
     }
 
@@ -1524,12 +1502,8 @@ pub const Window = struct {
         height: i32,
         _: anytype, // unused
     ) WindowError!void {
-        const new_icon = icon.createIcon(pixels, width, height) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+        const new_icon = icon.createIcon(pixels, width, height) catch
+            return WindowError.BadIcon;
 
         const bg_handle, const sm_handle = if (new_icon.sm_handle != null and
             new_icon.bg_handle != null)
@@ -1578,12 +1552,9 @@ pub const Window = struct {
             height,
             xhot,
             yhot,
-        ) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+        ) catch
+            return WindowError.BadIcon;
+
         icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1620,7 +1591,7 @@ pub const Window = struct {
         switch (self.fb_cfg.accel) {
             .software => {
                 if (@as(Win32CanvasTag, self.canvas) == .invalid) {
-                    self.canvas = .{ .blt_ctx = BlitContext.init(self) catch return WindowError.CanvasBad };
+                    self.canvas = .{ .blt_ctx = try BlitContext.init(self) };
                 }
                 const c = common.fb.Canvas{
                     .ctx = @ptrCast(&self.canvas),
@@ -1641,11 +1612,11 @@ pub const Window = struct {
                 if (@as(Win32CanvasTag, self.canvas) == .invalid) {
                     self.canvas = .{
                         .gl_ctx = wgl.GLContext.init(
-                            self.handle,
+                            self.win32.dc,
                             self.ctx.driver,
                             &self.fb_cfg,
                         ) catch
-                            return WindowError.GLError,
+                            return WindowError.CanvasImpossible,
                     };
                 }
                 const c = common.fb.Canvas{
@@ -1759,9 +1730,9 @@ fn swUpdateSoftwareBuffer(
     ctx: *anyopaque,
     w: i32,
     h: i32,
-) void {
+) bool {
     const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
-    c.blt_ctx.makeNewSoftwareBuffer(w, h);
+    return c.blt_ctx.makeNewSoftwareBuffer(w, h);
 }
 
 fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {

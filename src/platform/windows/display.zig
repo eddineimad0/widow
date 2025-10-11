@@ -438,7 +438,7 @@ pub const DisplayManager = struct {
     /// Updates the displays array by removing all disconnected displays
     /// and adding new connected ones.
     pub fn rePollDisplays(self: *Self, allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!void {
-        // TODO: This can possibly be optimized but isn't a priority now
+        // PERF: This can possibly be optimized but isn't a priority now
         self.expected_video_change = true;
         defer self.expected_video_change = false;
 

@@ -470,7 +470,7 @@ pub const DisplayManager = struct {
 
     /// Updates the displays array.
     pub fn rePollDisplays(self: *Self, allocator: mem.Allocator) (mem.Allocator.Error || DisplayError)!void {
-        // TODO: update display on connect/disconnect
+        // PERF: update display on connect/disconnect
         const new_displays = try pollDisplays(allocator, self.driver);
 
         self.displays.deinit();

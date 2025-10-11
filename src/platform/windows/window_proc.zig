@@ -38,14 +38,10 @@ pub fn helperWindowProc(
                 const widow_ctx: *WidowContext = @ptrCast(@alignCast(ref));
                 const display_mgr: *display.DisplayManager = &widow_ctx.display_mgr;
                 if (!display_mgr.expected_video_change) {
-                    display_mgr.rePollDisplays(widow_ctx.allocator) catch |err| {
+                    display_mgr.rePollDisplays(widow_ctx.allocator) catch {
                         // updateDisplays should only fail if we ran out of memory
                         // which is very unlikely on windows 64 bit systems
                         // but if it does happen the library should panic.
-                        std.log.err(
-                            "[Display Manager]: Failed to refresh Displays, error={}\n",
-                            .{err},
-                        );
                         @panic("[Widow]: Ran out of memory, can't update display data");
                     };
                 }
@@ -73,9 +69,7 @@ pub fn mainWindowProc(
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
             const struct_ptr: *win32_gfx.CREATESTRUCTW = @ptrFromInt(ulparam);
-            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
-                @alignCast(struct_ptr.*.lpCreateParams),
-            );
+            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(@alignCast(struct_ptr.*.lpCreateParams));
             if (create_lparam) |param| {
                 const drvr = param.*[1];
                 const data = param.*[0];

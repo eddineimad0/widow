@@ -77,7 +77,7 @@ pub const Canvas = struct {
             ctx: *anyopaque,
             w: i32,
             h: i32,
-        ) void = null,
+        ) bool = null,
         makeCurrent: ?*const fn (ctx: *anyopaque) bool = null,
         setSwapInterval: *const fn (ctx: *anyopaque, intrvl: SwapInterval) bool,
     },
@@ -153,7 +153,7 @@ pub const Canvas = struct {
 
     /// This function is for software canvas driver/rendering backend only.
     /// it attempt to resize the software framebuffer used for the window.
-    /// returns false on all non software backends
+    /// returns false on all non software backends, and true if it succeeds.
     /// # WARNING
     /// on success, values previously returned by *getSoftwareBuffer*
     /// are invalidated even if the width and height parameters are the same
@@ -169,8 +169,7 @@ pub const Canvas = struct {
         height: i32,
     ) bool {
         if (self._vtable.updateSoftwareBuffer) |f| {
-            f(self.ctx, width, height);
-            return true;
+            return f(self.ctx, width, height);
         }
         return false;
     }

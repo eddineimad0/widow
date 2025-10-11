@@ -5,12 +5,11 @@ const EventQueue = widow.event.EventQueue;
 const KeyCode = widow.input.keyboard.KeyCode;
 var gpa_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-// TODO: platform error reporting
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator, null);
+    const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
 
     var ev_queue = try EventQueue.init(allocator, 256);

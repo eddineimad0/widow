@@ -1688,7 +1688,7 @@ pub extern "user32" fn RegisterClassExW(
 ) callconv(.winapi) u16;
 
 pub extern "user32" fn UnregisterClassW(
-    lpClassName: ?win32.LPCWSTR,
+    lpClassName: ?[*:0]align(1) const u16,
     hInstance: ?win32.HINSTANCE,
 ) callconv(.winapi) win32.BOOL;
 

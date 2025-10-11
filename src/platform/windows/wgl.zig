@@ -286,7 +286,7 @@ fn loadGLExtensions(driver: *const Win32Driver) bool {
 }
 
 fn createGLContext(
-    window: win32.HWND,
+    window_dc: win32.HDC,
     cfg: *const FBConfig,
     pxfmt_info: *common.pixel.PixelFormatInfo,
 ) ?win32.HGLRC {
@@ -298,7 +298,6 @@ fn createGLContext(
     var index: usize = 0;
     var pfd = mem.zeroes(win32_gl.PIXELFORMATDESCRIPTOR);
 
-    const dc = win32_gfx.GetDC(window); // TODO: we really only need the dc
     const helper = struct {
         pub inline fn setAttribute(list: []c_int, idx: *usize, attrib: c_int, val: c_int) void {
             debug.assert(idx.* < list.len);
@@ -451,7 +450,7 @@ fn createGLContext(
         pfd_attrib_list[index] = 0;
 
         if (wgl_ext.ChoosePixelFormatARB.?(
-            dc,
+            window_dc,
             &pfd_attrib_list,
             &pfd_fattrib_list,
             1,
@@ -460,9 +459,9 @@ fn createGLContext(
         ) != win32.TRUE or format_count == 0) {
             // Fallback
             fillPFDstruct(&pfd, cfg);
-            pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
+            pixel_format[0] = win32_gl.ChoosePixelFormat(window_dc, &pfd);
         }
-        var ok = win32_gl.DescribePixelFormat(dc, pixel_format[0], @sizeOf(@TypeOf(pfd)), &pfd);
+        var ok = win32_gl.DescribePixelFormat(window_dc, pixel_format[0], @sizeOf(@TypeOf(pfd)), &pfd);
         // NOTE: DescribePixelFormat will fail if pixel_format[0] is an index into group 4 (non displayable pixel format)
         // however using WGL_DRAW_TO_WINDOW_ARB flag help us avoid this group
         debug.assert(ok != 0);
@@ -491,7 +490,7 @@ fn createGLContext(
 
             ok = if (wgl_ext.GetPixelFormatAttribivARB) |f|
                 f(
-                    dc,
+                    window_dc,
                     pixel_format[0],
                     0,
                     8,
@@ -514,15 +513,15 @@ fn createGLContext(
         }
     } else {
         fillPFDstruct(&pfd, cfg);
-        pixel_format[0] = win32_gl.ChoosePixelFormat(dc, &pfd);
+        pixel_format[0] = win32_gl.ChoosePixelFormat(window_dc, &pfd);
     }
 
-    if (win32_gl.SetPixelFormat(dc, pixel_format[0], &pfd) != win32.TRUE) {
+    if (win32_gl.SetPixelFormat(window_dc, pixel_format[0], &pfd) != win32.TRUE) {
         return null;
     }
 
     if (cfg.accel.opengl.ver.major < 3 or !wgl_ext.ARB_create_context) {
-        return win32_gl.wglCreateContext(dc);
+        return win32_gl.wglCreateContext(window_dc);
     }
 
     // gl_attrib_list
@@ -569,12 +568,12 @@ fn createGLContext(
         );
     }
 
-    return wgl_ext.CreateContextAttribsARB.?(dc, null, &gl_attrib_list);
+    return wgl_ext.CreateContextAttribsARB.?(window_dc, null, &gl_attrib_list);
 }
 
 pub const GLContext = struct {
     glrc: win32.HGLRC,
-    owner: win32.HWND,
+    owner: win32.HDC,
     driver: struct {
         hardware: [*:0]const u8,
         vendor: [*:0]const u8,
@@ -583,7 +582,7 @@ pub const GLContext = struct {
     px_fmt_info: common.pixel.PixelFormatInfo,
     const Self = @This();
 
-    pub fn init(window: win32.HWND, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
+    pub fn init(window_dc: win32.HDC, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
         const prev_dc = win32_gl.wglGetCurrentDC();
         const prev_glc = win32_gl.wglGetCurrentContext();
         defer _ = win32_gl.wglMakeCurrent(prev_dc, prev_glc);
@@ -593,13 +592,12 @@ pub const GLContext = struct {
         }
 
         var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
-        const rc = createGLContext(window, cfg, &px_fmt_info);
+        const rc = createGLContext(window_dc, cfg, &px_fmt_info);
         if (rc == null) {
             return WGLError.NoRC;
         }
 
-        const wdc = win32_gfx.GetDC(window);
-        _ = win32_gl.wglMakeCurrent(wdc, rc);
+        _ = win32_gl.wglMakeCurrent(window_dc, rc);
 
         var vend: [*:0]const u8 = undefined;
         var rend: [*:0]const u8 = undefined;
@@ -615,11 +613,9 @@ pub const GLContext = struct {
             ver = func(win32_gl.GL_VERSION) orelse "";
         }
 
-        _ = win32_gfx.ReleaseDC(window, wdc);
-
         return .{
             .glrc = rc.?,
-            .owner = window,
+            .owner = window_dc,
             .driver = .{
                 .hardware = rend,
                 .vendor = vend,
@@ -635,16 +631,12 @@ pub const GLContext = struct {
     }
 
     pub inline fn makeCurrent(self: *const Self) bool {
-        const wdc = win32_gfx.GetDC(self.owner);
-        const success = win32_gl.wglMakeCurrent(wdc, self.glrc) == win32.TRUE;
-        _ = win32_gfx.ReleaseDC(self.owner, wdc);
+        const success = win32_gl.wglMakeCurrent(self.owner, self.glrc) == win32.TRUE;
         return success;
     }
 
     pub inline fn swapBuffers(self: *const Self) bool {
-        const wdc = win32_gfx.GetDC(self.owner);
-        const success = win32_gl.SwapBuffers(wdc) == win32.TRUE;
-        _ = win32_gfx.ReleaseDC(self.owner, wdc);
+        const success = win32_gl.SwapBuffers(self.owner) == win32.TRUE;
         return success;
     }
 
