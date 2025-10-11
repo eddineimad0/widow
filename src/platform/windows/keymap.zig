@@ -352,8 +352,8 @@ const WIN32_VK_TO_SCANCODE = [512]ScanCode{
     ScanCode.Unknown, //0x158
     ScanCode.Unknown, //0x159
     ScanCode.Unknown, //0x15A
-    ScanCode.LMeta, //0x15B
-    ScanCode.RMeta, //0x15C
+    ScanCode.LSuper, //0x15B
+    ScanCode.RSuper, //0x15C
     ScanCode.Menu, //0x15D
     ScanCode.Unknown, //0x15E
     ScanCode.Unknown, //0x15F
@@ -612,8 +612,8 @@ const WIN32_VK_TO_KEYCODE = [255]KeyCode{
     KeyCode.X, //0x58
     KeyCode.Y, //0x59
     KeyCode.Z, //0x5A
-    KeyCode.Meta, //0x5B
-    KeyCode.Meta, //0x5C
+    KeyCode.Super, //0x5B
+    KeyCode.Super, //0x5C
     KeyCode.Unknown, //0x5D VK_APPS
     KeyCode.Unknown, //0x5E
     KeyCode.Unknown, //0x5F VK_SLEEP

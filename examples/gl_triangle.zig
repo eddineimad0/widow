@@ -52,9 +52,10 @@ pub fn main() !void {
     // customize the window.
     var mywindow = builder.withTitle("Simple Window")
         .withSize(640, 480)
-        .withDPIAware(false)
+        .withDPIAware(true)
         .withPosition(200, 200)
         .withDecoration(true)
+        .withResize(true)
         .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -66,22 +67,26 @@ pub fn main() !void {
 
     _ = mywindow.setEventQueue(&ev_queue);
 
-    var gl_ctx = try mywindow.initGLContext();
-    defer gl_ctx.deinit();
-    std.debug.print(
-        "Hardware: {s}, Driver: {s}, Made by: {s}\n",
-        .{ gl_ctx.getHardwareName(), gl_ctx.getDriverVersion(), gl_ctx.getVendorName() },
-    );
-    _ = gl_ctx.makeCurrent();
-    const ok = gl_ctx.setSwapIntervals(.Synced);
-    std.debug.print("VSync={s}\n", .{if (ok) "ON" else "OFF"});
+    var gl_canvas = try mywindow.createCanvas();
+    defer gl_canvas.deinit();
+    var pbuff: [1024]u8 = undefined;
+    var p_wr = std.io.Writer.fixed(&pbuff);
+    const success = gl_canvas.getDriverInfo(&p_wr);
+    if (success) {
+        std.debug.print("{s}\n", .{p_wr.buffered()});
+    }
+    std.debug.print("Render API:{s}\n", .{gl_canvas.getDriverName()});
+    std.debug.print("Framebuffer pixel format :{t}\n", .{gl_canvas.fb_format_info.fmt});
+    _ = gl_canvas.makeCurrent();
+    const ok = gl_canvas.setSwapInterval(.Synced);
+    std.debug.print("VSync:{s}\n", .{if (ok) "ON" else "OFF"});
 
     if (!gl_procs.init(widow.opengl.loaderFunc)) return error.glInitFailed;
 
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
-    const client_size = mywindow.getClientPixelSize();
-    gl.Viewport(0, 0, client_size.width, client_size.height);
+    const client_size = mywindow.getClientSize();
+    gl.Viewport(0, 0, client_size.physical_width, client_size.physical_height);
 
     const vertx_shader = try loadVertexShader(VERTEX_SHADER_SRC);
     const frag_shader = try loadFragShader(FRAG_SHADER_SRC);
@@ -114,8 +119,18 @@ pub fn main() !void {
                         }
                     }
                 },
-                EventType.WindowResize => |*new_size| {
-                    gl.Viewport(0, 0, new_size.width, new_size.height);
+                EventType.WindowResize => |*ev| {
+                    std.debug.print(
+                        "Window logical size (w:{}xh:{})\t physical size (w:{}xh:{})\t scale factor {}\n",
+                        .{
+                            ev.new_size.logical_width,
+                            ev.new_size.logical_height,
+                            ev.new_size.physical_width,
+                            ev.new_size.physical_height,
+                            ev.new_size.scale,
+                        },
+                    );
+                    gl.Viewport(0, 0, ev.new_size.physical_width, ev.new_size.physical_height);
                 },
                 else => continue,
             }
@@ -124,7 +139,7 @@ pub fn main() !void {
         gl.ClearColor(0.2, 0.3, 0.3, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
         try drawTriangle();
-        _ = gl_ctx.swapBuffers();
+        _ = gl_canvas.swapBuffers();
     }
 }
 

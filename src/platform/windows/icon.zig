@@ -1,8 +1,10 @@
 const std = @import("std");
 const common = @import("common");
 const win32_gfx = @import("win32api/graphics.zig");
+
 const win32 = std.os.windows;
 const mem = std.mem;
+const dbg = std.debug;
 
 pub const IconError = error{
     NotFound, // requested icon resource was not found.
@@ -169,7 +171,7 @@ pub fn createCursor(
 /// Returns a handle to a shared(standard) platform cursor.
 pub fn createNativeCursor(
     shape: common.cursor.NativeCursorShape,
-) IconError!CursorHints {
+) CursorHints {
     const CursorShape = common.cursor.NativeCursorShape;
 
     const cursor_id = switch (shape) {
@@ -193,9 +195,7 @@ pub fn createNativeCursor(
         win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 },
     );
 
-    if (handle == null) {
-        return IconError.NotFound;
-    }
+    dbg.assert(handle != null);
 
     return CursorHints{
         .icon = @ptrCast(handle),
