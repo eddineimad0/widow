@@ -27,7 +27,7 @@ pub fn main() !void {
     // and build a context for the current platform.
     // the context also keep a copy of the allocator you pass it
     // to use it for all allocations done by the library.
-    const ctx = try widow.createWidowContext(allocator,null);
+    const ctx = try widow.createWidowContext(allocator);
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to

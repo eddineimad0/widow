@@ -38,6 +38,14 @@ pub const WindowHandle = platform.WindowHandle;
 pub const DisplayHandle = platform.DisplayHandle;
 pub const WidowContext = platform.WidowContext;
 
+pub const gfx = struct {
+    pub const Canvas = common.fb.Canvas;
+    pub const RenderApi = common.fb.RenderApi;
+    pub const FramebufferConfig = common.fb.FBConfig;
+    pub const PixelFormat = common.pixel.PixelFormat;
+    pub const PixelFormatInfo = common.pixel.PixelFormatInfo;
+};
+
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
