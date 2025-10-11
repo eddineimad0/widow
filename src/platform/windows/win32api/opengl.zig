@@ -122,7 +122,7 @@ pub extern "gdi32" fn ChoosePixelFormat(
 
 pub extern "gdi32" fn DescribePixelFormat(
     hdc: ?win32.HDC,
-    iPixelFormat: PFD_PIXEL_TYPE,
+    iPixelFormat: c_int,
     nBytes: u32,
     ppfd: ?*PIXELFORMATDESCRIPTOR,
 ) callconv(.winapi) i32;

@@ -1,7 +1,7 @@
 .{
     .name = .widow,
     .version = "0.2.0",
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
     .fingerprint = 0xa8248340b9a2cccf,
     .dependencies = .{
         .zigglgen = .{

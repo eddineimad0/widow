@@ -82,14 +82,7 @@ pub fn main() !void {
                                 };
                             },
                             ScanCode.U => {
-                                mywindow.setNativeCursorIcon(
-                                    widow.cursor.NativeCursorShape.Help,
-                                ) catch {
-                                    std.debug.print(
-                                        "Failed to set standard cursor\n",
-                                        .{},
-                                    );
-                                };
+                                mywindow.setNativeCursorIcon(widow.cursor.NativeCursorShape.Help);
                             },
                             ScanCode.X => {
                                 if (key.mods.shift) {

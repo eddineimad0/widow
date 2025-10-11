@@ -83,19 +83,10 @@ fn createWidowModule(
     display_target: DisplayProtocol,
     opts: *std.Build.Step.Options,
 ) *std.Build.Module {
-    const gl_mod = b.createModule(.{
-        .root_source_file = b.path("src/opengl/gl.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const common_mod = b.createModule(.{
         .root_source_file = b.path("src/common/common.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{
-            .{ .name = "opengl", .module = gl_mod },
-        },
     });
 
     const platform_mod: *std.Build.Module = switch (display_target) {
@@ -106,7 +97,6 @@ fn createWidowModule(
                     .target = target,
                     .optimize = optimize,
                     .imports = &.{
-                        .{ .name = "opengl", .module = gl_mod },
                         .{ .name = "common", .module = common_mod },
                     },
                 },
@@ -118,7 +108,6 @@ fn createWidowModule(
                 .target = target,
                 .optimize = optimize,
                 .imports = &.{
-                    .{ .name = "opengl", .module = gl_mod },
                     .{ .name = "common", .module = common_mod },
                 },
             },
@@ -137,7 +126,6 @@ fn createWidowModule(
         .imports = &.{
             .{ .name = "common", .module = common_mod },
             .{ .name = "platform", .module = platform_mod },
-            .{ .name = "opengl", .module = gl_mod },
         },
     });
 
@@ -196,6 +184,7 @@ fn makeExamplesStep(b: *std.Build, target: std.Build.ResolvedTarget, optimize: s
         "cursor_and_icon",
         "events_loop",
         "gl_triangle",
+        "sw_render",
     };
 
     for (examples) |example_name| {

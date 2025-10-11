@@ -4,13 +4,16 @@ const platform = @import("platform");
 const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
+const WindowDpiInfo = common.window_data.WindowDpiInfo;
+const WindowSize = common.window_data.WindowSize;
 const EventQueue = common.event.EventQueue;
 const WidowContext = platform.WidowContext;
 
 pub const WindowBuilder = struct {
+    title: []const u8,
+    ev_queue: ?*EventQueue,
     attribs: common.window_data.WindowData,
     fbcfg: common.fb.FBConfig,
-    title: []const u8,
     const Self = @This();
 
     /// Creates a window builder instance.
@@ -25,6 +28,7 @@ pub const WindowBuilder = struct {
     pub fn init() Self {
         return Self{
             .title = "",
+            .ev_queue = null,
             // Defalut attributes
             .attribs = common.window_data.WindowData{
                 .id = 0,
@@ -47,23 +51,22 @@ pub const WindowBuilder = struct {
                     .is_focused = false,
                     .is_fullscreen = false,
                     .cursor_in_client = false,
-                    .is_dpi_aware = false,
+                    .is_dpi_aware = true,
                     .has_raw_mouse = false,
                 },
-                .input = common.keyboard_mouse.InputState.init(),
             },
             .fbcfg = .{
                 .depth_bits = 24,
                 .stencil_bits = 8,
 
-                .color_bits = .{
+                .color = .{
                     .red_bits = 8,
                     .green_bits = 8,
                     .blue_bits = 8,
                     .alpha_bits = 8,
                 },
 
-                .accum_bits = .{
+                .accum = .{
                     .red_bits = 0,
                     .green_bits = 0,
                     .blue_bits = 0,
@@ -101,13 +104,14 @@ pub const WindowBuilder = struct {
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn build(self: *Self, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
-        const w = Window.init(
+        var w = try Window.init(
             ctx,
             id,
             self.title,
             &self.attribs,
             &self.fbcfg,
         );
+        if (self.ev_queue) |q| _ = w.setEventQueue(q);
         return w;
     }
 
@@ -211,7 +215,7 @@ pub const WindowBuilder = struct {
     }
 
     /// Specify whether the window size should be scaled by the Display's Dpi.
-    /// scaling is not applied by default.
+    /// scaling is applied by default.
     /// # Parameters
     /// `value`: the boolean value of the flag.
     pub fn withDPIAware(self: *Self, value: bool) *Self {
@@ -234,6 +238,14 @@ pub const WindowBuilder = struct {
         self.fbcfg = cfg.*;
         return self;
     }
+
+    /// Specify the event queue where window event will be posted
+    /// # Parameters
+    /// `ev_queue`: a pointer to an event queue struct
+    pub fn withEventQueue(self: *Self, ev_queue: *EventQueue) *Self {
+        self.ev_queue = ev_queue;
+        return self;
+    }
 };
 
 pub const Window = struct {
@@ -251,7 +263,7 @@ pub const Window = struct {
     /// `OutOfMemory`: failure due to memory allocation.
     /// `WindowError.FailedToCreate` : couldn't create the window due
     /// to a platform error.
-    fn init(
+    inline fn init(
         ctx: *WidowContext,
         id: ?usize,
         window_title: []const u8,
@@ -362,22 +374,22 @@ pub const Window = struct {
         self.impl.setClientPosition(x, y);
     }
 
-    /// Returns the size in logical pixels of the window's client area.
+    /// Returns the size measurments in logical and physical pixels
+    /// of the window's client area.
     /// # Notes
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
-    pub inline fn getClientSize(self: *const Self) common.geometry.RectSize {
-        return self.impl.getClientSize();
-    }
-
-    /// Returns the size in physical pixels of the window's client area.
-    /// # Notes
-    /// The client area is the content of the window, excluding the title
-    /// bar and borders. If the window allows dpi scaling the returned
-    /// size might be diffrent from the logical size.
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return self.impl.getClientPixelSize();
+    pub inline fn getClientSize(self: *const Self) WindowSize {
+        var sz = WindowSize{
+            .logical_width = 0,
+            .logical_height = 0,
+            .scale = 0,
+            .physical_width = 0,
+            .physical_height = 0,
+        };
+        self.impl.getClientSize(&sz);
+        return sz;
     }
 
     /// Changes the client size of the window.
@@ -647,10 +659,21 @@ pub const Window = struct {
         return self.impl.data.flags.is_fullscreen;
     }
 
+    /// Returns true if the cursor is hovering on the window,
+    /// i.e the cursor is inside the window area.
+    /// # Notes
+    /// If you want to automatically be notified
+    /// of cursor entering and exiting the window area.
+    /// you can track the `EventType.MouseEnter`
+    /// and `EventType.MouseExit` events.
+    pub inline fn isHovered(self: *const Self) bool {
+        return self.impl.data.flags.cursor_in_client;
+    }
+
     /// Returns the scale factor that maps logical pixels to real(physical) pixels.
     /// This value depends on which monitor the system considers the window
     /// to be on.
-    /// The content scale factor is the ratio between the window's current DPI
+    /// The content scale factor is the ratio between the window's monitor DPI
     /// and the platform's default DPI
     /// e.g: On my windows laptop with a 120 DPI monitor this function returns
     /// 1.25(120/96)
@@ -662,10 +685,16 @@ pub const Window = struct {
     /// it should drawn with 128 physical pixels for it to appear good.
     /// `EventType.DPIChange` can be tracked to monitor changes in the dpi,
     /// and the scale factor.
-    pub fn getContentScale(self: *const Self) f64 {
-        var scale: f64 = undefined;
-        _ = self.impl.getScalingDPI(&scale);
-        return scale;
+    pub fn getDpiInfo(self: *const Self) WindowDpiInfo {
+        var scale: f64 = 0;
+        var dpi_x: f64 = 0;
+        var dpi_y: f64 = 0;
+        self.impl.getDpi(&dpi_x, &dpi_y, &scale);
+        return WindowDpiInfo{
+            .dpi_x = dpi_x,
+            .dpi_y = dpi_y,
+            .scale_factor = scale,
+        };
     }
 
     /// Returns the 2D virtual desktop coordinates of the mouse cursor,
@@ -676,17 +705,6 @@ pub const Window = struct {
     /// and the x axis pointing to the right
     pub inline fn getCursorPosition(self: *const Self) common.geometry.Point2D {
         return self.impl.getCursorPosition();
-    }
-
-    /// Returns true if the cursor is hovering on the window,
-    /// i.e the cursor is inside the window area.
-    /// # Notes
-    /// If you want to automatically be notified
-    /// of cursor entering and exiting the window area.
-    /// you can track the `EventType.MouseEnter`
-    /// and `EventType.MouseExit` events.
-    pub inline fn isHovered(self: *const Self) bool {
-        return self.impl.data.flags.cursor_in_client;
     }
 
     /// Changes the position of the cursor relative
@@ -833,8 +851,8 @@ pub const Window = struct {
     pub inline fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) !void {
-        try self.impl.setNativeCursorIcon(cursor_shape);
+    ) void {
+        self.impl.setNativeCursorIcon(cursor_shape);
     }
 
     /// Returns the descriptor or handle used by the platform to
@@ -845,12 +863,11 @@ pub const Window = struct {
         return self.impl.handle;
     }
 
-    /// Initializes an opengl rendering context for the window and returns
-    /// it. the context creation can be customized through the `cfg` struct
-    pub inline fn initGLContext(
-        self: *Self,
-    ) !platform.GLContext {
-        return self.impl.getGLContext();
+    /// Initializes a canvas for rendering graphics to the window
+    /// the canvas framebuffer configuration and what api it uses (software,opengl)
+    /// is decided by the framebuffer configuration used to create the window.
+    pub inline fn createCanvas(self: *Self) !common.fb.Canvas {
+        return self.impl.createCanvas();
     }
 
     /// Activate or deactivate raw mouse input for the window,
@@ -864,7 +881,7 @@ pub const Window = struct {
 
     // Prints some debug information to stdout.
     // if compiled in non Debug mode it does nothing.
-    pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
+    pub fn printDebugInfo(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG_BUILD) {
             self.impl.debugInfos(size, flags);
         }

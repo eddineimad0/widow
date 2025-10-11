@@ -7,10 +7,12 @@ const macros = @import("macros.zig");
 // Constants
 //========================
 pub const DISPLAY_DEVICE_ACTIVE = @as(u32, 1);
+pub const DISPLAY_DEVICE_PRIMARY_DEVICE = @as(u32, 4);
 pub const DM_BITSPERPEL = @as(i32, 262144);
 pub const DM_PELSWIDTH = @as(i32, 524288);
 pub const DM_PELSHEIGHT = @as(i32, 1048576);
 pub const DM_DISPLAYFREQUENCY = @as(i32, 4194304);
+pub const BI_RGB = @as(i32, 0);
 pub const BI_BITFIELDS = @as(i32, 3);
 pub const WM_NULL = @as(u32, 0);
 pub const WM_CREATE = @as(u32, 1);
@@ -403,6 +405,24 @@ pub const OCR_SIZENS = @as(u16, 32645);
 pub const OCR_SIZEALL = @as(u16, 32646);
 pub const OCR_NO = @as(u16, 32648);
 
+// Raster op
+pub const SRCCOPY = @as(win32.DWORD, 0x00CC0020);
+pub const SRCPAINT = @as(win32.DWORD, 0x00EE0086);
+pub const SRCAND = @as(win32.DWORD, 0x008800C6);
+pub const SRCINVERT = @as(win32.DWORD, 0x00660046);
+pub const SRCERASE = @as(win32.DWORD, 0x00440328);
+pub const NOTSRCCOPY = @as(win32.DWORD, 0x00330008);
+pub const NOTSRCERASE = @as(win32.DWORD, 0x001100A6);
+pub const MERGECOPY = @as(win32.DWORD, 0x00C000CA);
+pub const MERGEPAINT = @as(win32.DWORD, 0x00BB0226);
+pub const PATCOPY = @as(win32.DWORD, 0x00F00021);
+pub const PATPAINT = @as(win32.DWORD, 0x00FB0A09);
+pub const PATINVERT = @as(win32.DWORD, 0x005A0049);
+pub const DSTINVERT = @as(win32.DWORD, 0x00550009);
+pub const BLACKNESS = @as(win32.DWORD, 0x00000042);
+pub const WHITENESS = @as(win32.DWORD, 0x00FF0062);
+pub const NOMIRRORBITMAP = @as(win32.DWORD, 0x80000000);
+pub const CAPTUREBLT = @as(win32.DWORD, 0x40000000);
 //===================
 // Types
 //===================
@@ -1668,7 +1688,7 @@ pub extern "user32" fn RegisterClassExW(
 ) callconv(.winapi) u16;
 
 pub extern "user32" fn UnregisterClassW(
-    lpClassName: ?win32.LPCWSTR,
+    lpClassName: ?[*:0]align(1) const u16,
     hInstance: ?win32.HINSTANCE,
 ) callconv(.winapi) win32.BOOL;
 
@@ -1767,6 +1787,47 @@ pub extern "gdi32" fn CreateBitmap(
     nBitCount: u32,
     lpBits: ?*const anyopaque,
 ) callconv(.winapi) ?HBITMAP;
+
+pub extern "gdi32" fn CreateCompatibleBitmap(
+    hdc: win32.HDC,
+    cx: c_int,
+    cy: c_int,
+) callconv(.winapi) ?HBITMAP;
+
+pub extern "gdi32" fn CreateCompatibleDC(
+    hdc: ?win32.HDC,
+) callconv(.winapi) ?win32.HDC;
+
+pub extern "gdi32" fn DeleteDC(
+    hdc: win32.HDC,
+) callconv(.winapi) win32.BOOL;
+
+pub extern "gdi32" fn GetDIBits(
+    hdc: win32.HDC,
+    hbm: ?HBITMAP,
+    start: win32.UINT,
+    cLines: win32.UINT,
+    lpvBits: ?win32.LPVOID,
+    lpmi: *BITMAPINFO,
+    usage: DIB_USAGE,
+) callconv(.winapi) c_int;
+
+pub extern "gdi32" fn BitBlt(
+    hdc: win32.HDC,
+    x: c_int,
+    y: c_int,
+    cx: c_int,
+    cy: c_int,
+    hdcSrc: win32.HDC,
+    x1: c_int,
+    y1: c_int,
+    rop: win32.DWORD,
+) callconv(.winapi) win32.BOOL;
+
+pub extern "gdi32" fn SelectObject(
+    hdc: win32.HDC,
+    h: HGDIOBJ,
+) callconv(.winapi) HGDIOBJ;
 
 pub extern "user32" fn CreateIconIndirect(
     piconinfo: ?*ICONINFO,
