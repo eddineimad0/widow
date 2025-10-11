@@ -354,17 +354,3 @@ pub fn getPixelFormatInfo(
         .bits_per_pixel = bits_per_pixel,
     };
 }
-
-pub inline fn mapRGBA(fmt: *const PixelFormatInfo, r: u32, g: u32, b: u32, a: u32) u32 {
-    return ((r >> fmt.red.loss) << fmt.red.shift) |
-        ((g >> fmt.green.loss) << fmt.green.shift) |
-        ((b >> fmt.blue.loss) << fmt.blue.shift) |
-        ((a >> fmt.alpha.loss) << fmt.alpha.shift);
-}
-
-pub inline fn mapRGB(fmt: *const PixelFormatInfo, r: u32, g: u32, b: u32) u32 {
-    return ((r >> fmt.red.loss) << fmt.red.shift) |
-        ((g >> fmt.green.loss) << fmt.green.shift) |
-        ((b >> fmt.blue.loss) << fmt.blue.shift) |
-        fmt.alpha.mask;
-}
