@@ -1,6 +1,20 @@
 const geometry = @import("./geometry.zig");
 
-const InputState = @import("./keyboard_mouse.zig").InputState;
+pub const WindowSize = struct {
+    logical_width: i32,
+    logical_height: i32,
+    scale: f64,
+    physical_width: i32,
+    physical_height: i32,
+};
+
+pub const WindowDpiInfo = struct {
+    scale_factor: f64,
+    dpi_x: f64,
+    dpi_y: f64,
+};
+
+pub const WindowId = usize;
 
 pub const WindowFlags = packed struct {
     is_visible: bool, // Does the window appear on screen or is it hidden from the user.
@@ -17,11 +31,10 @@ pub const WindowFlags = packed struct {
 };
 
 pub const WindowData = struct {
-    id: usize,
+    id: WindowId,
     client_area: geometry.Rect, // The Size and position of the client(content) area.
     aspect_ratio: ?geometry.AspectRatio, // The (numerator,denominator) of the applied aspect ratio.
     min_size: ?geometry.RectSize, // The minimum limits of the window's size.
     max_size: ?geometry.RectSize, // The maximum limits of the window's size.
     flags: WindowFlags,
-    input: InputState, // Both the keyboard and mouse buttons states.
 };

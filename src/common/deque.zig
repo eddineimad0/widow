@@ -91,10 +91,9 @@ pub fn Deque(comptime T: type) type {
         ) (mem.Allocator.Error || error{CapacityZero})!bool {
             if (new_capacity == 0) return error.CapacityZero;
 
-            if(self.size > new_capacity){
+            if (self.size > new_capacity) {
                 return false;
             }
-
 
             const final_capacity = if (((new_capacity - 1) & new_capacity) == 0)
                 new_capacity
@@ -128,7 +127,7 @@ pub fn Deque(comptime T: type) type {
             return self.size == self.data.len;
         }
 
-        pub inline fn getCapacity(self:*const Self) usize {
+        pub inline fn getCapacity(self: *const Self) usize {
             return self.data.len;
         }
 
@@ -334,7 +333,6 @@ test "deque_resize" {
     try testing.expect(!d.isFull());
 }
 
-
 test "deque_shrinking" {
     const INITIAL_CAP = 32;
 
@@ -344,7 +342,7 @@ test "deque_shrinking" {
     try testing.expectEqual(d.data.len, INITIAL_CAP);
 
     const FILL_COUNT = 8;
-    for (0..FILL_COUNT)|i| {
+    for (0..FILL_COUNT) |i| {
         try d.pushBack(testing.allocator, &i);
     }
     try testing.expectEqual(d.size, FILL_COUNT);
@@ -357,48 +355,47 @@ test "deque_shrinking" {
     //  r+w
     try testing.expectEqual(d.size, FILL_COUNT);
     try testing.expectEqual(d.data.len, FILL_COUNT);
-    var data:usize = undefined;
-    for (0..FILL_COUNT)|i| {
+    var data: usize = undefined;
+    for (0..FILL_COUNT) |i| {
         try testing.expect(d.popFront(&data));
-        try testing.expectEqual(data,i);
+        try testing.expectEqual(data, i);
     }
     try testing.expectEqual(d.size, 0);
     try testing.expectEqual(d.data.len, FILL_COUNT);
 
     // refill
-    for (0..FILL_COUNT)|i| {
+    for (0..FILL_COUNT) |i| {
         try d.pushBack(testing.allocator, &i);
     }
     try testing.expectEqual(d.size, FILL_COUNT);
     try testing.expectEqual(d.data.len, FILL_COUNT);
 
     // keep only half
-    for (0..(FILL_COUNT - 2))|i| {
+    for (0..(FILL_COUNT - 2)) |i| {
         try testing.expect(d.popFront(&data));
-        try testing.expectEqual(data,i);
+        try testing.expectEqual(data, i);
     }
-    for (0..2)|i| {
+    for (0..2) |i| {
         try d.pushBack(testing.allocator, &i);
     }
-    try testing.expectEqual(d.size, FILL_COUNT/2);
+    try testing.expectEqual(d.size, FILL_COUNT / 2);
     try testing.expectEqual(d.data.len, FILL_COUNT);
     // [0,1,x,x,x,x,6,7]
     //     w        r
 
-    try testing.expect(!(try d.shrinkCapacity(testing.allocator, FILL_COUNT/4)));
-    try testing.expect(try d.shrinkCapacity(testing.allocator, FILL_COUNT/2));
+    try testing.expect(!(try d.shrinkCapacity(testing.allocator, FILL_COUNT / 4)));
+    try testing.expect(try d.shrinkCapacity(testing.allocator, FILL_COUNT / 2));
     // [6,7,0,1]
     // r+w
-    try testing.expectEqual(d.size, FILL_COUNT/2);
-    try testing.expectEqual(d.data.len, FILL_COUNT/2);
+    try testing.expectEqual(d.size, FILL_COUNT / 2);
+    try testing.expectEqual(d.data.len, FILL_COUNT / 2);
 
     try testing.expect(d.popFront(&data));
-    try testing.expectEqual(data,6);
+    try testing.expectEqual(data, 6);
     try testing.expect(d.popFront(&data));
-    try testing.expectEqual(data,7);
+    try testing.expectEqual(data, 7);
     try testing.expect(d.popFront(&data));
-    try testing.expectEqual(data,0);
+    try testing.expectEqual(data, 0);
     try testing.expect(d.popFront(&data));
-    try testing.expectEqual(data,1);
-
+    try testing.expectEqual(data, 1);
 }

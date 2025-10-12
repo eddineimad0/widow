@@ -39,35 +39,33 @@ const Win32Handles = struct {
 /// Holds pointer to functions that are not
 /// supported in all windows NT versions.
 const OptionalApi = struct {
-    // Types
-    // Functions
-    const SetProcessDPIAwareProc = *const fn () callconv(win32.WINAPI) win32.BOOL;
+    const SetProcessDPIAwareProc = *const fn () callconv(.winapi) win32.BOOL;
     const RtlVerifyVersionInfoProc = *const fn (
         VersionInfo: *krnl32.OSVERSIONINFOEXW,
         TypeMask: u32,
         ConditionMask: u64,
-    ) callconv(win32.WINAPI) win32.NTSTATUS;
+    ) callconv(.winapi) win32.NTSTATUS;
     const SetProcessDpiAwarenessProc = *const fn (
         win32_gfx.PROCESS_DPI_AWARENESS,
-    ) callconv(win32.WINAPI) win32.HRESULT;
+    ) callconv(.winapi) win32.HRESULT;
     pub const SetProcessDpiAwarenessContextProc = *const fn (
         win32_gfx.DPI_AWARENESS_CONTEXT,
-    ) callconv(win32.WINAPI) win32.HRESULT;
-    const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.BOOL;
-    const GetDpiForWindowProc = *const fn (win32.HWND) callconv(win32.WINAPI) win32.DWORD;
+    ) callconv(.winapi) win32.HRESULT;
+    const EnableNonClientDpiScalingProc = *const fn (win32.HWND) callconv(.winapi) win32.BOOL;
+    const GetDpiForWindowProc = *const fn (win32.HWND) callconv(.winapi) win32.DWORD;
     const GetDpiForMonitorProc = *const fn (
         win32_gfx.HMONITOR,
         win32_gfx.MONITOR_DPI_TYPE,
         *u32,
         *u32,
-    ) callconv(win32.WINAPI) win32.HRESULT;
+    ) callconv(.winapi) win32.HRESULT;
     const AdjustWindowRectExForDpiProc = *const fn (
         *win32.RECT,
         u32,
         i32,
         u32,
         u32,
-    ) callconv(win32.WINAPI) win32.BOOL;
+    ) callconv(.winapi) win32.BOOL;
 
     // RtlVerifyVersionInfo is guaranteed to be on all NT versions
     RtlVerifyVersionInfo: RtlVerifyVersionInfoProc,
@@ -164,15 +162,14 @@ pub const Win32Driver = struct {
 
             // Declare Process DPI Awareness.
             if (globl_instance.hints.is_win10b1703_or_above) {
-                _ = globl_instance.opt_func.SetProcessDpiAwarenessContext.?(
-                    win32_gfx.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-                );
+                if (globl_instance.opt_func.SetProcessDpiAwarenessContext) |f|
+                    _ = f(win32_gfx.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             } else if (globl_instance.hints.is_win8point1_or_above) {
-                _ = globl_instance.opt_func.SetProcessDpiAwareness.?(
-                    win32_gfx.PROCESS_PER_MONITOR_DPI_AWARE,
-                );
+                if (globl_instance.opt_func.SetProcessDpiAwareness) |f|
+                    _ = f(win32_gfx.PROCESS_PER_MONITOR_DPI_AWARE);
             } else if (globl_instance.hints.is_win_vista_or_above) {
-                _ = globl_instance.opt_func.SetProcessDPIAware.?();
+                if (globl_instance.opt_func.SetProcessDPIAware) |f|
+                    _ = f();
             }
 
             Self.g_init = true;
@@ -253,10 +250,9 @@ pub const Win32Driver = struct {
         return Self.WINDOW_CLASS_NAME;
     }
 
-    /// !!! Calling this function Unregister the main WNDCLASS effectively crashing any window
+    /// WARNING: Calling this function Unregister the main WNDCLASS effectively crashing any window
     /// that hasn't been destroyed yet.
-    /// INFO: This isn't called at all and for now we rely on the os to do the cleanup
-    fn deinitSingleton() void {
+    pub fn deinitSingleton() void {
         if (Self.g_init) {
             Self.g_init = false;
 
@@ -370,6 +366,10 @@ fn registerMainClass(
         opts.WIN32_WNDCLASS_NAME,
     );
 
+    // even if an icon name was provided
+    // loading the image might fail
+    // in this case leave hIcon set to null
+    // for default Application icon.
     if (opts.WIN32_ICON_RES_NAME) |icon_name| {
         window_class.hIcon = @ptrCast(win32_gfx.LoadImageW(
             hinstance,
@@ -380,9 +380,6 @@ fn registerMainClass(
             @bitCast(win32_gfx.IMAGE_FLAGS{ .SHARED = 1, .DEFAULTSIZE = 1 }),
         ));
     }
-
-    // even if an icon name was provided loading the image might fail
-    // in this case leave hIcon set to null for default Application icon.
 
     const class = win32_gfx.RegisterClassExW(&window_class);
     if (class == 0) {

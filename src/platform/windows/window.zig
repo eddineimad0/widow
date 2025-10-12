@@ -9,7 +9,10 @@ const wgl = @import("wgl.zig");
 const utils = @import("utils.zig");
 const icon = @import("icon.zig");
 const display = @import("display.zig");
+const build_options = @import("build-options");
+
 const mem = std.mem;
+const io = std.io;
 const debug = std.debug;
 const FBConfig = common.fb.FBConfig;
 const win32 = std.os.windows;
@@ -20,10 +23,9 @@ const WidowContext = @import("platform.zig").WidowContext;
 
 pub const WindowError = error{
     CreateFailed,
-    NoTitle,
-    OutOfMemory,
     BadIcon,
-    GLError,
+    OutOfMemory,
+    CanvasImpossible,
 };
 
 /// We'll use this type to pass data to the `CreateWindowExW` function.
@@ -51,31 +53,6 @@ pub const WM_ERROR_REPORT: u32 = win32_gfx.WM_USER + 1;
 
 // Define window property name
 pub const WINDOW_REF_PROP = std.unicode.utf8ToUtf16LeStringLiteral("WINDOW_REF");
-
-pub fn createHiddenWindow(
-    title: [:0]const u16,
-    driver: *const Win32Driver,
-) WindowError!win32.HWND {
-    const helper_window = win32_gfx.CreateWindowExW(
-        @bitCast(@as(u32, 0)),
-        win32_macros.MAKEINTATOM(driver.handles.helper_class),
-        title,
-        @bitCast(@as(u32, 0)),
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        win32_gfx.CW_USEDEFAULT,
-        null,
-        null,
-        driver.handles.hinstance,
-        null,
-    ) orelse {
-        return WindowError.CreateFailed;
-    };
-
-    _ = win32_gfx.ShowWindow(helper_window, win32_gfx.SW_HIDE);
-    return helper_window;
-}
 
 pub fn windowStyles(flags: *const WindowFlags) u32 {
     var styles: u32 = STYLE_BASIC;
@@ -311,16 +288,205 @@ fn createPlatformWindow(
     return window_handle;
 }
 
+pub const BlitContext = struct {
+    const INFO_SIZE = @divExact(@sizeOf(win32_gfx.BITMAPINFOHEADER) + (256 * @sizeOf(win32_gfx.RGBQUAD)), 4);
+    drawable: win32.HDC,
+    mem_dc: win32.HDC,
+    mem_bitmap: win32_gfx.HBITMAP,
+    backbuffer: []u32,
+    info_mem: [INFO_SIZE]u32,
+    width: u32,
+    height: u32,
+    pitch: u32,
+    px_fmt_info: common.pixel.PixelFormatInfo,
+
+    const Self = @This();
+
+    pub fn init(w: *const Window) WindowError!Self {
+        var s = Self{
+            .drawable = w.win32.dc,
+            .backbuffer = &.{},
+            .width = 0,
+            .height = 0,
+            .pitch = 0,
+            .info_mem = undefined,
+            .mem_dc = undefined,
+            .mem_bitmap = undefined,
+            .px_fmt_info = undefined,
+        };
+        var sz: common.window_data.WindowSize = undefined;
+        w.getClientSize(&sz);
+        const ok = s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
+        if (!ok) {
+            return WindowError.CanvasImpossible;
+        }
+        return s;
+    }
+
+    pub inline fn makeNewSoftwareBuffer(self: *Self, width: i32, height: i32) bool {
+        const hbm = win32_gfx.CreateCompatibleBitmap(
+            self.drawable,
+            1,
+            1,
+        );
+        @memset(&self.info_mem, 0);
+        const info: *win32_gfx.BITMAPINFO = @ptrCast(@alignCast(&self.info_mem[0]));
+        info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
+        _ = win32_gfx.GetDIBits(
+            self.drawable,
+            hbm,
+            0,
+            0,
+            null,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+        );
+        _ = win32_gfx.GetDIBits(
+            self.drawable,
+            hbm,
+            0,
+            0,
+            null,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+        );
+        _ = win32_gfx.DeleteObject(hbm);
+
+        var bits_per_pixel: u16 = 0;
+        var rmask: u32, var gmask: u32, var bmask: u32, var amask: u32 = .{
+            0,
+            0,
+            0,
+            0,
+        };
+
+        var px_fmt: common.pixel.PixelFormat = .Unknown;
+        if (info.bmiHeader.biCompression == win32_gfx.BI_BITFIELDS) {
+            bits_per_pixel = info.bmiHeader.biPlanes * info.bmiHeader.biBitCount;
+            if (bits_per_pixel != 32) {}
+            const mask: []u32 = self.info_mem[info.bmiHeader.biSize..];
+            rmask = mask[0];
+            gmask = mask[1];
+            bmask = mask[2];
+            amask = 0;
+            px_fmt = common.pixel.getPixelFormat(rmask, gmask, bmask, amask, bits_per_pixel);
+        }
+
+        if (px_fmt == .Unknown) {
+            // use XRGB with 8 bits for each channel, and let window handle conversion
+            @memset(&self.info_mem, 0);
+            info.bmiHeader.biSize = @sizeOf(win32_gfx.BITMAPINFOHEADER);
+            info.bmiHeader.biPlanes = 1;
+            info.bmiHeader.biBitCount = 32;
+            info.bmiHeader.biCompression = win32_gfx.BI_RGB;
+            bits_per_pixel = 32;
+            rmask = 0x00ff0000;
+            gmask = 0x0000ff00;
+            bmask = 0x000000ff;
+            amask = 0;
+        }
+
+        var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
+        common.pixel.getPixelFormatInfo(
+            rmask,
+            gmask,
+            bmask,
+            amask,
+            bits_per_pixel,
+            &px_fmt_info,
+        );
+
+        var pitch: u32 = @as(u32, @intCast(width)) * px_fmt_info.bytes_per_pixel;
+        pitch = (pitch + 3) & ~@as(u32, 3); // padding
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biSizeImage = @as(u32, @intCast(height)) * pitch;
+
+        var pixels: ?*anyopaque = null;
+        const mdc = win32_gfx.CreateCompatibleDC(self.drawable).?; // guarnteed to succeed.
+        const mbmp = win32_gfx.CreateDIBSection(
+            self.drawable,
+            info,
+            win32_gfx.DIB_RGB_COLORS,
+            &pixels,
+            null,
+            0,
+        );
+
+        if (mbmp == null) {
+            return false;
+        }
+        _ = win32_gfx.SelectObject(mdc, mbmp.?);
+
+        var buffer: []u32 = &.{};
+        buffer.ptr = @ptrCast(@alignCast(pixels.?));
+        buffer.len = info.bmiHeader.biSizeImage / 4;
+
+        self.mem_dc = mdc;
+        self.mem_bitmap = mbmp.?;
+        self.backbuffer = buffer;
+        self.width = @intCast(width);
+        self.height = @intCast(height);
+        self.pitch = pitch;
+        self.px_fmt_info = px_fmt_info;
+        return true;
+    }
+
+    pub inline fn blit(self: *const Self) void {
+        const success = win32_gfx.BitBlt(
+            self.drawable,
+            0,
+            0,
+            @intCast(self.width),
+            @intCast(self.height),
+            self.mem_dc,
+            0,
+            0,
+            win32_gfx.SRCCOPY,
+        );
+        debug.assert(success != 0);
+    }
+
+    pub inline fn deinit(self: *const Self) void {
+        var success = win32_gfx.DeleteDC(self.mem_dc);
+        debug.assert(success != 0);
+        success = win32_gfx.DeleteObject(self.mem_bitmap);
+        debug.assert(success != 0);
+    }
+};
+
 /// Win32 specific data.
 pub const WindowWin32Data = struct {
-    icon: icon.Icon,
+    dc: win32.HDC,
     dropped_files: std.ArrayListUnmanaged([]const u8),
+    input: struct {
+        sticky_keys: struct {
+            l_shift: common.keyboard_mouse.KeyState,
+            r_shift: common.keyboard_mouse.KeyState,
+            l_super: common.keyboard_mouse.KeyState,
+            r_super: common.keyboard_mouse.KeyState,
+        },
+        mouse_buttons: [common.keyboard_mouse.MouseButton.COUNT]common.keyboard_mouse.MouseButtonState,
+    },
+    icon: icon.Icon,
     cursor: icon.CursorHints,
     prev_frame: common.geometry.Rect, // Used when going fullscreen to save restore coords.
     high_surrogate: u16,
     frame_action: bool,
     position_update: bool,
     allow_drag_n_drop: bool,
+};
+
+pub const Win32CanvasTag = enum {
+    invalid,
+    blt_ctx,
+    gl_ctx,
+};
+
+pub const Win32Canvas = union(Win32CanvasTag) {
+    invalid: void,
+    blt_ctx: BlitContext,
+    gl_ctx: wgl.GLContext,
 };
 
 pub const Window = struct {
@@ -330,6 +496,7 @@ pub const Window = struct {
     data: WindowData,
     win32: WindowWin32Data,
     fb_cfg: FBConfig,
+    canvas: Win32Canvas,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
         .x = win32_gfx.CW_USEDEFAULT,
@@ -370,6 +537,8 @@ pub const Window = struct {
         self.data.id = if (id) |ident| ident else @intFromPtr(self.handle);
 
         self.win32 = WindowWin32Data{
+            .dc = win32_gfx.GetDC(self.handle) orelse
+                return WindowError.CreateFailed,
             .cursor = icon.CursorHints{
                 .icon = null, // uses the default system image
                 .mode = common.cursor.CursorMode.Normal,
@@ -390,7 +559,18 @@ pub const Window = struct {
                 .size = .{ .width = 0, .height = 0 },
                 .top_left = .{ .x = 0, .y = 0 },
             },
+            .input = .{
+                .sticky_keys = .{
+                    .l_shift = .Released,
+                    .r_shift = .Released,
+                    .l_super = .Released,
+                    .r_super = .Released,
+                },
+                .mouse_buttons = .{ .Released, .Released, .Released, .Released },
+            },
         };
+
+        self.canvas = .{ .invalid = {} };
 
         // Process inital events.
         // these events aren't reported.
@@ -415,8 +595,9 @@ pub const Window = struct {
                 .right = self.data.client_area.size.width,
                 .bottom = self.data.client_area.size.height,
             };
-            var dpi_scale: f64 = undefined;
-            const dpi = self.getScalingDPI(&dpi_scale);
+            var dpi_scale: f64 = 0;
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, &dpi_scale);
             // the requested client width and height are scaled by the display scale factor.
             const fwidth: f64 = @floatFromInt(client_rect.right);
             const fheight: f64 = @floatFromInt(client_rect.bottom);
@@ -428,7 +609,7 @@ pub const Window = struct {
                 &client_rect,
                 style,
                 ex_style,
-                dpi,
+                @intFromFloat(dpi_x),
             );
 
             var window_rect: win32.RECT = undefined;
@@ -495,18 +676,23 @@ pub const Window = struct {
 
         // Fullscreen
         if (self.data.flags.is_fullscreen) {
-            self.data.flags.is_fullscreen = false;
             // this functions can only switch to fullscreen mode
             // if the flag is already false.
-            if (!self.setFullscreen(true)) {
-                return WindowError.CreateFailed;
-            }
+            self.data.flags.is_fullscreen = false;
+            _ = self.setFullscreen(true);
         }
 
         return self;
     }
 
     pub fn deinit(self: *Self) void {
+        if (@as(Win32CanvasTag, self.canvas) != .invalid and common.IS_DEBUG_BUILD) {
+            // The window is being destroyed
+            // but a rendering canvas is still active
+            // panic to stop the program from being in an invalid state
+            @panic("the window canvas should be destroyed before calling deinit on the window");
+        }
+
         self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
@@ -536,21 +722,21 @@ pub const Window = struct {
         _ = win32_input.SetFocus(self.handle);
     }
 
-    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
+    pub fn getDpi(self: *const Self, dpi_x: ?*f64, dpi_y: ?*f64, scaler: ?*f64) void {
         var dpi: u32 = win32_gfx.USER_DEFAULT_SCREEN_DPI;
-        null_exit: {
+        err_exit: {
             if (self.ctx.driver.opt_func.GetDpiForWindow) |func| {
                 dpi = func(self.handle);
             } else {
-                const disp = self.ctx.display_mgr.findWindowDisplay(self) catch break :null_exit;
+                const disp = self.ctx.display_mgr.findWindowDisplay(self) catch
+                    break :err_exit;
                 dpi = disp.displayDPI(self.ctx.driver);
             }
         }
-        if (scaler) |s| {
-            const fdpi: f64 = @floatFromInt(dpi);
-            s.* = (fdpi / win32_gfx.USER_DEFAULT_SCREEN_DPI_F);
-        }
-        return dpi;
+        const fdpi: f64 = @floatFromInt(dpi);
+        if (scaler) |s| s.* = (fdpi / win32_gfx.USER_DEFAULT_SCREEN_DPI_F);
+        if (dpi_x) |x| x.* = fdpi;
+        if (dpi_y) |y| y.* = fdpi;
     }
 
     /// the window should belong to the thread calling this function.
@@ -673,10 +859,11 @@ pub const Window = struct {
         rect.right = new_area.size.width + rect.left;
         rect.bottom = new_area.size.height + rect.top;
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware)
-            self.getScalingDPI(null)
-        else
-            null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) blk: {
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, null);
+            break :blk @intFromFloat(dpi_x);
+        } else null;
 
         adjustWindowRect(
             self.ctx.driver,
@@ -774,7 +961,11 @@ pub const Window = struct {
             .bottom = self.data.client_area.size.height,
         };
 
-        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) self.getScalingDPI(null) else null;
+        const dpi: ?u32 = if (self.data.flags.is_dpi_aware) blk: {
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, null);
+            break :blk @intFromFloat(dpi_x);
+        } else null;
 
         adjustWindowRect(
             self.ctx.driver,
@@ -803,26 +994,23 @@ pub const Window = struct {
         );
     }
 
-    /// Returns the Pixel size of the window's client area
-    pub inline fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return common.geometry.RectSize{
-            .width = self.data.client_area.size.width,
-            .height = self.data.client_area.size.height,
-        };
-    }
-
     /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
         };
+        out.physical_width = (client_size.width);
+        out.physical_height = (client_size.height);
+        out.scale = 1.0;
         if (self.data.flags.is_dpi_aware and !self.data.flags.is_fullscreen) {
-            const dpi: f64 = @floatFromInt(self.getScalingDPI(null));
-            const r_scaler = (win32_gfx.USER_DEFAULT_SCREEN_DPI_F / dpi);
+            var dpi_x: f64 = 0;
+            self.getDpi(&dpi_x, null, &out.scale);
+            const r_scaler = (win32_gfx.USER_DEFAULT_SCREEN_DPI_F / dpi_x);
             client_size.scaleBy(r_scaler);
         }
-        return client_size;
+        out.logical_width = (client_size.width);
+        out.logical_height = (client_size.height);
     }
 
     /// Sets the new (width,height) of the window's client area
@@ -830,8 +1018,10 @@ pub const Window = struct {
         if (!self.data.flags.is_fullscreen) {
             var dpi: ?u32 = null;
             if (self.data.flags.is_dpi_aware) {
-                var scaler: f64 = undefined;
-                dpi = self.getScalingDPI(&scaler);
+                var scaler: f64 = 0;
+                var dpi_x: f64 = 0;
+                self.getDpi(&dpi_x, null, &scaler);
+                dpi = @intFromFloat(dpi_x);
                 size.scaleBy(scaler);
             }
 
@@ -893,17 +1083,19 @@ pub const Window = struct {
             if (self.data.max_size) |*max_size| {
                 // the min size shouldn't be superior to the max size.
                 if (max_size.width < size.width or max_size.height < size.height) {
-                    std.log.err(
-                        "[Window] Specified minimum size(w:{},h:{}) is less than the maximum size(w:{},h:{})\n",
-                        .{ size.width, size.height, max_size.width, max_size.height },
-                    );
+                    if (build_options.LOG_PLATFORM_EVENTS) {
+                        std.log.err(
+                            "[Window] Specified minimum size(w:{},h:{}) is more than the maximum size(w:{},h:{})\n",
+                            .{ min_size.width, min_size.height, size.width, size.height },
+                        );
+                    }
                     return;
                 }
             }
 
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.getScalingDPI(&scaler);
+                self.getDpi(null, null, &scaler);
                 size.scaleBy(scaler);
             }
 
@@ -952,16 +1144,18 @@ pub const Window = struct {
             if (self.data.min_size) |*min_size| {
                 // the max size should be superior or equal to the min size.
                 if (size.width < min_size.width or size.height < min_size.height) {
-                    std.log.err(
-                        "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
-                        .{ size.width, size.height, min_size.width, min_size.height },
-                    );
+                    if (build_options.LOG_PLATFORM_EVENTS) {
+                        std.log.err(
+                            "[Window] Specified maximum size(w:{},h:{}) is less than the minimum size(w:{},h:{})\n",
+                            .{ size.width, size.height, min_size.width, min_size.height },
+                        );
+                    }
                     return;
                 }
             }
             if (self.data.flags.is_dpi_aware) {
                 var scaler: f64 = undefined;
-                _ = self.getScalingDPI(&scaler);
+                self.getDpi(null, null, &scaler);
                 size.scaleBy(scaler);
             }
             self.data.max_size = size;
@@ -1042,7 +1236,7 @@ pub const Window = struct {
     pub inline fn getTitle(
         self: *const Self,
         allocator: mem.Allocator,
-    ) (WindowError || mem.Allocator.Error)![]u8 {
+    ) mem.Allocator.Error![]u8 {
         // This length doesn't take into account the null character
         // so add it when allocating.
         const wide_title_len = win32_gfx.GetWindowTextLengthW(self.handle);
@@ -1066,7 +1260,8 @@ pub const Window = struct {
             };
             return slice;
         }
-        return WindowError.NoTitle;
+        // it is fine to call free on this
+        return &.{};
     }
 
     /// Returns the window's current opacity
@@ -1099,7 +1294,7 @@ pub const Window = struct {
     /// # Note
     /// The value is between 1.0 and 0.0
     /// with 1 being opaque and 0 being full transparent.
-    pub fn setOpacity(self: *Self, value: f32) bool {
+    pub fn setOpacity(self: *const Self, value: f32) bool {
         var ex_styles: usize = @bitCast(win32_gfx.GetWindowLongPtrW(
             self.handle,
             win32_gfx.GWL_EXSTYLE,
@@ -1160,12 +1355,14 @@ pub const Window = struct {
             .bottom = 0,
         };
 
+        var dpi_x: f64 = 0;
+        self.getDpi(&dpi_x, null, null);
         adjustWindowRect(
             self.ctx.driver,
             &rect,
             windowStyles(&self.data.flags),
             windowExStyles(&self.data.flags),
-            self.getScalingDPI(null),
+            @intFromFloat(dpi_x),
         );
 
         switch (edge) {
@@ -1209,10 +1406,11 @@ pub const Window = struct {
                 // For non resizalble window we change
                 // monitor resoultion
                 if (!self.data.flags.is_resizable) {
-                    const size = self.getClientSize();
+                    var size: common.window_data.WindowSize = undefined;
+                    self.getClientSize(&size);
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
-                        .width = size.width,
-                        .height = size.height,
+                        .width = @intCast(size.logical_width),
+                        .height = @intCast(size.logical_height),
                         // INFO: These 2 are hardcoded for now
                         .frequency = 60,
                         .color_depth = 32,
@@ -1267,14 +1465,11 @@ pub const Window = struct {
     }
 
     /// Returns a cached slice that contains the path(s) to the last dropped file(s).
-    pub fn getDroppedFiles(self: *const Self) [][]const u8 {
+    pub inline fn getDroppedFiles(self: *const Self) [][]const u8 {
         return self.win32.dropped_files.items;
     }
 
-    pub inline fn setDragAndDrop(
-        self: *Self,
-        accepted: bool,
-    ) void {
+    pub fn setDragAndDrop(self: *Self, accepted: bool) void {
         if (accepted == self.win32.allow_drag_n_drop) {
             return;
         }
@@ -1289,7 +1484,7 @@ pub const Window = struct {
     }
 
     /// Frees the allocated memory used to hold the file(s) path(s).
-    pub inline fn freeDroppedFiles(self: *Self) void {
+    pub fn freeDroppedFiles(self: *Self) void {
         // Avoid double free, important since the client can call this directly.
         if (self.win32.dropped_files.capacity == 0) {
             return;
@@ -1307,12 +1502,8 @@ pub const Window = struct {
         height: i32,
         _: anytype, // unused
     ) WindowError!void {
-        const new_icon = icon.createIcon(pixels, width, height) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+        const new_icon = icon.createIcon(pixels, width, height) catch
+            return WindowError.BadIcon;
 
         const bg_handle, const sm_handle = if (new_icon.sm_handle != null and
             new_icon.bg_handle != null)
@@ -1361,12 +1552,9 @@ pub const Window = struct {
             height,
             xhot,
             yhot,
-        ) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+        ) catch
+            return WindowError.BadIcon;
+
         icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1377,13 +1565,8 @@ pub const Window = struct {
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) WindowError!void {
-        const new_cursor = icon.createNativeCursor(cursor_shape) catch |err| {
-            return switch (err) {
-                icon.IconError.BadIcon => WindowError.BadIcon,
-                else => WindowError.OutOfMemory,
-            };
-        };
+    ) void {
+        const new_cursor = icon.createNativeCursor(cursor_shape);
         icon.destroyCursorIcon(&self.win32.cursor);
         self.win32.cursor = new_cursor;
         if (self.data.flags.cursor_in_client) {
@@ -1404,12 +1587,52 @@ pub const Window = struct {
         }
     }
 
-    pub fn getGLContext(self: *const Self) WindowError!wgl.GLContext {
+    pub fn createCanvas(self: *Self) WindowError!common.fb.Canvas {
         switch (self.fb_cfg.accel) {
-            .opengl => return wgl.GLContext.init(self.handle, self.ctx.driver, &self.fb_cfg) catch {
-                return WindowError.GLError;
+            .software => {
+                if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{ .blt_ctx = try BlitContext.init(self) };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = swSwapBuffers,
+                        .setSwapInterval = swSetSwapInterval,
+                        .getSoftwareBuffer = swGetSoftwareBuffer,
+                        .updateSoftwareBuffer = swUpdateSoftwareBuffer,
+                        .getDriverInfo = swGetDriverInfo,
+                        .deinit = swDestroyCanvas,
+                    },
+                    .fb_format_info = self.canvas.blt_ctx.px_fmt_info,
+                    .render_backend = .software,
+                };
+                return c;
             },
-            else => return WindowError.GLError,
+            .opengl => {
+                if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{
+                        .gl_ctx = wgl.GLContext.init(
+                            self.win32.dc,
+                            self.ctx.driver,
+                            &self.fb_cfg,
+                        ) catch
+                            return WindowError.CanvasImpossible,
+                    };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = wgl.glSwapBuffers,
+                        .makeCurrent = wgl.glMakeCurrent,
+                        .setSwapInterval = wgl.glSetSwapInterval,
+                        .getDriverInfo = wgl.glGetDriverInfo,
+                        .deinit = wgl.glDestroyCanvas,
+                    },
+                    .fb_format_info = self.canvas.gl_ctx.px_fmt_info,
+                    .render_backend = .opengl,
+                };
+                return c;
+            },
         }
     }
 
@@ -1418,15 +1641,15 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const ls = self.getClientSize();
-                const ps = self.getClientPixelSize();
+                var cl_size: common.window_data.WindowSize = undefined;
+                self.getClientSize(&cl_size);
                 std.debug.print(
-                    "size with dpi scaling (w:{},h:{}) | size without dpi scaling (w:{},h:{})\n",
+                    "client size with dpi scaling (w:{},h:{}) | client size without dpi scaling (w:{},h:{})\n",
                     .{
-                        ps.width,
-                        ps.height,
-                        ls.width,
-                        ls.height,
+                        cl_size.physical_width,
+                        cl_size.physical_height,
+                        cl_size.logical_width,
+                        cl_size.logical_height,
                     },
                 );
                 const ws = windowSize(self.handle);
@@ -1474,4 +1697,53 @@ pub inline fn disableRawMouseMotion() bool {
     };
     const ret = win32_input.RegisterRawInputDevices(@ptrCast(&rid), 1, @sizeOf(@TypeOf(rid)));
     return ret == win32.TRUE;
+}
+
+//===========================
+// Software rendering hooks
+//============================
+
+fn swSwapBuffers(ctx: *anyopaque) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.blit();
+    return true;
+}
+pub fn swSetSwapInterval(_: *anyopaque, _: common.fb.SwapInterval) bool {
+    return true;
+}
+
+fn swGetSoftwareBuffer(
+    ctx: *anyopaque,
+    pixels: *[]u32,
+    w: *u32,
+    h: *u32,
+    pitch: *u32,
+) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    w.* = c.blt_ctx.width;
+    h.* = c.blt_ctx.height;
+    pitch.* = c.blt_ctx.pitch;
+    pixels.* = c.blt_ctx.backbuffer;
+}
+
+fn swUpdateSoftwareBuffer(
+    ctx: *anyopaque,
+    w: i32,
+    h: i32,
+) bool {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    return c.blt_ctx.makeNewSoftwareBuffer(w, h);
+}
+
+fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {
+    _ = wr.writeAll("Software renderer using BitBlt win32 api") catch
+        return false;
+
+    return true;
+}
+
+fn swDestroyCanvas(ctx: *anyopaque) void {
+    const c: *Win32Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.deinit();
+    c.* = .{ .invalid = {} };
 }

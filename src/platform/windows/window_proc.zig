@@ -18,7 +18,7 @@ pub fn helperWindowProc(
     msg: win32.DWORD,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(win32.WINAPI) isize {
+) callconv(.winapi) isize {
     switch (msg) {
         win32_gfx.WM_DISPLAYCHANGE => {
             // Monitor the window_msg.WM_DISPLAYCHANGE notification
@@ -38,14 +38,10 @@ pub fn helperWindowProc(
                 const widow_ctx: *WidowContext = @ptrCast(@alignCast(ref));
                 const display_mgr: *display.DisplayManager = &widow_ctx.display_mgr;
                 if (!display_mgr.expected_video_change) {
-                    display_mgr.rePollDisplays(widow_ctx.allocator) catch |err| {
+                    display_mgr.rePollDisplays(widow_ctx.allocator) catch {
                         // updateDisplays should only fail if we ran out of memory
                         // which is very unlikely on windows 64 bit systems
                         // but if it does happen the library should panic.
-                        std.log.err(
-                            "[Display Manager]: Failed to refresh Displays, error={}\n",
-                            .{err},
-                        );
                         @panic("[Widow]: Ran out of memory, can't update display data");
                     };
                 }
@@ -63,7 +59,7 @@ pub fn mainWindowProc(
     msg: win32.DWORD,
     wparam: win32.WPARAM,
     lparam: win32.LPARAM,
-) callconv(win32.WINAPI) isize {
+) callconv(.winapi) isize {
     const window_ref_prop = win32_gfx.GetPropW(hwnd, wndw.WINDOW_REF_PROP);
     if (window_ref_prop == null) {
         if (msg == win32_gfx.WM_NCCREATE) {
@@ -73,9 +69,7 @@ pub fn mainWindowProc(
             // that Windows correctly scale the window's non-client area.
             const ulparam: usize = @bitCast(lparam);
             const struct_ptr: *win32_gfx.CREATESTRUCTW = @ptrFromInt(ulparam);
-            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(
-                @alignCast(struct_ptr.*.lpCreateParams),
-            );
+            const create_lparam: ?*const wndw.CreationLparamTuple = @ptrCast(@alignCast(struct_ptr.*.lpCreateParams));
             if (create_lparam) |param| {
                 const drvr = param.*[1];
                 const data = param.*[0];
@@ -364,8 +358,9 @@ pub fn mainWindowProc(
                 std.log.info("window: {} recieved a DPICHANGED event\n", .{window.data.id});
             }
             const suggested_rect: *win32.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            const new_dpi = win32_macros.loWord(wparam);
-            const scale = @as(f64, @floatFromInt(new_dpi)) / win32_gfx.USER_DEFAULT_SCREEN_DPI_F;
+            const new_dpi_x = win32_macros.loWord(wparam);
+            const new_dpi_y = win32_macros.hiWord(wparam);
+            const scale = @as(f64, @floatFromInt(new_dpi_x)) / win32_gfx.USER_DEFAULT_SCREEN_DPI_F;
             const flags = win32_gfx.SET_WINDOW_POS_FLAGS{
                 .NOACTIVATE = 1,
                 .NOZORDER = 1,
@@ -385,7 +380,12 @@ pub fn mainWindowProc(
                 suggested_rect.bottom - suggested_rect.top,
                 flags,
             );
-            const event = common.event.createDPIEvent(window.data.id, new_dpi, scale);
+            const event = common.event.createDpiEvent(
+                window.data.id,
+                @floatFromInt(new_dpi_x),
+                @floatFromInt(new_dpi_y),
+                scale,
+            );
             window.sendEvent(&event);
             return 0;
         },
@@ -482,10 +482,17 @@ pub fn mainWindowProc(
 
             // For windows that allows resizing by dragging it's edges,
             // this message is received multiple times during the resize process
+            var sz = common.window_data.WindowSize{
+                .logical_width = 0,
+                .logical_height = 0,
+                .scale = 0,
+                .physical_width = 0,
+                .physical_height = 0,
+            };
+            window.getClientSize(&sz);
             const event = common.event.createResizeEvent(
                 window.data.id,
-                new_width,
-                new_height,
+                &sz,
             );
             window.sendEvent(&event);
 
@@ -691,6 +698,9 @@ pub fn mainWindowProc(
         win32_gfx.WM_INPUT => {
             if (window.data.flags.has_raw_mouse != true or window.win32.cursor.mode != .Hidden) {
                 return 0;
+            }
+            if (opt.LOG_PLATFORM_EVENTS) {
+                std.log.info("window: {} recieved a WM_INPUT event\n", .{window.data.id});
             }
 
             const ulparam: usize = @bitCast(lparam);

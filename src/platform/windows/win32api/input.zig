@@ -420,33 +420,33 @@ pub extern "user32" fn GetRawInputData(
     pData: ?*anyopaque,
     pcbSize: ?*u32,
     cbSizeHeader: u32,
-) callconv(win32.WINAPI) u32;
+) callconv(.winapi) u32;
 
 pub extern "comctl32" fn TrackMouseEvent(
     lpEventTrack: ?*TRACKMOUSEEVENT,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetCapture(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?win32.HWND;
+) callconv(.winapi) ?win32.HWND;
 
-pub extern "user32" fn ReleaseCapture() callconv(win32.WINAPI) win32.BOOL;
+pub extern "user32" fn ReleaseCapture() callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn RegisterRawInputDevices(
     pRawInputDevices: [*]RAWINPUTDEVICE,
     uiNumDevices: u32,
     cbSize: u32,
-) callconv(win32.WINAPI) win32.BOOL;
+) callconv(.winapi) win32.BOOL;
 
 pub extern "user32" fn SetFocus(
     hWnd: ?win32.HWND,
-) callconv(win32.WINAPI) ?win32.HWND;
+) callconv(.winapi) ?win32.HWND;
 
 pub extern "user32" fn MapVirtualKeyW(
     uCode: win32.UINT,
     uMapType: win32.UINT,
-) callconv(win32.WINAPI) win32.UINT;
+) callconv(.winapi) win32.UINT;
 
 pub extern "user32" fn GetKeyState(
     nVirtKey: win32.INT,
-) callconv(win32.WINAPI) win32.SHORT;
+) callconv(.winapi) win32.SHORT;
