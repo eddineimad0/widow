@@ -170,8 +170,51 @@ pub fn main() !void {
             }
         }
 
-        rend.clearRenderTarget(0.859, 0.412, 0.412, 1.0);
-        rend.putPixelf(0.0, 0.0, .{ .r = 0, .g = 0, .b = 0, .a = 1 });
+        rend.clearRenderTarget(0.0, 0.0, 0.0, 0.0);
+        // { // putPixelF
+        //     rend.putPixelF(0, 0, .FAV_RED);
+        //     rend.putPixelF(-1.0, 1.0, .FAV_RED);
+        //     rend.putPixelF(1.0, 1.0, .FAV_RED);
+        //     rend.putPixelF(-1.0, -1.0, .FAV_RED);
+        //     rend.putPixelF(1.0, -1.0, .FAV_RED);
+        // }
+
+        // { // putPixel
+        //     const h_div_2 = @"i32"(rend.frame.height / 2);
+        //     // rend.putPixel(-w_div_2, h_div_2, .FAV_RED);
+        //     // rend.putPixel(w_div_2, h_div_2, .FAV_RED);
+        //     // rend.putPixel(-w_div_2, -h_div_2, .FAV_RED);
+        //     // 3 horizontal points
+        //     rend.putPixel(-1, h_div_2, .FAV_RED);
+        //     rend.putPixel(0, h_div_2, .FAV_RED);
+        //     rend.putPixel(1, h_div_2, .FAV_RED);
+        //     // 3 vertical points
+        //     rend.putPixel(0, h_div_2, .FAV_RED);
+        //     rend.putPixel(0, h_div_2 - 1, .FAV_RED);
+        //     rend.putPixel(0, h_div_2 - 2, .FAV_RED);
+        //     // + in the middle
+        //     rend.putPixel(0, 0, .FAV_RED);
+        //     rend.putPixel(0, 0 - 1, .FAV_RED);
+        //     rend.putPixel(0, 0 + 1, .FAV_RED);
+        //     rend.putPixel(0 - 1, 0, .FAV_RED);
+        //     rend.putPixel(0 + 1, 0, .FAV_RED);
+        // }
+
+        { // DrawLine
+            const w_div_2 = @"i32"(rend.frame.width / 2);
+            const h_div_2 = @"i32"(rend.frame.height / 2);
+            rend.drawBrLine(0, 0, w_div_2, h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, w_div_2, -h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, -w_div_2, h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, -w_div_2, -h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, w_div_2 - 350, h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, w_div_2 - 350, -h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, -w_div_2 + 350, h_div_2, .FAV_RED);
+            rend.drawBrLine(0, 0, -w_div_2 + 350, -h_div_2, .FAV_RED);
+            rend.drawBrLine(-w_div_2, 0, w_div_2, 0, .FAV_RED); // horizontal line
+            rend.drawBrLine(0, h_div_2, 0, -h_div_2, .FAV_RED); // vertical line
+        }
+
         rend.present();
     }
 }
@@ -304,7 +347,8 @@ pub const Renderer = struct {
         @memset(self.frame.buffer, color);
     }
 
-    pub inline fn putPixelf(self: *Self, x: f32, y: f32, c: ColorF32) void {
+    // Draw routines
+    pub inline fn putPixelF(self: *Self, x: f32, y: f32, c: ColorF32) void {
         dbg.assert(self.frame.width > 0);
         dbg.assert(self.frame.height > 0);
         dbg.assert(@abs(x) <= 1.0);
@@ -317,15 +361,22 @@ pub const Renderer = struct {
         self.putPixel(@intFromFloat(sx), @intFromFloat(sy), c);
     }
 
-    pub inline fn putPixel(self: *Self, x: i32, y: i32, c: ColorF32) void {
+    pub fn putPixel(self: *Self, x: i32, y: i32, c: ColorF32) void {
         dbg.assert(self.frame.width > 0);
         dbg.assert(self.frame.height > 0);
         dbg.assert(@abs(x * 2) <= self.frame.width);
         dbg.assert(@abs(y * 2) <= self.frame.height);
+        dbg.assert(self.frame.width % 2 == 0);
+        dbg.assert(self.frame.height % 2 == 0);
         const W_DIV_2 = @"i32"(self.frame.width / 2);
         const H_DIV_2 = @"i32"(self.frame.height / 2);
-        const nx = x + W_DIV_2;
-        const ny = H_DIV_2 - y;
+        var nx = x + W_DIV_2;
+        var ny = H_DIV_2 - y;
+        // NOTE: both w/2 and (w/2) - 1 point ot the same pixel
+        if (nx == self.frame.width) nx -= 1;
+        // NOTE: both -h/2 and (h/2) - 1 point ot the same pixel
+        if (ny == self.frame.height) ny -= 1;
+        dbg.print("Coloring ({},{}) => ({}x{})\n", .{ x, y, nx, ny });
         self.frame.buffer[(self.frame.pitch / 4) * @"u32"(ny) + @"u32"(nx)] = mapRGBA(
             &self.target.fb_format_info,
             @intFromFloat(255 * c.r),
@@ -334,6 +385,73 @@ pub const Renderer = struct {
             @intFromFloat(255 * c.a),
         );
     }
+
+    pub fn drawLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        if (@abs(dx) >= @abs(dy)) {
+            var x_start, const y_start, const x_end = if (x0 < x1) .{ x0, y0, x1 } else .{ x1, y1, x0 };
+            const a = @"f32"(dy) / @"f32"(dx);
+            var y: f32 = @floatFromInt(y_start);
+            while (x_start <= x_end) : (x_start += 1) {
+                self.putPixel(x_start, @intFromFloat(y), c);
+                y += a;
+            }
+        } else {
+            const x_start, var y_start, const y_end = if (y0 < y1) .{ x0, y0, y1 } else .{ x1, y1, y0 };
+            const a = @"f32"(dx) / @"f32"(dy);
+            var x: f32 = @floatFromInt(x_start);
+            while (y_start <= y_end) : (y_start += 1) {
+                self.putPixel(@intFromFloat(x), y_start, c);
+                x += a;
+            }
+        }
+    }
+
+    pub fn drawBrLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {
+        const dy: i32 = @intCast(@abs(y1 - y0));
+        const dx: i32 = @intCast(@abs(x1 - x0));
+        if (dx >= dy) {
+            var x, var y, const x_end, const y_end = if (x0 < x1)
+                .{ x0, y0, x1, y1 }
+            else
+                .{ x1, y1, x0, y0 };
+
+            var d = (2 * dy) - dx; // d = 2*err*delta_x + 2*delta_y - delta_x
+            const d_inc0 = 2 * dy;
+            const d_inc1 = 2 * (dy - dx);
+            const y_inc: i32 = if (y > y_end) -1 else 1;
+            while (x <= x_end) : (x += 1) {
+                self.putPixel(x, y, c);
+                if (d < 0) {
+                    d += d_inc0;
+                } else {
+                    d += d_inc1;
+                    y += y_inc;
+                }
+            }
+        } else {
+            var y, var x, const y_end, const x_end = if (y0 < y1)
+                .{ y0, x0, y1, x1 }
+            else
+                .{ y1, x1, y0, x0 };
+
+            var d = (2 * dx) - dy; // d = 2*err*delta_y + 2*delta_x - delta_y
+            const d_inc0 = 2 * dx;
+            const d_inc1 = 2 * (dx - dy);
+            const x_inc: i32 = if (x > x_end) -1 else 1;
+            while (y <= y_end) : (y += 1) {
+                self.putPixel(x, y, c);
+                if (d < 0) {
+                    d += d_inc0;
+                } else {
+                    d += d_inc1;
+                    x += x_inc;
+                }
+            }
+        }
+    }
+    // pub fn drawWuLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {}
 
     pub inline fn present(self: *const Self) void {
         const ok = self.target.swapBuffers();
@@ -352,3 +470,7 @@ pub const Renderer = struct {
         std.debug.print("Software framebuffer:({}x{}) with pitch:{}\n", .{ self.frame.width, self.frame.height, self.frame.pitch });
     }
 };
+
+fn lerp(a: f32, b: f32, t: f32) f32 {
+    return a + t * (b - a);
+}
