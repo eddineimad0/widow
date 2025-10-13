@@ -95,12 +95,12 @@ pub fn fixKeyMods(
         mods.shift = (mods.shift or keycode == .Shift);
         mods.ctrl = (mods.ctrl or keycode == .Control);
         mods.alt = (mods.alt or keycode == .Alt);
-        mods.meta = (mods.meta or keycode == .Meta);
+        mods.meta = (mods.meta or keycode == .Super);
     } else {
         mods.shift = (mods.shift and keycode != .Shift);
         mods.ctrl = (mods.ctrl and keycode != .Control);
         mods.alt = (mods.alt and keycode != .Alt);
-        mods.meta = (mods.meta and keycode != .Meta);
+        mods.meta = (mods.meta and keycode != .Super);
     }
 }
 

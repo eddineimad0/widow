@@ -2,9 +2,11 @@ const std = @import("std");
 const display = @import("display.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
-const so = @import("common").unix.so;
+const common = @import("common");
 const driver = @import("driver.zig");
 
+const so = common.unix.so;
+const dbg = std.dbg;
 const mem = std.mem;
 
 pub const WindowHandle = libx11.Window;
@@ -41,7 +43,8 @@ pub const WidowContext = struct {
     }
 };
 
-pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || so.ModuleError ||
+pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
+    so.ModuleError ||
     display.DisplayError ||
     driver.XConnectionError)!*WidowContext {
     libx11.initDynamicApi() catch |e| {
@@ -58,6 +61,36 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     a.destroy(ctx);
 }
 
+pub inline fn getPrimaryDisplay(ctx: *const WidowContext) ?DisplayHandle {
+    // TODO need is_primary on display struct
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.is_primary) {
+            return d.handle;
+        }
+    }
+    return null;
+}
+
+pub inline fn getDisplayFromWindow(ctx: *WidowContext, w: *Window) ?DisplayHandle {
+    const d = ctx.display_mgr.findWindowDisplay(w) catch return null;
+    return d.handle;
+}
+
+pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_mode.DisplayInfo) bool {
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.handle == h) {
+            d.getCurrentVideoMode(&info.video_mode);
+            info.name_len = d.name.len;
+            dbg.assert(info.name_len <= info.name.len);
+            const end = @min(info.name_len, info.name.len);
+            @memcpy(info.name[0..end], d.name);
+            return true;
+        }
+    }
+    return false;
+}
+
 test "Platform" {
+    // TODO: make testing actually work
     @import("std").testing.refAllDecls(@import("utils.zig"));
 }

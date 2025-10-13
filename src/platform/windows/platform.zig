@@ -114,7 +114,8 @@ pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_
             d.getCurrentVideoMode(&info.video_mode);
             info.name_len = d.name.len;
             dbg.assert(info.name_len <= info.name.len);
-            @memcpy(info.name[0..info.name_len], d.name);
+            const end = @min(info.name_len, info.name.len);
+            @memcpy(info.name[0..end], d.name);
             return true;
         }
     }

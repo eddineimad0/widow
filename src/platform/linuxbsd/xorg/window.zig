@@ -86,13 +86,14 @@ pub const BlitContext = struct {
             }
         }
 
-        const cl_sz = w.getClientSize();
+        var cl_sz: common.window_data.WindowSize = undefined;
+        w.getClientSize(&cl_sz);
         const BYTES_PER_PIXEL = 4; // TODO: Grab this from the visuals
-        const stride: u32 = @as(u32, @intCast(cl_sz.width)) * BYTES_PER_PIXEL;
+        const stride: u32 = @as(u32, @intCast(cl_sz.physical_width)) * BYTES_PER_PIXEL;
         const stride_padded = (stride + 3) & ~3;
         const pixels = try w.ctx.allocator.alloc(
             u8,
-            @as(u32, @intCast(cl_sz)) * stride_padded,
+            @as(u32, @intCast(cl_sz.physical_height)) * stride_padded,
         );
         w.x11.ximage = libx11.dyn_api.XCreateImage(
             w.ctx.driver.handles.xdisplay,
@@ -101,8 +102,8 @@ pub const BlitContext = struct {
             libx11.ZPixmap,
             0,
             pixels.ptr,
-            @intCast(cl_sz.width),
-            @intCast(cl_sz.height),
+            @intCast(cl_sz.physical_width),
+            @intCast(cl_sz.physical_height),
             32,
             0,
         );
@@ -123,8 +124,8 @@ pub const BlitContext = struct {
         debug.assert(self.drawable.x11.ximage != null);
         debug.assert(self.drawable.x11.gc != null);
 
-        const cl_sz = self.drawable.getClientSize();
-
+        var cl_sz: common.window_data.WindowSize = undefined;
+        self.drawable.getClientSize(&cl_sz);
         libx11.dyn_api.XPutImage(
             self.ctx.driver.handles.xdisplay,
             self.drawable.handle,
@@ -134,8 +135,8 @@ pub const BlitContext = struct {
             0,
             0,
             0,
-            @intCast(cl_sz.width),
-            @intCast(cl_sz.height),
+            @intCast(cl_sz.physical_width),
+            @intCast(cl_sz.physical_height),
         );
 
         libx11.dyn_api.XSync(
@@ -572,16 +573,7 @@ pub const Window = struct {
         drvr.flushXRequests();
     }
 
-    /// Returns the Physical size of the window's client area
-    pub fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return .{
-            .width = self.data.client_area.size.width,
-            .height = self.data.client_area.size.height,
-        };
-    }
-
-    /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = self.ctx.driver;
         _ = libx11.dyn_api.XGetWindowAttributes(
@@ -590,9 +582,15 @@ pub const Window = struct {
             &attribs,
         );
 
-        return .{
-            .width = @intCast(attribs.width),
-            .height = @intCast(attribs.height),
+        var scale = @as(f64, 0);
+        self.getDpi(null, null, &scale);
+
+        out.* = .{
+            .physical_width = self.data.client_area.size.width,
+            .physical_height = self.data.client_area.size.height,
+            .scale = scale,
+            .logical_width = @intCast(attribs.width),
+            .logical_height = @intCast(attribs.height),
         };
     }
 
@@ -1164,12 +1162,11 @@ pub const Window = struct {
         }
     }
 
-    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
+    pub fn getDpi(self: *const Self, dpi_x: ?*f64, dpi_y: ?*f64, scaler: ?*f64) void {
         const drvr = self.ctx.driver;
-        if (scaler) |s| {
-            s.* = drvr.g_screen_scale;
-        }
-        return @intFromFloat(drvr.g_dpi);
+        if (scaler) |s| s.* = drvr.g_screen_scale;
+        if (dpi_x) |x| x.* = drvr.g_dpi;
+        if (dpi_y) |y| y.* = drvr.g_dpi;
     }
 
     pub fn setCursorIcon(
@@ -1206,10 +1203,8 @@ pub const Window = struct {
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) WindowError!void {
-        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape) catch {
-            return WindowError.OutOfMemory;
-        };
+    ) void {
+        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape);
         cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
@@ -1348,85 +1343,136 @@ pub const Window = struct {
         return success;
     }
 
-    pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
-        switch (self.fb_cfg.accel) {
-            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
-                return WindowError.GLError;
-            },
-            else => return WindowError.UnsupportedRenderBackend,
-        }
+    // pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
+    //     switch (self.fb_cfg.accel) {
+    //         .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
+    //             return WindowError.GLError;
+    //         },
+    //         else => return WindowError.UnsupportedRenderBackend,
+    //     }
+    // }
+
+    pub fn createCanvas(self: *Self) WindowError!common.fb.Canvas {
+        // TODO: Implement
+        // switch (self.fb_cfg.accel) {
+        //     .software => {
+        //         if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+        //             self.canvas = .{ .blt_ctx = try BlitContext.init(self) };
+        //         }
+        //         const c = common.fb.Canvas{
+        //             .ctx = @ptrCast(&self.canvas),
+        //             ._vtable = .{
+        //                 .swapBuffers = swSwapBuffers,
+        //                 .setSwapInterval = swSetSwapInterval,
+        //                 .getSoftwareBuffer = swGetSoftwareBuffer,
+        //                 .updateSoftwareBuffer = swUpdateSoftwareBuffer,
+        //                 .getDriverInfo = swGetDriverInfo,
+        //                 .deinit = swDestroyCanvas,
+        //             },
+        //             .fb_format_info = self.canvas.blt_ctx.px_fmt_info,
+        //             .render_backend = .software,
+        //         };
+        //         return c;
+        //     },
+        //     .opengl => {
+        //         if (@as(Win32CanvasTag, self.canvas) == .invalid) {
+        //             self.canvas = .{
+        //                 .gl_ctx = wgl.GLContext.init(
+        //                     self.win32.dc,
+        //                     self.ctx.driver,
+        //                     &self.fb_cfg,
+        //                 ) catch
+        //                     return WindowError.CanvasImpossible,
+        //             };
+        //         }
+        //         const c = common.fb.Canvas{
+        //             .ctx = @ptrCast(&self.canvas),
+        //             ._vtable = .{
+        //                 .swapBuffers = wgl.glSwapBuffers,
+        //                 .makeCurrent = wgl.glMakeCurrent,
+        //                 .setSwapInterval = wgl.glSetSwapInterval,
+        //                 .getDriverInfo = wgl.glGetDriverInfo,
+        //                 .deinit = wgl.glDestroyCanvas,
+        //             },
+        //             .fb_format_info = self.canvas.gl_ctx.px_fmt_info,
+        //             .render_backend = .opengl,
+        //         };
+        //         return c;
+        //     },
+        // }
     }
 
-    const DrawContext = struct {};
-    pub fn createDrawContext(self: *Self) WindowError!DrawContext {
-        switch (self.fb_cfg.accel) {
-            .none => {
-                var gcv: libx11.XGCValues = undefined;
-                var vinfo: libx11.XVisualInfo = undefined;
+    // pub fn createCanvas(self: *Self) WindowError!DrawContext {
+    //     switch (self.fb_cfg.accel) {
+    //         .none => {
+    //             var gcv: libx11.XGCValues = undefined;
+    //             var vinfo: libx11.XVisualInfo = undefined;
 
-                gcv.graphics_exposures = libx11.False;
-                self.x11.gc = libx11.dyn_api.XCreateGC(
-                    self.ctx.driver.handles.xdisplay,
-                    self.handle,
-                    libx11.GCGraphicsExposures,
-                    &gcv,
-                );
-                if (self.x11.gc == null) {
-                    @panic("TODO fail path can't create graphics context");
-                }
+    //             gcv.graphics_exposures = libx11.False;
+    //             self.x11.gc = libx11.dyn_api.XCreateGC(
+    //                 self.ctx.driver.handles.xdisplay,
+    //                 self.handle,
+    //                 libx11.GCGraphicsExposures,
+    //                 &gcv,
+    //             );
+    //             if (self.x11.gc == null) {
+    //                 @panic("TODO fail path can't create graphics context");
+    //             }
 
-                if (libx11.dyn_api.XGetVisualInfoFromVisual(
-                    self.ctx.driver.handles.xdisplay,
-                    self.x11.visual,
-                    &vinfo,
-                ) < 0) {
-                    @panic("TODO fail path cant get visual info");
-                }
-                const cl_sz = self.getClientSize();
-                const BYTES_PER_PIXEL = 4; // TODO: Grab this from the visuals
-                const stride: u32 = @as(u32, @intCast(cl_sz.width)) * BYTES_PER_PIXEL;
-                const stride_padded = (stride + 3) & ~3;
-                const pixels = try self.ctx.allocator.alloc(
-                    u8,
-                    @as(u32, @intCast(cl_sz)) * stride_padded,
-                );
-                self.x11.ximage = libx11.dyn_api.XCreateImage(
-                    self.ctx.driver.handles.xdisplay,
-                    self.x11.visual,
-                    vinfo.depth,
-                    libx11.ZPixmap,
-                    0,
-                    pixels.ptr,
-                    @intCast(cl_sz.width),
-                    @intCast(cl_sz.height),
-                    32,
-                    0,
-                );
+    //             if (libx11.dyn_api.XGetVisualInfoFromVisual(
+    //                 self.ctx.driver.handles.xdisplay,
+    //                 self.x11.visual,
+    //                 &vinfo,
+    //             ) < 0) {
+    //                 @panic("TODO fail path cant get visual info");
+    //             }
+    //             var cl_sz: common.window_data.WindowSize = undefined;
+    //             self.getClientSize(&cl_sz);
+    //             const BYTES_PER_PIXEL = 4; // TODO: Grab this from the visuals
+    //             const stride: u32 = @as(u32, @intCast(cl_sz.physical_width)) * BYTES_PER_PIXEL;
+    //             const stride_padded = (stride + 3) & ~3;
+    //             const pixels = try self.ctx.allocator.alloc(
+    //                 u8,
+    //                 @as(u32, @intCast(cl_sz.physical_height)) * stride_padded,
+    //             );
+    //             self.x11.ximage = libx11.dyn_api.XCreateImage(
+    //                 self.ctx.driver.handles.xdisplay,
+    //                 self.x11.visual,
+    //                 vinfo.depth,
+    //                 libx11.ZPixmap,
+    //                 0,
+    //                 pixels.ptr,
+    //                 @intCast(cl_sz.physical_width),
+    //                 @intCast(cl_sz.physical_height),
+    //                 32,
+    //                 0,
+    //             );
 
-                if (self.x11.ximage == null) {
-                    @panic("TODO fail path cant create ximage");
-                }
-                self.x11.ximage.?.byte_order = libx11.LSBFirst;
-            },
-            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
-                return WindowError.GLError;
-            },
-        }
-    }
+    //             if (self.x11.ximage == null) {
+    //                 @panic("TODO fail path cant create ximage");
+    //             }
+    //             self.x11.ximage.?.byte_order = libx11.LSBFirst;
+    //         },
+    //         .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
+    //             return WindowError.GLError;
+    //         },
+    //     }
+    // }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
         if (common.IS_DEBUG_BUILD) {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const cs = self.getClientSize();
+                var cl_sz: common.window_data.WindowSize = undefined;
+                self.getClientSize(&cl_sz);
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
                     .{
-                        self.data.client_area.size.width,
-                        self.data.client_area.size.height,
-                        cs.width,
-                        cs.height,
+                        cl_sz.physical_width,
+                        cl_sz.physical_height,
+                        cl_sz.logical_width,
+                        cl_sz.logical_height,
                     },
                 );
                 if (self.data.min_size) |*value| {

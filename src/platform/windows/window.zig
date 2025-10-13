@@ -994,7 +994,6 @@ pub const Window = struct {
         );
     }
 
-    /// Returns the logical size of the window's client area
     pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,

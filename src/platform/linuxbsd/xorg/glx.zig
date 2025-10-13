@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
-const gl = @import("opengl");
 const mem = std.mem;
 const debug = std.debug;
 const so = common.unix.so;
@@ -304,25 +303,25 @@ pub fn initGLX(driver: *const X11Driver) (so.ModuleError || GLXError)!void {
 
     glx_ext.supported_extensions = mem.span(extensions);
 
-    if (gl.glHasExtension("GLX_EXT_swap_control", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_EXT_swap_control", glx_ext.supported_extensions)) {
         glx_ext.glXSwapIntervalEXT =
             @ptrCast(glLoaderFunc("glXSwapIntervalEXT"));
 
-        if (gl.glHasExtension("GLX_EXT_swap_control_tear", glx_ext.supported_extensions)) {
+        if (common.fb.glHasExtension("GLX_EXT_swap_control_tear", glx_ext.supported_extensions)) {
             glx_ext.EXT_swap_control_tear = true;
         }
     }
 
-    if (gl.glHasExtension("GLX_ARB_multisample", glx_ext.supported_extensions))
+    if (common.fb.glHasExtension("GLX_ARB_multisample", glx_ext.supported_extensions))
         glx_ext.ARB_multisample = true;
 
-    if (gl.glHasExtension("GLX_ARB_framebuffer_sRGB", glx_ext.supported_extensions))
+    if (common.fb.glHasExtension("GLX_ARB_framebuffer_sRGB", glx_ext.supported_extensions))
         glx_ext.ARB_framebuffer_sRGB = true;
 
-    if (gl.glHasExtension("GLX_EXT_framebuffer_sRGB", glx_ext.supported_extensions))
+    if (common.fb.glHasExtension("GLX_EXT_framebuffer_sRGB", glx_ext.supported_extensions))
         glx_ext.EXT_framebuffer_sRGB = true;
 
-    if (gl.glHasExtension("GLX_ARB_create_context", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_ARB_create_context", glx_ext.supported_extensions)) {
         glx_ext.glXCreateContextAttribsARB =
             @ptrCast(glLoaderFunc("glXCreateContextAttribsARB"));
 
@@ -330,23 +329,23 @@ pub fn initGLX(driver: *const X11Driver) (so.ModuleError || GLXError)!void {
             glx_ext.ARB_create_context = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_robustness", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_ARB_create_context_robustness", glx_ext.supported_extensions)) {
         glx_ext.ARB_create_context_robustness = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_profile", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_ARB_create_context_profile", glx_ext.supported_extensions)) {
         glx_ext.ARB_create_context_profile = true;
     }
 
-    if (gl.glHasExtension("GLX_EXT_create_context_es2_profile", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_EXT_create_context_es2_profile", glx_ext.supported_extensions)) {
         glx_ext.EXT_create_context_es2_profile = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_create_context_no_error", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_ARB_create_context_no_error", glx_ext.supported_extensions)) {
         glx_ext.ARB_create_context_no_error = true;
     }
 
-    if (gl.glHasExtension("GLX_ARB_context_flush_control", glx_ext.supported_extensions)) {
+    if (common.fb.glHasExtension("GLX_ARB_context_flush_control", glx_ext.supported_extensions)) {
         glx_ext.ARB_context_flush_control = true;
     }
 }
@@ -381,14 +380,14 @@ fn chooseFBConfig(driver: *const X11Driver, cfg: *const common.fb.FBConfig) ?GLX
     helper.setAttribute(&attribs, &idx, GLX_RENDER_TYPE, GLX_RGBA_BIT);
     helper.setAttribute(&attribs, &idx, GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT);
     helper.setAttribute(&attribs, &idx, GLX_X_RENDERABLE, 1);
-    helper.setAttribute(&attribs, &idx, GLX_RED_SIZE, cfg.color_bits.red_bits);
-    helper.setAttribute(&attribs, &idx, GLX_GREEN_SIZE, cfg.color_bits.green_bits);
-    helper.setAttribute(&attribs, &idx, GLX_BLUE_SIZE, cfg.color_bits.blue_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ALPHA_SIZE, cfg.color_bits.alpha_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_RED_SIZE, cfg.accum_bits.red_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_GREEN_SIZE, cfg.accum_bits.green_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_BLUE_SIZE, cfg.accum_bits.blue_bits);
-    helper.setAttribute(&attribs, &idx, GLX_ACCUM_ALPHA_SIZE, cfg.accum_bits.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_RED_SIZE, cfg.color.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_GREEN_SIZE, cfg.color.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_BLUE_SIZE, cfg.color.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ALPHA_SIZE, cfg.color.alpha_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_RED_SIZE, cfg.accum.red_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_GREEN_SIZE, cfg.accum.green_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_BLUE_SIZE, cfg.accum.blue_bits);
+    helper.setAttribute(&attribs, &idx, GLX_ACCUM_ALPHA_SIZE, cfg.accum.alpha_bits);
     helper.setAttribute(&attribs, &idx, GLX_DEPTH_SIZE, cfg.depth_bits);
     helper.setAttribute(&attribs, &idx, GLX_STENCIL_SIZE, cfg.stencil_bits);
     if (cfg.flags.double_buffered) {
@@ -577,7 +576,7 @@ pub const GLContext = struct {
         return true;
     }
 
-    pub fn setSwapIntervals(self: *const Self, interval: gl.SwapInterval) bool {
+    pub fn setSwapIntervals(self: *const Self, interval: common.fb.SwapInterval) bool {
         if (glx_ext.glXSwapIntervalEXT) |func| {
             if (interval == .Adaptive and glx_ext.EXT_swap_control_tear == false) {
                 return false;

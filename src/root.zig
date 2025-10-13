@@ -46,8 +46,6 @@ pub const gfx = struct {
     pub const PixelFormatInfo = common.pixel.PixelFormatInfo;
 };
 
-pub const WidowContext = platform.WidowContext;
-
 pub const DrawSurface = union {
     software: platform.BlitContext,
     opengl: platform.GLContext,
