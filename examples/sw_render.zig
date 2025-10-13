@@ -128,6 +128,7 @@ pub fn main() !void {
     std.debug.print("DPI Info:{}\n", .{mywindow.getDpiInfo()});
 
     var rend = Renderer.init(sw_canvas);
+    var in_key = KeyCode.L;
     event_loop: while (true) {
         try mywindow.pollEvents();
 
@@ -139,6 +140,7 @@ pub fn main() !void {
                     break :event_loop;
                 },
                 EventType.Keyboard => |*key| {
+                    in_key = key.keycode;
                     if (key.state.isPressed()) {
                         if (key.keycode == KeyCode.Q) {
                             mywindow.queueCloseEvent();
@@ -170,7 +172,55 @@ pub fn main() !void {
             }
         }
 
-        rend.clearRenderTarget(0.0, 0.0, 0.0, 0.0);
+        rend.clearRenderTarget(RGBA.BLACK);
+        const w_div_2 = @"i32"(rend.frame.width / 2);
+        const h_div_2 = @"i32"(rend.frame.height / 2);
+
+        switch (in_key) {
+            .L => { // DrawLine
+                rend.drawLine(0, 0, w_div_2, h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, w_div_2, -h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, -w_div_2, h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, -w_div_2, -h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, w_div_2 - 350, h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, w_div_2 - 350, -h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, -w_div_2 + 350, h_div_2, RGBA.FAV_RED);
+                rend.drawLine(0, 0, -w_div_2 + 350, -h_div_2, RGBA.FAV_RED);
+                rend.drawLine(-w_div_2, 0, w_div_2, 0, RGBA.FAV_RED); // horizontal line
+                rend.drawLine(0, h_div_2, 0, -h_div_2, RGBA.FAV_RED); // vertical line
+            },
+            .P => { // Points
+                // 3 horizontal points
+                rend.putPixel(-1, h_div_2, RGBA.FAV_RED);
+                rend.putPixel(0, h_div_2, RGBA.FAV_RED);
+                rend.putPixel(1, h_div_2, RGBA.FAV_RED);
+                // 3 vertical points
+                rend.putPixel(0, h_div_2, RGBA.FAV_RED);
+                rend.putPixel(0, h_div_2 - 1, RGBA.FAV_RED);
+                rend.putPixel(0, h_div_2 - 2, RGBA.FAV_RED);
+                // + in the middle
+                rend.putPixel(0, 0, RGBA.FAV_RED);
+                rend.putPixel(0, 0 - 1, RGBA.FAV_RED);
+                rend.putPixel(0, 0 + 1, RGBA.FAV_RED);
+                rend.putPixel(0 - 1, 0, RGBA.FAV_RED);
+                rend.putPixel(0 + 1, 0, RGBA.FAV_RED);
+            },
+            .T => {
+                rend.drawTriangle(
+                    .xy(-w_div_2 + 100, 0),
+                    .xy(-w_div_2 + 200, h_div_2),
+                    .xy(-w_div_2 + 300, h_div_2 - 200),
+                    RGBA.FAV_RED,
+                );
+                rend.drawTriangle(
+                    .xy(w_div_2 - 300, 0),
+                    .xy(w_div_2 - 100, 0),
+                    .xy(w_div_2 - 100, h_div_2),
+                    RGBA.FAV_RED,
+                );
+            },
+            else => {},
+        }
         // { // putPixelF
         //     rend.putPixelF(0, 0, .FAV_RED);
         //     rend.putPixelF(-1.0, 1.0, .FAV_RED);
@@ -178,42 +228,6 @@ pub fn main() !void {
         //     rend.putPixelF(-1.0, -1.0, .FAV_RED);
         //     rend.putPixelF(1.0, -1.0, .FAV_RED);
         // }
-
-        // { // putPixel
-        //     const h_div_2 = @"i32"(rend.frame.height / 2);
-        //     // rend.putPixel(-w_div_2, h_div_2, .FAV_RED);
-        //     // rend.putPixel(w_div_2, h_div_2, .FAV_RED);
-        //     // rend.putPixel(-w_div_2, -h_div_2, .FAV_RED);
-        //     // 3 horizontal points
-        //     rend.putPixel(-1, h_div_2, .FAV_RED);
-        //     rend.putPixel(0, h_div_2, .FAV_RED);
-        //     rend.putPixel(1, h_div_2, .FAV_RED);
-        //     // 3 vertical points
-        //     rend.putPixel(0, h_div_2, .FAV_RED);
-        //     rend.putPixel(0, h_div_2 - 1, .FAV_RED);
-        //     rend.putPixel(0, h_div_2 - 2, .FAV_RED);
-        //     // + in the middle
-        //     rend.putPixel(0, 0, .FAV_RED);
-        //     rend.putPixel(0, 0 - 1, .FAV_RED);
-        //     rend.putPixel(0, 0 + 1, .FAV_RED);
-        //     rend.putPixel(0 - 1, 0, .FAV_RED);
-        //     rend.putPixel(0 + 1, 0, .FAV_RED);
-        // }
-
-        { // DrawLine
-            const w_div_2 = @"i32"(rend.frame.width / 2);
-            const h_div_2 = @"i32"(rend.frame.height / 2);
-            rend.drawBrLine(0, 0, w_div_2, h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, w_div_2, -h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, -w_div_2, h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, -w_div_2, -h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, w_div_2 - 350, h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, w_div_2 - 350, -h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, -w_div_2 + 350, h_div_2, .FAV_RED);
-            rend.drawBrLine(0, 0, -w_div_2 + 350, -h_div_2, .FAV_RED);
-            rend.drawBrLine(-w_div_2, 0, w_div_2, 0, .FAV_RED); // horizontal line
-            rend.drawBrLine(0, h_div_2, 0, -h_div_2, .FAV_RED); // vertical line
-        }
 
         rend.present();
     }
@@ -226,9 +240,9 @@ fn renderWeirdGradient(framebuffer: []u32) void {
     const g: f64 = 0.5 + (0.5 * std.math.sin(now + (PI * 2 / 3)));
     const b: f64 = 0.5 + (0.5 * std.math.sin(now + (PI * 4 / 3)));
     var argb = [4]u8{ 255, @intFromFloat(255 * r), @intFromFloat(255 * g), @intFromFloat(255 * b) };
-    const color = std.mem.readInt(u32, &argb, .big);
+    const color_ = std.mem.readInt(u32, &argb, .big);
     for (framebuffer) |*pixel|
-        pixel.* = color;
+        pixel.* = color_;
 }
 
 pub inline fn mapRGBA(fmt: *const widow.gfx.PixelFormatInfo, r: u32, g: u32, b: u32, a: u32) u32 {
@@ -260,43 +274,151 @@ pub inline fn mapRGB(fmt: *const widow.gfx.PixelFormatInfo, r: u32, g: u32, b: u
     return red | green | blue;
 }
 
-pub const RgbaF32 = struct {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+// pub const Rgba8888 = extern struct {
+//     r: u8,
+//     g: u8,
+//     b: u8,
+//     a: u8,
 
-    const Self = @This();
+//     const Self = @This();
+// };
 
-    pub const BLACK = Self{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 };
-    pub const WHITE = Self{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 };
-    pub const TRANSPARENT = Self{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 0.0 };
-    pub const RED = Self{ .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0 };
-    pub const GREEN = Self{ .r = 0.0, .g = 1.0, .b = 0.0, .a = 1.0 };
-    pub const BLUE = Self{ .r = 0.0, .g = 0.0, .b = 1.0, .a = 1.0 };
-    pub const LIGHTGRAY = Self{ .r = 0.78, .g = 0.78, .b = 0.78, .a = 1.0 };
-    pub const GRAY = Self{ .r = 0.51, .g = 0.51, .b = 0.51, .a = 1.0 };
-    pub const DARKGRAY = Self{ .r = 0.31, .g = 0.31, .b = 0.31, .a = 1.0 };
-    pub const YELLOW = Self{ .r = 0.99, .g = 0.98, .b = 0.00, .a = 1.0 };
-    pub const GOLD = Self{ .r = 1.00, .g = 0.80, .b = 0.00, .a = 1.0 };
-    pub const ORANGE = Self{ .r = 1.00, .g = 0.63, .b = 0.00, .a = 1.0 };
-    pub const PINK = Self{ .r = 1.00, .g = 0.43, .b = 0.76, .a = 1.0 };
-    pub const MAROON = Self{ .r = 0.75, .g = 0.13, .b = 0.22, .a = 1.0 };
-    pub const LIME = Self{ .r = 0.00, .g = 0.62, .b = 0.18, .a = 1.0 };
-    pub const DARKGREEN = Self{ .r = 0.00, .g = 0.46, .b = 0.17, .a = 1.0 };
-    pub const SKYBLUE = Self{ .r = 0.40, .g = 0.75, .b = 1.00, .a = 1.0 };
-    pub const DARKBLUE = Self{ .r = 0.00, .g = 0.32, .b = 0.67, .a = 1.0 };
-    pub const PURPLE = Self{ .r = 0.78, .g = 0.48, .b = 1.00, .a = 1.0 };
-    pub const VIOLET = Self{ .r = 0.53, .g = 0.24, .b = 0.75, .a = 1.0 };
-    pub const DARKPURPLE = Self{ .r = 0.44, .g = 0.12, .b = 0.49, .a = 1.0 };
-    pub const BEIGE = Self{ .r = 0.83, .g = 0.69, .b = 0.51, .a = 1.0 };
-    pub const BROWN = Self{ .r = 0.50, .g = 0.42, .b = 0.31, .a = 1.0 };
-    pub const DARKBROWN = Self{ .r = 0.30, .g = 0.25, .b = 0.18, .a = 1.0 };
-    pub const MAGENTA = Self{ .r = 1.00, .g = 0.00, .b = 1.00, .a = 1.0 };
-    pub const FAV_RED = Self{ .r = 859, .g = 0.412, .b = 0.412, .a = 1.0 };
+// pub const RgbaF32 = extern struct {
+//     r: f32,
+//     g: f32,
+//     b: f32,
+//     a: f32,
+
+//     const Self = @This();
+
+// };
+
+// pub const ColorF32 = RgbaF32;
+
+fn Tx2(comptime T: type) type {
+    return extern struct {
+        _0: T,
+        _1: T,
+
+        const Self = @This();
+        pub inline fn xy(x: T, y: T) Self {
+            return .{
+                ._0 = x,
+                ._1 = y,
+            };
+        }
+    };
+}
+
+fn Tx3(comptime T: type) type {
+    return extern struct {
+        _0: T,
+        _1: T,
+        _2: T,
+
+        const Self = @This();
+        pub inline fn xy(x: T, y: T, z: T) Self {
+            return .{
+                ._0 = x,
+                ._1 = y,
+                ._2 = z,
+            };
+        }
+    };
+}
+
+fn Tx4(comptime T: type) type {
+    return extern struct {
+        _0: T,
+        _1: T,
+        _2: T,
+        _3: T,
+
+        const Self = @This();
+        pub inline fn xyzw(x: T, y: T, z: T, w: T) Self {
+            return .{
+                ._0 = x,
+                ._1 = y,
+                ._2 = z,
+                ._3 = w,
+            };
+        }
+
+        pub inline fn rgba(r: T, g: T, b: T, a: T) Self {
+            return .{
+                ._0 = r,
+                ._1 = g,
+                ._2 = b,
+                ._3 = a,
+            };
+        }
+    };
+}
+pub const i32x2 = Tx2(i32);
+pub const i32x4 = Tx4(i32);
+pub const f32x2 = Tx2(f32);
+pub const f32x4 = Tx4(f32);
+
+pub const Rgba8 = Tx4(u8);
+pub const RgbaF32 = f32x4;
+
+const RGBA = struct {
+    pub const BLACK: Rgba8 = .rgba(0, 0, 0, 255);
+    pub const WHITE: Rgba8 = .rgba(255, 255, 255, 255);
+    pub const TRANSPARENT: Rgba8 = .rgba(0, 0, 0, 0);
+    pub const RED: Rgba8 = .rgba(255, 0, 0, 255);
+    pub const GREEN: Rgba8 = .rgba(0, 255, 0, 255);
+    pub const BLUE: Rgba8 = .rgba(0, 0, 255, 255);
+    pub const LIGHTGRAY: Rgba8 = .rgba(199, 199, 199, 255);
+    pub const GRAY: Rgba8 = .rgba(130, 130, 130, 255);
+    pub const DARKGRAY: Rgba8 = .rgba(79, 79, 79, 255);
+    pub const YELLOW: Rgba8 = .rgba(252, 250, 0, 255);
+    pub const GOLD: Rgba8 = .rgba(255, 204, 0, 255);
+    pub const ORANGE: Rgba8 = .rgba(255, 161, 0, 255);
+    pub const PINK: Rgba8 = .rgba(255, 110, 194, 255);
+    pub const MAROON: Rgba8 = .rgba(191, 33, 56, 255);
+    pub const LIME: Rgba8 = .rgba(0, 158, 46, 255);
+    pub const DARKGREEN: Rgba8 = .rgba(0, 117, 43, 255);
+    pub const SKYBLUE: Rgba8 = .rgba(102, 191, 255, 255);
+    pub const DARKBLUE: Rgba8 = .rgba(0, 82, 171, 255);
+    pub const PURPLE: Rgba8 = .rgba(199, 122, 255, 255);
+    pub const VIOLET: Rgba8 = .rgba(135, 61, 191, 255);
+    pub const DARKPURPLE: Rgba8 = .rgba(112, 31, 125, 255);
+    pub const BEIGE: Rgba8 = .rgba(212, 176, 130, 255);
+    pub const BROWN: Rgba8 = .rgba(128, 107, 79, 255);
+    pub const DARKBROWN: Rgba8 = .rgba(77, 64, 46, 255);
+    pub const MAGENTA: Rgba8 = .rgba(255, 0, 255, 255);
+    pub const FAV_RED: Rgba8 = .rgba(219, 105, 105, 255);
+    // float version
+    pub const BLACK_F32: RgbaF32 = .rgba(0.0, 0.0, 0.0, 1.0);
+    pub const WHITE_F32: RgbaF32 = .rgba(1.0, 1.0, 1.0, 1.0);
+    pub const TRANSPARENT_F32: RgbaF32 = .rgba(0.0, 0.0, 0.0, 0.0);
+    pub const RED_F32: RgbaF32 = .rgba(1.0, 0.0, 0.0, 1.0);
+    pub const GREEN_F32: RgbaF32 = .rgba(0.0, 1.0, 0.0, 1.0);
+    pub const BLUE_F32: RgbaF32 = .rgba(0.0, 0.0, 1.0, 1.0);
+    pub const LIGHTGRAY_F32: RgbaF32 = .rgba(0.78, 0.78, 0.78, 1.0);
+    pub const GRAY_F32: RgbaF32 = .rgba(0.51, 0.51, 0.51, 1.0);
+    pub const DARKGRAY_F32: RgbaF32 = .rgba(0.31, 0.31, 0.31, 1.0);
+    pub const YELLOW_F32: RgbaF32 = .rgba(0.99, 0.98, 0.00, 1.0);
+    pub const GOLD_F32: RgbaF32 = .rgba(1.00, 0.80, 0.00, 1.0);
+    pub const ORANGE_F32: RgbaF32 = .rgba(1.00, 0.63, 0.00, 1.0);
+    pub const PINK_F32: RgbaF32 = .rgba(1.00, 0.43, 0.76, 1.0);
+    pub const MAROON_F32: RgbaF32 = .rgba(0.75, 0.13, 0.22, 1.0);
+    pub const LIME_F32: RgbaF32 = .rgba(0.00, 0.62, 0.18, 1.0);
+    pub const DARKGREEN_F32: RgbaF32 = .rgba(0.00, 0.46, 0.17, 1.0);
+    pub const SKYBLUE_F32: RgbaF32 = .rgba(0.40, 0.75, 1.00, 1.0);
+    pub const DARKBLUE_F32: RgbaF32 = .rgba(0.00, 0.32, 0.67, 1.0);
+    pub const PURPLE_F32: RgbaF32 = .rgba(0.78, 0.48, 1.00, 1.0);
+    pub const VIOLET_F32: RgbaF32 = .rgba(0.53, 0.24, 0.75, 1.0);
+    pub const DARKPURPLE_F32: RgbaF32 = .rgba(0.44, 0.12, 0.49, 1.0);
+    pub const BEIGE_F32: RgbaF32 = .rgba(0.83, 0.69, 0.51, 1.0);
+    pub const BROWN_F32: RgbaF32 = .rgba(0.50, 0.42, 0.31, 1.0);
+    pub const DARKBROWN_F32: RgbaF32 = .rgba(0.30, 0.25, 0.18, 1.0);
+    pub const MAGENTA_F32: RgbaF32 = .rgba(1.00, 0.00, 1.00, 1.0);
+    pub const FAV_RED_F32: RgbaF32 = .rgba(0.859, 0.412, 0.412, 1.0);
 };
 
-pub const ColorF32 = RgbaF32;
+pub const Color32 = Rgba8;
 
 pub const Renderer = struct {
     target: widow.gfx.Canvas,
@@ -319,6 +441,7 @@ pub const Renderer = struct {
         height: u32,
         pitch: u32,
     },
+    fb_format: widow.gfx.PixelFormatInfo,
 
     const Self = @This();
 
@@ -328,27 +451,31 @@ pub const Renderer = struct {
         const success = target.getSoftwareBuffer(&pixels, &w, &h, &pitch);
         std.debug.assert(success);
         std.debug.print("Software framebuffer:({}x{}) with pitch:{}\n", .{ w, h, pitch });
-        return .{ .target = target, .frame = .{
-            .buffer = pixels,
-            .width = w,
-            .height = h,
-            .pitch = pitch,
-        } };
+        return .{
+            .target = target,
+            .frame = .{
+                .buffer = pixels,
+                .width = w,
+                .height = h,
+                .pitch = pitch,
+            },
+            .fb_format = target.fb_format_info,
+        };
     }
 
-    pub inline fn clearRenderTarget(self: *Self, r: f32, g: f32, b: f32, a: f32) void {
-        const color: u32 = mapRGBA(
-            &self.target.fb_format_info,
-            @intFromFloat(255 * r),
-            @intFromFloat(255 * g),
-            @intFromFloat(255 * b),
-            @intFromFloat(255 * a),
+    pub inline fn clearRenderTarget(self: *Self, clear_color: Color32) void {
+        const c: u32 = mapRGBA(
+            &self.fb_format,
+            clear_color._0,
+            clear_color._1,
+            clear_color._2,
+            clear_color._3,
         );
-        @memset(self.frame.buffer, color);
+        @memset(self.frame.buffer, c);
     }
 
     // Draw routines
-    pub inline fn putPixelF(self: *Self, x: f32, y: f32, c: ColorF32) void {
+    pub inline fn putPixelF(self: *Self, x: f32, y: f32, c: Color32) void {
         dbg.assert(self.frame.width > 0);
         dbg.assert(self.frame.height > 0);
         dbg.assert(@abs(x) <= 1.0);
@@ -361,7 +488,7 @@ pub const Renderer = struct {
         self.putPixel(@intFromFloat(sx), @intFromFloat(sy), c);
     }
 
-    pub fn putPixel(self: *Self, x: i32, y: i32, c: ColorF32) void {
+    inline fn normalizeCoordinates(self: *const Self, x: i32, y: i32) [2]i32 {
         dbg.assert(self.frame.width > 0);
         dbg.assert(self.frame.height > 0);
         dbg.assert(@abs(x * 2) <= self.frame.width);
@@ -376,17 +503,22 @@ pub const Renderer = struct {
         if (nx == self.frame.width) nx -= 1;
         // NOTE: both -h/2 and (h/2) - 1 point ot the same pixel
         if (ny == self.frame.height) ny -= 1;
-        dbg.print("Coloring ({},{}) => ({}x{})\n", .{ x, y, nx, ny });
-        self.frame.buffer[(self.frame.pitch / 4) * @"u32"(ny) + @"u32"(nx)] = mapRGBA(
-            &self.target.fb_format_info,
-            @intFromFloat(255 * c.r),
-            @intFromFloat(255 * c.g),
-            @intFromFloat(255 * c.b),
-            @intFromFloat(255 * c.a),
+        dbg.print("Normalizing ({},{}) => ({}x{})\n", .{ x, y, nx, ny });
+        return .{ nx, ny };
+    }
+
+    pub fn putPixel(self: *Self, x: i32, y: i32, c: Color32) void {
+        const nx: i32, const ny: i32 = self.normalizeCoordinates(x, y);
+        self.frame.buffer[(self.frame.pitch / self.fb_format.bytes_per_pixel) * @"u32"(ny) + @"u32"(nx)] = mapRGBA(
+            &self.fb_format,
+            c._0,
+            c._1,
+            c._2,
+            c._3,
         );
     }
 
-    pub fn drawLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {
+    pub fn drawLineNaive(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: Color32) void {
         const dx = x1 - x0;
         const dy = y1 - y0;
         if (@abs(dx) >= @abs(dy)) {
@@ -408,7 +540,15 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn drawBrLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {
+    inline fn drawBrLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: Color32) void {
+        const pitch = (self.frame.pitch / self.fb_format.bytes_per_pixel);
+        const color = mapRGBA(
+            &self.fb_format,
+            c._0,
+            c._1,
+            c._2,
+            c._3,
+        );
         const dy: i32 = @intCast(@abs(y1 - y0));
         const dx: i32 = @intCast(@abs(x1 - x0));
         if (dx >= dy) {
@@ -422,7 +562,7 @@ pub const Renderer = struct {
             const d_inc1 = 2 * (dy - dx);
             const y_inc: i32 = if (y > y_end) -1 else 1;
             while (x <= x_end) : (x += 1) {
-                self.putPixel(x, y, c);
+                self.frame.buffer[pitch * @"u32"(y) + @"u32"(x)] = color;
                 if (d < 0) {
                     d += d_inc0;
                 } else {
@@ -440,8 +580,9 @@ pub const Renderer = struct {
             const d_inc0 = 2 * dx;
             const d_inc1 = 2 * (dx - dy);
             const x_inc: i32 = if (x > x_end) -1 else 1;
+
             while (y <= y_end) : (y += 1) {
-                self.putPixel(x, y, c);
+                self.frame.buffer[pitch * @"u32"(y) + @"u32"(x)] = color;
                 if (d < 0) {
                     d += d_inc0;
                 } else {
@@ -451,7 +592,81 @@ pub const Renderer = struct {
             }
         }
     }
-    // pub fn drawWuLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: ColorF32) void {}
+
+    inline fn drawHorizLine(self: *Self, nx0: i32, nx1: i32, ny: i32, c: Color32) void {
+        const color: u32 = mapRGBA(&self.fb_format, c._0, c._1, c._2, c._3);
+        const len: i32 = nx1 - nx0;
+
+        const start: usize = if (len >= 0)
+            (self.frame.pitch / self.fb_format.bytes_per_pixel) * @"u32"(ny) + @"u32"(nx0)
+        else
+            (self.frame.pitch / self.fb_format.bytes_per_pixel) * @"u32"(ny) + @"u32"(nx1);
+
+        @memset(self.frame.buffer[start..(start + @abs(len) + 1)], color);
+    }
+
+    inline fn drawVertiLine(self: *Self, ny0: i32, ny1: i32, nx: i32, c: Color32) void {
+        const color: u32 = mapRGBA(&self.fb_format, c._0, c._1, c._2, c._3);
+        const pitch = self.frame.pitch / self.fb_format.bytes_per_pixel;
+        const len: i32 = ny1 - ny0;
+
+        var start: usize = if (len >= 0)
+            pitch * @"u32"(ny0) + @"u32"(nx)
+        else
+            pitch * @"u32"(ny1) + @"u32"(nx);
+
+        var end: u32 = @abs(len) + 1;
+
+        while (end > 0) : (end -= 1) {
+            self.frame.buffer[start] = color;
+            start += pitch;
+        }
+    }
+
+    inline fn drawDiagLine(self: *Self, nx0: i32, ny0: i32, nx1: i32, ny1: i32, c: Color32) void {
+        const color: u32 = mapRGBA(&self.fb_format, c._0, c._1, c._2, c._3);
+        var pitch = self.frame.pitch / self.fb_format.bytes_per_pixel;
+
+        var start: usize = 0;
+        const len = ny1 - ny0;
+        if (len >= 0) {
+            start = pitch * @"u32"(ny0) + @"u32"(nx0);
+            if (nx0 <= nx1) pitch += 1 else pitch -= 1;
+        } else {
+            start = pitch * @"u32"(ny1) + @"u32"(nx1);
+            if (nx1 <= nx0) pitch += 1 else pitch -= 1;
+        }
+
+        var end: u32 = @abs(len) + 1;
+
+        while (end > 0) : (end -= 1) {
+            self.frame.buffer[start] = color;
+            start += pitch;
+        }
+    }
+
+    pub fn drawLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: Color32) void {
+        const nx0, const ny0 = self.normalizeCoordinates(x0, y0);
+        const nx1, const ny1 = self.normalizeCoordinates(x1, y1);
+
+        if (y0 == y1) {
+            self.drawHorizLine(nx0, nx1, ny0, c);
+            return;
+        } else if (x0 == x1) {
+            self.drawVertiLine(ny0, ny1, nx0, c);
+            return;
+        } else if (y1 - y0 == x1 - x0) {
+            self.drawDiagLine(nx0, ny0, nx1, ny1, c);
+        }
+
+        self.drawBrLine(nx0, ny0, nx1, ny1, c);
+    }
+
+    pub fn drawTriangle(self: *Self, p0: i32x2, p1: i32x2, p2: i32x2, color: Color32) void {
+        self.drawLine(p0._0, p0._1, p1._0, p1._1, color);
+        self.drawLine(p0._0, p0._1, p2._0, p2._1, color);
+        self.drawLine(p1._0, p1._1, p2._0, p2._1, color);
+    }
 
     pub inline fn present(self: *const Self) void {
         const ok = self.target.swapBuffers();
