@@ -582,7 +582,7 @@ pub const GLContext = struct {
     px_fmt_info: common.pixel.PixelFormatInfo,
     const Self = @This();
 
-    pub fn init(window_dc: win32.HDC, driver: *const Win32Driver, cfg: *const FBConfig) WGLError!Self {
+    pub fn init(driver: *const Win32Driver, window_dc: win32.HDC, cfg: *const FBConfig) WGLError!Self {
         const prev_dc = win32_gl.wglGetCurrentDC();
         const prev_glc = win32_gl.wglGetCurrentContext();
         defer _ = win32_gl.wglMakeCurrent(prev_dc, prev_glc);

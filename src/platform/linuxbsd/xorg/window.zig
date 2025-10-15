@@ -11,6 +11,7 @@ const bopts = @import("build-options");
 
 const debug = std.debug;
 const mem = std.mem;
+const io = std.io;
 const unix = common.unix;
 const WindowData = common.window_data.WindowData;
 const FBConfig = common.fb.FBConfig;
@@ -31,6 +32,210 @@ pub const WindowError = error{
     UnsupportedRenderBackend,
     GLError,
     VisualNone,
+    CanvasImpossible,
+};
+
+pub const BlitContext = struct {
+    xdisplay: *libx11.Display,
+    drawable: *const Window,
+    gc: libx11.GC,
+    ximage: *libx11.XImage,
+    backbuffer: []u32,
+    width: u32,
+    height: u32,
+    pitch: u32,
+    px_fmt_info: common.pixel.PixelFormatInfo,
+    const Self = @This();
+
+    pub fn init(w: *Window) WindowError!Self {
+        var graphics_context: libx11.GC = null;
+        var gcv: libx11.XGCValues = undefined;
+        { // graphics context creation
+            gcv.graphics_exposures = libx11.False;
+            graphics_context = libx11.dyn_api.XCreateGC(
+                w.ctx.driver.handles.xdisplay,
+                w.handle,
+                libx11.GCGraphicsExposures,
+                &gcv,
+            );
+            if (graphics_context == null) {
+                return WindowError.CanvasImpossible;
+            }
+        }
+
+        var s = Self{
+            .xdisplay = w.ctx.driver.handles.xdisplay,
+            .drawable = w,
+            .gc = graphics_context,
+            .backbuffer = &.{},
+            .width = 0,
+            .height = 0,
+            .pitch = 0,
+            .ximage = undefined,
+            .px_fmt_info = undefined,
+        };
+        var sz: common.window_data.WindowSize = undefined;
+        w.getClientSize(&sz);
+        const ok = s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
+        if (!ok) {
+            return WindowError.CanvasImpossible;
+        }
+
+        return s;
+    }
+
+    pub inline fn makeNewSoftwareBuffer(self: *Self, w: i32, h: i32) bool {
+        debug.assert(self.drawable.x11.visual != null);
+
+        var vinfo: libx11.XVisualInfo = undefined;
+        { // find out pixel format info
+            vinfo.visualid = libx11.dyn_api.XVisualIDFromVisual(self.drawable.x11.visual);
+            var num_visuals: c_int = 0;
+            const vi = libx11.dyn_api.XGetVisualInfo(
+                self.xdisplay,
+                libx11.VisualIDMask,
+                &vinfo,
+                &num_visuals,
+            );
+
+            if (vi != null) {
+                vinfo = vi.?.*;
+                _ = libx11.dyn_api.XFree(vi.?);
+            } else {
+                return false;
+            }
+
+            if (vinfo.class == libx11.DirectColor or vinfo.class == libx11.TrueColor) {
+                if (vinfo.depth < 24) {
+                    return false;
+                }
+
+                const rmask: u32 = @intCast(vinfo.red_mask);
+                const gmask: u32 = @intCast(vinfo.green_mask);
+                const bmask: u32 = @intCast(vinfo.blue_mask);
+                const amask: u32 = if (vinfo.depth == 32)
+                    @as(u32, 0xffff_ffff) & (~(rmask | gmask | bmask))
+                else
+                    0;
+
+                var bpp: u16 = @intCast(vinfo.depth);
+                if (bpp == 24) {
+                    // is it possible to get a 32 bits format ?
+                    var formats_counts: c_int = 0;
+                    const pixmap_formats = libx11.dyn_api.XListPixmapFormats(self.xdisplay, &formats_counts);
+                    if (pixmap_formats) |pf| {
+                        defer _ = libx11.dyn_api.XFree(pf);
+                        for (0..@intCast(formats_counts)) |i| {
+                            const fmt = &pf[i];
+                            if (fmt.depth == 24) {
+                                bpp = @intCast(fmt.bits_per_pixel);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                common.pixel.getPixelFormatInfo(
+                    rmask,
+                    gmask,
+                    bmask,
+                    amask,
+                    bpp,
+                    &self.px_fmt_info,
+                );
+            } else {
+                return false;
+            }
+        }
+
+        if (self.px_fmt_info.fmt == .Unknown) {
+            return false;
+        }
+
+        { // creating the pixels buffer
+            // PERF: use X11 shared memory extension to allocate the buffer
+            var pitch: u32 = @as(u32, @intCast(w)) * self.px_fmt_info.bytes_per_pixel;
+            pitch = (pitch + 3) & ~@as(u32, 3); // 4 bytes align
+
+            const pixels = self.drawable.ctx.allocator.alignedAlloc(
+                u8,
+                .@"4",
+                @as(u32, @intCast(h)) * pitch,
+            ) catch return false;
+
+            const ximage = libx11.dyn_api.XCreateImage(
+                self.xdisplay,
+                self.drawable.x11.visual.?,
+                @intCast(vinfo.depth),
+                libx11.ZPixmap,
+                0,
+                pixels.ptr,
+                @intCast(w),
+                @intCast(h),
+                32,
+                0,
+            );
+
+            if (ximage == null) {
+                self.drawable.ctx.allocator.free(pixels);
+                return false;
+            }
+
+            self.drawable.ctx.allocator.free(self.backbuffer);
+            self.ximage = ximage.?;
+            self.width = @intCast(w);
+            self.height = @intCast(h);
+            self.pitch = pitch;
+            self.backbuffer = @ptrCast(pixels);
+        }
+
+        return true;
+    }
+
+    pub fn deinit(self: *Self) void {
+        debug.assert(self.gc != null);
+        debug.assert(@intFromPtr(self.backbuffer.ptr) == @intFromPtr(self.ximage.data));
+
+        self.drawable.ctx.allocator.free(self.backbuffer);
+        self.ximage.data = null;
+        libx11.dyn_api.XDestroyImage(self.ximage);
+        libx11.dyn_api.XFreeGC(self.xdisplay, self.gc.?);
+        self.gc = null;
+    }
+
+    pub inline fn blit(self: *Self) void {
+        debug.assert(self.gc != null);
+
+        libx11.dyn_api.XPutImage(
+            self.xdisplay,
+            self.drawable.handle,
+            self.gc.?,
+            self.ximage,
+            0,
+            0,
+            0,
+            0,
+            self.width,
+            self.height,
+        );
+
+        libx11.dyn_api.XSync(
+            self.xdisplay,
+            libx11.False,
+        );
+    }
+};
+
+pub const X11CanvasTag = enum {
+    invalid,
+    blt_ctx,
+    gl_ctx,
+};
+
+pub const X11Canvas = union(X11CanvasTag) {
+    invalid: void,
+    blt_ctx: BlitContext,
+    gl_ctx: glx.GLContext,
 };
 
 pub const Window = struct {
@@ -50,7 +255,9 @@ pub const Window = struct {
         cursor: cursor.CursorHints,
         xdnd_allow: bool,
         windowed_area: common.geometry.Rect,
+        visual: ?*libx11.Visual,
     },
+    canvas: X11Canvas,
 
     pub const WINDOW_DEFAULT_POSITION = common.geometry.Point2D{
         .x = 0,
@@ -87,10 +294,12 @@ pub const Window = struct {
             },
             .xdnd_allow = false,
             .windowed_area = data.client_area,
+            .visual = null,
         };
         self.ctx = ctx;
+        self.canvas = .{ .invalid = {} };
 
-        // X11 won't let us change the visual and depth later so decide now.
+        //NOTE:  X11 won't let us change the visual and depth later so decide now.
         var visual: ?*libx11.Visual = null;
         var depth: c_int = 0;
         switch (fb_cfg.accel) {
@@ -100,7 +309,7 @@ pub const Window = struct {
                     return WindowError.VisualNone;
                 }
             },
-            else => {
+            .software => {
                 visual = libx11.DefaultVisual(
                     ctx.driver.handles.xdisplay,
                     ctx.driver.handles.default_screen,
@@ -113,6 +322,7 @@ pub const Window = struct {
         }
 
         self.handle = try createPlatformWindow(ctx.driver, data, visual, depth);
+        self.x11.visual = visual;
         self.data.id = if (id) |ident| ident else @intCast(self.handle);
 
         if (!ctx.driver.addToXContext(self.handle, @ptrCast(self))) {
@@ -151,6 +361,14 @@ pub const Window = struct {
     /// Destroy the window
     pub fn deinit(self: *Self) void {
         std.debug.assert(self.handle != 0);
+
+        if (@as(X11CanvasTag, self.canvas) != .invalid and common.IS_DEBUG_BUILD) {
+            // The window is being destroyed
+            // but a rendering canvas is still active
+            // panic to stop the program from being in an invalid state
+            @panic("the window canvas should be destroyed before calling deinit on the window");
+        }
+
         self.ev_queue = null;
         if (self.data.flags.is_fullscreen) _ = self.setFullscreen(false);
         self.setCursorMode(.Normal);
@@ -438,16 +656,7 @@ pub const Window = struct {
         drvr.flushXRequests();
     }
 
-    /// Returns the Physical size of the window's client area
-    pub fn getClientPixelSize(self: *const Self) common.geometry.RectSize {
-        return .{
-            .width = self.data.client_area.size.width,
-            .height = self.data.client_area.size.height,
-        };
-    }
-
-    /// Returns the logical size of the window's client area
-    pub fn getClientSize(self: *const Self) common.geometry.RectSize {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = self.ctx.driver;
         _ = libx11.dyn_api.XGetWindowAttributes(
@@ -456,9 +665,15 @@ pub const Window = struct {
             &attribs,
         );
 
-        return .{
-            .width = @intCast(attribs.width),
-            .height = @intCast(attribs.height),
+        var scale = @as(f64, 0);
+        self.getDpi(null, null, &scale);
+
+        out.* = .{
+            .physical_width = self.data.client_area.size.width,
+            .physical_height = self.data.client_area.size.height,
+            .scale = scale,
+            .logical_width = @intCast(attribs.width),
+            .logical_height = @intCast(attribs.height),
         };
     }
 
@@ -1030,12 +1245,11 @@ pub const Window = struct {
         }
     }
 
-    pub fn getScalingDPI(self: *const Self, scaler: ?*f64) u32 {
+    pub fn getDpi(self: *const Self, dpi_x: ?*f64, dpi_y: ?*f64, scaler: ?*f64) void {
         const drvr = self.ctx.driver;
-        if (scaler) |s| {
-            s.* = drvr.g_screen_scale;
-        }
-        return @intFromFloat(drvr.g_dpi);
+        if (scaler) |s| s.* = drvr.g_screen_scale;
+        if (dpi_x) |x| x.* = drvr.g_dpi;
+        if (dpi_y) |y| y.* = drvr.g_dpi;
     }
 
     pub fn setCursorIcon(
@@ -1072,10 +1286,8 @@ pub const Window = struct {
     pub fn setNativeCursorIcon(
         self: *Self,
         cursor_shape: common.cursor.NativeCursorShape,
-    ) WindowError!void {
-        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape) catch {
-            return WindowError.OutOfMemory;
-        };
+    ) void {
+        const new_cursor = cursor.createNativeCursor(self.ctx.driver, cursor_shape);
         cursor.destroyCursorIcon(self.ctx.driver.handles.xdisplay, &self.x11.cursor);
         self.x11.cursor.icon = new_cursor.icon;
         self.x11.cursor.mode = new_cursor.mode;
@@ -1214,12 +1426,52 @@ pub const Window = struct {
         return success;
     }
 
-    pub fn getGLContext(self: *const Self) WindowError!glx.GLContext {
+    pub fn createCanvas(self: *Self) WindowError!common.fb.Canvas {
         switch (self.fb_cfg.accel) {
-            .opengl => return glx.GLContext.init(self.ctx.driver, self.handle, &self.fb_cfg) catch {
-                return WindowError.GLError;
+            .software => {
+                if (@as(X11CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{ .blt_ctx = try BlitContext.init(self) };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = swSwapBuffers,
+                        .setSwapInterval = swSetSwapInterval,
+                        .getSoftwareBuffer = swGetSoftwareBuffer,
+                        .updateSoftwareBuffer = swUpdateSoftwareBuffer,
+                        .getDriverInfo = swGetDriverInfo,
+                        .deinit = swDestroyCanvas,
+                    },
+                    .fb_format_info = self.canvas.blt_ctx.px_fmt_info,
+                    .render_backend = .software,
+                };
+                return c;
             },
-            else => return WindowError.UnsupportedRenderBackend,
+            .opengl => {
+                if (@as(X11CanvasTag, self.canvas) == .invalid) {
+                    self.canvas = .{
+                        .gl_ctx = glx.GLContext.init(
+                            self.ctx.driver,
+                            self.handle,
+                            &self.fb_cfg,
+                        ) catch
+                            return WindowError.CanvasImpossible,
+                    };
+                }
+                const c = common.fb.Canvas{
+                    .ctx = @ptrCast(&self.canvas),
+                    ._vtable = .{
+                        .swapBuffers = glx.glSwapBuffers,
+                        .makeCurrent = glx.glMakeCurrent,
+                        .setSwapInterval = glx.glSetSwapInterval,
+                        .getDriverInfo = glx.glGetDriverInfo,
+                        .deinit = glx.glDestroyCanvas,
+                    },
+                    .fb_format_info = self.canvas.gl_ctx.px_fmt_info,
+                    .render_backend = .opengl,
+                };
+                return c;
+            },
         }
     }
 
@@ -1228,14 +1480,15 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                const cs = self.getClientSize();
+                var cl_sz: common.window_data.WindowSize = undefined;
+                self.getClientSize(&cl_sz);
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
                     .{
-                        self.data.client_area.size.width,
-                        self.data.client_area.size.height,
-                        cs.width,
-                        cs.height,
+                        cl_sz.physical_width,
+                        cl_sz.physical_height,
+                        cl_sz.logical_width,
+                        cl_sz.logical_height,
                     },
                 );
                 if (self.data.min_size) |*value| {
@@ -1493,4 +1746,53 @@ fn waitForWindowVisibility(display: *libx11.Display, window_id: libx11.Window) b
         }
     }
     return true;
+}
+
+//===========================
+// Software rendering hooks
+//============================
+
+fn swSwapBuffers(ctx: *anyopaque) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.blit();
+    return true;
+}
+pub fn swSetSwapInterval(_: *anyopaque, _: common.fb.SwapInterval) bool {
+    return true;
+}
+
+fn swGetSoftwareBuffer(
+    ctx: *anyopaque,
+    pixels: *[]u32,
+    w: *u32,
+    h: *u32,
+    pitch: *u32,
+) void {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    w.* = c.blt_ctx.width;
+    h.* = c.blt_ctx.height;
+    pitch.* = c.blt_ctx.pitch;
+    pixels.* = c.blt_ctx.backbuffer;
+}
+
+fn swUpdateSoftwareBuffer(
+    ctx: *anyopaque,
+    w: i32,
+    h: i32,
+) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    return c.blt_ctx.makeNewSoftwareBuffer(w, h);
+}
+
+fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {
+    _ = wr.writeAll("Software renderer using BitBlt win32 api") catch
+        return false;
+
+    return true;
+}
+
+fn swDestroyCanvas(ctx: *anyopaque) void {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    c.blt_ctx.deinit();
+    c.* = .{ .invalid = {} };
 }

@@ -61,6 +61,7 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 // WARN: because Displays(monitors) can be unplugged at any
 // moment by the user from the system. the identifiers returned
 // by these functions may get invalidated at any moment, so use with caution
+// TODO: add an event for when monitors gets unplugged
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;
