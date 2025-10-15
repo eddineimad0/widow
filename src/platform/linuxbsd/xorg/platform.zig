@@ -6,11 +6,11 @@ const common = @import("common");
 const driver = @import("driver.zig");
 
 const so = common.unix.so;
-const dbg = std.dbg;
+const dbg = std.debug;
 const mem = std.mem;
 
 pub const WindowHandle = libx11.Window;
-pub const DisplayHandle = x11ext.RRCrtc;
+pub const DisplayHandle = x11ext.xrandr.RRCrtc;
 
 const KeyMaps = @import("keymaps.zig").KeyMaps;
 pub const Window = @import("window.zig").Window;
@@ -62,10 +62,9 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
 }
 
 pub inline fn getPrimaryDisplay(ctx: *const WidowContext) ?DisplayHandle {
-    // TODO need is_primary on display struct
     for (ctx.display_mgr.displays.items) |*d| {
         if (d.is_primary) {
-            return d.handle;
+            return d.adapter;
         }
     }
     return null;
@@ -73,13 +72,13 @@ pub inline fn getPrimaryDisplay(ctx: *const WidowContext) ?DisplayHandle {
 
 pub inline fn getDisplayFromWindow(ctx: *WidowContext, w: *Window) ?DisplayHandle {
     const d = ctx.display_mgr.findWindowDisplay(w) catch return null;
-    return d.handle;
+    return d.adapter;
 }
 
 pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_mode.DisplayInfo) bool {
     for (ctx.display_mgr.displays.items) |*d| {
-        if (d.handle == h) {
-            d.getCurrentVideoMode(&info.video_mode);
+        if (d.adapter == h) {
+            d.queryCurrentMode(ctx.driver, &info.video_mode);
             info.name_len = d.name.len;
             dbg.assert(info.name_len <= info.name.len);
             const end = @min(info.name_len, info.name.len);
@@ -91,6 +90,5 @@ pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_
 }
 
 test "Platform" {
-    // TODO: make testing actually work
     @import("std").testing.refAllDecls(@import("utils.zig"));
 }

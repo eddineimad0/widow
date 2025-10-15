@@ -46,11 +46,6 @@ pub const gfx = struct {
     pub const PixelFormatInfo = common.pixel.PixelFormatInfo;
 };
 
-pub const DrawSurface = union {
-    software: platform.BlitContext,
-    opengl: platform.GLContext,
-};
-
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
@@ -66,6 +61,7 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 // WARN: because Displays(monitors) can be unplugged at any
 // moment by the user from the system. the identifiers returned
 // by these functions may get invalidated at any moment, so use with caution
+// TODO: add an event for when monitors gets unplugged
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;

@@ -37,7 +37,8 @@ pub const WindowError = error{
 
 pub const BlitContext = struct {
     xdisplay: *libx11.Display,
-    drawable: *Window,
+    drawable: *const Window,
+    gc: libx11.GC,
     ximage: *libx11.XImage,
     backbuffer: []u32,
     width: u32,
@@ -47,9 +48,25 @@ pub const BlitContext = struct {
     const Self = @This();
 
     pub fn init(w: *Window) WindowError!Self {
+        var graphics_context: libx11.GC = null;
+        var gcv: libx11.XGCValues = undefined;
+        { // graphics context creation
+            gcv.graphics_exposures = libx11.False;
+            graphics_context = libx11.dyn_api.XCreateGC(
+                w.ctx.driver.handles.xdisplay,
+                w.handle,
+                libx11.GCGraphicsExposures,
+                &gcv,
+            );
+            if (graphics_context == null) {
+                return WindowError.CanvasImpossible;
+            }
+        }
+
         var s = Self{
             .xdisplay = w.ctx.driver.handles.xdisplay,
             .drawable = w,
+            .gc = graphics_context,
             .backbuffer = &.{},
             .width = 0,
             .height = 0,
@@ -68,29 +85,14 @@ pub const BlitContext = struct {
     }
 
     pub inline fn makeNewSoftwareBuffer(self: *Self, w: i32, h: i32) bool {
-        // TODO: this needs revision
         debug.assert(self.drawable.x11.visual != null);
-        debug.assert(self.drawable.x11.gc == null);
-        var gcv: libx11.XGCValues = undefined;
-        { // graphics context creation
-            gcv.graphics_exposures = libx11.False;
-            self.drawable.x11.gc = libx11.dyn_api.XCreateGC(
-                self.xdisplay,
-                self.drawable.handle,
-                libx11.GCGraphicsExposures,
-                &gcv,
-            );
-            if (self.drawable.x11.gc == null) {
-                return false;
-            }
-        }
 
         var vinfo: libx11.XVisualInfo = undefined;
         { // find out pixel format info
             vinfo.visualid = libx11.dyn_api.XVisualIDFromVisual(self.drawable.x11.visual);
             var num_visuals: c_int = 0;
             const vi = libx11.dyn_api.XGetVisualInfo(
-                self.drawable.ctx.driver.handles.xdisplay,
+                self.xdisplay,
                 libx11.VisualIDMask,
                 &vinfo,
                 &num_visuals,
@@ -116,7 +118,23 @@ pub const BlitContext = struct {
                 else
                     0;
 
-                const bpp: u16 = @intCast(vinfo.depth);
+                var bpp: u16 = @intCast(vinfo.depth);
+                if (bpp == 24) {
+                    // is it possible to get a 32 bits format ?
+                    var formats_counts: c_int = 0;
+                    const pixmap_formats = libx11.dyn_api.XListPixmapFormats(self.xdisplay, &formats_counts);
+                    if (pixmap_formats) |pf| {
+                        defer _ = libx11.dyn_api.XFree(pf);
+                        for (0..@intCast(formats_counts)) |i| {
+                            const fmt = &pf[i];
+                            if (fmt.depth == 24) {
+                                bpp = @intCast(fmt.bits_per_pixel);
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 common.pixel.getPixelFormatInfo(
                     rmask,
                     gmask,
@@ -125,10 +143,6 @@ pub const BlitContext = struct {
                     bpp,
                     &self.px_fmt_info,
                 );
-
-                if (bpp == 24) {
-                    //TODO: is it truly a rgb display ?
-                }
             } else {
                 return false;
             }
@@ -138,60 +152,64 @@ pub const BlitContext = struct {
             return false;
         }
 
-        var pitch: u32 = @as(u32, @intCast(w)) * self.px_fmt_info.bytes_per_pixel;
-        pitch = (pitch + 3) & ~@as(u32, 3);
+        { // creating the pixels buffer
+            // PERF: use X11 shared memory extension to allocate the buffer
+            var pitch: u32 = @as(u32, @intCast(w)) * self.px_fmt_info.bytes_per_pixel;
+            pitch = (pitch + 3) & ~@as(u32, 3); // 4 bytes align
 
-        const pixels = self.drawable.ctx.allocator.alloc(
-            u32,
-            @as(u32, @intCast(h)) * pitch,
-        ) catch return false;
+            const pixels = self.drawable.ctx.allocator.alignedAlloc(
+                u8,
+                .@"4",
+                @as(u32, @intCast(h)) * pitch,
+            ) catch return false;
 
-        const ximage = libx11.dyn_api.XCreateImage(
-            self.xdisplay,
-            self.drawable.x11.visual.?,
-            @intCast(vinfo.depth),
-            libx11.ZPixmap,
-            0,
-            @ptrCast(pixels.ptr),
-            @intCast(w),
-            @intCast(h),
-            32,
-            0,
-        );
+            const ximage = libx11.dyn_api.XCreateImage(
+                self.xdisplay,
+                self.drawable.x11.visual.?,
+                @intCast(vinfo.depth),
+                libx11.ZPixmap,
+                0,
+                pixels.ptr,
+                @intCast(w),
+                @intCast(h),
+                32,
+                0,
+            );
 
-        if (ximage == null) {
-            self.drawable.ctx.allocator.free(pixels);
-            return false;
+            if (ximage == null) {
+                self.drawable.ctx.allocator.free(pixels);
+                return false;
+            }
+
+            self.drawable.ctx.allocator.free(self.backbuffer);
+            self.ximage = ximage.?;
+            self.width = @intCast(w);
+            self.height = @intCast(h);
+            self.pitch = pitch;
+            self.backbuffer = @ptrCast(pixels);
         }
 
-        ximage.?.byte_order = libx11.LSBFirst;
-
-        self.ximage = ximage.?;
-        self.width = @intCast(w);
-        self.height = @intCast(h);
-        self.pitch = pitch;
-        self.backbuffer = pixels;
         return true;
     }
 
     pub fn deinit(self: *Self) void {
-        debug.assert(self.drawable.x11.gc != null);
+        debug.assert(self.gc != null);
         debug.assert(@intFromPtr(self.backbuffer.ptr) == @intFromPtr(self.ximage.data));
 
         self.drawable.ctx.allocator.free(self.backbuffer);
         self.ximage.data = null;
         libx11.dyn_api.XDestroyImage(self.ximage);
-        libx11.dyn_api.XFreeGC(self.xdisplay, self.drawable.x11.gc.?);
-        self.drawable.x11.gc = null;
+        libx11.dyn_api.XFreeGC(self.xdisplay, self.gc.?);
+        self.gc = null;
     }
 
     pub inline fn blit(self: *Self) void {
-        debug.assert(self.drawable.x11.gc != null);
+        debug.assert(self.gc != null);
 
         libx11.dyn_api.XPutImage(
             self.xdisplay,
             self.drawable.handle,
-            self.drawable.x11.gc.?,
+            self.gc.?,
             self.ximage,
             0,
             0,
@@ -238,7 +256,6 @@ pub const Window = struct {
         xdnd_allow: bool,
         windowed_area: common.geometry.Rect,
         visual: ?*libx11.Visual,
-        gc: libx11.GC,
     },
     canvas: X11Canvas,
 
@@ -277,7 +294,6 @@ pub const Window = struct {
             },
             .xdnd_allow = false,
             .windowed_area = data.client_area,
-            .gc = null,
             .visual = null,
         };
         self.ctx = ctx;

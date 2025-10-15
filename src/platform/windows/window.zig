@@ -399,7 +399,7 @@ pub const BlitContext = struct {
         var pitch: u32 = @as(u32, @intCast(width)) * px_fmt_info.bytes_per_pixel;
         pitch = (pitch + 3) & ~@as(u32, 3); // padding
         info.bmiHeader.biWidth = width;
-        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biHeight = -height; // negative for top-down bitmap
         info.bmiHeader.biSizeImage = @as(u32, @intCast(height)) * pitch;
 
         var pixels: ?*anyopaque = null;

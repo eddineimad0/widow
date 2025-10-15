@@ -133,6 +133,12 @@ pub const XImage = extern struct {
     },
 };
 
+pub const XPixmapFormatValues = extern struct {
+    depth: c_int,
+    bits_per_pixel: c_int,
+    scanline_pad: c_int,
+};
+
 pub const ScreenFormat = extern struct {
     ext_data: ?[*]XExtData,
     depth: c_int,
@@ -3238,6 +3244,11 @@ pub const dyn_api = struct {
         visual: ?*Visual,
     ) callconv(.c) VisualID;
 
+    const XListPixmapFormatsProc = *const fn (
+        display: ?*Display,
+        count_return: *c_int,
+    ) callconv(.c) ?[*]XPixmapFormatValues;
+
     const XCreateImageProc = *const fn (
         display: ?*Display,
         visual: *Visual,
@@ -3378,6 +3389,7 @@ pub const dyn_api = struct {
     pub var XFreeGC: XFreeGCProc = undefined;
     pub var XGetVisualInfo: XGetVisualInfoProc = undefined;
     pub var XVisualIDFromVisual: XVisualIDFromVisualProc = undefined;
+    pub var XListPixmapFormats: XListPixmapFormatsProc = undefined;
     pub var XCreateImage: XCreateImageProc = undefined;
     pub var XPutImage: XPutImageProc = undefined;
     pub var XDestroyImage: XDestroyImageProc = undefined;
