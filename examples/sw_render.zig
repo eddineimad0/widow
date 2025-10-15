@@ -684,11 +684,14 @@ pub const Renderer = struct {
         dbg.assert(total_height > 0);
 
         const pitch: u32 = (self.frame.pitch / self.fb_format.bytes_per_pixel);
-
         var y = min_y;
+        var offset: usize = @"u32"(y) * pitch;
         { // first half
             const segment_height = max_y_1 - min_y;
-            while (y <= max_y_1) : (y += 1) {
+            while (y <= max_y_1) : ({
+                y += 1;
+                offset += pitch;
+            }) {
                 const m02: f32 = @"f32"(y - min_y) / @"f32"(total_height);
                 const m01: f32 = @"f32"(y - min_y) / @"f32"(segment_height);
                 const a = lerp(@"f32"(nv0[0]), @"f32"(nv2[0]), m02);
@@ -699,7 +702,7 @@ pub const Renderer = struct {
                 var max_x = next_x01 ^ next_x02;
                 max_x = max_x ^ min_x;
 
-                const start: usize = @"u32"(y) * pitch + @"u32"(min_x + 1);
+                const start: usize = offset + @"u32"(min_x + 1);
                 const len: usize = @intCast(max_x - min_x);
                 @memset(self.frame.buffer[start..(start + len)], color);
             }
@@ -707,7 +710,10 @@ pub const Renderer = struct {
 
         { // second half
             const segment_height = max_y_2 - max_y_1;
-            while (y <= max_y_2) : (y += 1) {
+            while (y <= max_y_2) : ({
+                y += 1;
+                offset += pitch;
+            }) {
                 const m02: f32 = @"f32"(y - min_y) / @"f32"(total_height);
                 const m01: f32 = @"f32"(y - max_y_1) / @"f32"(segment_height);
                 const a = lerp(@"f32"(nv0[0]), @"f32"(nv2[0]), m02);
@@ -718,7 +724,7 @@ pub const Renderer = struct {
                 var max_x = next_x01 ^ next_x02;
                 max_x = max_x ^ min_x;
 
-                const start: usize = @"u32"(y) * pitch + @"u32"(min_x + 1);
+                const start: usize = offset + @"u32"(min_x + 1);
                 const len: usize = @intCast(max_x - min_x);
                 @memset(self.frame.buffer[start..(start + len)], color);
             }
