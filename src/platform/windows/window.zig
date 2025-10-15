@@ -399,7 +399,7 @@ pub const BlitContext = struct {
         var pitch: u32 = @as(u32, @intCast(width)) * px_fmt_info.bytes_per_pixel;
         pitch = (pitch + 3) & ~@as(u32, 3); // padding
         info.bmiHeader.biWidth = width;
-        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biHeight = -height; // negative for top-down bitmap
         info.bmiHeader.biSizeImage = @as(u32, @intCast(height)) * pitch;
 
         var pixels: ?*anyopaque = null;
@@ -994,7 +994,6 @@ pub const Window = struct {
         );
     }
 
-    /// Returns the logical size of the window's client area
     pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
         var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,
@@ -1612,8 +1611,8 @@ pub const Window = struct {
                 if (@as(Win32CanvasTag, self.canvas) == .invalid) {
                     self.canvas = .{
                         .gl_ctx = wgl.GLContext.init(
-                            self.win32.dc,
                             self.ctx.driver,
+                            self.win32.dc,
                             &self.fb_cfg,
                         ) catch
                             return WindowError.CanvasImpossible,

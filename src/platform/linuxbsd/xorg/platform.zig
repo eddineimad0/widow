@@ -2,19 +2,22 @@ const std = @import("std");
 const display = @import("display.zig");
 const libx11 = @import("x11/xlib.zig");
 const x11ext = @import("x11/extensions/extensions.zig");
-const so = @import("common").unix.so;
+const common = @import("common");
 const driver = @import("driver.zig");
 
+const so = common.unix.so;
+const dbg = std.debug;
 const mem = std.mem;
 
 pub const WindowHandle = libx11.Window;
-pub const DisplayHandle = x11ext.RRCrtc;
+pub const DisplayHandle = x11ext.xrandr.RRCrtc;
 
 const KeyMaps = @import("keymaps.zig").KeyMaps;
 pub const Window = @import("window.zig").Window;
 pub const WindowError = @import("window.zig").WindowError;
 
 pub const GLContext = @import("glx.zig").GLContext;
+pub const BlitContext = @import("window.zig").BlitContext;
 pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
 
 pub const WidowContext = struct {
@@ -40,7 +43,8 @@ pub const WidowContext = struct {
     }
 };
 
-pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || so.ModuleError ||
+pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
+    so.ModuleError ||
     display.DisplayError ||
     driver.XConnectionError)!*WidowContext {
     libx11.initDynamicApi() catch |e| {
@@ -55,6 +59,34 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error || so.ModuleErr
 pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     ctx.display_mgr.deinit(ctx.allocator);
     a.destroy(ctx);
+}
+
+pub inline fn getPrimaryDisplay(ctx: *const WidowContext) ?DisplayHandle {
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.is_primary) {
+            return d.adapter;
+        }
+    }
+    return null;
+}
+
+pub inline fn getDisplayFromWindow(ctx: *WidowContext, w: *Window) ?DisplayHandle {
+    const d = ctx.display_mgr.findWindowDisplay(w) catch return null;
+    return d.adapter;
+}
+
+pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_mode.DisplayInfo) bool {
+    for (ctx.display_mgr.displays.items) |*d| {
+        if (d.adapter == h) {
+            d.queryCurrentMode(ctx.driver, &info.video_mode);
+            info.name_len = d.name.len;
+            dbg.assert(info.name_len <= info.name.len);
+            const end = @min(info.name_len, info.name.len);
+            @memcpy(info.name[0..end], d.name);
+            return true;
+        }
+    }
+    return false;
 }
 
 test "Platform" {

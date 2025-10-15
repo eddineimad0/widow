@@ -2,7 +2,7 @@ const std = @import("std");
 const libx11 = @import("x11/xlib.zig");
 const common = @import("common");
 
-const debug = std.debug;
+const dbg = std.debug;
 
 const X11Driver = @import("driver.zig").X11Driver;
 
@@ -61,7 +61,7 @@ pub fn createX11Cursor(
 pub fn createNativeCursor(
     driver: *const X11Driver,
     shape: common.cursor.NativeCursorShape,
-) IconError!CursorHints {
+) CursorHints {
     const CursorShape = common.cursor.NativeCursorShape;
     var cursor_handle: libx11.Cursor = 0;
     if (driver.handles.xcursor) |_| {
@@ -110,10 +110,7 @@ pub fn createNativeCursor(
         );
     }
 
-    if (cursor_handle == 0) {
-        // We failed.
-        return IconError.NotFound;
-    }
+    dbg.assert(cursor_handle != 0);
 
     return CursorHints{
         .icon = cursor_handle,
@@ -185,5 +182,5 @@ pub fn captureCursor(x_display: *libx11.Display, w: libx11.Window) void {
         libx11.None,
         libx11.CurrentTime,
     );
-    debug.assert(retv == libx11.GrabSuccess);
+    dbg.assert(retv == libx11.GrabSuccess);
 }

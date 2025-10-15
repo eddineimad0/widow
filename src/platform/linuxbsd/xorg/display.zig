@@ -159,9 +159,15 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
         );
     }
 
+    const primary_output_id = driver.extensions.xrandr.XRRGetOutputPrimary(
+        driver.handles.xdisplay,
+        driver.handles.root_window,
+    );
+
     // the number of outputs matches the number of available
     // video ports(HDMI,VGA,...etc)
     for (0..@intCast(screens_res.noutput)) |i| {
+        const is_primary = screens_res.outputs[i] == primary_output_id;
         const output_info = driver.extensions.xrandr.XRRGetOutputInfo(
             driver.handles.xdisplay,
             screens_res,
@@ -217,6 +223,7 @@ pub fn pollDisplays(allocator: Allocator, driver: *const X11Driver) Allocator.Er
             .orig_video_mode = x11ext.xrandr.RRMode_None,
             .modes = .empty,
             .modes_ids = .empty,
+            .is_primary = is_primary,
         };
         errdefer d.deinit(allocator, driver);
 
@@ -253,6 +260,7 @@ pub const Display = struct {
     output: x11ext.xrandr.RROutput,
     orig_video_mode: x11ext.xrandr.RRMode, // Keeps track of any mode changes we made.
     xinerama_index: i32,
+    is_primary: bool,
 
     const Self = @This();
 
