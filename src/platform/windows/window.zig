@@ -1611,8 +1611,8 @@ pub const Window = struct {
                 if (@as(Win32CanvasTag, self.canvas) == .invalid) {
                     self.canvas = .{
                         .gl_ctx = wgl.GLContext.init(
-                            self.win32.dc,
                             self.ctx.driver,
+                            self.win32.dc,
                             &self.fb_cfg,
                         ) catch
                             return WindowError.CanvasImpossible,

@@ -3229,18 +3229,18 @@ pub const dyn_api = struct {
 
     const XGetVisualInfoProc = *const fn (
         display: ?*Display,
-        vinfo_mask: *c_long,
+        vinfo_mask: c_long,
         vinfo_template: *XVisualInfo,
         nitems_return: *c_int,
     ) callconv(.c) ?*XVisualInfo;
 
     const XVisualIDFromVisualProc = *const fn (
         visual: ?*Visual,
-    ) callconv(.c) ?*XVisualInfo;
+    ) callconv(.c) VisualID;
 
     const XCreateImageProc = *const fn (
         display: ?*Display,
-        visual: Visual,
+        visual: *Visual,
         depth: c_uint,
         format: c_int,
         offset: c_int,

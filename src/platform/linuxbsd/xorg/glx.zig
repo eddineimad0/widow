@@ -2,10 +2,14 @@ const std = @import("std");
 const builtin = @import("builtin");
 const common = @import("common");
 const libx11 = @import("x11/xlib.zig");
+
 const mem = std.mem;
 const debug = std.debug;
+const io = std.io;
 const so = common.unix.so;
+
 const X11Driver = @import("driver.zig").X11Driver;
+const X11Canvas = @import("window.zig").X11Canvas;
 
 pub const GLX_SO_NAMES = switch (builtin.target.os.tag) {
     .linux => [_][*:0]const u8{ "libGLX.so.0", "libGL.so.1", "libGL.so" },
@@ -183,9 +187,16 @@ pub const glx_api = struct {
         display: ?*libx11.Display,
         drawable: GLXDrawable,
     ) callconv(.c) void;
-    const glXGetVisualFromFBConfigProc = *const fn (display: ?*libx11.Display, config: GLXFBConfig) callconv(.c) ?*libx11.XVisualInfo;
-    const glXGetProcAddressProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
-    const glXGetProcAddressARBProc = *const fn (proc_name: [*:0]const u8) callconv(.c) ?*anyopaque;
+    const glXGetVisualFromFBConfigProc = *const fn (
+        display: ?*libx11.Display,
+        config: GLXFBConfig,
+    ) callconv(.c) ?*libx11.XVisualInfo;
+    const glXGetProcAddressProc = *const fn (
+        proc_name: [*:0]const u8,
+    ) callconv(.c) ?*anyopaque;
+    const glXGetProcAddressARBProc = *const fn (
+        proc_name: [*:0]const u8,
+    ) callconv(.c) ?*anyopaque;
 
     var glXGetFBConfigs: glXGetFBConfigsProc = undefined;
     var glXChooseFBConfig: glXChooseFBConfigProc = undefined;
@@ -431,6 +442,7 @@ fn createGLContext(
     w: libx11.Window,
     cfg: *const common.fb.FBConfig,
     glx_wndw: *GLXWindow,
+    pxfmt_info: *common.pixel.PixelFormatInfo,
 ) (GLXError || so.ModuleError)!?GLXContext {
     var gl_attrib_list: [16]c_int = undefined;
     var glx_rc: ?GLXContext = null;
@@ -489,6 +501,32 @@ fn createGLContext(
         return GLXError.NullWindow;
     }
 
+    { // fill the pixel format info param
+        var alpha_bits: c_int = 0;
+        const ok = glx_api.glXGetFBConfigAttrib(driver.handles.xdisplay, fb_cfg, GLX_ALPHA_SIZE, &alpha_bits);
+        debug.assert(ok == libx11.Success);
+        const visual_info = glx_api.glXGetVisualFromFBConfig(driver.handles.xdisplay, fb_cfg);
+        debug.assert(visual_info != null); // should not return null because the fb_cfg is valid
+        if (visual_info) |vinfo| {
+            defer _ = libx11.dyn_api.XFree(vinfo);
+            const rmask: u32 = @intCast(vinfo.red_mask);
+            const gmask: u32 = @intCast(vinfo.green_mask);
+            const bmask: u32 = @intCast(vinfo.blue_mask);
+            const bits_per_pixel: u16 = @intCast(vinfo.depth);
+            const total_bits_mask: u32 = @intCast((@as(u64, 1) << @truncate(bits_per_pixel)) - 1);
+            const rgb_mask = rmask | gmask | bmask;
+            const amask = if (alpha_bits == 0) 0 else (~rgb_mask) & total_bits_mask;
+            common.pixel.getPixelFormatInfo(
+                rmask,
+                gmask,
+                bmask,
+                amask,
+                bits_per_pixel,
+                pxfmt_info,
+            );
+        }
+    }
+
     glx_wndw.* = wndw;
     return glx_rc;
 }
@@ -506,20 +544,22 @@ const GLXError = error{
 pub const GLContext = struct {
     const GL_UNKOWN_VENDOR = "Vendor_Unknown";
     const GL_UNKOWN_RENDER = "Renderer_Unknown";
+    x_display: *libx11.Display,
     glrc: GLXContext,
-    glwndw: GLXWindow,
-    owner: libx11.Window,
     driver: struct {
         hardware: [*:0]const u8,
         vendor: [*:0]const u8,
         version: [*:0]const u8,
     },
-    x_display: *libx11.Display,
+    owner: libx11.Window,
+    glwndw: GLXWindow,
+    px_fmt_info: common.pixel.PixelFormatInfo,
     const Self = @This();
 
     pub fn init(driver: *const X11Driver, window: libx11.Window, cfg: *const common.fb.FBConfig) GLXError!Self {
         var glx_wndw: GLXWindow = 0;
-        const rc = createGLContext(driver, window, cfg, &glx_wndw) catch |err| {
+        var px_fmt_info: common.pixel.PixelFormatInfo = undefined;
+        const rc = createGLContext(driver, window, cfg, &glx_wndw, &px_fmt_info) catch |err| {
             switch (err) {
                 so.ModuleError.NotFound, so.ModuleError.UndefinedSymbol => return GLXError.MissingLibGLX,
                 else => return @as(GLXError, @errorCast(err)),
@@ -556,6 +596,7 @@ pub const GLContext = struct {
                 .version = ver,
             },
             .x_display = driver.handles.xdisplay,
+            .px_fmt_info = px_fmt_info,
         };
     }
 
@@ -566,17 +607,17 @@ pub const GLContext = struct {
         self.glrc = undefined;
     }
 
-    pub fn makeCurrent(self: *const Self) bool {
+    pub inline fn makeCurrent(self: *const Self) bool {
         const ret = glx_api.glXMakeCurrent(self.x_display, self.glwndw, self.glrc);
         return ret == libx11.True;
     }
 
-    pub fn swapBuffers(self: *const Self) bool {
+    pub inline fn swapBuffers(self: *const Self) bool {
         glx_api.glXSwapBuffers(self.x_display, self.glwndw);
         return true;
     }
 
-    pub fn setSwapIntervals(self: *const Self, interval: common.fb.SwapInterval) bool {
+    pub inline fn setSwapInterval(self: *const Self, interval: common.fb.SwapInterval) bool {
         if (glx_ext.glXSwapIntervalEXT) |func| {
             if (interval == .Adaptive and glx_ext.EXT_swap_control_tear == false) {
                 return false;
@@ -615,4 +656,39 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
     } else {
         return null;
     }
+}
+
+//===========================
+// opengl rendering hooks
+//============================
+
+pub fn glSwapBuffers(ctx: *anyopaque) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.swapBuffers();
+}
+
+pub fn glSetSwapInterval(ctx: *anyopaque, interval: common.fb.SwapInterval) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.setSwapInterval(interval);
+}
+
+pub fn glMakeCurrent(ctx: *anyopaque) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    return c.gl_ctx.makeCurrent();
+}
+
+pub fn glGetDriverInfo(ctx: *anyopaque, wr: *io.Writer) bool {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    wr.print("Driver: {s}, for Hardware: {s}, Made by: {s}", .{
+        c.gl_ctx.driver.version,
+        c.gl_ctx.driver.hardware,
+        c.gl_ctx.driver.vendor,
+    }) catch return false;
+    return true;
+}
+
+pub fn glDestroyCanvas(ctx: *anyopaque) void {
+    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
+    c.gl_ctx.deinit();
+    c.* = .{ .invalid = {} };
 }
