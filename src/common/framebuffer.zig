@@ -86,7 +86,7 @@ pub const Canvas = struct {
 
     const Self = @This();
 
-    pub inline fn deinit(self: *Self) void {
+    pub inline fn deinit(self: *const Self) void {
         self._vtable.deinit(self.ctx);
     }
 
@@ -97,7 +97,7 @@ pub const Canvas = struct {
         return self._vtable.swapBuffers(self.ctx);
     }
 
-    pub inline fn setSwapInterval(self: *Self, intrvl: SwapInterval) bool {
+    pub inline fn setSwapInterval(self: *const Self, intrvl: SwapInterval) bool {
         return self._vtable.setSwapInterval(self.ctx, intrvl);
     }
 
@@ -107,7 +107,7 @@ pub const Canvas = struct {
     /// returns false if the writer ran out of space, otherwise returns true.
     /// # Parameters:
     /// 'wr': the writer into which the details string is written
-    pub inline fn getDriverInfo(self: *Self, wr: *io.Writer) bool {
+    pub inline fn getDriverInfo(self: *const Self, wr: *io.Writer) bool {
         return self._vtable.getDriverInfo(self.ctx, wr);
     }
 
