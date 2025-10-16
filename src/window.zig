@@ -5,7 +5,7 @@ const mem = std.mem;
 const WindowImpl = platform.Window;
 const WindowData = common.window_data.WindowData;
 const WindowDpiInfo = common.window_data.WindowDpiInfo;
-const WindowSize = common.window_data.WindowSize;
+const ClientSize = common.window_data.ClientSize;
 const EventQueue = common.event.EventQueue;
 const WidowContext = platform.WidowContext;
 
@@ -380,8 +380,8 @@ pub const Window = struct {
     /// The client area is the content of the window, excluding the title
     /// bar and borders. If the window allows dpi scaling
     /// the returned size might be diffrent from the physical size.
-    pub inline fn getClientSize(self: *const Self) WindowSize {
-        var sz = WindowSize{
+    pub inline fn getClientSize(self: *const Self) ClientSize {
+        var sz = ClientSize{
             .logical_width = 0,
             .logical_height = 0,
             .scale = 0,

@@ -482,7 +482,7 @@ pub fn mainWindowProc(
 
             // For windows that allows resizing by dragging it's edges,
             // this message is received multiple times during the resize process
-            var sz = common.window_data.WindowSize{
+            var sz = common.window_data.ClientSize{
                 .logical_width = 0,
                 .logical_height = 0,
                 .scale = 0,

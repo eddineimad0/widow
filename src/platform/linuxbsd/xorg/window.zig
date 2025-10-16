@@ -74,7 +74,7 @@ pub const BlitContext = struct {
             .ximage = undefined,
             .px_fmt_info = undefined,
         };
-        var sz: common.window_data.WindowSize = undefined;
+        var sz: common.window_data.ClientSize = undefined;
         w.getClientSize(&sz);
         const ok = s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
         if (!ok) {
@@ -656,7 +656,7 @@ pub const Window = struct {
         drvr.flushXRequests();
     }
 
-    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.ClientSize) void {
         var attribs: libx11.XWindowAttributes = undefined;
         const drvr = self.ctx.driver;
         _ = libx11.dyn_api.XGetWindowAttributes(
@@ -1480,7 +1480,7 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                var cl_sz: common.window_data.WindowSize = undefined;
+                var cl_sz: common.window_data.ClientSize = undefined;
                 self.getClientSize(&cl_sz);
                 std.debug.print(
                     "physical client Size (w:{},h:{}) | logical client size (w:{},h:{})\n",
