@@ -10,7 +10,7 @@ const ScrollEvent = kbd_mouse.ScrollEvent;
 const Deque = @import("deque.zig").Deque;
 const WindowId = @import("window_data.zig").WindowId;
 const WindowDpiInfo = @import("window_data.zig").WindowDpiInfo;
-const WindowSize = @import("window_data.zig").WindowSize;
+const ClientSize = @import("window_data.zig").ClientSize;
 
 pub const EventType = enum(u8) {
     WindowClose, // The X icon on the window frame was pressed.
@@ -37,7 +37,7 @@ pub const EventType = enum(u8) {
 
 pub const ResizeEvent = struct {
     window_id: WindowId,
-    new_size: WindowSize,
+    new_size: ClientSize,
 };
 
 pub const MoveEvent = struct {
@@ -131,7 +131,7 @@ pub inline fn createFocusEvent(window_id: WindowId, focus: bool) Event {
     } };
 }
 
-pub inline fn createResizeEvent(window_id: WindowId, sz: *const WindowSize) Event {
+pub inline fn createResizeEvent(window_id: WindowId, sz: *const ClientSize) Event {
     return .{
         .WindowResize = ResizeEvent{
             .window_id = window_id,

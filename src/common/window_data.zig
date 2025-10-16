@@ -1,6 +1,6 @@
 const geometry = @import("./geometry.zig");
 
-pub const WindowSize = struct {
+pub const ClientSize = struct {
     logical_width: i32,
     logical_height: i32,
     scale: f64,

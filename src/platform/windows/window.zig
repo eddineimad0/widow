@@ -314,7 +314,7 @@ pub const BlitContext = struct {
             .mem_bitmap = undefined,
             .px_fmt_info = undefined,
         };
-        var sz: common.window_data.WindowSize = undefined;
+        var sz: common.window_data.ClientSize = undefined;
         w.getClientSize(&sz);
         const ok = s.makeNewSoftwareBuffer(sz.physical_width, sz.physical_height);
         if (!ok) {
@@ -994,7 +994,7 @@ pub const Window = struct {
         );
     }
 
-    pub fn getClientSize(self: *const Self, out: *common.window_data.WindowSize) void {
+    pub fn getClientSize(self: *const Self, out: *common.window_data.ClientSize) void {
         var client_size = common.geometry.RectSize{
             .width = self.data.client_area.size.width,
             .height = self.data.client_area.size.height,
@@ -1405,7 +1405,7 @@ pub const Window = struct {
                 // For non resizalble window we change
                 // monitor resoultion
                 if (!self.data.flags.is_resizable) {
-                    var size: common.window_data.WindowSize = undefined;
+                    var size: common.window_data.ClientSize = undefined;
                     self.getClientSize(&size);
                     self.ctx.display_mgr.setDisplayVideoMode(d, &.{
                         .width = @intCast(size.logical_width),
@@ -1640,7 +1640,7 @@ pub const Window = struct {
             std.debug.print("0==========================0\n", .{});
             if (size) {
                 std.debug.print("\nWindow #{}\n", .{self.data.id});
-                var cl_size: common.window_data.WindowSize = undefined;
+                var cl_size: common.window_data.ClientSize = undefined;
                 self.getClientSize(&cl_size);
                 std.debug.print(
                     "client size with dpi scaling (w:{},h:{}) | client size without dpi scaling (w:{},h:{})\n",
