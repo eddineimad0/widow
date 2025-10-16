@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = std.builtin;
 const widow = @import("widow");
 const EventType = widow.event.EventType;
 const EventQueue = widow.event.EventQueue;
@@ -78,7 +79,6 @@ pub fn main() !void {
     var builder = widow.WindowBuilder.init();
     var mywindow = builder.withTitle("Software rendered Window")
         .withSize(640, 480)
-        // .withDPIAware(false)
         .withPosition(200, 200)
         .withDecoration(true)
         .withResize(true)
@@ -129,7 +129,7 @@ pub fn main() !void {
     std.debug.print("DPI Info:{}\n", .{mywindow.getDpiInfo()});
 
     var rend = Renderer.init(sw_canvas);
-    var in_key = KeyCode.L;
+    var in_key = KeyCode.T;
     var prng = std.Random.Xoroshiro128.init(blk: {
         const seed: u64 = @bitCast(std.time.milliTimestamp());
         break :blk seed;
@@ -220,7 +220,7 @@ pub fn main() !void {
             },
             .T => {
                 rend.clearRenderTarget(RGBA.BLACK);
-                rend.fillTriangleClassic(
+                rend.fillTriangle(
                     .{ -w_div_2 + 100, 0 },
                     .{ -w_div_2 + 200, h_div_2 },
                     .{ 0, h_div_2 - 200 },
@@ -233,7 +233,7 @@ pub fn main() !void {
                     RGBA.BLUE,
                 );
 
-                rend.fillTriangleClassic(
+                rend.fillTriangle(
                     .{ w_div_2 - 300, 0 },
                     .{ w_div_2 - 100, 0 },
                     .{ w_div_2 - 100, h_div_2 },
@@ -246,7 +246,7 @@ pub fn main() !void {
                     RGBA.BLUE,
                 );
 
-                rend.fillTriangleClassic(
+                rend.fillTriangle(
                     .{ w_div_2 - 100, 0 },
                     .{ w_div_2 - 200, -h_div_2 },
                     .{ 0, -h_div_2 + 200 },
@@ -259,7 +259,7 @@ pub fn main() !void {
                     RGBA.BLUE,
                 );
 
-                rend.fillTriangleClassic(
+                rend.fillTriangle(
                     .{ -w_div_2, -h_div_2 },
                     .{ -w_div_2 + 200, -h_div_2 },
                     .{ -w_div_2 + 100, -100 },
@@ -651,6 +651,7 @@ pub const Renderer = struct {
     }
 
     /// scanline rasterization
+    /// doesn't follow any fill convention
     pub fn fillTriangleClassic(self: *Self, v0: i32x2, v1: i32x2, v2: i32x2, c: Color32) void {
         const color = mapRGBA(&self.fb_format, c[0], c[1], c[2], c[3]);
         var nv0 = self.normalizeCoordinates(v0[0], v0[1]);
@@ -732,28 +733,10 @@ pub const Renderer = struct {
     }
 
     pub fn fillTriangle(self: *Self, v0: i32x2, v1: i32x2, v2: i32x2, c: Color32) void {
-        // BUG: this is not correct
         const color = mapRGBA(&self.fb_format, c[0], c[1], c[2], c[3]);
-        var nv0 = self.normalizeCoordinates(v0[0], v0[1]);
+        const nv0 = self.normalizeCoordinates(v0[0], v0[1]);
         var nv1 = self.normalizeCoordinates(v1[0], v1[1]);
         var nv2 = self.normalizeCoordinates(v2[0], v2[1]);
-
-        // verticies sorting by Y
-        if (nv1[1] > nv0[1]) {
-            const tmp = nv0;
-            nv0 = nv1;
-            nv1 = tmp;
-        }
-        if (nv2[1] > nv0[1]) {
-            const tmp = nv0;
-            nv0 = nv2;
-            nv2 = tmp;
-        }
-        if (nv2[1] > nv1[1]) {
-            const tmp = nv1;
-            nv1 = nv2;
-            nv2 = tmp;
-        }
 
         var min_x: i32, var max_x: i32 = .{ 0, 0 };
         var min_y: i32, var max_y: i32 = .{ 0, 0 };
@@ -765,75 +748,49 @@ pub const Renderer = struct {
             max_y = @max(nv0[1], @max(nv1[1], nv2[1]));
         }
 
-        const e = struct {
-
-            // edge p1 -> p2
-            //E12(x, y) = (y1 - y2)*x + (x2 - x1)*y + (x1*y2 - x2*y1)
-            var y_12: i32 = 0;
-            var x_12: i32 = 0;
-            var c_12: i32 = 0;
-            inline fn edge12(x: i32, y: i32) i32 {
-                return y_12 * x + x_12 * y + c_12;
-            }
-
-            // edge p2 -> p0
-            var y_20: i32 = 0;
-            var x_20: i32 = 0;
-            var c_20: i32 = 0;
-            inline fn edge20(x: i32, y: i32) i32 {
-                return y_20 * x + x_20 * y + c_20;
-            }
-
-            // edge p0 -> p1
-            var y_01: i32 = 0;
-            var x_01: i32 = 0;
-            var c_01: i32 = 0;
-            inline fn edge01(x: i32, y: i32) i32 {
-                return y_01 * x + x_01 * y + c_01;
-            }
-
-            inline fn isPixelInside(r1: i32, r2: i32, r3: i32) bool {
-                if (r1 <= 0 and r2 <= 0 and r3 <= 0)
-                    return true;
-
-                if (r1 >= 0 and r2 >= 0 and r3 >= 0)
-                    return true;
-
-                return false;
-            }
-        };
-
-        { // prepare edge constants
-            e.y_01 = nv0[1] - nv1[1];
-            e.x_01 = nv1[0] - nv0[0];
-            e.c_01 = (nv1[1] * nv0[0]) - (nv1[0] * nv0[1]);
-            e.y_20 = nv2[1] - nv0[1];
-            e.x_20 = nv0[0] - nv2[0];
-            e.c_20 = (nv0[1] * nv2[0]) - (nv0[1] * nv2[1]);
-            e.y_12 = nv1[1] - nv2[1];
-            e.x_12 = nv2[0] - nv1[0];
-            e.c_12 = (nv2[1] * nv1[0]) - (nv2[0] * nv1[1]);
+        var area = cross2(sub2(nv1, nv0), sub2(nv2, nv0));
+        if (area == 0) return;
+        if (area < 0) {
+            // enforce clockwise configuration
+            const tmp = nv1;
+            nv1 = nv2;
+            nv2 = tmp;
+            area = -area;
         }
 
-        // const box_width = max_x - min_x + 1;
+        const nv0v1 = sub2(nv1, nv0);
+        const nv1v2 = sub2(nv2, nv1);
+        const nv2v0 = sub2(nv0, nv2);
+        const bias_w0: i32 = if (isTopLeftEdge(nv0, nv1)) 0 else -1;
+        const bias_w1: i32 = if (isTopLeftEdge(nv1, nv2)) 0 else -1;
+        const bias_w2: i32 = if (isTopLeftEdge(nv2, nv0)) 0 else -1;
+
         const pitch: u32 = (self.frame.pitch / self.fb_format.bytes_per_pixel);
-        // const end: usize = @"u32"(max_y) * pitch + @"u32"(min_x);
         var start: usize = @"u32"(min_y) * pitch + @"u32"(min_x);
         var y: i32 = min_y;
+        const v0p = sub2(i32x2{ min_x, y }, nv0);
+        const v1p = sub2(i32x2{ min_x, y }, nv1);
+        const v2p = sub2(i32x2{ min_x, y }, nv2);
+        var initial_w0 = edgeCross(nv0v1, v0p) + bias_w0;
+        var initial_w1 = edgeCross(nv1v2, v1p) + bias_w1;
+        var initial_w2 = edgeCross(nv2v0, v2p) + bias_w2;
         while (y <= max_y) : (y += 1) {
             var x: i32 = min_x;
+            var w0 = initial_w0;
+            var w1 = initial_w1;
+            var w2 = initial_w2;
+
             while (x <= max_x + 1) : (x += 1) {
-                var r01 = e.edge01(x, y);
-                var r12 = e.edge12(x, y);
-                var r20 = e.edge20(x, y);
-                if (e.isPixelInside(r01, r12, r20)) {
+                if (w0 >= 0 and w1 >= 0 and w2 >= 0)
                     self.frame.buffer[start + @"u32"(x - min_x)] = color;
-                }
-                x += 1;
-                r01 += e.y_01;
-                r12 += e.y_12;
-                r20 += e.y_20;
+
+                w0 -= nv0v1[1];
+                w1 -= nv1v2[1];
+                w2 -= nv2v0[1];
             }
+            initial_w0 += nv0v1[0];
+            initial_w1 += nv1v2[0];
+            initial_w2 += nv2v0[0];
             start += pitch;
         }
     }
@@ -858,4 +815,42 @@ pub const Renderer = struct {
 
 inline fn lerp(a: f32, b: f32, t: f32) f32 {
     return a + t * (b - a);
+}
+
+/// NOTE: this test is done in screen coordinate system (i.e x=>right,y=>down).
+/// assumes clockwise winding of verticies
+inline fn isTopLeftEdge(start: i32x2, end: i32x2) bool {
+    const edge = .{ end[0] - start[0], end[1] - start[1] };
+    // a left edge has negative dy assumes clockwise edge order
+    const is_left_edge = edge[1] < 0;
+    // an edge is top edge if start and end has same y value
+    // and is above the third vertex
+    const is_top_edge = edge[1] == 0 and edge[0] > 0;
+    return is_top_edge or is_left_edge;
+}
+
+inline fn sub2(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
+    return .{ lhs[0] - rhs[0], lhs[1] - rhs[1] };
+}
+
+inline fn subArray(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
+    const T = @TypeOf(lhs);
+    const array_info = @typeInfo(T).array;
+    var result: T = undefined;
+    inline for (0..array_info.len) |i| {
+        result[i] = lhs[i] - rhs[i];
+    }
+    return result;
+}
+
+inline fn edgeCross(a: i32x2, b: i32x2) i64 {
+    return (@"i64"(a[0]) * b[1]) - (@"i64"(a[1]) * b[0]);
+}
+
+inline fn cross2(lhs: anytype, rhs: @TypeOf(lhs)) ret_type: {
+    const T = @TypeOf(lhs);
+    const array_info = @typeInfo(T).array;
+    break :ret_type array_info.child;
+} {
+    return (lhs[0] * rhs[1]) - (lhs[1] * rhs[0]);
 }
