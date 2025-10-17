@@ -224,7 +224,9 @@ pub fn main() !void {
                     .{ -w_div_2 + 100, 0 },
                     .{ -w_div_2 + 200, h_div_2 },
                     .{ 0, h_div_2 - 200 },
-                    RGBA.FAV_RED,
+                    RGBA.RED,
+                    RGBA.GREEN,
+                    RGBA.BLUE,
                 );
                 rend.drawTriangle(
                     .{ -w_div_2 + 100, 0 },
@@ -238,6 +240,8 @@ pub fn main() !void {
                     .{ w_div_2 - 100, 0 },
                     .{ w_div_2 - 100, h_div_2 },
                     RGBA.FAV_RED,
+                    RGBA.FAV_RED,
+                    RGBA.FAV_RED,
                 );
                 rend.drawTriangle(
                     .{ w_div_2 - 300, 0 },
@@ -251,6 +255,8 @@ pub fn main() !void {
                     .{ w_div_2 - 200, -h_div_2 },
                     .{ 0, -h_div_2 + 200 },
                     RGBA.FAV_RED,
+                    RGBA.FAV_RED,
+                    RGBA.FAV_RED,
                 );
                 rend.drawTriangle(
                     .{ w_div_2 - 100, 0 },
@@ -263,6 +269,8 @@ pub fn main() !void {
                     .{ -w_div_2, -h_div_2 },
                     .{ -w_div_2 + 200, -h_div_2 },
                     .{ -w_div_2 + 100, -100 },
+                    RGBA.FAV_RED,
+                    RGBA.FAV_RED,
                     RGBA.FAV_RED,
                 );
                 rend.drawTriangle(
@@ -350,6 +358,7 @@ pub inline fn mapRGB(fmt: *const widow.gfx.PixelFormatInfo, r: u32, g: u32, b: u
 }
 
 pub const i32x2 = [2](i32);
+pub const i32x3 = [3](i32);
 pub const i32x4 = [4](i32);
 pub const f32x2 = [2](f32);
 pub const f32x4 = [4](f32);
@@ -654,6 +663,7 @@ pub const Renderer = struct {
     /// doesn't follow any fill convention
     pub fn fillTriangleClassic(self: *Self, v0: i32x2, v1: i32x2, v2: i32x2, c: Color32) void {
         const color = mapRGBA(&self.fb_format, c[0], c[1], c[2], c[3]);
+
         var nv0 = self.normalizeCoordinates(v0[0], v0[1]);
         var nv1 = self.normalizeCoordinates(v1[0], v1[1]);
         var nv2 = self.normalizeCoordinates(v2[0], v2[1]);
@@ -732,11 +742,22 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn fillTriangle(self: *Self, v0: i32x2, v1: i32x2, v2: i32x2, c: Color32) void {
-        const color = mapRGBA(&self.fb_format, c[0], c[1], c[2], c[3]);
+    pub fn fillTriangle(
+        self: *Self,
+        v0: i32x2,
+        v1: i32x2,
+        v2: i32x2,
+        c0: Color32,
+        c1: Color32,
+        c2: Color32,
+    ) void {
         const nv0 = self.normalizeCoordinates(v0[0], v0[1]);
         var nv1 = self.normalizeCoordinates(v1[0], v1[1]);
+        var nc1 = c1;
         var nv2 = self.normalizeCoordinates(v2[0], v2[1]);
+        var nc2 = c2;
+
+        const is_flat_colored = arrayEq(c0, c1) and arrayEq(c1, c2);
 
         var min_x: i32, var max_x: i32 = .{ 0, 0 };
         var min_y: i32, var max_y: i32 = .{ 0, 0 };
@@ -755,6 +776,11 @@ pub const Renderer = struct {
             const tmp = nv1;
             nv1 = nv2;
             nv2 = tmp;
+            if (!is_flat_colored) {
+                const c_tmp = nc1;
+                nc1 = nc2;
+                nc2 = c_tmp;
+            }
             area = -area;
         }
 
@@ -771,27 +797,58 @@ pub const Renderer = struct {
         const v0p = sub2(i32x2{ min_x, y }, nv0);
         const v1p = sub2(i32x2{ min_x, y }, nv1);
         const v2p = sub2(i32x2{ min_x, y }, nv2);
+        // bias is used to respect top-left rasterization rule
         var initial_w0 = edgeCross(nv0v1, v0p) + bias_w0;
         var initial_w1 = edgeCross(nv1v2, v1p) + bias_w1;
         var initial_w2 = edgeCross(nv2v0, v2p) + bias_w2;
-        while (y <= max_y) : (y += 1) {
-            var x: i32 = min_x;
-            var w0 = initial_w0;
-            var w1 = initial_w1;
-            var w2 = initial_w2;
+        if (is_flat_colored) {
+            const color = mapRGBA(&self.fb_format, c0[0], c0[1], c0[2], c0[3]);
+            while (y <= max_y) : (y += 1) {
+                var x: i32 = min_x;
+                var w0 = initial_w0;
+                var w1 = initial_w1;
+                var w2 = initial_w2;
 
-            while (x <= max_x + 1) : (x += 1) {
-                if (w0 >= 0 and w1 >= 0 and w2 >= 0)
-                    self.frame.buffer[start + @"u32"(x - min_x)] = color;
+                while (x <= max_x + 1) : (x += 1) {
+                    if (w0 >= 0 and w1 >= 0 and w2 >= 0)
+                        self.frame.buffer[start + @"u32"(x - min_x)] = color;
 
-                w0 -= nv0v1[1];
-                w1 -= nv1v2[1];
-                w2 -= nv2v0[1];
+                    w0 -= nv0v1[1];
+                    w1 -= nv1v2[1];
+                    w2 -= nv2v0[1];
+                }
+                initial_w0 += nv0v1[0];
+                initial_w1 += nv1v2[0];
+                initial_w2 += nv2v0[0];
+                start += pitch;
             }
-            initial_w0 += nv0v1[0];
-            initial_w1 += nv1v2[0];
-            initial_w2 += nv2v0[0];
-            start += pitch;
+        } else {
+            // baycentric color mapping
+            while (y <= max_y) : (y += 1) {
+                var x: i32 = min_x;
+                var w0 = initial_w0;
+                var w1 = initial_w1;
+                var w2 = initial_w2;
+
+                while (x <= max_x + 1) : (x += 1) {
+                    if (w0 >= 0 and w1 >= 0 and w2 >= 0) {
+                        const r: u32 = @intCast(@divTrunc((c0[0] * w1 + nc1[0] * w2 + nc2[0] * w0), area));
+                        const g: u32 = @intCast(@divTrunc((c0[1] * w1 + nc1[1] * w2 + nc2[1] * w0), area));
+                        const b: u32 = @intCast(@divTrunc((c0[2] * w1 + nc1[2] * w2 + nc2[2] * w0), area));
+                        const a: u32 = @intCast(@divTrunc((c0[3] * w1 + nc1[3] * w2 + nc2[3] * w0), area));
+                        const color = mapRGBA(&self.fb_format, r, g, b, a);
+                        self.frame.buffer[start + @"u32"(x - min_x)] = @intCast(color);
+                    }
+
+                    w0 -= nv0v1[1];
+                    w1 -= nv1v2[1];
+                    w2 -= nv2v0[1];
+                }
+                initial_w0 += nv0v1[0];
+                initial_w1 += nv1v2[0];
+                initial_w2 += nv2v0[0];
+                start += pitch;
+            }
         }
     }
 
@@ -833,17 +890,18 @@ inline fn sub2(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
     return .{ lhs[0] - rhs[0], lhs[1] - rhs[1] };
 }
 
-inline fn subArray(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
+inline fn arrayEq(lhs: anytype, rhs: @TypeOf(lhs)) bool {
     const T = @TypeOf(lhs);
     const array_info = @typeInfo(T).array;
-    var result: T = undefined;
+    var is_eq: bool = true;
     inline for (0..array_info.len) |i| {
-        result[i] = lhs[i] - rhs[i];
+        is_eq = is_eq and lhs[i] == rhs[i];
     }
-    return result;
+    return is_eq;
 }
 
 inline fn edgeCross(a: i32x2, b: i32x2) i64 {
+    // force i64 because these values might potentialy overflow
     return (@"i64"(a[0]) * b[1]) - (@"i64"(a[1]) * b[0]);
 }
 
