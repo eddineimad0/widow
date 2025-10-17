@@ -713,7 +713,7 @@ pub fn handleWindowEvent(ev: *libx11.XEvent, window: *Window) void {
                 window.data.client_area.size.width = ev.xconfigure.width;
                 window.data.client_area.size.height = ev.xconfigure.height;
 
-                var sz: common.window_data.WindowSize = undefined;
+                var sz: common.window_data.ClientSize = undefined;
                 window.getClientSize(&sz);
                 const event = common.event.createResizeEvent(
                     window.data.id,
