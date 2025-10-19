@@ -455,7 +455,7 @@ pub const Renderer = struct {
         const success = target.getSoftwareBuffer(&pixels, &w, &h, &pitch);
         dbg.assert(success);
         dbg.print("Software framebuffer:({}x{}) with pitch:{}\n", .{ w, h, pitch });
-        dbg.assert(target.fb_format_info.bytes_per_pixel == 4); // the renderer doesn't support any other colordepth
+        dbg.assert(target.getPixelFormatInfo().bytes_per_pixel == 4); // the renderer doesn't support any other colordepth
         return .{
             .target = target,
             .frame = .{
@@ -464,7 +464,7 @@ pub const Renderer = struct {
                 .height = h,
                 .pitch = pitch,
             },
-            .fb_format = target.fb_format_info,
+            .fb_format = target.getPixelFormatInfo(),
         };
     }
 
