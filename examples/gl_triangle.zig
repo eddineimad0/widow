@@ -75,8 +75,8 @@ pub fn main() !void {
     if (success) {
         std.debug.print("{s}\n", .{p_wr.buffered()});
     }
-    std.debug.print("Render API:{s}\n", .{gl_canvas.getDriverName()});
-    std.debug.print("Framebuffer pixel format :{t}\n", .{gl_canvas.fb_format_info.fmt});
+    std.debug.print("Render API:{t}\n", .{gl_canvas.getDriverName()});
+    std.debug.print("Framebuffer pixel format :{t}\n", .{gl_canvas.getPixelFormatInfo().fmt});
     _ = gl_canvas.makeCurrent();
     const ok = gl_canvas.setSwapInterval(.Synced);
     std.debug.print("VSync:{s}\n", .{if (ok) "ON" else "OFF"});

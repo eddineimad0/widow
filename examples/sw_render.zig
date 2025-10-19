@@ -123,8 +123,8 @@ pub fn main() !void {
     if (success) {
         std.debug.print("{s}\n", .{p_wr.buffered()});
     }
-    std.debug.print("Render API:{s}\n", .{sw_canvas.getDriverName()});
-    std.debug.print("Framebuffer pixel format :{t}\n", .{sw_canvas.fb_format_info.fmt});
+    std.debug.print("Render API:{t}\n", .{sw_canvas.getDriverName()});
+    std.debug.print("Framebuffer pixel format :{t}\n", .{sw_canvas.getPixelFormatInfo().fmt});
 
     std.debug.print("DPI Info:{}\n", .{mywindow.getDpiInfo()});
 
