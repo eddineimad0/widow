@@ -12,6 +12,7 @@ const dbg = std.debug;
 const io = std.io;
 
 pub const Window = wndw.Window;
+pub const Canvas = wndw.Win32Canvas;
 pub const WindowError = wndw.WindowError;
 
 // Platform handles

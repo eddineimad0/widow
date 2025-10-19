@@ -1,8 +1,12 @@
 const std = @import("std");
 const common = @import("common");
 const platform = @import("platform");
+
 const mem = std.mem;
+const io = std.io;
+
 const WindowImpl = platform.Window;
+const CanvasImpl = platform.Canvas;
 const WindowData = common.window_data.WindowData;
 const WindowDpiInfo = common.window_data.WindowDpiInfo;
 const ClientSize = common.window_data.ClientSize;
@@ -866,8 +870,11 @@ pub const Window = struct {
     /// Initializes a canvas for rendering graphics to the window
     /// the canvas framebuffer configuration and what api it uses (software,opengl)
     /// is decided by the framebuffer configuration used to create the window.
-    pub inline fn createCanvas(self: *Self) !common.fb.Canvas {
-        return self.impl.createCanvas();
+    /// # NOTE
+    /// only one canvas can be created for a window, so calling this more than once
+    /// will return the same canvas
+    pub inline fn createCanvas(self: *Self) !Canvas {
+        return .{ .impl = try self.impl.createCanvas() };
     }
 
     /// Activate or deactivate raw mouse input for the window,
@@ -885,5 +892,89 @@ pub const Window = struct {
         if (common.IS_DEBUG_BUILD) {
             self.impl.debugInfos(size, flags);
         }
+    }
+};
+
+pub const Canvas = struct {
+    impl: *CanvasImpl,
+
+    const Self = @This();
+
+    pub inline fn deinit(self: *const Self) void {
+        self.impl.deinit();
+    }
+
+    /// signal to canvas driver/rendering backend to copy the backbuffer
+    /// into the window framebuffer
+    /// returns true on success, false on failure
+    pub inline fn swapBuffers(self: *const Self) bool {
+        return self.impl.swapBuffers();
+    }
+
+    pub inline fn setSwapInterval(self: *const Self, intrvl: common.fb.SwapInterval) bool {
+        return self.impl.setSwapInterval(intrvl);
+    }
+
+    /// write details about the canvas driver/rendering backend.
+    /// for hardware backends such as OpenGL this includes hardware name,
+    /// hardware vendor name and also the kernel driver version running on the platform.
+    /// returns false if the writer ran out of space, otherwise returns true.
+    /// # Parameters:
+    /// 'wr': the writer into which the details string is written
+    pub inline fn getDriverInfo(self: *const Self, wr: *io.Writer) bool {
+        return self.impl.getDriverInfo(wr);
+    }
+
+    /// Returns a string identifier of the canvas driver/rendering backend
+    pub inline fn getDriverName(self: *const Self) common.fb.RenderApi {
+        return self.impl.getDriverName();
+    }
+
+    pub inline fn getPixelFormatInfo(self: *const Self) common.pixel.PixelFormatInfo {
+        return self.impl.getPixelFormatInfo();
+    }
+
+    pub inline fn makeCurrent(self: *const Self) bool {
+        return self.impl.makeCurrent();
+    }
+
+    /// This function is for software canvas driver/rendering backend only.
+    /// it returns the software framebuffer used for the window + the canvas
+    /// width, height and pitch/stride i.e number of bytes in one row or scanline
+    /// of the framebuffer.
+    /// returns false on all non software backends
+    /// # Parameters
+    /// `pixels`: pointer to the variable that receives the framebuffer slice,
+    /// `width`: pointer to the variable that receives the width,
+    /// `height`: pointer to the variable that receives the height,
+    /// `pitch`: pointer to the framebuffer pitch/stride,
+    pub inline fn getSoftwareBuffer(
+        self: *const Self,
+        pixels: *[]u32,
+        width: *u32,
+        height: *u32,
+        pitch: *u32,
+    ) bool {
+        return self.impl.getSoftwareBuffer(pixels, width, height, pitch);
+    }
+
+    /// This function is for software canvas driver/rendering backend only.
+    /// it attempt to resize the software framebuffer used for the window.
+    /// returns false on all non software backends, and true if it succeeds.
+    /// # WARNING
+    /// on success, values previously returned by *getSoftwareBuffer*
+    /// are invalidated even if the width and height parameters are the same
+    /// as the previous returned values.
+    /// in short each time you call this call *getSoftwareBuffer* after to avoid
+    /// crashing.
+    /// # Parameters
+    /// `width`: new width of the framebuffer,
+    /// `height`: new height of the framebuffer,
+    pub inline fn updateSoftwareBuffer(
+        self: *const Self,
+        width: i32,
+        height: i32,
+    ) bool {
+        return self.impl.updateSoftwareBuffer(width, height);
     }
 };
