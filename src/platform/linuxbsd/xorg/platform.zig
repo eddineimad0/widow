@@ -14,6 +14,7 @@ pub const DisplayHandle = x11ext.xrandr.RRCrtc;
 
 const KeyMaps = @import("keymaps.zig").KeyMaps;
 pub const Window = @import("window.zig").Window;
+pub const Canvas = @import("window.zig").X11Canvas;
 pub const WindowError = @import("window.zig").WindowError;
 
 pub const GLContext = @import("glx.zig").GLContext;
