@@ -39,7 +39,7 @@ pub const DisplayHandle = platform.DisplayHandle;
 pub const WidowContext = platform.WidowContext;
 
 pub const gfx = struct {
-    pub const Canvas = common.fb.Canvas;
+    pub const Canvas = @import("window.zig").Canvas;
     pub const RenderApi = common.fb.RenderApi;
     pub const FramebufferConfig = common.fb.FBConfig;
     pub const PixelFormat = common.pixel.PixelFormat;
