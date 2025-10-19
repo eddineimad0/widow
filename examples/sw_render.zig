@@ -63,8 +63,8 @@ pub fn main() !void {
     if (success) {
         std.debug.print("{s}\n", .{p_wr.buffered()});
     }
-    std.debug.print("Render API:{s}\n", .{sw_canvas.getDriverName()});
-    std.debug.print("Framebuffer pixel format :{t}\n", .{sw_canvas.fb_format_info.fmt});
+    std.debug.print("Render API:{t}\n", .{sw_canvas.getDriverName()});
+    std.debug.print("Framebuffer pixel format :{t}\n", .{sw_canvas.getPixelFormatInfo().fmt});
 
     var pixels: []u32 = &.{};
     var w: u32, var h: u32, var pitch: u32 = .{ 0, 0, 0 };
