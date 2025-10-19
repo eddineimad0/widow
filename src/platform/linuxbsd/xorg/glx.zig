@@ -657,38 +657,3 @@ pub fn glLoaderFunc(symbol_name: [*:0]const u8) ?*const anyopaque {
         return null;
     }
 }
-
-//===========================
-// opengl rendering hooks
-//============================
-
-pub fn glSwapBuffers(ctx: *anyopaque) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    return c.gl_ctx.swapBuffers();
-}
-
-pub fn glSetSwapInterval(ctx: *anyopaque, interval: common.fb.SwapInterval) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    return c.gl_ctx.setSwapInterval(interval);
-}
-
-pub fn glMakeCurrent(ctx: *anyopaque) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    return c.gl_ctx.makeCurrent();
-}
-
-pub fn glGetDriverInfo(ctx: *anyopaque, wr: *io.Writer) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    wr.print("Driver: {s}, for Hardware: {s}, Made by: {s}", .{
-        c.gl_ctx.driver.version,
-        c.gl_ctx.driver.hardware,
-        c.gl_ctx.driver.vendor,
-    }) catch return false;
-    return true;
-}
-
-pub fn glDestroyCanvas(ctx: *anyopaque) void {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    c.gl_ctx.deinit();
-    c.* = .{ .invalid = {} };
-}

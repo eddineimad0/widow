@@ -203,7 +203,7 @@ pub const BlitContext = struct {
         self.gc = null;
     }
 
-    pub inline fn blit(self: *Self) void {
+    pub inline fn blit(self: *Self) bool {
         debug.assert(self.gc != null);
 
         libx11.dyn_api.XPutImage(
@@ -223,6 +223,8 @@ pub const BlitContext = struct {
             self.xdisplay,
             libx11.False,
         );
+
+        return true;
     }
 };
 
@@ -236,6 +238,109 @@ pub const X11Canvas = union(X11CanvasTag) {
     invalid: void,
     blt_ctx: BlitContext,
     gl_ctx: glx.GLContext,
+    const Self = @This();
+
+    pub fn deinit(self: *Self) void {
+        switch (self.*) {
+            .invalid => {},
+            .blt_ctx => |*ctx| ctx.deinit(),
+            .gl_ctx => |*ctx| ctx.deinit(),
+        }
+
+        self.* = .{ .invalid = {} };
+    }
+
+    pub fn swapBuffers(self: *Self) bool {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => |*ctx| ctx.blit(),
+            .gl_ctx => |*ctx| ctx.swapBuffers(),
+        };
+    }
+
+    pub fn setSwapInterval(self: *Self, intrvl: common.fb.SwapInterval) bool {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => true,
+            .gl_ctx => |*ctx| ctx.setSwapInterval(intrvl),
+        };
+    }
+
+    pub fn makeCurrent(self: *Self) bool {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => true,
+            .gl_ctx => |*ctx| ctx.makeCurrent(),
+        };
+    }
+
+    pub inline fn getSoftwareBuffer(
+        self: *const Self,
+        pixels: *[]u32,
+        width: *u32,
+        height: *u32,
+        pitch: *u32,
+    ) bool {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => |*ctx| ret: {
+                width.* = ctx.width;
+                height.* = ctx.height;
+                pitch.* = ctx.pitch;
+                pixels.* = ctx.backbuffer;
+                break :ret true;
+            },
+            else => false,
+        };
+    }
+
+    pub inline fn updateSoftwareBuffer(
+        self: *Self,
+        width: i32,
+        height: i32,
+    ) bool {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => |*ctx| ctx.makeNewSoftwareBuffer(width, height),
+            else => false,
+        };
+    }
+
+    pub fn getDriverName(self: *const Self) common.fb.RenderApi {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => .software,
+            .gl_ctx => .opengl,
+        };
+    }
+
+    pub fn getDriverInfo(self: *const Self, wr: *io.Writer) bool {
+        switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => {
+                _ = wr.writeAll("Software renderer using BitBlt win32 api") catch
+                    return false;
+
+                return true;
+            },
+            .gl_ctx => |*ctx| {
+                wr.print("Driver: {s}, for Hardware: {s}, Made by: {s}", .{
+                    ctx.driver.version,
+                    ctx.driver.hardware,
+                    ctx.driver.vendor,
+                }) catch return false;
+                return true;
+            },
+        }
+    }
+
+    pub fn getPixelFormatInfo(self: *const Self) common.pixel.PixelFormatInfo {
+        return switch (self.*) {
+            .invalid => unreachable,
+            .blt_ctx => |*ctx| ctx.px_fmt_info,
+            .gl_ctx => |*ctx| ctx.px_fmt_info,
+        };
+    }
 };
 
 pub const Window = struct {
@@ -1426,26 +1531,12 @@ pub const Window = struct {
         return success;
     }
 
-    pub fn createCanvas(self: *Self) WindowError!common.fb.Canvas {
+    pub fn createCanvas(self: *Self) WindowError!*X11Canvas {
         switch (self.fb_cfg.accel) {
             .software => {
                 if (@as(X11CanvasTag, self.canvas) == .invalid) {
                     self.canvas = .{ .blt_ctx = try BlitContext.init(self) };
                 }
-                const c = common.fb.Canvas{
-                    .ctx = @ptrCast(&self.canvas),
-                    ._vtable = .{
-                        .swapBuffers = swSwapBuffers,
-                        .setSwapInterval = swSetSwapInterval,
-                        .getSoftwareBuffer = swGetSoftwareBuffer,
-                        .updateSoftwareBuffer = swUpdateSoftwareBuffer,
-                        .getDriverInfo = swGetDriverInfo,
-                        .deinit = swDestroyCanvas,
-                    },
-                    .fb_format_info = self.canvas.blt_ctx.px_fmt_info,
-                    .render_backend = .software,
-                };
-                return c;
             },
             .opengl => {
                 if (@as(X11CanvasTag, self.canvas) == .invalid) {
@@ -1458,21 +1549,9 @@ pub const Window = struct {
                             return WindowError.CanvasImpossible,
                     };
                 }
-                const c = common.fb.Canvas{
-                    .ctx = @ptrCast(&self.canvas),
-                    ._vtable = .{
-                        .swapBuffers = glx.glSwapBuffers,
-                        .makeCurrent = glx.glMakeCurrent,
-                        .setSwapInterval = glx.glSetSwapInterval,
-                        .getDriverInfo = glx.glGetDriverInfo,
-                        .deinit = glx.glDestroyCanvas,
-                    },
-                    .fb_format_info = self.canvas.gl_ctx.px_fmt_info,
-                    .render_backend = .opengl,
-                };
-                return c;
             },
         }
+        return &self.canvas;
     }
 
     pub fn debugInfos(self: *const Self, size: bool, flags: bool) void {
@@ -1746,53 +1825,4 @@ fn waitForWindowVisibility(display: *libx11.Display, window_id: libx11.Window) b
         }
     }
     return true;
-}
-
-//===========================
-// Software rendering hooks
-//============================
-
-fn swSwapBuffers(ctx: *anyopaque) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    c.blt_ctx.blit();
-    return true;
-}
-pub fn swSetSwapInterval(_: *anyopaque, _: common.fb.SwapInterval) bool {
-    return true;
-}
-
-fn swGetSoftwareBuffer(
-    ctx: *anyopaque,
-    pixels: *[]u32,
-    w: *u32,
-    h: *u32,
-    pitch: *u32,
-) void {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    w.* = c.blt_ctx.width;
-    h.* = c.blt_ctx.height;
-    pitch.* = c.blt_ctx.pitch;
-    pixels.* = c.blt_ctx.backbuffer;
-}
-
-fn swUpdateSoftwareBuffer(
-    ctx: *anyopaque,
-    w: i32,
-    h: i32,
-) bool {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    return c.blt_ctx.makeNewSoftwareBuffer(w, h);
-}
-
-fn swGetDriverInfo(_: *anyopaque, wr: *io.Writer) bool {
-    _ = wr.writeAll("Software renderer using BitBlt win32 api") catch
-        return false;
-
-    return true;
-}
-
-fn swDestroyCanvas(ctx: *anyopaque) void {
-    const c: *X11Canvas = @ptrCast(@alignCast(ctx));
-    c.blt_ctx.deinit();
-    c.* = .{ .invalid = {} };
 }
