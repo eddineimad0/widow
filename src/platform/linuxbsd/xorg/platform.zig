@@ -20,6 +20,8 @@ pub const GLContext = @import("glx.zig").GLContext;
 pub const BlitContext = @import("window.zig").BlitContext;
 pub const glLoaderFunc = @import("glx.zig").glLoaderFunc;
 
+pub const time = common.unix.time;
+
 pub const WidowContext = struct {
     driver: *const driver.X11Driver,
     key_map: *const KeyMaps,

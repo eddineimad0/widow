@@ -66,6 +66,25 @@ pub inline fn @"f64"(x: anytype) f64 {
     return castNumeric(f64, x);
 }
 
+const NUM_CUBE_POINTS = 2 * 2 * 2;
+var cube_points = [NUM_CUBE_POINTS]f32x3{
+    // 4 world units for each edge
+    // front 4
+    // A-B
+    // D-C
+    .{ 1, 2, 1 }, //D
+    .{ 4, 2, 1 }, //C
+    .{ 4, 2, 4 }, //B
+    .{ 1, 2, 4 }, //A
+    // back 4
+    // X-Y
+    // W-Z
+    .{ 1, 3, 1 }, //W
+    .{ 4, 3, 1 }, //Z
+    .{ 4, 3, 4 }, //Y
+    .{ 1, 3, 4 }, //X
+};
+
 pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
@@ -128,28 +147,34 @@ pub fn main() !void {
 
     std.debug.print("DPI Info:{}\n", .{mywindow.getDpiInfo()});
 
+    initTicks();
     var rend = Renderer.init(sw_canvas);
-    var in_key = KeyCode.T;
-    var prng = std.Random.Xoroshiro128.init(blk: {
-        const seed: u64 = @bitCast(std.time.milliTimestamp());
-        break :blk seed;
-    });
-
-    var rand = prng.random();
-    var rx0: i32 = 0;
-    var ry0: i32 = 0;
-    var rx1: i32 = 0;
-    var ry1: i32 = 0;
+    var in_key = KeyCode.C;
+    const CAM_SPEED = 5;
+    var cam = Camera{ .position = .{ 0, 0, 0 }, .deg_fov_x = 520, .aspect_ratio = @as(f32, 800.0) / 600.0 };
+    var frame_start: u64 = 0;
+    var frame_end: u64 = 0;
+    const TARGET_FRAME_TIME = 16 * std.time.ns_per_ms;
     event_loop: while (true) {
+        var last_frame_time = frame_end - frame_start;
+        if (last_frame_time < TARGET_FRAME_TIME) {
+            widow.time.waitForNs(TARGET_FRAME_TIME - last_frame_time);
+            last_frame_time = TARGET_FRAME_TIME;
+        }
+
+        const dt = @"f64"(last_frame_time) / std.time.ns_per_s;
+        frame_start = getTicksNs();
+        dbg.print(
+            "last frame: {} ms, {d} FPS\n",
+            .{ @divTrunc(last_frame_time, std.time.ns_per_ms), std.time.ns_per_s / @"f64"(last_frame_time) },
+        );
         try mywindow.pollEvents();
 
         var event: widow.event.Event = undefined;
 
         while (ev_queue.popEvent(&event)) {
             switch (event) {
-                EventType.WindowClose => {
-                    break :event_loop;
-                },
+                EventType.WindowClose => break :event_loop,
                 EventType.Keyboard => |*key| {
                     in_key = key.keycode;
                     if (key.state.isPressed()) {
@@ -163,6 +188,22 @@ pub fn main() !void {
 
                         if (key.keycode == KeyCode.Escape) {
                             _ = mywindow.setFullscreen(false);
+                        }
+
+                        if (key.keycode == .Down) {
+                            cam.position[1] += CAM_SPEED * -1 * @"f32"(dt);
+                        }
+
+                        if (key.keycode == .Up) {
+                            cam.position[1] += CAM_SPEED * 1 * @"f32"(dt);
+                        }
+
+                        if (key.keycode == .Right) {
+                            cam.position[0] += CAM_SPEED * 1 * @"f32"(dt);
+                        }
+
+                        if (key.keycode == .Left) {
+                            cam.position[0] += CAM_SPEED * -1 * @"f32"(dt);
                         }
                     }
                 },
@@ -179,140 +220,46 @@ pub fn main() !void {
                         },
                     );
                     rend.updateFramebuffer(ev.new_size.physical_width, ev.new_size.physical_height);
+                    cam.aspect_ratio = @"f32"(ev.new_size.physical_width) / @"f32"(ev.new_size.physical_height);
                 },
                 else => continue,
             }
         }
 
-        const w_div_2 = @"i32"(rend.frame.width / 2);
-        const h_div_2 = @"i32"(rend.frame.height / 2);
+        { // drawing routine
+            rend.clearRenderTarget(RGBA.BLACK);
+            var scr_pts: [NUM_CUBE_POINTS]i32x2 = std.mem.zeroes([NUM_CUBE_POINTS]i32x2);
+            for (&cube_points, 0..) |*p, i| {
+                // p.* = rotateYDeg(p.*, @floatCast(60.0 * dt));
+                const view_p = camToViewport(&cam, p.*);
+                if (@abs(view_p[0]) > 1 or @abs(view_p[1]) > 1) continue; //skip
+                scr_pts[i] = viewportToCanvas(
+                    view_p[0],
+                    view_p[1],
+                    @"f32"(rend.frame.width),
+                    @"f32"(rend.frame.height),
+                );
+            }
 
-        switch (in_key) {
-            .L => { // DrawLine
-                rend.clearRenderTarget(RGBA.BLACK);
-                rend.drawLine(0, 0, w_div_2, h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, w_div_2, -h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, -w_div_2, h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, -w_div_2, -h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, w_div_2 - 350, h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, w_div_2 - 350, -h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, -w_div_2 + 350, h_div_2, RGBA.FAV_RED);
-                rend.drawLine(0, 0, -w_div_2 + 350, -h_div_2, RGBA.FAV_RED);
-                rend.drawLine(-w_div_2, 0, w_div_2, 0, RGBA.FAV_RED); // horizontal line
-                rend.drawLine(0, h_div_2, 0, -h_div_2, RGBA.FAV_RED); // vertical line
-            },
-            .P => { // Points
-                // 3 horizontal points
-                rend.clearRenderTarget(RGBA.BLACK);
-                rend.putPixel(-1, h_div_2, RGBA.FAV_RED);
-                rend.putPixel(0, h_div_2, RGBA.FAV_RED);
-                rend.putPixel(1, h_div_2, RGBA.FAV_RED);
-                // 3 vertical points
-                rend.putPixel(0, h_div_2, RGBA.FAV_RED);
-                rend.putPixel(0, h_div_2 - 1, RGBA.FAV_RED);
-                rend.putPixel(0, h_div_2 - 2, RGBA.FAV_RED);
-                // + in the middle
-                rend.putPixel(0, 0, RGBA.FAV_RED);
-                rend.putPixel(0, 0 - 1, RGBA.FAV_RED);
-                rend.putPixel(0, 0 + 1, RGBA.FAV_RED);
-                rend.putPixel(0 - 1, 0, RGBA.FAV_RED);
-                rend.putPixel(0 + 1, 0, RGBA.FAV_RED);
-            },
-            .T => {
-                rend.clearRenderTarget(RGBA.BLACK);
-                rend.fillTriangle(
-                    .{ -w_div_2 + 100, 0 },
-                    .{ -w_div_2 + 200, h_div_2 },
-                    .{ 0, h_div_2 - 200 },
-                    RGBA.RED,
-                    RGBA.GREEN,
-                    RGBA.BLUE,
-                );
-                rend.drawTriangle(
-                    .{ -w_div_2 + 100, 0 },
-                    .{ -w_div_2 + 200, h_div_2 },
-                    .{ 0, h_div_2 - 200 },
-                    RGBA.BLUE,
-                );
+            rend.drawLine(scr_pts[0][0], scr_pts[0][1], scr_pts[1][0], scr_pts[1][1], RGBA.GREEN);
+            rend.drawLine(scr_pts[1][0], scr_pts[1][1], scr_pts[2][0], scr_pts[2][1], RGBA.GREEN);
+            rend.drawLine(scr_pts[2][0], scr_pts[2][1], scr_pts[3][0], scr_pts[3][1], RGBA.GREEN);
+            rend.drawLine(scr_pts[3][0], scr_pts[3][1], scr_pts[0][0], scr_pts[0][1], RGBA.GREEN);
 
-                rend.fillTriangle(
-                    .{ w_div_2 - 300, 0 },
-                    .{ w_div_2 - 100, 0 },
-                    .{ w_div_2 - 100, h_div_2 },
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                );
-                rend.drawTriangle(
-                    .{ w_div_2 - 300, 0 },
-                    .{ w_div_2 - 100, 0 },
-                    .{ w_div_2 - 100, h_div_2 },
-                    RGBA.BLUE,
-                );
+            rend.drawLine(scr_pts[4][0], scr_pts[4][1], scr_pts[5][0], scr_pts[5][1], RGBA.FAV_RED);
+            rend.drawLine(scr_pts[5][0], scr_pts[5][1], scr_pts[6][0], scr_pts[6][1], RGBA.FAV_RED);
+            rend.drawLine(scr_pts[6][0], scr_pts[6][1], scr_pts[7][0], scr_pts[7][1], RGBA.FAV_RED);
+            rend.drawLine(scr_pts[7][0], scr_pts[7][1], scr_pts[4][0], scr_pts[4][1], RGBA.FAV_RED);
 
-                rend.fillTriangle(
-                    .{ w_div_2 - 100, 0 },
-                    .{ w_div_2 - 200, -h_div_2 },
-                    .{ 0, -h_div_2 + 200 },
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                );
-                rend.drawTriangle(
-                    .{ w_div_2 - 100, 0 },
-                    .{ w_div_2 - 200, -h_div_2 },
-                    .{ 0, -h_div_2 + 200 },
-                    RGBA.BLUE,
-                );
-
-                rend.fillTriangle(
-                    .{ -w_div_2, -h_div_2 },
-                    .{ -w_div_2 + 200, -h_div_2 },
-                    .{ -w_div_2 + 100, -100 },
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                    RGBA.FAV_RED,
-                );
-                rend.drawTriangle(
-                    .{ -w_div_2, -h_div_2 },
-                    .{ -w_div_2 + 200, -h_div_2 },
-                    .{ -w_div_2 + 100, -100 },
-                    RGBA.BLUE,
-                );
-            },
-            .R => {
-                rx0 = @intFromFloat(rand.float(f32) * @"f32"(w_div_2));
-                ry0 = @intFromFloat(rand.float(f32) * @"f32"(h_div_2));
-                rx1 = @intFromFloat(rand.float(f32) * @"f32"(w_div_2));
-                ry1 = @intFromFloat(rand.float(f32) * @"f32"(h_div_2));
-            },
-            .S => {
-                std.debug.print("Ploting ({},{})|({},{})\n", .{ rx0, ry0, rx1, ry1 });
-                rend.clearRenderTarget(RGBA.BLACK);
-                rend.drawLine(rx0, ry0, rx1, ry1, RGBA.FAV_RED);
-            },
-            .F => {
-                rx0 = rand.intRangeAtMost(i32, -w_div_2, w_div_2);
-                ry0 = rand.intRangeAtMost(i32, -h_div_2, h_div_2);
-                rx1 = rand.intRangeAtMost(i32, -w_div_2, w_div_2);
-                ry1 = rand.intRangeAtMost(i32, -h_div_2, h_div_2);
-                std.debug.print("Ploting ({},{})|({},{})\n", .{ rx0, ry0, rx1, ry1 });
-                rend.clearRenderTarget(RGBA.BLACK);
-                rend.drawLine(rx0, ry0, rx1, ry1, RGBA.FAV_RED);
-            },
-            else => {
-                // rend.clearRenderTarget(RGBA.BLACK);
-            },
+            rend.drawLine(scr_pts[4][0], scr_pts[4][1], scr_pts[0][0], scr_pts[0][1], RGBA.BLUE);
+            rend.drawLine(scr_pts[5][0], scr_pts[5][1], scr_pts[1][0], scr_pts[1][1], RGBA.BLUE);
+            rend.drawLine(scr_pts[6][0], scr_pts[6][1], scr_pts[2][0], scr_pts[2][1], RGBA.BLUE);
+            rend.drawLine(scr_pts[7][0], scr_pts[7][1], scr_pts[3][0], scr_pts[3][1], RGBA.BLUE);
         }
-        // { // putPixelF
-        //     rend.putPixelF(0, 0, .FAV_RED);
-        //     rend.putPixelF(-1.0, 1.0, .FAV_RED);
-        //     rend.putPixelF(1.0, 1.0, .FAV_RED);
-        //     rend.putPixelF(-1.0, -1.0, .FAV_RED);
-        //     rend.putPixelF(1.0, -1.0, .FAV_RED);
-        // }
 
         rend.present();
+
+        frame_end = getTicksNs();
     }
 }
 
@@ -361,7 +308,19 @@ pub const i32x2 = [2](i32);
 pub const i32x3 = [3](i32);
 pub const i32x4 = [4](i32);
 pub const f32x2 = [2](f32);
+pub const f32x3 = [3](f32);
 pub const f32x4 = [4](f32);
+pub const i64x2 = [2](i64);
+pub const i64x3 = [3](i64);
+pub const i64x4 = [4](i64);
+
+pub const u32x2 = [2](u32);
+pub const u32x3 = [3](u32);
+
+// row major
+pub const Mat2 = [2](f32x2);
+pub const Mat3 = [3](f32x3);
+pub const Mat4 = [4](f32x4);
 
 pub const Rgba8 = [4](u8);
 pub const RgbaF32 = f32x4;
@@ -433,7 +392,7 @@ pub const Renderer = struct {
     //          │                   │                   │
     //          │                   │                   │
     //          │                   │                   │
-    //-w/2(-1.0)────────────────────│──────────────────── w/2(1.0)
+    //-w/2(-1.0)<───────────────────│───────────────────> w/2(1.0)
     //          │                   │                   │
     //          │                   │                   │
     //          │                   │                   │
@@ -479,27 +438,32 @@ pub const Renderer = struct {
         @memset(self.frame.buffer, c);
     }
 
-    // Draw routines
-    pub inline fn putPixelF(self: *Self, x: f32, y: f32, c: Color32) void {
-        dbg.assert(self.frame.width > 0);
-        dbg.assert(self.frame.height > 0);
-        dbg.assert(@abs(x) <= 1.0);
-        dbg.assert(@abs(y) <= 1.0);
-        const W_DIV_2: f32 = @"f32"(self.frame.width) / 2.0;
-        const H_DIV_2: f32 = @"f32"(self.frame.height) / 2.0;
-        const sx = x * W_DIV_2;
-        const sy = y * H_DIV_2;
-
-        self.putPixel(@intFromFloat(sx), @intFromFloat(sy), c);
-    }
-
     inline fn normalizeCoordinates(self: *const Self, x: i32, y: i32) [2]i32 {
         dbg.assert(self.frame.width > 0);
         dbg.assert(self.frame.height > 0);
+        dbg.assert(self.frame.width % 2 == 0);
         dbg.assert(@abs(x * 2) <= self.frame.width);
         dbg.assert(@abs(y * 2) <= self.frame.height);
+        const W_DIV_2 = @"i32"(self.frame.width / 2);
+        const H_DIV_2 = @"i32"(self.frame.height / 2);
+        var nx = x + W_DIV_2;
+        var ny = H_DIV_2 - y;
+        // NOTE: both w/2 and (w/2) - 1 point ot the same pixel
+        if (nx == self.frame.width) nx -= 1;
+        // NOTE: both -h/2 and (h/2) - 1 point ot the same pixel
+        if (ny == self.frame.height) ny -= 1;
+        dbg.print("Normalizing ({},{}) => ({}x{})\n", .{ x, y, nx, ny });
+        return .{ nx, ny };
+    }
+
+    inline fn canvasToRasterCoords(self: *const Self, x: i32, y: i32) [2]i32 {
+        dbg.assert(self.frame.width > 0);
+        dbg.assert(self.frame.height > 0);
         dbg.assert(self.frame.width % 2 == 0);
-        // dbg.assert(self.frame.height % 2 == 0); // Not always true especially for maximized windows
+
+        if (@abs(x * 2) > self.frame.width or
+            @abs(y * 2) > self.frame.height) return .{ -1, -1 };
+
         const W_DIV_2 = @"i32"(self.frame.width / 2);
         const H_DIV_2 = @"i32"(self.frame.height / 2);
         var nx = x + W_DIV_2;
@@ -513,31 +477,11 @@ pub const Renderer = struct {
     }
 
     pub fn putPixel(self: *Self, x: i32, y: i32, c: Color32) void {
-        const nx: i32, const ny: i32 = self.normalizeCoordinates(x, y);
+        const nx: i32, const ny: i32 = self.canvasToRasterCoords(x, y);
+        if (nx == -1) return; // don't plot
+
         self.frame.buffer[(self.frame.pitch / self.fb_format.bytes_per_pixel) * @"u32"(ny) + @"u32"(nx)] =
             mapRGBA(&self.fb_format, c[0], c[1], c[2], c[3]);
-    }
-
-    pub fn drawLineNaive(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, c: Color32) void {
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        if (@abs(dx) >= @abs(dy)) {
-            var x_start, const y_start, const x_end = if (x0 < x1) .{ x0, y0, x1 } else .{ x1, y1, x0 };
-            const a = @"f32"(dy) / @"f32"(dx);
-            var y: f32 = @floatFromInt(y_start);
-            while (x_start <= x_end) : (x_start += 1) {
-                self.putPixel(x_start, @intFromFloat(y), c);
-                y += a;
-            }
-        } else {
-            const x_start, var y_start, const y_end = if (y0 < y1) .{ x0, y0, y1 } else .{ x1, y1, y0 };
-            const a = @"f32"(dx) / @"f32"(dy);
-            var x: f32 = @floatFromInt(x_start);
-            while (y_start <= y_end) : (y_start += 1) {
-                self.putPixel(@intFromFloat(x), y_start, c);
-                x += a;
-            }
-        }
     }
 
     inline fn drawBrLine(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, color: u32) void {
@@ -852,6 +796,46 @@ pub const Renderer = struct {
         }
     }
 
+    pub fn fillRect(self: *Self, x: i32, y: i32, w: i32, h: i32, c0: Rgba8) void {
+        dbg.assert(w > 0);
+        dbg.assert(h > 0);
+
+        const color = mapRGBA(&self.fb_format, c0[0], c0[1], c0[2], c0[3]);
+        const pitch = (self.frame.pitch / self.fb_format.bytes_per_pixel);
+        const nx0, const ny0 = self.normalizeCoordinates(x, y);
+
+        const height: i32 = if (@"u32"(ny0 + h) <= self.frame.height)
+            h
+        else
+            (@"i32"(self.frame.height) - (ny0));
+
+        const width: u32 = if (@"u32"(nx0 + w) <= self.frame.width)
+            @intCast(w)
+        else
+            (self.frame.width - @"u32"(nx0));
+
+        const ny1 = ny0 + height;
+
+        var start: usize = @"u32"(ny0) * pitch + @"u32"(nx0);
+        var i = ny0;
+        while (i < ny1) : (i += 1) {
+            const end = start + width;
+            @memset(self.frame.buffer[start..end], color);
+            start += pitch;
+        }
+    }
+
+    pub fn drawObject(self: *Self, verticies: []const i32x3, triangles: []const TriangleDesc) void {
+        for (triangles) |t| {
+            self.drawTriangle(
+                projectVertex(verticies[t.indices[0]], 100),
+                projectVertex(verticies[t.indices[1]], 100),
+                projectVertex(verticies[t.indices[2]], 100),
+                t.color,
+            );
+        }
+    }
+
     pub inline fn present(self: *const Self) void {
         const ok = self.target.swapBuffers();
         std.debug.assert(ok);
@@ -874,7 +858,7 @@ inline fn lerp(a: f32, b: f32, t: f32) f32 {
     return a + t * (b - a);
 }
 
-/// NOTE: this test is done in screen coordinate system (i.e x=>right,y=>down).
+/// NOTE: this test is done in screen coordinate system (i.e x=>right, y=>down)
 /// assumes clockwise winding of verticies
 inline fn isTopLeftEdge(start: i32x2, end: i32x2) bool {
     const edge = .{ end[0] - start[0], end[1] - start[1] };
@@ -884,10 +868,6 @@ inline fn isTopLeftEdge(start: i32x2, end: i32x2) bool {
     // and is above the third vertex
     const is_top_edge = edge[1] == 0 and edge[0] > 0;
     return is_top_edge or is_left_edge;
-}
-
-inline fn sub2(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
-    return .{ lhs[0] - rhs[0], lhs[1] - rhs[1] };
 }
 
 inline fn arrayEq(lhs: anytype, rhs: @TypeOf(lhs)) bool {
@@ -905,10 +885,365 @@ inline fn edgeCross(a: i32x2, b: i32x2) i64 {
     return (@"i64"(a[0]) * b[1]) - (@"i64"(a[1]) * b[0]);
 }
 
+inline fn projectVertex(v: i32x3, distance: i32) i32x2 {
+    return .{ @divTrunc(v[0] * distance, v[2]), @divTrunc(v[1] * distance, v[2]) };
+}
+
+pub const TriangleDesc = extern struct {
+    indices: u32x3,
+    color: Rgba8,
+};
+
+const Rect = struct {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+};
+
+pub const Camera = extern struct {
+    position: f32x3,
+    deg_fov_x: f32, // in degrees
+    aspect_ratio: f32, // render surface w/h
+
+    const Self = @This();
+
+    /// This creates a symmetric frustum with horizontal FOV
+    /// by converting 4 params (self.fov_x, self.aspect_ratio=w/h, near_plane, far_plane)
+    /// to 6 params (l, r, b, t, n, f)
+    pub fn makeFrustum(self: *const Self, near_plane: f32, far_plane: f32, out_mat: *Mat4) void {
+        const front = (near_plane + self.position[1]);
+        const back = (far_plane + self.position[1]);
+
+        const tangent = @tan((self.deg_fov_x / 2) * math.rad_per_deg);
+        const right = front * tangent;
+        const top = right / self.aspect_ratio;
+        out_mat[0] = @splat(0);
+        out_mat[1] = @splat(0);
+        out_mat[2] = @splat(0);
+        out_mat[4] = @splat(0);
+
+        out_mat[0][0] = front / right;
+        out_mat[1][2] = front / top;
+        out_mat[2][1] = (-front - back) / (front - back);
+        out_mat[2][3] = (2 * front * back) / (front - back);
+        out_mat[3][1] = 1;
+    }
+
+    pub fn makeFrustumX(self: *const Self, near_plane: f32, out_mat: *Mat3) void {
+        const front = (near_plane + self.position[1]);
+
+        const tangent = @tan((self.deg_fov_x / 2) * math.rad_per_deg);
+        dbg.print("tg={d}\n", .{tangent});
+        const right = (front * tangent) + self.position[0];
+        const top = (right / self.aspect_ratio) + self.position[2];
+        dbg.print("front:{d},right:{d},top:{d}\n", .{ front, right, top });
+        // TODO ask user to zero the matrix
+        out_mat[0] = @splat(0);
+        out_mat[1] = @splat(0);
+        out_mat[2] = @splat(0);
+
+        out_mat[0][0] = front / right;
+        out_mat[1][2] = front / top;
+        out_mat[2][1] = 1;
+    }
+};
+
+pub fn viewportToCanvas(x: f32, y: f32, cv_w: f32, cv_h: f32) i32x2 {
+    const w_div_2 = cv_w / 2;
+    const h_div_2 = cv_h / 2;
+    return .{ @intFromFloat(x * w_div_2), @intFromFloat(y * h_div_2) };
+}
+
+// Vec manipulation
+inline fn rotate2(v: f32x2, angle: f32) f32x2 {
+    return .{
+        v[0] * @cos(angle) + v[1] * @sin(angle),
+        v[0] * @sin(angle) - v[1] * @cos(angle),
+    };
+}
+
+inline fn rotateX(v: f32x3, angle: f32) f32x3 {
+    return .{
+        v[0],
+        v[1] * @cos(angle) + v[2] * @sin(angle),
+        v[1] * @sin(angle) - v[2] * @cos(angle),
+    };
+}
+
+inline fn rotateY(v: f32x3, angle: f32) f32x3 {
+    return .{
+        v[0] * @cos(angle) + v[2] * @sin(angle),
+        v[1],
+        v[0] * @sin(angle) - v[2] * @cos(angle),
+    };
+}
+
+inline fn rotateZ(v: f32x3, angle: f32) f32x3 {
+    return .{
+        v[0] * @cos(angle) + v[1] * @sin(angle),
+        v[0] * @sin(angle) - v[1] * @cos(angle),
+        v[2],
+    };
+}
+
+inline fn rotateXDeg(v: f32x3, deg_angle: f32) f32x3 {
+    const angle = deg_angle * math.rad_per_deg;
+    return .{
+        v[0],
+        v[1] * @cos(angle) - v[2] * @sin(angle),
+        v[1] * @sin(angle) + v[2] * @cos(angle),
+    };
+}
+
+inline fn rotateYDeg(v: f32x3, deg_angle: f32) f32x3 {
+    const angle = deg_angle * math.rad_per_deg;
+    return .{
+        v[0] * @cos(angle) + v[2] * @sin(angle),
+        v[1],
+        -v[0] * @sin(angle) + v[2] * @cos(angle),
+    };
+}
+
+inline fn rotateZDeg(v: f32x3, deg_angle: f32) f32x3 {
+    const angle = deg_angle * math.rad_per_deg;
+    return .{
+        v[0] * @cos(angle) - v[1] * @sin(angle),
+        v[0] * @sin(angle) + v[1] * @cos(angle),
+        v[2],
+    };
+}
+
+inline fn sub2(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
+    return .{ lhs[0] - rhs[0], lhs[1] - rhs[1] };
+}
+
+inline fn add3(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
+    return .{ lhs[0] + rhs[0], lhs[1] + rhs[1], lhs[2] + rhs[2] };
+}
+
+inline fn dot4(lhs: anytype, rhs: @TypeOf(lhs)) ret: {
+    const T = @TypeOf(lhs);
+    break :ret @typeInfo(T).array.child;
+} {
+    const T = @TypeOf(lhs);
+    if (@typeInfo(T).array.len != 4) @compileError("dot4 is intended for 4 components vectors only");
+    return (lhs[0] * rhs[0]) + (lhs[1] * rhs[1]) + (lhs[2] * rhs[2]) + (lhs[3] * rhs[3]);
+}
+
+pub inline fn dot3(lhs: anytype, rhs: @TypeOf(lhs)) ret: {
+    const T = @TypeOf(lhs);
+    break :ret @typeInfo(T).array.child;
+} {
+    const T = @TypeOf(lhs);
+    if (@typeInfo(T).array.len != 3) @compileError("dot3 is intended for 3 components vectors only");
+    return (lhs[0] * rhs[0]) + (lhs[1] * rhs[1]) + (lhs[2] * rhs[2]);
+}
+
 inline fn cross2(lhs: anytype, rhs: @TypeOf(lhs)) ret_type: {
     const T = @TypeOf(lhs);
     const array_info = @typeInfo(T).array;
     break :ret_type array_info.child;
 } {
     return (lhs[0] * rhs[1]) - (lhs[1] * rhs[0]);
+}
+
+inline fn mat_mul_v(
+    m: anytype,
+    v: @typeInfo(@TypeOf(m)).array.child,
+) @typeInfo(@TypeOf(m)).array.child {
+    return switch (@typeInfo(@TypeOf(m)).array.len) {
+        2 => @panic("Unimplementd"),
+        3 => .{
+            dot3(m[0], v),
+            dot3(m[1], v),
+            dot3(m[2], v),
+        },
+        4 => .{
+            dot4(m[0], v),
+            dot4(m[1], v),
+            dot4(m[2], v),
+            dot4(m[3], v),
+        },
+        else => unreachable,
+    };
+}
+
+fn camToViewport(cam: *const Camera, p: f32x3) f32x2 {
+    var m: Mat3 = undefined;
+    cam.makeFrustumX(1, &m);
+    const clip_p = mat_mul_v(m, p);
+    dbg.print("P:({any}) => Clip:({any})\n", .{ p, clip_p });
+    return .{ clip_p[0] / clip_p[2], clip_p[1] / clip_p[2] };
+}
+// model space -> world space -> camera space -> viewport -> canvas -> raster space
+//  (+x -> right, +y -> forward, +z -> up)    | (+x -> right, +y -> up) | (+x -> right, +y -> down)
+// opengl
+// camera space -> clip space -> ndc -> raster space space
+
+fn task1(rend: *Renderer, input_key: KeyCode) void {
+    const w_div_2 = @"i32"(rend.frame.width / 2);
+    const h_div_2 = @"i32"(rend.frame.height / 2);
+    var prng = std.Random.Xoroshiro128.init(blk: {
+        const seed: u64 = @bitCast(std.time.milliTimestamp());
+        break :blk seed;
+    });
+
+    var rand = prng.random();
+
+    switch (input_key) {
+        .L => { // DrawLine
+            rend.clearRenderTarget(RGBA.BLACK);
+            rend.drawLine(0, 0, w_div_2, h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, w_div_2, -h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, -w_div_2, h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, -w_div_2, -h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, w_div_2 - 350, h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, w_div_2 - 350, -h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, -w_div_2 + 350, h_div_2, RGBA.FAV_RED);
+            rend.drawLine(0, 0, -w_div_2 + 350, -h_div_2, RGBA.FAV_RED);
+            rend.drawLine(-w_div_2, 0, w_div_2, 0, RGBA.FAV_RED); // horizontal line
+            rend.drawLine(0, h_div_2, 0, -h_div_2, RGBA.FAV_RED); // vertical line
+        },
+        .C => { // Draw cube
+            rend.clearRenderTarget(RGBA.BLACK);
+            var verts = [_]i32x3{
+                .{ 1, 1, 1 },
+                .{ -1, 1, 1 },
+                .{ -1, -1, 1 },
+                .{ 1, -1, 1 },
+                .{ 1, 1, -1 },
+                .{ -1, 1, -1 },
+                .{ -1, -1, -1 },
+                .{ 1, -1, -1 },
+            };
+            const triangles = [_]TriangleDesc{
+                .{ .indices = .{ 0, 1, 2 }, .color = RGBA.RED },
+                .{ .indices = .{ 0, 2, 3 }, .color = RGBA.RED },
+                .{ .indices = .{ 4, 0, 3 }, .color = RGBA.GREEN },
+                .{ .indices = .{ 4, 3, 7 }, .color = RGBA.GREEN },
+                .{ .indices = .{ 5, 4, 7 }, .color = RGBA.BLUE },
+                .{ .indices = .{ 5, 7, 6 }, .color = RGBA.BLUE },
+                .{ .indices = .{ 1, 5, 6 }, .color = RGBA.YELLOW },
+                .{ .indices = .{ 1, 6, 2 }, .color = RGBA.YELLOW },
+                .{ .indices = .{ 4, 5, 1 }, .color = RGBA.PURPLE },
+                .{ .indices = .{ 4, 1, 0 }, .color = RGBA.PURPLE },
+                .{ .indices = .{ 2, 6, 7 }, .color = RGBA.BROWN },
+                .{ .indices = .{ 2, 7, 3 }, .color = RGBA.BROWN },
+            };
+
+            const translation = i32x3{ -2, 0, 2 };
+            for (verts, 0..) |v, i| {
+                verts[i] = add3(v, translation);
+            }
+
+            rend.drawObject(&verts, &triangles);
+        },
+        .T => {
+            rend.clearRenderTarget(RGBA.BLACK);
+            rend.fillTriangle(
+                .{ -w_div_2 + 100, 0 },
+                .{ -w_div_2 + 200, h_div_2 },
+                .{ 0, h_div_2 - 200 },
+                RGBA.RED,
+                RGBA.GREEN,
+                RGBA.BLUE,
+            );
+            rend.drawTriangle(
+                .{ -w_div_2 + 100, 0 },
+                .{ -w_div_2 + 200, h_div_2 },
+                .{ 0, h_div_2 - 200 },
+                RGBA.BLUE,
+            );
+
+            rend.fillTriangle(
+                .{ w_div_2 - 300, 0 },
+                .{ w_div_2 - 100, 0 },
+                .{ w_div_2 - 100, h_div_2 },
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+            );
+            rend.drawTriangle(
+                .{ w_div_2 - 300, 0 },
+                .{ w_div_2 - 100, 0 },
+                .{ w_div_2 - 100, h_div_2 },
+                RGBA.BLUE,
+            );
+
+            rend.fillTriangle(
+                .{ w_div_2 - 100, 0 },
+                .{ w_div_2 - 200, -h_div_2 },
+                .{ 0, -h_div_2 + 200 },
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+            );
+            rend.drawTriangle(
+                .{ w_div_2 - 100, 0 },
+                .{ w_div_2 - 200, -h_div_2 },
+                .{ 0, -h_div_2 + 200 },
+                RGBA.BLUE,
+            );
+
+            rend.fillTriangle(
+                .{ -w_div_2, -h_div_2 },
+                .{ -w_div_2 + 200, -h_div_2 },
+                .{ -w_div_2 + 100, -100 },
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+                RGBA.FAV_RED,
+            );
+            rend.drawTriangle(
+                .{ -w_div_2, -h_div_2 },
+                .{ -w_div_2 + 200, -h_div_2 },
+                .{ -w_div_2 + 100, -100 },
+                RGBA.BLUE,
+            );
+        },
+        .R => {
+            rend.clearRenderTarget(RGBA.BLACK);
+            // rend.fillRect(0, 0, 200, 200, RGBA.BLUE);
+            rend.fillRect(-100, 100, 100, 100, RGBA.FAV_RED);
+            rend.fillRect(0, 0, 500, 400, RGBA.BLUE);
+            const rect3_pos = viewportToCanvas(-1, 1, @floatFromInt(rend.frame.width), @floatFromInt(rend.frame.height));
+            dbg.print("Rect=({any})\n", .{rect3_pos});
+            rend.fillRect(rect3_pos[0], rect3_pos[1], 100, 100, RGBA.FAV_RED);
+        },
+        .F => {
+            const rx0 = rand.intRangeAtMost(i32, -w_div_2, w_div_2);
+            const ry0 = rand.intRangeAtMost(i32, -h_div_2, h_div_2);
+            const rx1 = rand.intRangeAtMost(i32, -w_div_2, w_div_2);
+            const ry1 = rand.intRangeAtMost(i32, -h_div_2, h_div_2);
+            const rx2 = rand.intRangeAtMost(i32, -w_div_2, w_div_2);
+            const ry2 = rand.intRangeAtMost(i32, -h_div_2, h_div_2);
+            std.debug.print("Ploting ({},{})|({},{})|({},{})\n", .{ rx0, ry0, rx1, ry1, rx2, ry2 });
+            rend.clearRenderTarget(RGBA.BLACK);
+            rend.fillTriangle(.{ rx0, ry0 }, .{ rx1, ry1 }, .{ rx2, ry2 }, RGBA.FAV_RED, RGBA.FAV_RED, RGBA.FAV_RED);
+        },
+        else => {
+            // rend.clearRenderTarget(RGBA.BLACK);
+        },
+    }
+}
+
+var tick_start: u64 = 0;
+var tick_nume_ns: u32 = 0;
+var tick_denom_ns: u32 = 0;
+fn initTicks() void {
+    const tick_freq = widow.time.getMonoClockFreq();
+    dbg.assert(tick_freq > 0 and tick_freq <= math.maxInt(u32));
+    const gcd = math.gcd(std.time.ns_per_s, tick_freq);
+    tick_nume_ns = @intCast(std.time.ns_per_s / gcd);
+    dbg.assert(tick_nume_ns > 0);
+    tick_denom_ns = @intCast(tick_freq / gcd);
+    tick_start = widow.time.getMonoClockTicks();
+    dbg.assert(tick_start != 0);
+}
+fn getTicksNs() u64 {
+    var result: u64 = 0;
+    result = (widow.time.getMonoClockTicks() - tick_start);
+    result = result * tick_nume_ns;
+    result = result / tick_denom_ns;
+    return result;
 }

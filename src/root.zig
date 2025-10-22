@@ -32,11 +32,18 @@ pub const opengl = struct {
     pub const loaderFunc = platform.glLoaderFunc;
 };
 
-pub const WindowBuilder = @import("window.zig").WindowBuilder;
-pub const Window = @import("window.zig").Window;
-pub const WindowHandle = platform.WindowHandle;
-pub const DisplayHandle = platform.DisplayHandle;
-pub const WidowContext = platform.WidowContext;
+pub const time = struct {
+    /// Get the ticks count per second of the platform high resolution counter.
+    pub const getMonoClockFreq = platform.time.getMonotonicClockFrequency;
+
+    /// Get the current value of the platform high resolution counter.
+    /// diffrence between values can be converted to times by using
+    /// getMonoClockFreq().
+    pub const getMonoClockTicks = platform.time.getMonotonicClockTicks;
+
+    /// blocks thread and wait *at least* for the specified number of nanoseconds.
+    pub const waitForNs = platform.time.waitForNs;
+};
 
 pub const gfx = struct {
     pub const Canvas = @import("window.zig").Canvas;
@@ -45,6 +52,12 @@ pub const gfx = struct {
     pub const PixelFormat = common.pixel.PixelFormat;
     pub const PixelFormatInfo = common.pixel.PixelFormatInfo;
 };
+
+pub const WindowBuilder = @import("window.zig").WindowBuilder;
+pub const Window = @import("window.zig").Window;
+pub const WindowHandle = platform.WindowHandle;
+pub const DisplayHandle = platform.DisplayHandle;
+pub const WidowContext = platform.WidowContext;
 
 /// initialize a platform context.
 /// this should be the first function you call before
