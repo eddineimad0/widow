@@ -19,6 +19,8 @@ pub const WindowError = wndw.WindowError;
 pub const DisplayHandle = win32_gfx.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
+pub const time = @import("time.zig");
+
 pub const glLoaderFunc = @import("wgl.zig").glLoaderFunc;
 
 pub const WidowContext = struct {
