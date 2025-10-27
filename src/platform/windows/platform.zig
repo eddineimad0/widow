@@ -135,23 +135,25 @@ pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_
     return false;
 }
 
-pub fn getOsName(ctx: *WidowContext) [*:0]const u8 {
+pub fn getOsName(ctx: *WidowContext, wr: *std.io.Writer) bool {
     if (ctx.driver.hints.is_stupid_win11)
-        return "Windows 11";
+        wr.writeAll("Windows 11") catch return false;
 
     if (ctx.driver.hints.is_win10b1607_or_above)
-        return "Windows 10";
+        wr.writeAll("Windows 10") catch return false;
 
     //NOTE: never tried running widow on these
     // platform and i don't know if it can
     if (ctx.driver.hints.is_win8point1_or_above)
-        return "Windows 8.1";
+        wr.writeAll("Windows 8.1") catch return false;
 
     if (ctx.driver.hints.is_win7_or_above)
-        return "Windows 7";
+        wr.writeAll("Windows 7") catch return false;
 
     if (ctx.driver.hints.is_win_vista_or_above)
-        return "Windows Vista ";
+        wr.writeAll("Windows Vista") catch return false;
+
+    return true;
 }
 
 pub inline fn getCommonPlatformInfo(ctx: *WidowContext) *const common.sysinfo.CommonInfo {
