@@ -25,7 +25,7 @@ pub const ProcessInfo = struct {
     pid: u32,
 };
 
-pub const CommonInfo = struct {
+pub const RuntimeEnv = struct {
     system: SystemInfo,
     process: ProcessInfo,
 };
