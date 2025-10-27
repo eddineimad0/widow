@@ -35,12 +35,12 @@ pub const CpuX86 = struct {
                     \\ pushfl
                     \\ popl %%eax
                     \\ xorl %%ecx, %%eax
-                    \\ jnz set_true
+                    \\ jnz widow_cpuid_set_true
                     \\ xorl %%eax, %%eax
-                    \\ jmp exit
-                    \\set_true:
+                    \\ jmp widow_cpuid_exit
+                    \\widow_cpuid_set_true:
                     \\ movl $1, %%eax
-                    \\exit:
+                    \\widow_cpuid_exit:
                     : [ret] "={eax}" (-> bool),
                     :
                     : .{ .eax = true, .ecx = true });
@@ -56,12 +56,12 @@ pub const CpuX86 = struct {
                     \\ pushfq
                     \\ popq %%rax
                     \\ xorl %%ecx, %%eax
-                    \\ jnz set_true
+                    \\ jnz widow_cpuid_set_true
                     \\ xorq %%rax, %%rax
-                    \\ jmp exit
-                    \\set_true:
+                    \\ jmp widow_cpuid_exit
+                    \\widow_cpuid_set_true:
                     \\ movq $1, %%rax
-                    \\exit:
+                    \\widow_cpuid_exit:
                     : [ret] "={rax}" (-> bool),
                     :
                     : .{ .rax = true, .rcx = true });

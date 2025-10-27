@@ -59,6 +59,8 @@ pub const WindowHandle = platform.WindowHandle;
 pub const DisplayHandle = platform.DisplayHandle;
 pub const WidowContext = platform.WidowContext;
 
+pub const CommonInfo = common.sysinfo.CommonInfo;
+
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
