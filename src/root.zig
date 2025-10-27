@@ -86,8 +86,9 @@ pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;
 
-/// returns a string identifier for the current os
-/// we are running on.
+/// writes a string identifier for the current os we are running on
+/// into the the writer param
+/// returns true if it wrote all the informations.
 pub const getOsName = platform.getOsName;
 
 /// returns a struct containing informations about the current
@@ -98,7 +99,7 @@ pub const getOsName = platform.getOsName;
 /// * user *home* and *temp* paths
 /// * process id, binary path, and current workind directory
 /// for more see [common.sysinfo.CommonInfo]
-pub const getCommonPlatformInfo = platform.getCommonPlatformInfo;
+pub const getRuntimeEnvInfo = platform.getRuntimeEnvInfo;
 
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);
