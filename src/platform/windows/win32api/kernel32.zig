@@ -9,6 +9,9 @@ pub const CP_UTF8 = @as(win32.UINT, 65001);
 pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = @as(u32, 0x02);
 pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS = @as(u32, 0x04);
 pub const VER_GREATER_EQUAL = @as(u32, 0x03);
+pub const VER_NT_WORKSTATION = 1;
+pub const VER_NT_DOMAIN_CONTROLLER = 2;
+pub const VER_NT_SERVER = 3;
 
 //===========================
 // Types
@@ -137,3 +140,5 @@ pub extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) win32.UINT;
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: win32.HANDLE, lpMode: *win32.DWORD) callconv(.winapi) win32.BOOL;
 pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: win32.HANDLE, dwMode: win32.DWORD) callconv(.winapi) win32.BOOL;
 pub extern "kernel32" fn GetTempPathW(nBufferLength: win32.DWORD, lpBuffer: ?win32.LPWSTR) callconv(.winapi) win32.DWORD;
+
+pub extern "ntdll" fn RtlGetVersion(lpVersionInformations: *OSVERSIONINFOEXW) callconv(.winapi) win32.NTSTATUS;
