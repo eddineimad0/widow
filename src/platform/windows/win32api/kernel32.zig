@@ -5,6 +5,7 @@ const win32 = std.os.windows;
 //==========================
 // Constants
 //==========================
+pub const CP_UTF8 = @as(win32.UINT, 65001);
 pub const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = @as(u32, 0x02);
 pub const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS = @as(u32, 0x04);
 pub const VER_GREATER_EQUAL = @as(u32, 0x03);
@@ -69,13 +70,13 @@ pub const VER_SUITENAME = VER_FLAGS{ .SUITENAME = 1 };
 pub const VER_PRODUCT_TYPE = VER_FLAGS{ .PRODUCT_TYPE = 1 };
 
 pub const EXECUTION_STATE = packed struct(win32.DWORD) {
-    SYSTEM_REQUIRED : u1 = 0,
-    DISPLAY_REQUIRED : u1 = 0,
-    USER_PRESENT :u1 = 0,
-    __UNUSED_1:u3 = 0,
-    AWAYMODE_REQUIRED:u1 = 0,
-    __UNUSED_2:u24 = 0,
-    CONTINUOUS :u1 = 0,
+    SYSTEM_REQUIRED: u1 = 0,
+    DISPLAY_REQUIRED: u1 = 0,
+    USER_PRESENT: u1 = 0,
+    __UNUSED_1: u3 = 0,
+    AWAYMODE_REQUIRED: u1 = 0,
+    __UNUSED_2: u24 = 0,
+    CONTINUOUS: u1 = 0,
 
     pub const ES_AWAYMODE_REQUIRED = EXECUTION_STATE{ .AWAYMODE_REQUIRED = 1 };
     pub const ES_CONTINUOUS = EXECUTION_STATE{ .CONTINUOUS = 1 };
@@ -127,8 +128,12 @@ pub extern "kernel32" fn VerSetConditionMask(
     Condition: u8,
 ) callconv(.winapi) u64;
 
+pub extern "kernel32" fn SetThreadExecutionState(esFlags: EXECUTION_STATE) callconv(.winapi) EXECUTION_STATE;
 
-pub extern "kernel32" fn SetThreadExecutionState(
-  esFlags:EXECUTION_STATE
-) callconv(.winapi) EXECUTION_STATE;
-
+pub extern "kernel32" fn SetConsoleCP(wCodePageID: win32.UINT) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn GetConsoleCP() callconv(.winapi) win32.UINT;
+pub extern "kernel32" fn SetConsoleOutputCP(wCodePageID: win32.UINT) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) win32.UINT;
+pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: win32.HANDLE, lpMode: *win32.DWORD) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: win32.HANDLE, dwMode: win32.DWORD) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn GetTempPathW(nBufferLength: win32.DWORD, lpBuffer: ?win32.LPWSTR) callconv(.winapi) win32.DWORD;
