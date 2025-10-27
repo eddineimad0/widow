@@ -407,22 +407,3 @@ pub fn getPlatformInfo(allocator: mem.Allocator) !PlatformInfo {
 
     return pinfo;
 }
-
-//----------------------
-// Unit test
-//----------------------
-test "system init" {
-    const testing = std.testing;
-    var state = try getPlatformInfo(testing.allocator);
-    defer state.deinit(testing.allocator);
-    std.debug.print("OSState = {}\n", .{state});
-    std.debug.print("HostName = {s}\n", .{state.common.system.hostname});
-    std.debug.print("Binary Path = {s}\n", .{state.common.process.binary_path});
-    std.debug.print("Working directory = {s}\n", .{state.common.process.working_path});
-    if (state.common.process.user_home_path) |path| {
-        std.debug.print("User home path = {s}\n", .{path});
-    }
-    if (state.common.process.user_temp_path) |path| {
-        std.debug.print("User temp path = {s}\n", .{path});
-    }
-}

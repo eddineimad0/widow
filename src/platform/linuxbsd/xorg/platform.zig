@@ -29,6 +29,7 @@ pub const WidowContext = struct {
     allocator: mem.Allocator,
     display_mgr: display.DisplayManager,
     raw_mouse_motion_window: ?libx11.Window,
+    unix_envinfo: common.unix.envinfo.UnixEnvInfo,
 
     const Self = @This();
     fn init(a: mem.Allocator) (mem.Allocator.Error || display.DisplayError ||
@@ -36,15 +37,21 @@ pub const WidowContext = struct {
         const d = try driver.X11Driver.initSingleton();
         const km = KeyMaps.initSingleton(d);
         const display_mgr = try display.DisplayManager.init(a, d);
+        const platform_info = try common.unix.envinfo.getPlatformInfo(a);
         return .{
             .driver = d,
             .key_map = km,
             .allocator = a,
             .display_mgr = display_mgr,
             .raw_mouse_motion_window = null,
+            .unix_envinfo = platform_info,
         };
     }
 };
+
+//------------
+// Functions
+//------------
 
 pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     so.ModuleError ||
@@ -61,6 +68,7 @@ pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
 
 pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     ctx.display_mgr.deinit(ctx.allocator);
+    ctx.unix_envinfo.deinit(ctx.allocator);
     a.destroy(ctx);
 }
 
@@ -90,6 +98,14 @@ pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_
         }
     }
     return false;
+}
+
+pub fn getOsName(_: *WidowContext, wr: *std.io.Writer) bool {
+    return common.unix.process.getOsName(wr);
+}
+
+pub inline fn getRuntimeEnvInfo(ctx: *WidowContext) *const common.envinfo.RuntimeEnv {
+    return &ctx.unix_envinfo.common;
 }
 
 test "Platform" {
