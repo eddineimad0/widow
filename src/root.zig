@@ -62,6 +62,11 @@ pub const WidowContext = platform.WidowContext;
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
+/// # Side effects
+/// on windows:
+///  * we initialize COM
+///  * we set Console code page to UTF8 (allows printing of utf8 strings correctly)
+///  * we enable virtual console (enables extra features in the terminal)
 pub const createWidowContext = platform.createWidowContext;
 
 /// destroys and frees the resources used by the platform context.
@@ -78,6 +83,20 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;
+
+/// returns a string identifier for the current os
+/// we are running on.
+pub const getOsName = platform.getOsName;
+
+/// returns a struct containing informations about the current
+/// execution environement.
+/// notably:
+/// * cpu identifier and extensions support
+/// * hostname
+/// * user *home* and *temp* paths
+/// * process id, binary path, and current workind directory
+/// for more see [common.sysinfo.CommonInfo]
+pub const getCommonPlatformInfo = platform.getCommonPlatformInfo;
 
 test "all_widow_unit_tests" {
     std.testing.refAllDeclsRecursive(common);

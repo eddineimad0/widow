@@ -25,6 +25,7 @@ const OsVersionHints = struct {
     is_win8point1_or_above: bool,
     is_win10b1607_or_above: bool,
     is_win10b1703_or_above: bool,
+    is_stupid_win11: bool,
 };
 
 const Win32Handles = struct {
@@ -94,6 +95,7 @@ pub const Win32Driver = struct {
             .is_win8point1_or_above = false,
             .is_win10b1607_or_above = false,
             .is_win10b1703_or_above = false,
+            .is_stupid_win11 = false,
         },
         .opt_func = OptionalApi{
             .SetProcessDPIAware = null,
@@ -159,6 +161,8 @@ pub const Win32Driver = struct {
                     }
                 }
             }
+
+            globl_instance.hints.is_stupid_win11 = isWin11(globl_instance.opt_func.RtlVerifyVersionInfo);
 
             // Declare Process DPI Awareness.
             if (globl_instance.hints.is_win10b1703_or_above) {
@@ -344,6 +348,29 @@ fn isWin10BuildMinimum(func: OptionalApi.RtlVerifyVersionInfoProc, build: u32) b
     cond_mask = krnl32.VerSetConditionMask(
         cond_mask,
         krnl32.VER_BUILDNUMBER,
+        krnl32.VER_GREATER_EQUAL,
+    );
+    return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;
+}
+
+fn isWin11(func: OptionalApi.RtlVerifyVersionInfoProc) bool {
+    var vi: krnl32.OSVERSIONINFOEXW = std.mem.zeroes(krnl32.OSVERSIONINFOEXW);
+    vi.dwOSVersionInfoSize = @sizeOf(krnl32.OSVERSIONINFOEXW);
+    vi.dwMajorVersion = 11;
+    vi.dwMinorVersion = 0;
+    const mask = krnl32.VER_FLAGS{
+        .MINORVERSION = 1,
+        .MAJORVERSION = 1,
+    };
+    var cond_mask: u64 = 0;
+    cond_mask = krnl32.VerSetConditionMask(
+        cond_mask,
+        krnl32.VER_MAJORVERSION,
+        krnl32.VER_GREATER_EQUAL,
+    );
+    cond_mask = krnl32.VerSetConditionMask(
+        cond_mask,
+        krnl32.VER_MINORVERSION,
         krnl32.VER_GREATER_EQUAL,
     );
     return func(&vi, @bitCast(mask), cond_mask) == win32.NTSTATUS.SUCCESS;

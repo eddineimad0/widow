@@ -3,6 +3,7 @@ const common = @import("common");
 const display = @import("display.zig");
 const driver = @import("driver.zig");
 const wndw = @import("window.zig");
+const sysinfo = @import("sysinfo.zig");
 const win32_gfx = @import("win32api/graphics.zig");
 const win32_macros = @import("win32api/macros.zig");
 const win32 = std.os.windows;
@@ -28,6 +29,7 @@ pub const WidowContext = struct {
     allocator: mem.Allocator,
     driver: *const driver.Win32Driver,
     display_mgr: display.DisplayManager,
+    windows_info: sysinfo.PlatformInfo,
 
     const Self = @This();
     fn init(a: mem.Allocator) (mem.Allocator.Error ||
@@ -59,15 +61,22 @@ pub const WidowContext = struct {
 
         errdefer _ = win32_gfx.DestroyWindow(h);
         const display_mgr = try display.DisplayManager.init(a);
+        const platform_info = sysinfo.getPlatformInfo(a) catch
+            return mem.Allocator.Error.OutOfMemory;
+
         return .{
             .driver = d,
             .helper_window = h,
             .display_mgr = display_mgr,
             .allocator = a,
+            .windows_info = platform_info,
         };
     }
 };
 
+//------------
+// Functions
+//------------
 pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     display.DisplayError ||
     driver.Win32DriverError ||
@@ -94,6 +103,7 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     _ = win32_gfx.DestroyWindow(ctx.helper_window);
     ctx.display_mgr.deinit(ctx.allocator);
     driver.Win32Driver.deinitSingleton();
+    ctx.windows_info.deinit(ctx.allocator);
     a.destroy(ctx);
 }
 
@@ -123,6 +133,29 @@ pub fn getDisplayInfo(ctx: *WidowContext, h: DisplayHandle, info: *common.video_
         }
     }
     return false;
+}
+
+pub fn getOsName(ctx: *WidowContext) [*:0]const u8 {
+    if (ctx.driver.hints.is_stupid_win11)
+        return "Windows 11";
+
+    if (ctx.driver.hints.is_win10b1607_or_above)
+        return "Windows 10";
+
+    //NOTE: never tried running widow on these
+    // platform and i don't know if it can
+    if (ctx.driver.hints.is_win8point1_or_above)
+        return "Windows 8.1";
+
+    if (ctx.driver.hints.is_win7_or_above)
+        return "Windows 7";
+
+    if (ctx.driver.hints.is_win_vista_or_above)
+        return "Windows Vista ";
+}
+
+pub inline fn getCommonPlatformInfo(ctx: *WidowContext) *const common.sysinfo.CommonInfo {
+    return &ctx.windows_info.common;
 }
 
 test "platform_unit_test" {
