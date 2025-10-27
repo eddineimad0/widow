@@ -156,13 +156,15 @@ pub const Win32Driver = struct {
 
                             if (isWin10BuildMinimum(globl_instance.opt_func.RtlVerifyVersionInfo, 1703)) {
                                 globl_instance.hints.is_win10b1703_or_above = true;
+                                globl_instance.hints.is_stupid_win11 = isWin10BuildMinimum(
+                                    globl_instance.opt_func.RtlVerifyVersionInfo,
+                                    22000,
+                                );
                             }
                         }
                     }
                 }
             }
-
-            globl_instance.hints.is_stupid_win11 = isWin11(globl_instance.opt_func.RtlVerifyVersionInfo);
 
             // Declare Process DPI Awareness.
             if (globl_instance.hints.is_win10b1703_or_above) {

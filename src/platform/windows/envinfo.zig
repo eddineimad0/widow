@@ -212,8 +212,8 @@ extern "userenv" fn GetUserProfileDirectoryW(
 //---------------------
 // Types
 //---------------------
-pub const PlatformInfo = struct {
-    common: common.sysinfo.CommonInfo,
+pub const Win32EnvInfo = struct {
+    common: common.envinfo.RuntimeEnv,
     input_cp: win32.UINT,
     output_cp: win32.UINT,
     orig_console_mode: win32.DWORD,
@@ -250,8 +250,8 @@ pub const PlatformInfo = struct {
 //---------------------
 // Functions
 //---------------------
-pub fn getPlatformInfo(allocator: mem.Allocator) !PlatformInfo {
-    var pinfo = PlatformInfo{
+pub fn getPlatformInfo(allocator: mem.Allocator) !Win32EnvInfo {
+    var pinfo = Win32EnvInfo{
         .common = .{
             .system = .{
                 .hostname = &.{},
@@ -336,6 +336,7 @@ pub fn getPlatformInfo(allocator: mem.Allocator) !PlatformInfo {
                 );
             }
 
+            // TODO: maybe we can just create it
             // we need to make sure this path exist since windows doesn't check for us
             if (pinfo.common.process.user_home_path) |path| {
                 var dir: ?std.fs.Dir = std.fs.openDirAbsolute(path, .{}) catch dir: {

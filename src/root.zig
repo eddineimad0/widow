@@ -59,7 +59,7 @@ pub const WindowHandle = platform.WindowHandle;
 pub const DisplayHandle = platform.DisplayHandle;
 pub const WidowContext = platform.WidowContext;
 
-pub const CommonPlatformInfo = common.sysinfo.CommonInfo;
+pub const RuntimeEnv = common.envinfo.RuntimeEnv;
 
 /// initialize a platform context.
 /// this should be the first function you call before

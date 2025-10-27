@@ -1,7 +1,7 @@
 const builtin = @import("builtin");
 const cpu_info = @import("cpuinfo.zig");
 
-pub const SystemInfo = struct {
+const SystemInfo = struct {
     hostname: []const u8,
     cpu: struct {
         logical_cores_count: u32,
@@ -17,7 +17,7 @@ pub const SystemInfo = struct {
     },
 };
 
-pub const ProcessInfo = struct {
+const ProcessInfo = struct {
     binary_path: []const u8,
     working_path: []const u8,
     user_home_path: ?[]const u8,
