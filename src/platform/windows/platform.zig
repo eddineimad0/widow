@@ -142,19 +142,23 @@ pub fn getOsName(ctx: *WidowContext, wr: *std.io.Writer) bool {
     const ok = win32_krnl.RtlGetVersion(&ver_info);
     dbg.assert(ok == win32.NTSTATUS.SUCCESS);
 
+    wr.writeAll("Windows ") catch return false;
+
     if (ctx.driver.hints.is_stupid_win11) {
-        wr.writeAll("Windows 11 ") catch return false;
+        wr.writeAll("11 ") catch return false;
     } else if (ctx.driver.hints.is_win10b1607_or_above) {
-        wr.writeAll("Windows 10 ") catch return false;
+        wr.writeAll("10 ") catch return false;
     }
     //NOTE: never tried running widow on these
     // platform and i don't know if it can
     else if (ctx.driver.hints.is_win8point1_or_above) {
-        wr.writeAll("Windows 8.1 ") catch return false;
+        wr.writeAll("8.1 ") catch return false;
     } else if (ctx.driver.hints.is_win7_or_above) {
-        wr.writeAll("Windows 7 ") catch return false;
+        wr.writeAll("7 ") catch return false;
     } else if (ctx.driver.hints.is_win_vista_or_above) {
-        wr.writeAll("Windows Vista ") catch return false;
+        wr.writeAll("Vista ") catch return false;
+    } else {
+        wr.writeAll("XP or older ") catch return false;
     }
 
     wr.print(
