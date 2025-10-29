@@ -37,7 +37,7 @@ fn getHostName(allocator: mem.Allocator) mem.Allocator.Error![]const u8 {
     const hostname_buffer = try allocator.alloc(u8, posix.HOST_NAME_MAX);
     const hostname = posix.gethostname(@ptrCast(hostname_buffer)) catch return &.{};
     if (allocator.resize(hostname_buffer, hostname.len)) {
-        return hostname_buffer;
+        return hostname;
     } else {
         const dupe_hostname = try allocator.dupe(u8, hostname);
         allocator.free(hostname_buffer);
@@ -62,7 +62,7 @@ fn getCWD(allocator: mem.Allocator) mem.Allocator.Error![]const u8 {
 
     if (cwd) |dir| {
         if (allocator.resize(buffers[ret_buffer_idx], dir.len)) {
-            return buffers[ret_buffer_idx];
+            return dir;
         } else {
             const dup_cwd = try allocator.dupe(u8, buffers[ret_buffer_idx][0..dir.len]);
             allocator.free(buffers[ret_buffer_idx]);
@@ -91,7 +91,7 @@ fn getBinPath(allocator: mem.Allocator) mem.Allocator.Error![]const u8 {
 
     if (bin_path) |path| {
         if (allocator.resize(buffers[ret_buffer_idx], path.len)) {
-            return buffers[ret_buffer_idx];
+            return path;
         } else {
             const dupe_bin_path = try allocator.dupe(u8, buffers[ret_buffer_idx][0..path.len]);
             allocator.free(buffers[ret_buffer_idx]);
