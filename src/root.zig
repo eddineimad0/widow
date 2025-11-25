@@ -61,6 +61,16 @@ pub const WidowContext = platform.WidowContext;
 
 pub const RuntimeEnv = common.envinfo.RuntimeEnv;
 
+pub const audio = struct {
+    pub const AudioSink = @import("audio.zig").AudioSink;
+    pub const StreamBuffer = common.audio.StreamBuffer;
+    pub const FrameDescription = common.audio.FrameDescription;
+    pub const AudioSinkDescription = common.audio.AudioSinkDescription;
+    pub const SampleFormat = common.audio.SampleFormat;
+    pub const SampleRate = common.audio.SampleRate;
+    pub const ChannelCount = common.audio.ChannelCount;
+};
+
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.
@@ -82,6 +92,10 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 // moment by the user from the system. the identifiers returned
 // by these functions may get invalidated at any moment, so use with caution
 // TODO: add an event for when monitors gets unplugged
+// TODO: better monitor notification
+// TODO: audio sink
+// TODO: dropped file api improvements
+// TODO: file watch if possible
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;

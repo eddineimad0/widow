@@ -7,6 +7,7 @@ const envinfo = @import("envinfo.zig");
 const win32_gfx = @import("win32api/graphics.zig");
 const win32_krnl = @import("win32api/kernel32.zig");
 const win32_macros = @import("win32api/macros.zig");
+const audio = @import("audio.zig");
 const win32 = std.os.windows;
 
 const mem = std.mem;
@@ -15,6 +16,7 @@ const io = std.io;
 
 pub const Window = wndw.Window;
 pub const Canvas = wndw.Win32Canvas;
+pub const AudioSink = audio.Win32AudioSink;
 pub const WindowError = wndw.WindowError;
 
 // Platform handles
@@ -78,6 +80,7 @@ pub const WidowContext = struct {
 //------------
 // Functions
 //------------
+
 pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
     display.DisplayError ||
     driver.Win32DriverError ||

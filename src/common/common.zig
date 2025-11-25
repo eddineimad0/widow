@@ -7,6 +7,7 @@ pub const cursor = @import("cursor.zig");
 pub const fb = @import("framebuffer.zig");
 pub const pixel = @import("pixel.zig");
 pub const envinfo = @import("envinfo.zig");
+pub const audio = @import("audio.zig");
 
 const builtin = @import("builtin");
 pub const unix = if (builtin.target.os.tag == .windows) {} else @import("unix/unix.zig");

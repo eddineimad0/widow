@@ -185,6 +185,7 @@ fn makeExamplesStep(b: *std.Build, target: std.Build.ResolvedTarget, optimize: s
         "events_loop",
         "gl_triangle",
         "sw_render",
+        "audio_stream",
     };
 
     for (examples) |example_name| {
