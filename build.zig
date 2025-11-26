@@ -2,14 +2,14 @@ const std = @import("std");
 const mem = std.mem;
 
 const LinuxDisplayProtocol = enum {
-    Xorg,
-    Wayland,
+    xorg,
+    wayland,
 };
 
 const DisplayProtocol = enum {
-    Win32,
-    Xorg,
-    Wayland,
+    win32,
+    xorg,
+    wayland,
 };
 
 pub fn build(b: *std.Build) !void {
@@ -38,7 +38,7 @@ fn detectDispalyTarget(
     const SESSION_TYPE_WAYLAND: [*:0]const u8 = "wayland";
 
     return switch (target.result.os.tag) {
-        .windows => .Win32,
+        .windows => .win32,
         .linux, .freebsd, .netbsd => unix: {
             const display_target = b.option(
                 LinuxDisplayProtocol,
@@ -47,8 +47,8 @@ fn detectDispalyTarget(
             );
             if (display_target) |dt| {
                 switch (dt) {
-                    .Xorg => break :unix .Xorg,
-                    .Wayland => break :unix .Wayland,
+                    .xorg => break :unix .xorg,
+                    .wayland => break :unix .wayland,
                 }
             } else {
                 // need to determine what display server is being used
@@ -64,9 +64,9 @@ fn detectDispalyTarget(
                 }
 
                 if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_X11))) {
-                    break :unix .Xorg;
+                    break :unix .xorg;
                 } else if (mem.eql(u8, display_session_type, mem.span(SESSION_TYPE_WAYLAND))) {
-                    break :unix .Wayland;
+                    break :unix .wayland;
                 } else {
                     @panic("Unsupported unix display server");
                 }
@@ -90,7 +90,7 @@ fn createWidowModule(
     });
 
     const platform_mod: *std.Build.Module = switch (display_target) {
-        .Win32 => win32: {
+        .win32 => win32: {
             break :win32 b.createModule(
                 .{
                     .root_source_file = b.path("src/platform/windows/platform.zig"),
@@ -102,7 +102,7 @@ fn createWidowModule(
                 },
             );
         },
-        .Xorg => b.createModule(
+        .xorg => b.createModule(
             .{
                 .root_source_file = b.path("src/platform/linuxbsd/xorg/platform.zig"),
                 .target = target,
