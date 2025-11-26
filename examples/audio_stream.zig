@@ -22,7 +22,13 @@ pub fn main() !void {
         .num_channels_hint = .stereo,
         .stream_buffer_frames = 2048,
     }, null);
+    var sink2 = try audio.AudioSink.init(allocator, .{
+        .samples_rate_hint = .@"44100Hz",
+        .num_channels_hint = .stereo,
+        .stream_buffer_frames = 2048,
+    }, null);
     defer sink.deinit(allocator);
+    defer sink2.deinit(allocator);
     std.debug.print("Sink Stream buffer:\n", .{});
     std.debug.print("bytesize={d}\n", .{sink.stream_buffer.bytesize});
     std.debug.print("frames_count={d}\n", .{sink.stream_buffer.frames_count});
@@ -36,14 +42,15 @@ pub fn main() !void {
     defer allocator.free(sound);
     var written: usize = 0;
     while (written < sound.len) {
-        const samples = try sink.waitBufferReady(null);
+        try sink.update();
+        const samples = sink.waitBufferReady(null);
         const dst: []f32 = @ptrCast(samples);
         const src = sound[written..];
         @memset(dst, 0);
         const limit = @min(dst.len, src.len);
         @memcpy(dst[0..limit], src[0..limit]);
         written += limit;
-        try sink.submitBuffer();
+        sink.submitBuffer();
     }
 }
 

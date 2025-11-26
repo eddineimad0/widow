@@ -12,7 +12,7 @@ pub const IUnknown = extern union {
         QueryInterface: *const fn (
             self: *const IUnknown,
             riid: *const win32.GUID,
-            ppvObject: **anyopaque,
+            ppvObject: ?*?*anyopaque,
         ) callconv(.winapi) win32.HRESULT,
         AddRef: *const fn (
             self: *const IUnknown,

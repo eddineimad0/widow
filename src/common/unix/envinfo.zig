@@ -165,7 +165,6 @@ pub fn getPlatformInfo(allocator: mem.Allocator) mem.Allocator.Error!UnixEnvInfo
         for (search_env_vars) |v| {
             env_tmp_path = posix.getenvZ(v);
             if (env_tmp_path) |p| {
-                // TODO: we can possibly just create it instead of this
                 var dir: std.fs.Dir = std.fs.openDirAbsoluteZ(p, .{}) catch {
                     continue;
                 };

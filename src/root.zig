@@ -93,7 +93,6 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 // by these functions may get invalidated at any moment, so use with caution
 // TODO: add an event for when monitors gets unplugged
 // TODO: better monitor notification
-// TODO: audio sink
 // TODO: dropped file api improvements
 // TODO: file watch if possible
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
@@ -112,7 +111,7 @@ pub const getOsName = platform.getOsName;
 /// * hostname
 /// * user *home* and *temp* paths
 /// * process id, binary path, and current workind directory
-/// for more see [common.sysinfo.CommonInfo]
+/// for more see [`common.sysinfo.CommonInfo`]
 pub const getRuntimeEnvInfo = platform.getRuntimeEnvInfo;
 
 test "all_widow_unit_tests" {

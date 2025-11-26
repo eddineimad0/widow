@@ -1,9 +1,8 @@
-// TODO: we don't handle the following scenarios correctly
-// * playing through speaker -> user plug headphones -> we continue playing throught speaker
-// * playing through headphones -> user unplugs -> we crash
 const std = @import("std");
 const win32_com = @import("win32api/com.zig");
 const win32_ole = @import("win32api/ole32.zig");
+const win32_krnl = @import("win32api/kernel32.zig");
+const win32_error = @import("win32api/error_codes.zig");
 const common = @import("common");
 
 const mem = std.mem;
@@ -14,12 +13,116 @@ const win32 = std.os.windows;
 
 const CLSID_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = win32.GUID.parse("{00000003-0000-0010-8000-00aa00389b71}");
 const AUDCLNT_E_DEVICE_INVALIDATED = @as(win32.HRESULT, -2004287484);
+pub const DEVICE_STATE_ACTIVE = @as(u32, 1);
+pub const DEVICE_STATE_DISABLED = @as(u32, 2);
+pub const DEVICE_STATE_NOTPRESENT = @as(u32, 4);
+pub const DEVICE_STATE_UNPLUGGED = @as(u32, 8);
 
 const WasapiError = error{
     COMCreateFail,
-    NoDeviceAvailable,
-    DeviceInitFail,
-    SetEventFail,
+    WasapiDeviceInitFail,
+    WasapiDeviceActivateFail,
+    WasapiSetEventFail,
+    WasapiRegisterNotifClientFail,
+};
+
+var notif_client = WasapiNotifClient{
+    .imm_notif_client = .{
+        .vtable = &WasapiNotifClientVtable,
+    },
+    .default_device_change_event = undefined,
+};
+const com_sucks = struct {
+    /// IUnknown
+    fn QueryInterface(
+        self: *const win32_com.IUnknown,
+        riid: *const win32.GUID,
+        ppvObject: ?*?*anyopaque,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = self;
+        _ = riid;
+        _ = ppvObject;
+        return win32.E_NOINTERFACE;
+    }
+    fn AddRef(_: *const win32_com.IUnknown) callconv(.winapi) u32 {
+        return 1;
+    }
+    fn Release(_: *const win32_com.IUnknown) callconv(.winapi) u32 {
+        return 1;
+    }
+
+    /// IMMNotificationClient
+    fn OnDeviceStateChanged(
+        self: *const win32_com.IMMNotificationClient,
+        pwstrDeviceId: ?[*:0]const u16,
+        dwNewState: u32,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = self;
+        _ = pwstrDeviceId;
+        _ = dwNewState;
+        return win32.S_OK;
+    }
+
+    fn OnDeviceAdded(
+        self: *const win32_com.IMMNotificationClient,
+        pwstrDeviceId: ?[*:0]const u16,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = self;
+        _ = pwstrDeviceId;
+        return win32.S_OK;
+    }
+
+    fn OnDeviceRemoved(
+        self: *const win32_com.IMMNotificationClient,
+        pwstrDeviceId: ?[*:0]const u16,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = self;
+        _ = pwstrDeviceId;
+        return win32.S_OK;
+    }
+
+    fn OnDefaultDeviceChanged(
+        self: *const win32_com.IMMNotificationClient,
+        flow: win32_com.EDataFlow,
+        role: win32_com.ERole,
+        pwstrDefaultDeviceId: ?[*:0]const u16,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = pwstrDefaultDeviceId;
+        if (flow == win32_com.EDataFlow.eRender and role == win32_com.ERole.eConsole) {
+            const client: *const WasapiNotifClient = @ptrCast(self);
+            _ = win32_krnl.SetEvent(client.default_device_change_event);
+        }
+        return win32.S_OK;
+    }
+
+    fn OnPropertyValueChanged(
+        self: *const win32_com.IMMNotificationClient,
+        pwstrDeviceId: ?[*:0]const u16,
+        key: win32_com.PROPERTYKEY,
+    ) callconv(.winapi) win32.HRESULT {
+        _ = self;
+        _ = pwstrDeviceId;
+        _ = key;
+        return win32.S_OK;
+    }
+};
+
+const WasapiNotifClientVtable: win32_com.IMMNotificationClient.VTable = .{
+    .base = .{
+        .QueryInterface = com_sucks.QueryInterface,
+        .AddRef = com_sucks.AddRef,
+        .Release = com_sucks.Release,
+    },
+    .OnDeviceStateChanged = com_sucks.OnDeviceStateChanged,
+    .OnDeviceAdded = com_sucks.OnDeviceAdded,
+    .OnDeviceRemoved = com_sucks.OnDeviceRemoved,
+    .OnDefaultDeviceChanged = com_sucks.OnDefaultDeviceChanged,
+    .OnPropertyValueChanged = com_sucks.OnPropertyValueChanged,
+};
+
+const WasapiNotifClient = extern struct {
+    imm_notif_client: win32_com.IMMNotificationClient,
+    default_device_change_event: win32.HANDLE,
 };
 
 const WasapiBackend = struct {
@@ -30,10 +133,12 @@ const WasapiBackend = struct {
     buffer_ready_event: win32.HANDLE,
     wave_format: win32_com.WAVEFORMATEXTENSIBLE,
     buff_duration: i64, // in 100 nano-seconds units
+    notification_client: *const WasapiNotifClient,
 };
 
 pub const Win32AudioSinkError = error{
-    DeviceLost,
+    NoAudioRenderDevice,
+    AudioRenderDeviceSwitchFail,
 } || WasapiError;
 
 pub const Win32AudioSink = struct {
@@ -49,6 +154,7 @@ pub const Win32AudioSink = struct {
 
     pub fn deinit(sink: *Win32AudioSink) void {
         win32.CloseHandle(sink.wasapi.buffer_ready_event);
+        win32.CloseHandle(sink.wasapi.notification_client.default_device_change_event);
         _ = sink.wasapi.audio_client.Stop();
         _ = sink.wasapi.audio_render_client.IUnknown.Release();
         _ = sink.wasapi.audio_client.IUnknown.Release();
@@ -56,64 +162,65 @@ pub const Win32AudioSink = struct {
         _ = sink.wasapi.device_enumerator.IUnknown.Release();
     }
 
-    /// writes a bunch of audio frames to an empty space in the audio buffer
-    /// caller must make sure there is an empty space and the amount of frames fits
-    /// into the space.
-    /// returns [`Win32AudioSink.DeviceLost`] in case of an error
-    pub fn write(sink: *Win32AudioSink, samples: []const u8, num_frames: u32) Win32AudioSinkError!void {
-        var buff_ptr: ?[*]u8 = null;
-        while (true) {
-            const get_result = sink.wasapi.audio_render_client.GetBuffer(num_frames, &buff_ptr);
-            if (win32_ole.FAILED(get_result) or buff_ptr == null) {
-                @branchHint(.unlikely);
-                if (sink.recoverFromError(get_result)) {
-                    continue; // try again
-                }
-                return Win32AudioSinkError.DeviceLost; // we failed
-            }
-            @memcpy(buff_ptr.?[0..samples.len], samples);
-            const release_result = sink.wasapi.audio_render_client.ReleaseBuffer(num_frames, 0);
-            if (win32_ole.FAILED(release_result)) {
-                @branchHint(.cold);
-                if (sink.recoverFromError(get_result)) {
-                    continue; // try again
-                }
-                return Win32AudioSinkError.DeviceLost;
-            }
-            return;
+    pub fn update(sink: *Win32AudioSink) Win32AudioSinkError!void {
+        if (sink.checkForDeviceChange()) {
+            try sink.switchDefaultDevice();
         }
     }
 
     /// returns the amount of frames are left in the buffer
-    /// or [`Win32AudioSink.DeviceLost`] in case of an error
-    pub fn waitBufferReady(sink: *Win32AudioSink, timeout: ?u32) Win32AudioSinkError!?u32 {
+    /// or null if it couldn't because the device got invalidated
+    pub fn waitBufferReady(sink: *Win32AudioSink, timeout: ?u32) ?u32 {
         const wait_time: u32 = if (timeout) |t| t else win32.INFINITE;
         win32.WaitForSingleObject(sink.wasapi.buffer_ready_event, wait_time) catch |err| {
             dbg.assert(err == error.WaitTimeOut);
             return null;
         };
-        while (true) {
-            var pad: u32 = 0;
-            const getpad_result = sink.wasapi.audio_client.GetCurrentPadding(&pad);
-            if (win32_ole.FAILED(getpad_result)) {
-                @branchHint(.unlikely);
-                if (sink.recoverFromError(getpad_result)) {
-                    continue; // try again
-                }
-                return Win32AudioSinkError.DeviceLost;
-            }
-            return pad;
+        var pad: u32 = 0;
+        const getpad_result = sink.wasapi.audio_client.GetCurrentPadding(&pad);
+        if (win32_ole.FAILED(getpad_result)) {
+            @branchHint(.unlikely);
+            return null;
         }
+        return pad;
     }
 
-    /// the wait/submit loop can fail if the audio device gets disconnected
-    /// this function attempt to recover form that and grab a new device for the sink
-    fn recoverFromError(sink: *Win32AudioSink, result: win32.HRESULT) bool {
-        if (result != AUDCLNT_E_DEVICE_INVALIDATED) {
-            // can't do much
-            return false;
+    /// writes a bunch of audio frames to an empty space in the audio buffer
+    /// caller must make sure there is an empty space and the amount of frames fits
+    /// into the space.
+    /// if the client is invalidated it does nothing
+    pub fn write(sink: *Win32AudioSink, samples: []const u8, num_frames: u32) void {
+        dbg.assert(num_frames != 0);
+        // while (true) {
+        var buff_ptr: ?[*]u8 = null;
+        const get_result = sink.wasapi.audio_render_client.GetBuffer(num_frames, &buff_ptr);
+        if (win32_ole.FAILED(get_result) or buff_ptr == null) {
+            @branchHint(.unlikely);
+            return; // we failed
         }
 
+        @memcpy(buff_ptr.?[0..samples.len], samples);
+        _ = sink.wasapi.audio_render_client.ReleaseBuffer(num_frames, 0);
+    }
+
+    /// Checks if the default audio rendering device was changed and attempt to switch to it
+    /// returns true if a change happend, false otherwise
+    inline fn checkForDeviceChange(sink: *Win32AudioSink) bool {
+        win32.WaitForSingleObject(
+            sink.wasapi.notification_client.default_device_change_event,
+            0,
+        ) catch return false; // no change
+        return true;
+    }
+
+    /// switches the current audio rendering device to the new default one
+    /// it also set the audio format for the new device to the one use
+    /// during initialization of the AudioSink
+    /// # Error
+    /// this function only fails if the default audio device is changed(unplugged or through settings) again
+    /// while we are switching, that however should never happend in practice
+    /// because the process will run this code faster than user can modify his environement
+    fn switchDefaultDevice(sink: *Win32AudioSink) Win32AudioSinkError!void {
         var device: ?*win32_com.IMMDevice = null;
         const enumerate_result = sink.wasapi.device_enumerator.GetDefaultAudioEndpoint(
             .eRender,
@@ -121,7 +228,7 @@ pub const Win32AudioSink = struct {
             &device,
         );
         if (win32_ole.FAILED(enumerate_result) or device == null) {
-            return false;
+            return Win32AudioSinkError.NoAudioRenderDevice;
         }
 
         var audio_client: ?*win32_com.IAudioClient = null;
@@ -132,7 +239,7 @@ pub const Win32AudioSink = struct {
             @ptrCast(&audio_client),
         );
         if (win32_ole.FAILED(activate_result) or audio_client == null) {
-            return false;
+            return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
         const init_result = audio_client.?.Initialize(
@@ -146,12 +253,12 @@ pub const Win32AudioSink = struct {
             null,
         );
         if (win32_ole.FAILED(init_result)) {
-            return false;
+            return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
         const eventset_result = audio_client.?.SetEventHandle(sink.wasapi.buffer_ready_event);
         if (win32_ole.FAILED(eventset_result)) {
-            return false;
+            return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
         var render_client: ?*win32_com.IAudioRenderClient = null;
@@ -160,26 +267,25 @@ pub const Win32AudioSink = struct {
             @ptrCast(&render_client),
         );
         if (win32_ole.FAILED(getservice_result) or render_client == null) {
-            return false;
+            return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
         const start_result = audio_client.?.Start();
         if (win32_ole.FAILED(start_result)) {
-            return false;
+            return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
         _ = sink.wasapi.audio_render_client.IUnknown.Release();
+        _ = sink.wasapi.audio_client.Stop();
         _ = sink.wasapi.audio_client.IUnknown.Release();
         _ = sink.wasapi.device.IUnknown.Release();
         sink.wasapi.device = device.?;
         sink.wasapi.audio_client = audio_client.?;
         sink.wasapi.audio_render_client = render_client.?;
-
-        return true;
     }
 };
 
-pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_audio.StreamBuffer, err_wr: *io.Writer) WasapiError!Win32AudioSink {
+pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_audio.StreamBuffer, err_wr: *io.Writer) Win32AudioSinkError!Win32AudioSink {
     // NOTE: COM is already intialized when WidowContext is created so skip doing that
 
     var device_enumerator: ?*win32_com.IMMDeviceEnumerator = null;
@@ -223,7 +329,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
 
         if (win32_ole.FAILED(enumerate_result) or device == null) {
             err_wr.print("HRESULT = {d}", .{enumerate_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return Win32AudioSinkError.NoAudioRenderDevice;
         }
 
         const activate_result = device.?.Activate(
@@ -235,7 +341,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
 
         if (win32_ole.FAILED(activate_result) or audio_client == null) {
             err_wr.print("HRESULT = {d}", .{activate_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return WasapiError.WasapiDeviceActivateFail;
         }
     }
 
@@ -277,7 +383,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
 
         if (win32_ole.FAILED(init_result)) {
             err_wr.print("HRESULT = {d}", .{init_result}) catch {};
-            return WasapiError.DeviceInitFail;
+            return WasapiError.WasapiDeviceInitFail;
         }
     }
 
@@ -286,7 +392,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
         const getbuffsize_result = audio_client.?.GetBufferSize(&buffer_frames);
         if (win32_ole.FAILED(getbuffsize_result)) {
             err_wr.print("HRESULT = {d}", .{getbuffsize_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return WasapiError.WasapiDeviceInitFail;
         }
         dbg.assert(buffer_frames == desc.stream_buffer_frames);
 
@@ -309,12 +415,12 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
         "WIDOW_WASAPI_BUFFER_EVENT",
         0,
         win32.SYNCHRONIZE | win32.EVENT_MODIFY_STATE,
-    ) catch return WasapiError.SetEventFail;
+    ) catch return WasapiError.WasapiSetEventFail;
     errdefer win32.CloseHandle(buff_wait_event);
     const eventset_result = audio_client.?.SetEventHandle(buff_wait_event);
     if (win32_ole.FAILED(eventset_result)) {
         err_wr.print("HRESULT = {d}", .{eventset_result}) catch {};
-        return WasapiError.NoDeviceAvailable;
+        return WasapiError.WasapiSetEventFail;
     }
 
     { // get render client
@@ -325,7 +431,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
 
         if (win32_ole.FAILED(getservice_result) or render_client == null) {
             err_wr.print("HRESULT = {d}", .{getservice_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return WasapiError.WasapiDeviceInitFail;
         }
     }
 
@@ -334,7 +440,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
         const getbuffer_result = render_client.?.GetBuffer(sbuff.frames_count, &buff_ptr);
         if (win32_ole.FAILED(getbuffer_result) or buff_ptr == null) {
             err_wr.print("HRESULT = {d}", .{getbuffer_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return WasapiError.WasapiDeviceInitFail;
         }
         const buff_slice = buff_ptr.?[0..sbuff.frames_count];
         @memset(buff_slice, sbuff.frame_desc.sample_format.getSilenceValue());
@@ -342,8 +448,23 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
         const start_result = audio_client.?.Start();
         if (win32_ole.FAILED(start_result)) {
             err_wr.print("HRESULT = {d}", .{start_result}) catch {};
-            return WasapiError.NoDeviceAvailable;
+            return WasapiError.WasapiDeviceInitFail;
         }
+    }
+
+    const default_device_change_event = win32.CreateEventEx(
+        null,
+        "WIDOW_WASAPI_DEVICE_EVENT",
+        0,
+        win32.SYNCHRONIZE | win32.EVENT_MODIFY_STATE,
+    ) catch return WasapiError.WasapiRegisterNotifClientFail;
+    errdefer win32.CloseHandle(default_device_change_event);
+    notif_client.default_device_change_event = default_device_change_event;
+
+    const register_notif_result = device_enumerator.?.RegisterEndpointNotificationCallback(@ptrCast(&notif_client));
+    if (win32_ole.FAILED(register_notif_result)) {
+        err_wr.print("HRESULT = {d}", .{register_notif_result}) catch {};
+        return WasapiError.WasapiRegisterNotifClientFail;
     }
 
     return Win32AudioSink{
@@ -355,6 +476,7 @@ pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_a
             .buffer_ready_event = buff_wait_event,
             .wave_format = wave_fmt,
             .buff_duration = buff_duration, // in 100 nano-seconds units
+            .notification_client = &notif_client,
         },
     };
 }

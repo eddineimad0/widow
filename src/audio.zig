@@ -29,6 +29,7 @@ pub const AudioSink = struct {
     const Self = @This();
 
     /// initializes and AudioSink that matches the given description
+    /// we pick the default audio rendering device.
     /// # Parameters
     /// `allocator`: use to allocate internal audio buffer memory, the same allocator should be use with [`AudioSink.deinit`]
     /// `asdesc`: a description of the requested AudioSink properties such as audio format number of frames...
@@ -36,6 +37,9 @@ pub const AudioSink = struct {
     /// # Errors
     /// the returned errors depend on the platform backend but if it fails it usually because
     /// we couldn't create an AudioSink that matches the description or couldn't find any audio rendering device to use.
+    /// # Note
+    /// haven't tested if creating more than 1 sink is possible, it might fail or it might succeed and cause a bug
+    /// don't do it
     pub fn init(
         allocator: mem.Allocator,
         asdesc: common.audio.AudioSinkDescription,
@@ -62,6 +66,19 @@ pub const AudioSink = struct {
         allocator.free(sink.slice);
     }
 
+    /// this function updates the AudioSink state
+    /// this includes:
+    /// * switching audio rendering device if the user environement has changed (new default device or current device was unplugged)
+    /// if a call to this function finds the device in an invalid state
+    /// it attempts as best as it can to recover from that if it fails an error is returned
+    /// # Error
+    /// [`AudioSinkError.NoAudioRenderDevice`]: the previous audio hardware was unplugged and we couldn't grab a new one
+    /// [`AudioSinkError.AudioRenderDeviceSwitchFail`]: we tried to switch to the new default device but we failed (unlikley to happen)
+    /// we stick the old device in that case
+    pub inline fn update(sink: *Self) AudioSinkError!void {
+        try sink.backend.update();
+    }
+
     /// this function blocks the calling thread and waits
     /// for a free block in the audio buffer, it then returns a
     /// slice into that block memory that the caller can fill with audio samples
@@ -71,13 +88,11 @@ pub const AudioSink = struct {
     /// # Parameters
     /// `timeout`: an optional number of milliseconds upon which the function stops waiting
     /// and returns an empty slice
-    /// # Error
-    /// [`AudioSinkError.DeviceLost`]: the default audio hardware was unplugged and we couldn't grab a new one
     /// # NOTE
     /// to avoid audio glitches it is best to minimize the time spent between
     /// [`AudioSink.waitBufferReady`] returning the slice and calling [`AudioSink.submitBuffer`]
-    pub fn waitBufferReady(sink: *Self, timeout: ?u32) AudioSinkError![]align(4) u8 {
-        const remaining_frames = try sink.backend.waitBufferReady(timeout);
+    pub fn waitBufferReady(sink: *Self, timeout: ?u32) []align(4) u8 {
+        const remaining_frames = sink.backend.waitBufferReady(timeout);
         if (remaining_frames) |rf| {
             dbg.assert(rf <= sink.stream_buffer.frames_count);
             const frames_to_write: u32 = sink.stream_buffer.frames_count - rf;
@@ -89,10 +104,12 @@ pub const AudioSink = struct {
     }
 
     /// flushes the samples written to the audio buffer
-    /// # Error
-    /// [`AudioSinkError.DeviceLost`]: the default audio hardware was unplugged and we couldn't grab a new one
-    pub fn submitBuffer(sink: *Self) AudioSinkError!void {
-        try sink.backend.write(sink.pending.samples, sink.pending.frames);
+    pub inline fn submitBuffer(sink: *Self) void {
+        if (sink.pending.frames == 0) {
+            dbg.assert(sink.pending.samples.len == 0);
+            return;
+        }
+        sink.backend.write(sink.pending.samples, sink.pending.frames);
         sink.pending.frames = 0;
         sink.pending.samples = &.{};
     }

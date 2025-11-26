@@ -140,5 +140,7 @@ pub extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) win32.UINT;
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: win32.HANDLE, lpMode: *win32.DWORD) callconv(.winapi) win32.BOOL;
 pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: win32.HANDLE, dwMode: win32.DWORD) callconv(.winapi) win32.BOOL;
 pub extern "kernel32" fn GetTempPathW(nBufferLength: win32.DWORD, lpBuffer: ?win32.LPWSTR) callconv(.winapi) win32.DWORD;
+pub extern "kernel32" fn SetEvent(hEvent: win32.HANDLE) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn ResetEvent(hEvent: win32.HANDLE) callconv(.winapi) win32.BOOL;
 
 pub extern "ntdll" fn RtlGetVersion(lpVersionInformations: *OSVERSIONINFOEXW) callconv(.winapi) win32.NTSTATUS;

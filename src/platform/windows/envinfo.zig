@@ -297,7 +297,6 @@ pub fn getPlatformInfo(allocator: mem.Allocator) !Win32EnvInfo {
     defer allocator.free(path_u16);
     const path_length = kernl32.GetCurrentDirectoryW(path_size, path_u16.ptr);
     dbg.assert(path_length <= path_size);
-
     pinfo.common.process.working_path = try unicode.utf16LeToUtf8Alloc(
         allocator,
         path_u16[0..path_length],
@@ -336,9 +335,8 @@ pub fn getPlatformInfo(allocator: mem.Allocator) !Win32EnvInfo {
                 );
             }
 
-            // TODO: maybe we can just create it
-            // we need to make sure this path exist since windows doesn't check for us
             if (pinfo.common.process.user_home_path) |path| {
+                // we need to make sure this path exist
                 var dir: ?std.fs.Dir = std.fs.openDirAbsolute(path, .{}) catch dir: {
                     allocator.free(path);
                     pinfo.common.process.user_home_path = null;

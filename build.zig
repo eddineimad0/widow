@@ -178,6 +178,7 @@ fn prepareCompileOptions(b: *std.Build) *std.Build.Step.Options {
 }
 
 fn makeExamplesStep(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, widow_module: *std.Build.Module) void {
+    const check_step = b.step("check", "check for compile errors");
     const example_step = b.step("examples", "Compile examples");
     const examples = [_][]const u8{
         "simple_window",
@@ -217,9 +218,9 @@ fn makeExamplesStep(b: *std.Build, target: std.Build.ResolvedTarget, optimize: s
         if (target.result.os.tag == .linux) {
             example.linkLibC();
         }
+        check_step.dependOn(&example.step);
 
         const install_step = b.addInstallArtifact(example, .{});
-        example_step.dependOn(&example.step);
         example_step.dependOn(&install_step.step);
     }
 }
