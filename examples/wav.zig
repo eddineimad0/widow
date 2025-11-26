@@ -1,11 +1,10 @@
 //! Microsoft RIFF Wave format decoding.
-//! only common format are supported (PCM, float)
+//! only common format are supported (PCM and  IEEE 32bit float)
 
 const std = @import("std");
 
 const mem = std.mem;
 const io = std.io;
-const log = std.log;
 
 //-----------------------
 // Constants
@@ -23,7 +22,7 @@ const WAVE_FORMAT_IEEE_FLOAT = @as(u16, 0x0003);
 
 const CHUNK_HEADER_SIZE = 8;
 
-const VALIDATE_WAVE_FILE = true; // TODO: compile options module
+const WAV_SANITY_CHECK = true;
 
 //----------------------------
 // Types
@@ -133,6 +132,7 @@ fn parseDataChunk(
 pub fn decode(
     allocator: mem.Allocator,
     r: *io.Reader,
+    err_wr: ?*io.Writer,
 ) (mem.Allocator.Error || WavDecodeError)!Audio {
     var required_chunks: struct {
         fmt: bool,
@@ -155,7 +155,9 @@ pub fn decode(
 
     // read RIFF chunk
     const riff_chunk = readNextChunk(r) catch |err| {
-        log.err("[WaveDecoder]: Could not read RIFF chunk\n", .{});
+        if (err_wr) |wr| {
+            wr.writeAll("could not read RIFF chunk") catch {};
+        }
         return err;
     };
 
@@ -169,7 +171,9 @@ pub fn decode(
 
     while (data_read < RIFF_END) {
         const wave_chunk = readNextChunk(r) catch |err| {
-            log.info("[WaveDecoder]: Unexpected end of WAVE file\n", .{});
+            if (err_wr) |wr| {
+                wr.writeAll("unexpected end of WAV file") catch {};
+            }
             return err;
         };
 
@@ -178,11 +182,15 @@ pub fn decode(
                 var fmt_chunk: FmtChunk = undefined;
                 fmt_chunk.chunk = wave_chunk;
                 if (fmt_chunk.chunk.size < 16) {
-                    log.info("[WaveDecoder]: Invalid fmt chunk size \n", .{});
+                    if (err_wr) |wr| {
+                        wr.writeAll("invalid fmt chunk size") catch {};
+                    }
                     return WavDecodeError.Invalid_Wav_Stream;
                 }
                 parseFmtChunk(r, &fmt_chunk) catch |err| {
-                    log.info("[WaveDecoder]: Unexpected end of WAVE file\n", .{});
+                    if (err_wr) |wr| {
+                        wr.writeAll("unexpected end of WAV file") catch {};
+                    }
                     return err;
                 };
                 wav_out.channels_count = fmt_chunk.num_channels;
@@ -194,20 +202,24 @@ pub fn decode(
                     else => return WavDecodeError.Unsupported_Sample_Format,
                 };
 
-                if (VALIDATE_WAVE_FILE) {
-                    // bassrt.assertEq(
-                    //     fmt_chunk.avg_bytes_per_sec,
-                    //     @as(u32, fmt_chunk.block_align) * @as(u32, fmt_chunk.sample_frames_per_sec),
-                    //     "FMT chunk fields not consistent\n",
-                    // );
+                if (WAV_SANITY_CHECK) {
+                    if (fmt_chunk.avg_bytes_per_sec != @as(u32, fmt_chunk.block_align) *
+                        @as(u32, fmt_chunk.sample_frames_per_sec))
+                    {
+                        if (err_wr) |wr| {
+                            wr.writeAll("FMT chunk fields are corrupted") catch {};
+                        }
+                        return WavDecodeError.Invalid_Wav_Stream;
+                    }
 
-                    // if (fmt_chunk.fmt_tag == WAVE_FORMAT_IEEE_FLOAT) {
-                    //     bassrt.assertEq(
-                    //         fmt_chunk.bits_per_sample,
-                    //         32,
-                    //         "FMT format is float but the bits per sample isn't 32\n",
-                    //     );
-                    // }
+                    if (fmt_chunk.fmt_tag == WAVE_FORMAT_IEEE_FLOAT) {
+                        if (fmt_chunk.bits_per_sample != 32) {
+                            if (err_wr) |wr| {
+                                wr.writeAll("FMT format is float but the bits per sample isn't 32") catch {};
+                            }
+                            return WavDecodeError.Invalid_Wav_Stream;
+                        }
+                    }
                 }
 
                 required_chunks.fmt = true;
@@ -231,7 +243,6 @@ pub fn decode(
                 break;
             },
             else => {
-                std.debug.print("[WaveDecoder] Unknown chunk type {x}\n", .{wave_chunk.fourcc});
                 const discarded = try r.discard(.limited(wave_chunk.size));
                 if (discarded != wave_chunk.size) {
                     return WavDecodeError.Invalid_Wav_Stream;
@@ -241,8 +252,17 @@ pub fn decode(
         data_read += wave_chunk.size + CHUNK_HEADER_SIZE;
     }
 
-    if (!required_chunks.data or !required_chunks.fmt) {
-        // The FMT chunk and the DATA chunk are obligatory for a WAVE file
+    // The FMT chunk and the DATA chunk are obligatory for a WAVE file
+    if (!required_chunks.fmt) {
+        if (err_wr) |wr| {
+            wr.writeAll("FMT chunk is missing from the WAV file") catch {};
+        }
+        return WavDecodeError.Invalid_Wav_Stream;
+    }
+    if (!required_chunks.data) {
+        if (err_wr) |wr| {
+            wr.writeAll("DATA chunk is missing from the WAV file") catch {};
+        }
         return WavDecodeError.Invalid_Wav_Stream;
     }
 

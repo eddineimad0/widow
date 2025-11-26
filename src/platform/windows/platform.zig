@@ -17,6 +17,7 @@ const io = std.io;
 pub const Window = wndw.Window;
 pub const Canvas = wndw.Win32Canvas;
 pub const AudioSink = audio.Win32AudioSink;
+pub const AudioSinkError = audio.Win32AudioSinkError;
 pub const WindowError = wndw.WindowError;
 
 // Platform handles

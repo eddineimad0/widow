@@ -7,28 +7,53 @@ const io = std.io;
 const dbg = std.debug;
 
 const AudioSinkBackend = platform.AudioSink;
+pub const AudioSinkError = platform.AudioSinkError;
 
-/// An audio sink is just interface to the audio device use by the window
-/// it doesn't do any mixing or volume control it simply takes
-/// a buffer of audio samples and writes it to the audio device
+/// An audio sink is just interface to a platform audio device,
+/// it doesn't do any mixing or volume control, it simply checks
+/// if the audio buffer needs more samples and provides a slice
+/// for the user to write them
+/// # Platform APIs
+/// * on windows it uses WASAPI
+/// * on linux it uses ALSA
 pub const AudioSink = struct {
     /// a slice into our audio buffer memory
     slice: []align(4) u8,
     stream_buffer: common.audio.StreamBuffer,
     backend: AudioSinkBackend,
-    pending_frames: u32,
+    pending: struct {
+        frames: u32,
+        samples: []align(4) u8,
+    },
 
     const Self = @This();
 
-    pub fn init(allocator: mem.Allocator, asdesc: common.audio.AudioSinkDescription) !AudioSink {
+    /// initializes and AudioSink that matches the given description
+    /// # Parameters
+    /// `allocator`: use to allocate internal audio buffer memory, the same allocator should be use with [`AudioSink.deinit`]
+    /// `asdesc`: a description of the requested AudioSink properties such as audio format number of frames...
+    /// `err_wr`: optional writer that receives a detailed error message and platform error code.
+    /// # Errors
+    /// the returned errors depend on the platform backend but if it fails it usually because
+    /// we couldn't create an AudioSink that matches the description or couldn't find any audio rendering device to use.
+    pub fn init(
+        allocator: mem.Allocator,
+        asdesc: common.audio.AudioSinkDescription,
+        err_wr: ?*io.Writer,
+    ) (mem.Allocator.Error || AudioSinkError)!AudioSink {
         var sbuff: common.audio.StreamBuffer = undefined;
-        var backend = try AudioSinkBackend.init(asdesc, &sbuff);
+        var discarding = io.Writer.Discarding.init(&.{});
+        const err_writer = if (err_wr) |wr| wr else &discarding.writer;
+        var backend = try AudioSinkBackend.init(asdesc, &sbuff, err_writer);
         errdefer backend.deinit();
         return .{
             .slice = try allocator.alignedAlloc(u8, .@"4", sbuff.bytesize),
             .stream_buffer = sbuff,
             .backend = backend,
-            .pending_frames = 0,
+            .pending = .{
+                .frames = 0,
+                .samples = &.{},
+            },
         };
     }
 
@@ -37,19 +62,38 @@ pub const AudioSink = struct {
         allocator.free(sink.slice);
     }
 
-    pub fn waitDeviceReady(sink: *Self, timeout: ?u32) ![]align(4) u8 {
+    /// this function blocks the calling thread and waits
+    /// for a free block in the audio buffer, it then returns a
+    /// slice into that block memory that the caller can fill with audio samples
+    /// to be played.
+    /// once the returned slice is fully filled caller should call [`AudioSink.submitBuffer`]
+    /// so that the samples can be flushed to the audio buffer
+    /// # Parameters
+    /// `timeout`: an optional number of milliseconds upon which the function stops waiting
+    /// and returns an empty slice
+    /// # Error
+    /// [`AudioSinkError.DeviceLost`]: the default audio hardware was unplugged and we couldn't grab a new one
+    /// # NOTE
+    /// to avoid audio glitches it is best to minimize the time spent between
+    /// [`AudioSink.waitBufferReady`] returning the slice and calling [`AudioSink.submitBuffer`]
+    pub fn waitBufferReady(sink: *Self, timeout: ?u32) AudioSinkError![]align(4) u8 {
         const remaining_frames = try sink.backend.waitBufferReady(timeout);
-        dbg.assert(remaining_frames <= sink.stream_buffer.frames_count);
-        const frames_to_write: u32 = sink.stream_buffer.frames_count - remaining_frames;
-        const samples_to_fill = frames_to_write * sink.stream_buffer.frame_bytesize;
-        sink.pending_frames = frames_to_write;
-        return sink.slice[0..samples_to_fill];
+        if (remaining_frames) |rf| {
+            dbg.assert(rf <= sink.stream_buffer.frames_count);
+            const frames_to_write: u32 = sink.stream_buffer.frames_count - rf;
+            const samples_to_fill = frames_to_write * sink.stream_buffer.frame_bytesize;
+            sink.pending.frames = frames_to_write;
+            sink.pending.samples = sink.slice[0..samples_to_fill];
+        }
+        return sink.pending.samples;
     }
 
-    pub fn writeFrames(sink: *Self, samples: []align(4) u8) !void {
-        const samples_to_fill = sink.pending_frames * sink.stream_buffer.frame_bytesize;
-        dbg.assert(samples_to_fill == samples.len);
-        try sink.backend.write(samples, sink.pending_frames);
-        sink.pending_frames = 0;
+    /// flushes the samples written to the audio buffer
+    /// # Error
+    /// [`AudioSinkError.DeviceLost`]: the default audio hardware was unplugged and we couldn't grab a new one
+    pub fn submitBuffer(sink: *Self) AudioSinkError!void {
+        try sink.backend.write(sink.pending.samples, sink.pending.frames);
+        sink.pending.frames = 0;
+        sink.pending.samples = &.{};
     }
 };
