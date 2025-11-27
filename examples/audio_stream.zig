@@ -14,7 +14,7 @@ pub fn main() !void {
 
     // first we need to preform some platform specific initialization.
     // and build a context for the current platform.
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, .{ .force_single_instance = true });
     defer widow.destroyWidowContext(allocator, ctx);
 
     var sink = try audio.AudioSink.init(allocator, .{
@@ -22,13 +22,7 @@ pub fn main() !void {
         .num_channels_hint = .stereo,
         .stream_buffer_frames = 2048,
     }, null);
-    var sink2 = try audio.AudioSink.init(allocator, .{
-        .samples_rate_hint = .@"44100Hz",
-        .num_channels_hint = .stereo,
-        .stream_buffer_frames = 2048,
-    }, null);
     defer sink.deinit(allocator);
-    defer sink2.deinit(allocator);
     std.debug.print("Sink Stream buffer:\n", .{});
     std.debug.print("bytesize={d}\n", .{sink.stream_buffer.bytesize});
     std.debug.print("frames_count={d}\n", .{sink.stream_buffer.frames_count});

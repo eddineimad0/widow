@@ -13,6 +13,7 @@ const win32 = std.os.windows;
 const mem = std.mem;
 const dbg = std.debug;
 const io = std.io;
+const fmt = std.fmt;
 
 pub const Window = wndw.Window;
 pub const Canvas = wndw.Win32Canvas;
@@ -28,6 +29,10 @@ pub const time = @import("time.zig");
 
 pub const glLoaderFunc = @import("wgl.zig").glLoaderFunc;
 
+pub const WidowContextError = error{
+    Instance_Already_Exist,
+} || driver.Win32DriverError || display.DisplayError;
+
 pub const WidowContext = struct {
     helper_window: win32.HWND,
     allocator: mem.Allocator,
@@ -36,11 +41,10 @@ pub const WidowContext = struct {
     windows_envinfo: envinfo.Win32EnvInfo,
 
     const Self = @This();
-    fn init(a: mem.Allocator) (mem.Allocator.Error ||
-        display.DisplayError ||
-        driver.Win32DriverError ||
-        wndw.WindowError)!Self {
-        const d = try driver.Win32Driver.initSingleton();
+    fn init(a: mem.Allocator, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
+        WidowContextError ||
+        WindowError)!Self {
+        const d = try driver.Win32Driver.initSingleton(ctxt_options);
         errdefer driver.Win32Driver.deinitSingleton();
         const h = blk: { // create hidden window for system messages
             const helper_window = win32_gfx.CreateWindowExW(
@@ -62,11 +66,28 @@ pub const WidowContext = struct {
             _ = win32_gfx.ShowWindow(helper_window, win32_gfx.SW_HIDE);
             break :blk helper_window;
         };
-
         errdefer _ = win32_gfx.DestroyWindow(h);
-        const display_mgr = try display.DisplayManager.init(a);
-        const platform_info = envinfo.getPlatformInfo(a) catch
+
+        var display_mgr = try display.DisplayManager.init(a);
+        errdefer display_mgr.deinit(a);
+
+        var platform_info = envinfo.getPlatformInfo(a) catch
             return mem.Allocator.Error.OutOfMemory;
+        errdefer platform_info.deinit(a);
+
+        if (ctxt_options.force_single_instance) { // block other instances from running
+            const bin_dir: ?[]const u8 = std.fs.path.dirname(platform_info.common.process.binary_path);
+            if (bin_dir) |dir| {
+                const file_path: [:0]const u8 = try fmt.allocPrintSentinel(
+                    a,
+                    "{s}\\{s}.widow.lock",
+                    .{ dir, ctxt_options.win32.wndclass_name },
+                    0,
+                );
+                defer a.free(file_path);
+                try createFileLock(file_path);
+            }
+        }
 
         return .{
             .driver = d,
@@ -82,13 +103,11 @@ pub const WidowContext = struct {
 // Functions
 //------------
 
-pub fn createWidowContext(a: mem.Allocator) (mem.Allocator.Error ||
-    display.DisplayError ||
-    driver.Win32DriverError ||
-    wndw.WindowError)!*WidowContext {
+pub fn createWidowContext(a: mem.Allocator, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
+    WidowContextError || WindowError)!*WidowContext {
     const ctx = try a.create(WidowContext);
     errdefer a.destroy(ctx);
-    ctx.* = try WidowContext.init(a);
+    ctx.* = try WidowContext.init(a, ctxt_options);
     // register helper properties
     _ = win32_gfx.SetPropW(
         ctx.helper_window,
@@ -181,6 +200,24 @@ pub fn getOsName(ctx: *WidowContext, wr: *std.io.Writer) bool {
 
 pub inline fn getRuntimeEnvInfo(ctx: *WidowContext) *const common.envinfo.RuntimeEnv {
     return &ctx.windows_envinfo.common;
+}
+
+/// attempt to create a lock file so that running multiple instances of the application can be detected
+fn createFileLock(file_path: [:0]const u8) WidowContextError!void {
+    const lock_file = win32_krnl.CreateFileA(
+        file_path.ptr,
+        win32_krnl.GENERIC_WRITE,
+        win32_krnl.FILE_SHARE_NONE,
+        null,
+        win32_krnl.CREATE_ALWAYS,
+        win32_krnl.FILE_ATTRIBUTE_NORMAL | win32_krnl.FILE_FLAG_DELETE_ON_CLOSE,
+        null,
+    );
+    if (lock_file == win32.INVALID_HANDLE_VALUE and
+        win32.GetLastError() == win32.Win32Error.SHARING_VIOLATION)
+    {
+        return WidowContextError.Instance_Already_Exist;
+    }
 }
 
 test "platform_unit_test" {

@@ -45,7 +45,7 @@ const com_sucks = struct {
         return win32.E_NOINTERFACE;
     }
     fn AddRef(_: *const win32_com.IUnknown) callconv(.winapi) u32 {
-        return 1;
+        return 2;
     }
     fn Release(_: *const win32_com.IUnknown) callconv(.winapi) u32 {
         return 1;
@@ -153,13 +153,13 @@ pub const Win32AudioSink = struct {
     }
 
     pub fn deinit(sink: *Win32AudioSink) void {
-        win32.CloseHandle(sink.wasapi.buffer_ready_event);
-        win32.CloseHandle(sink.wasapi.notification_client.default_device_change_event);
         _ = sink.wasapi.audio_client.Stop();
         _ = sink.wasapi.audio_render_client.IUnknown.Release();
         _ = sink.wasapi.audio_client.IUnknown.Release();
         _ = sink.wasapi.device.IUnknown.Release();
         _ = sink.wasapi.device_enumerator.IUnknown.Release();
+        win32.CloseHandle(sink.wasapi.buffer_ready_event);
+        win32.CloseHandle(sink.wasapi.notification_client.default_device_change_event);
     }
 
     pub fn update(sink: *Win32AudioSink) Win32AudioSinkError!void {
@@ -191,7 +191,6 @@ pub const Win32AudioSink = struct {
     /// if the client is invalidated it does nothing
     pub fn write(sink: *Win32AudioSink, samples: []const u8, num_frames: u32) void {
         dbg.assert(num_frames != 0);
-        // while (true) {
         var buff_ptr: ?[*]u8 = null;
         const get_result = sink.wasapi.audio_render_client.GetBuffer(num_frames, &buff_ptr);
         if (win32_ole.FAILED(get_result) or buff_ptr == null) {
@@ -222,6 +221,14 @@ pub const Win32AudioSink = struct {
     /// because the process will run this code faster than user can modify his environement
     fn switchDefaultDevice(sink: *Win32AudioSink) Win32AudioSinkError!void {
         var device: ?*win32_com.IMMDevice = null;
+        var audio_client: ?*win32_com.IAudioClient = null;
+        var render_client: ?*win32_com.IAudioRenderClient = null;
+        errdefer {
+            if (device) |d| _ = d.IUnknown.Release();
+            if (audio_client) |ac| _ = ac.IUnknown.Release();
+            if (render_client) |rc| _ = rc.IUnknown.Release();
+        }
+
         const enumerate_result = sink.wasapi.device_enumerator.GetDefaultAudioEndpoint(
             .eRender,
             .eConsole,
@@ -231,7 +238,6 @@ pub const Win32AudioSink = struct {
             return Win32AudioSinkError.NoAudioRenderDevice;
         }
 
-        var audio_client: ?*win32_com.IAudioClient = null;
         const activate_result = device.?.Activate(
             win32_com.IID_IAudioClient,
             win32_ole.CLSCTX_ALL,
@@ -261,7 +267,6 @@ pub const Win32AudioSink = struct {
             return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
-        var render_client: ?*win32_com.IAudioRenderClient = null;
         const getservice_result = audio_client.?.GetService(
             win32_com.IID_IAudioRenderClient,
             @ptrCast(&render_client),
@@ -275,6 +280,7 @@ pub const Win32AudioSink = struct {
             return Win32AudioSinkError.AudioRenderDeviceSwitchFail;
         }
 
+        errdefer unreachable;
         _ = sink.wasapi.audio_render_client.IUnknown.Release();
         _ = sink.wasapi.audio_client.Stop();
         _ = sink.wasapi.audio_client.IUnknown.Release();

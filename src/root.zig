@@ -93,8 +93,8 @@ pub const destroyWidowContext = platform.destroyWidowContext;
 // by these functions may get invalidated at any moment, so use with caution
 // TODO: add an event for when monitors gets unplugged
 // TODO: better monitor notification
-// TODO: dropped file api improvements
 // TODO: file watch if possible
+// TODO: a message box api for showing a message to the user
 pub const getPrimaryDisplay = platform.getPrimaryDisplay;
 pub const getDisplayFromWindow = platform.getDisplayFromWindow;
 pub const getDisplayInfo = platform.getDisplayInfo;

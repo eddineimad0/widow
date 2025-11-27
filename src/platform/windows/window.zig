@@ -26,6 +26,7 @@ pub const WindowError = error{
     BadIcon,
     OutOfMemory,
     CanvasImpossible,
+    InvalidUtf8,
 };
 
 /// We'll use this type to pass data to the `CreateWindowExW` function.

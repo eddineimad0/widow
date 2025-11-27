@@ -6,6 +6,12 @@ const mem = std.mem;
 const io = std.io;
 const dbg = std.debug;
 
+pub const AudioFormat = struct {
+    samples_rate: common.audio.SamplesRate,
+    num_channels: common.audio.ChannelCount,
+    sample_format: common.audio.SampleFormat,
+};
+
 const AudioSinkBackend = platform.AudioSink;
 pub const AudioSinkError = platform.AudioSinkError;
 
@@ -16,8 +22,12 @@ pub const AudioSinkError = platform.AudioSinkError;
 /// # Platform APIs
 /// * on windows it uses WASAPI
 /// * on linux it uses ALSA
+/// # Thread Safety
+/// the AudioSink API isn't thread safe, you should create
+/// the AudioSink and manage it in an audio thread only
 pub const AudioSink = struct {
-    /// a slice into our audio buffer memory
+    /// you shouldn't mutate any of these fields directly
+    /// use the struct function where possible
     slice: []align(4) u8,
     stream_buffer: common.audio.StreamBuffer,
     backend: AudioSinkBackend,
@@ -61,6 +71,7 @@ pub const AudioSink = struct {
         };
     }
 
+    /// frees the allocated ressources
     pub inline fn deinit(sink: *Self, allocator: mem.Allocator) void {
         sink.backend.deinit();
         allocator.free(sink.slice);
@@ -112,5 +123,13 @@ pub const AudioSink = struct {
         sink.backend.write(sink.pending.samples, sink.pending.frames);
         sink.pending.frames = 0;
         sink.pending.samples = &.{};
+    }
+
+    pub inline fn getAudioFormat(sink: *const Self) AudioFormat {
+        return .{
+            .sample_format = .ieee_f32,
+            .samples_rate = sink.stream_buffer.samples_rate,
+            .num_channels = sink.stream_buffer.frame_desc.num_channels,
+        };
     }
 };

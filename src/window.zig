@@ -5,6 +5,7 @@ const platform = @import("platform");
 const mem = std.mem;
 const io = std.io;
 
+const WindowError = platform.WindowError;
 const WindowImpl = platform.Window;
 const CanvasImpl = platform.Canvas;
 const WindowData = common.window_data.WindowData;
@@ -273,7 +274,7 @@ pub const Window = struct {
         window_title: []const u8,
         data: *WindowData,
         fb_cfg: *common.fb.FBConfig,
-    ) !Self {
+    ) WindowError!Self {
         return .{
             .impl = try WindowImpl.init(
                 ctx,
@@ -312,13 +313,21 @@ pub const Window = struct {
     /// the event queue.
     /// make sure a destination queue is already set in place
     /// by calling *setEventQueue* otherwise the events won't be reported.
-    pub inline fn pollEvents(self: *Self) platform.WindowError!void {
+    /// # Errors
+    /// the only failure point in event polling is when placing
+    /// the event on the event queue if the latter ran out of space
+    /// it needs to allocate extra memory. in practice this never happens on laptop operating systems
+    pub inline fn pollEvents(self: *Self) WindowError!void {
         return self.impl.processEvents();
     }
 
     /// This function puts the calling thread to sleep
     /// until an event msg is posted by the system.
-    pub inline fn waitEvent(self: *Self) platform.WindowError!void {
+    /// # Errors
+    /// the only failure point in event polling is when placing
+    /// the event on the event queue if the latter ran out of space
+    /// it needs to allocate extra memory. in practice this never happens on laptop operating systems
+    pub inline fn waitEvent(self: *Self) WindowError!void {
         return self.impl.waitEvent();
     }
 
@@ -329,10 +338,14 @@ pub const Window = struct {
     /// `duration_ms`: the timeout period in milliseconds.
     /// # Notes
     /// If the timeout is 0 the function will return immediately.
+    /// # Errors
+    /// the only failure point in event polling is when placing
+    /// the event on the event queue if the latter ran out of space
+    /// it needs to allocate extra memory. in practice this never happens on laptop operating systems
     pub inline fn waitEventTimeout(
         self: *Self,
         duration_ms: u32,
-    ) platform.WindowError!bool {
+    ) WindowError!bool {
         std.debug.assert(duration_ms != 0);
         return self.impl.waitEventTimeout(duration_ms);
     }
@@ -756,6 +769,10 @@ pub const Window = struct {
     /// and dropped.
     /// # Parameters
     /// `allow`: true to allow file dropping, false to block it.
+    /// # Note
+    /// allowing drag and drop adds another possible fail point to the
+    /// window event loop since, the path for every dropped file
+    /// need to be allocated an stored, if the allocation fail [`Window.pollEvents`] will return an error
     pub inline fn allowDragAndDrop(self: *Self, allow: bool) void {
         self.impl.setDragAndDrop(allow);
     }
@@ -763,10 +780,10 @@ pub const Window = struct {
     /// Returns a slice that holds the path(s) to the latest dropped file(s)
     /// # Note
     /// User should only call this function when receiving a
-    /// `EventType.FileDrop` event, otherwise it returns undefined data.
+    /// [`EventType.FileDrop`] event, otherwise it returns garbage data.
     /// Caller shouldn't attempt to free or modify the returned slice
-    /// and should instead call `Window.freeDroppedFiles` if they wish
-    /// to free the cache. The returned slice may gets invalidated and mutated
+    /// and should instead call [`Window.freeDroppedFiles`] if they wish
+    /// to free the cache. The returned slice will get invalidated and mutated
     /// during the next file drop event
     pub inline fn getDroppedFilesURI(self: *const Self) [][]const u8 {
         return self.impl.getDroppedFiles();
@@ -804,7 +821,7 @@ pub const Window = struct {
         width: i32,
         height: i32,
         allocator: std.mem.Allocator,
-    ) !void {
+    ) WindowError!void {
         if (pixels != null) {
             std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
@@ -841,7 +858,7 @@ pub const Window = struct {
         height: i32,
         xhot: u32,
         yhot: u32,
-    ) !void {
+    ) WindowError!void {
         if (pixels != null) {
             std.debug.assert(width > 0 and height > 0);
             std.debug.assert(pixels.?.len == (width * height * 4));
@@ -873,7 +890,10 @@ pub const Window = struct {
     /// # NOTE
     /// only one canvas can be created for a window, so calling this more than once
     /// will return the same canvas
-    pub inline fn createCanvas(self: *Self) !Canvas {
+    /// # Errors
+    /// it's possible that that the requested framebuffer configuration
+    /// isn't supported on the current device, this function fails in that case
+    pub inline fn createCanvas(self: *Self) WindowError!Canvas {
         return .{ .impl = try self.impl.createCanvas() };
     }
 

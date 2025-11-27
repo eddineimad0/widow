@@ -11,7 +11,7 @@ pub fn main() !void {
 
     // first we need to preform some platform specific initialization.
     // and build a context for the current platform.
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, .{});
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to

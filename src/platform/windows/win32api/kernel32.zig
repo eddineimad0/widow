@@ -13,6 +13,47 @@ pub const VER_NT_WORKSTATION = 1;
 pub const VER_NT_DOMAIN_CONTROLLER = 2;
 pub const VER_NT_SERVER = 3;
 
+// GENERIC ACCESS RIGHTS
+pub const GENERIC_ALL = 0x10000000;
+pub const GENERIC_EXECUTE = 0x20000000;
+pub const GENERIC_WRITE = 0x40000000;
+pub const GENERIC_READ = 0x80000000;
+
+// FILE SHARE MODE
+pub const FILE_SHARE_NONE = 0;
+pub const FILE_SHARE_DELETE = 0x00000004;
+pub const FILE_SHARE_WRITE = 0x00000002;
+pub const FILE_SHARE_READ = 0x00000001;
+
+// CREATE MODE
+pub const CREATE_ALWAYS = 2;
+pub const CREATE_NEW = 1;
+pub const OPEN_ALWAYS = 4;
+pub const OPEN_EXISTING = 3;
+pub const TRUNCATE_EXISTING = 5;
+
+// FILE ATTRIBUTES OR FLAGS
+pub const FILE_ATTRIBUTE_ARCHIVE = 0x20;
+pub const FILE_ATTRIBUTE_ENCRYPTED = 0x4000;
+pub const FILE_ATTRIBUTE_HIDDEN = 0x2;
+pub const FILE_ATTRIBUTE_NORMAL = 0x80;
+pub const FILE_ATTRIBUTE_OFFLINE = 0x1000;
+pub const FILE_ATTRIBUTE_READONLY = 0x1;
+pub const FILE_ATTRIBUTE_SYSTEM = 0x4;
+pub const FILE_ATTRIBUTE_TEMPORARY = 0x100;
+
+pub const FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
+pub const FILE_FLAG_DELETE_ON_CLOSE = 0x04000000;
+pub const FILE_FLAG_NO_BUFFERING = 0x20000000;
+pub const FILE_FLAG_OPEN_NO_RECALL = 0x00100000;
+pub const FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
+pub const FILE_FLAG_OVERLAPPED = 0x40000000;
+pub const FILE_FLAG_POSIX_SEMANTICS = 0x01000000;
+pub const FILE_FLAG_RANDOM_ACCESS = 0x10000000;
+pub const FILE_FLAG_SESSION_AWARE = 0x00800000;
+pub const FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000;
+pub const FILE_FLAG_WRITE_THROUGHT = 0x80000000;
+
 //===========================
 // Types
 //==========================
@@ -142,5 +183,14 @@ pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: win32.HANDLE, dwMode: wi
 pub extern "kernel32" fn GetTempPathW(nBufferLength: win32.DWORD, lpBuffer: ?win32.LPWSTR) callconv(.winapi) win32.DWORD;
 pub extern "kernel32" fn SetEvent(hEvent: win32.HANDLE) callconv(.winapi) win32.BOOL;
 pub extern "kernel32" fn ResetEvent(hEvent: win32.HANDLE) callconv(.winapi) win32.BOOL;
+pub extern "kernel32" fn CreateFileA(
+    lpFileName: win32.LPCSTR,
+    dwDesiredAccess: win32.DWORD,
+    dwShareMode: win32.DWORD,
+    lpSecurityAttributes: ?*win32.SECURITY_ATTRIBUTES,
+    dwCreationDisposition: win32.DWORD,
+    dwFlagsAndAttributes: win32.DWORD,
+    hTemplateFile: ?win32.HANDLE,
+) win32.HANDLE;
 
 pub extern "ntdll" fn RtlGetVersion(lpVersionInformations: *OSVERSIONINFOEXW) callconv(.winapi) win32.NTSTATUS;

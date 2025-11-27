@@ -39,7 +39,7 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator);
+    const ctx = try widow.createWidowContext(allocator, .{});
     defer widow.destroyWidowContext(allocator, ctx);
 
     // the window will require an event queue to

@@ -1,13 +1,14 @@
 const std = @import("std");
-const win32 = std.os.windows;
 const win32_macros = @import("win32api/macros.zig");
 const win32_gfx = @import("win32api/graphics.zig");
 const krnl32 = @import("win32api/kernel32.zig");
 const dynlib = @import("dynlib.zig");
 const utils = @import("utils.zig");
-const opts = @import("build-options");
+// const opts = @import("build-options");
+const common = @import("common");
 
 const unicode = std.unicode;
+const win32 = std.os.windows;
 
 const helperWindowProc = @import("window_proc.zig").helperWindowProc;
 const mainWindowProc = @import("window_proc.zig").mainWindowProc;
@@ -119,7 +120,7 @@ pub const Win32Driver = struct {
 
     const Self = @This();
 
-    pub fn initSingleton() Win32DriverError!*const Self {
+    pub fn initSingleton(comptime ctxt_options: common.WidowContextOptions) Win32DriverError!*const Self {
         Self.sing_guard.lock();
         defer Self.sing_guard.unlock();
 
@@ -132,9 +133,11 @@ pub const Win32Driver = struct {
 
             globl_instance.handles.wnd_class = try registerMainClass(
                 globl_instance.handles.hinstance,
+                ctxt_options,
             );
             globl_instance.handles.helper_class = try registerHelperClass(
                 globl_instance.handles.hinstance,
+                ctxt_options,
             );
 
             // Load the required libraries.
@@ -250,10 +253,6 @@ pub const Win32Driver = struct {
             self.opt_func.SetProcessDpiAwareness = null;
             self.opt_func.GetDpiForMonitor = null;
         }
-    }
-
-    inline fn WNDClassName() []const u8 {
-        return Self.WINDOW_CLASS_NAME;
     }
 
     /// WARNING: Calling this function Unregister the main WNDCLASS effectively crashing any window
@@ -380,6 +379,7 @@ fn isWin11(func: OptionalApi.RtlVerifyVersionInfoProc) bool {
 
 fn registerMainClass(
     hinstance: win32.HINSTANCE,
+    comptime ctxt_options: common.WidowContextOptions,
 ) Win32DriverError!u16 {
     var window_class: win32_gfx.WNDCLASSEXW = std.mem.zeroes(win32_gfx.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_gfx.WNDCLASSEXW);
@@ -392,14 +392,14 @@ fn registerMainClass(
     window_class.hInstance = hinstance;
     window_class.hCursor = win32_gfx.LoadCursorW(null, win32_gfx.IDC_ARROW);
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
-        opts.WIN32_WNDCLASS_NAME,
+        ctxt_options.win32.wndclass_name,
     );
 
     // even if an icon name was provided
     // loading the image might fail
     // in this case leave hIcon set to null
     // for default Application icon.
-    if (opts.WIN32_ICON_RES_NAME) |icon_name| {
+    if (ctxt_options.win32.icon_res_name) |icon_name| {
         window_class.hIcon = @ptrCast(win32_gfx.LoadImageW(
             hinstance,
             unicode.utf8ToUtf16LeStringLiteral(icon_name),
@@ -419,13 +419,14 @@ fn registerMainClass(
 
 fn registerHelperClass(
     hinstance: win32.HINSTANCE,
+    comptime ctxt_options: common.WidowContextOptions,
 ) Win32DriverError!u16 {
     var window_class: win32_gfx.WNDCLASSEXW = std.mem.zeroes(win32_gfx.WNDCLASSEXW);
     window_class.cbSize = @sizeOf(win32_gfx.WNDCLASSEXW);
     window_class.lpfnWndProc = helperWindowProc;
     window_class.hInstance = hinstance;
     window_class.lpszClassName = unicode.utf8ToUtf16LeStringLiteral(
-        opts.WIN32_WNDCLASS_NAME ++ "_HELPER",
+        ctxt_options.win32.wndclass_name ++ "_HELPER",
     );
 
     const class = win32_gfx.RegisterClassExW(&window_class);
