@@ -39,6 +39,7 @@ pub const WidowContext = struct {
     driver: *const driver.Win32Driver,
     display_mgr: display.DisplayManager,
     windows_envinfo: envinfo.Win32EnvInfo,
+    lock_file: ?win32.HANDLE,
 
     const Self = @This();
     fn init(a: mem.Allocator, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
@@ -75,6 +76,7 @@ pub const WidowContext = struct {
             return mem.Allocator.Error.OutOfMemory;
         errdefer platform_info.deinit(a);
 
+        var lock_file: ?win32.HANDLE = null;
         if (ctxt_options.force_single_instance) { // block other instances from running
             const bin_dir: ?[]const u8 = std.fs.path.dirname(platform_info.common.process.binary_path);
             if (bin_dir) |dir| {
@@ -85,7 +87,7 @@ pub const WidowContext = struct {
                     0,
                 );
                 defer a.free(file_path);
-                try createFileLock(file_path);
+                lock_file = try createFileLock(file_path);
             }
         }
 
@@ -95,6 +97,7 @@ pub const WidowContext = struct {
             .display_mgr = display_mgr,
             .allocator = a,
             .windows_envinfo = platform_info,
+            .lock_file = lock_file,
         };
     }
 };
@@ -128,6 +131,9 @@ pub fn destroyWidowContext(a: mem.Allocator, ctx: *WidowContext) void {
     ctx.display_mgr.deinit(ctx.allocator);
     driver.Win32Driver.deinitSingleton();
     ctx.windows_envinfo.deinit(ctx.allocator);
+    if (ctx.lock_file) |file| {
+        win32.CloseHandle(file);
+    }
     a.destroy(ctx);
 }
 
@@ -203,7 +209,7 @@ pub inline fn getRuntimeEnvInfo(ctx: *WidowContext) *const common.envinfo.Runtim
 }
 
 /// attempt to create a lock file so that running multiple instances of the application can be detected
-fn createFileLock(file_path: [:0]const u8) WidowContextError!void {
+fn createFileLock(file_path: [:0]const u8) WidowContextError!win32.HANDLE {
     const lock_file = win32_krnl.CreateFileA(
         file_path.ptr,
         win32_krnl.GENERIC_WRITE,
@@ -218,6 +224,7 @@ fn createFileLock(file_path: [:0]const u8) WidowContextError!void {
     {
         return WidowContextError.Instance_Already_Exist;
     }
+    return lock_file;
 }
 
 test "platform_unit_test" {
