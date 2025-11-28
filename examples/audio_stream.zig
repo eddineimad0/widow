@@ -12,9 +12,14 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    // first we need to preform some platform specific initialization.
-    // and build a context for the current platform.
-    const ctx = try widow.createWidowContext(allocator, .{ .force_single_instance = true });
+    const ctx = widow.createWidowContext(allocator, .{ .force_single_instance = true }) catch |err| {
+        if (err == error.Instance_Already_Exists) {
+            // only allow one instance
+            widow.dialog.showMessageDialog("Another instance of audio_stream.exe is already running\n only one can run at a time");
+            return;
+        }
+        return err;
+    };
     defer widow.destroyWidowContext(allocator, ctx);
 
     var sink = try audio.AudioSink.init(allocator, .{

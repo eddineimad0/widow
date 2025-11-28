@@ -71,6 +71,11 @@ pub const audio = struct {
     pub const ChannelCount = common.audio.ChannelCount;
 };
 
+pub const dialog = struct {
+    /// Shows an informative message to the user using system dialog boxes
+    pub const showMessageDialog = platform.dialogbox.showMessageDialog;
+};
+
 /// initialize a platform context.
 /// this should be the first function you call before
 /// using the library.

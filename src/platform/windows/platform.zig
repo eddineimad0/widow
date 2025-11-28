@@ -26,11 +26,12 @@ pub const DisplayHandle = win32_gfx.HMONITOR;
 pub const WindowHandle = win32.HWND;
 
 pub const time = @import("time.zig");
+pub const dialogbox = @import("dialogbox.zig");
 
 pub const glLoaderFunc = @import("wgl.zig").glLoaderFunc;
 
 pub const WidowContextError = error{
-    Instance_Already_Exist,
+    Instance_Already_Exists,
 } || driver.Win32DriverError || display.DisplayError;
 
 pub const WidowContext = struct {
@@ -222,7 +223,7 @@ fn createFileLock(file_path: [:0]const u8) WidowContextError!win32.HANDLE {
     if (lock_file == win32.INVALID_HANDLE_VALUE and
         win32.GetLastError() == win32.Win32Error.SHARING_VIOLATION)
     {
-        return WidowContextError.Instance_Already_Exist;
+        return WidowContextError.Instance_Already_Exists;
     }
     return lock_file;
 }

@@ -423,6 +423,41 @@ pub const BLACKNESS = @as(win32.DWORD, 0x00000042);
 pub const WHITENESS = @as(win32.DWORD, 0x00FF0062);
 pub const NOMIRRORBITMAP = @as(win32.DWORD, 0x80000000);
 pub const CAPTUREBLT = @as(win32.DWORD, 0x40000000);
+
+// Message box
+pub const MB_OK = @as(u32, 0x00000000);
+pub const MB_OKCANCEL = @as(u32, 0x00000001);
+pub const MB_ABORTRETRYIGNORE = @as(u32, 0x00000002);
+pub const MB_YESNOCANCEL = @as(u32, 0x00000003);
+pub const MB_YESNO = @as(u32, 0x00000004);
+pub const MB_RETRYCANCEL = @as(u32, 0x00000005);
+pub const MB_CANCELTRYCONTINUE = @as(u32, 0x00000006);
+pub const MB_HELP = @as(u32, 0x00004000);
+
+pub const MB_ICONHAND = @as(u32, 0x00000010);
+pub const MB_ICONERROR = @as(u32, MB_ICONHAND);
+pub const MB_ICONSTOP = @as(u32, MB_ICONHAND);
+pub const MB_ICONQUESTION = @as(u32, 0x00000020);
+pub const MB_ICONEXCLAMATION = @as(u32, 0x00000030);
+pub const MB_ICONWARNING = @as(u32, MB_ICONEXCLAMATION);
+pub const MB_ICONINFORMATION = @as(u32, 0x00000040);
+pub const MB_ICONASTERISK = @as(u32, MB_ICONINFORMATION);
+
+pub const MB_DEFBUTTON1 = @as(u32, 0x00000000);
+pub const MB_DEFBUTTON2 = @as(u32, 0x00000100);
+pub const MB_DEFBUTTON3 = @as(u32, 0x00000200);
+pub const MB_DEFBUTTON4 = @as(u32, 0x00000300);
+
+pub const MB_APPLMODAL = @as(u32, 0x00000000);
+pub const MB_SYSTEMMODAL = @as(u32, 0x00001000);
+pub const MB_TASKMODAL = @as(u32, 0x00002000);
+
+pub const MB_DEFAULT_DESKTOP_ONLY = @as(u32, 0x00020000);
+pub const MB_SETFOREGROUND = @as(u32, 0x00010000);
+pub const MB_TOPMOST = @as(u32, 0x00040000);
+pub const MB_RIGHT = @as(u32, 0x00080000);
+pub const MB_RTLREADING = @as(u32, 0x00100000);
+pub const MB_SERVICE_NOTIFICATION = @as(u32, 0x00200000);
 //===================
 // Types
 //===================
@@ -1973,3 +2008,10 @@ pub extern "user32" fn OffsetRect(
     dx: i32,
     dy: i32,
 ) callconv(.winapi) win32.BOOL;
+
+pub extern "user32" fn MessageBoxA(
+    hWnd: ?win32.HWND,
+    lpText: ?win32.LPCSTR,
+    lpCaption: ?win32.LPCSTR,
+    uType: win32.UINT,
+) c_int;
