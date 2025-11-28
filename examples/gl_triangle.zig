@@ -39,17 +39,13 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator, .{});
-    defer widow.destroyWidowContext(allocator, ctx);
-
-    // the window will require an event queue to
-    // send events.
     var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
 
-    // create a WindowBuilder.
+    const ctx = try widow.createWidowContext(allocator, &ev_queue, .{});
+    defer widow.destroyWidowContext(allocator, ctx);
+
     var builder = widow.WindowBuilder.init();
-    // customize the window.
     var mywindow = builder.withTitle("Simple Window")
         .withSize(640, 480)
         .withDPIAware(true)
@@ -61,11 +57,8 @@ pub fn main() !void {
         return;
     };
 
-    // closes the window when done.
     defer mywindow.deinit();
     mywindow.focus();
-
-    _ = mywindow.setEventQueue(&ev_queue);
 
     var gl_canvas = try mywindow.createCanvas();
     defer gl_canvas.deinit();

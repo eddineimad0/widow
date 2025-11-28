@@ -11,11 +11,11 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator, .{});
-    defer widow.destroyWidowContext(allocator, ctx);
-
     var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
+
+    const ctx = try widow.createWidowContext(allocator, &ev_queue, .{});
+    defer widow.destroyWidowContext(allocator, ctx);
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
@@ -32,8 +32,6 @@ pub fn main() !void {
     };
 
     defer mywindow.deinit();
-
-    _ = mywindow.setEventQueue(&ev_queue);
 
     const icon_pixels = [_]u8{ 0xF7, 0xA4, 0x1D, 0xFF } ** (32 * 32);
     mywindow.setIcon(&icon_pixels, 32, 32, allocator) catch {

@@ -9,15 +9,16 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    // first we need to preform some platform specific initialization.
-    // and build a context for the current platform.
-    const ctx = try widow.createWidowContext(allocator, .{});
-    defer widow.destroyWidowContext(allocator, ctx);
-
-    // the window will require an event queue to
-    // send events.
+    // start by creating an event queue, where we can pump events
     var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
+
+    // we need to preform some platform specific initialization.
+    // and build a context for the current platform.
+    // the context take a non owning refrence to the event queue
+    // and acts as a proxy for all other objects to send events
+    const ctx = try widow.createWidowContext(allocator, &ev_queue, .{});
+    defer widow.destroyWidowContext(allocator, ctx);
 
     // create a WindowBuilder.
     var builder = widow.WindowBuilder.init();
@@ -27,7 +28,6 @@ pub fn main() !void {
         .withResize(true)
         .withDPIAware(true)
         .withPosition(200, 200)
-        .withEventQueue(&ev_queue)
         .build(ctx, null) catch |err| {
         std.debug.print("Failed to build the window,{}\n", .{err});
         return;
@@ -40,6 +40,8 @@ pub fn main() !void {
 
     event_loop: while (true) {
         // sleeps until an event is posted.
+        // alternatively you can do a wait with timeout or a non blocking poll
+        // see [`widow.Window.pollEvents`] or [`widow.Window.waitEventTimeout`]
         try mywindow.waitEvent();
 
         var event: widow.event.Event = undefined;

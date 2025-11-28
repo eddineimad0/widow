@@ -40,10 +40,11 @@ pub const WidowContext = struct {
     driver: *const driver.Win32Driver,
     display_mgr: display.DisplayManager,
     windows_envinfo: envinfo.Win32EnvInfo,
+    ev_queue: *common.event.EventQueue, //WARN: don't call deinit on this it's not owned by the context for now
     lock_file: ?win32.HANDLE,
 
     const Self = @This();
-    fn init(a: mem.Allocator, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
+    fn init(a: mem.Allocator, queue: *common.event.EventQueue, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
         WidowContextError ||
         WindowError)!Self {
         const d = try driver.Win32Driver.initSingleton(ctxt_options);
@@ -99,6 +100,7 @@ pub const WidowContext = struct {
             .allocator = a,
             .windows_envinfo = platform_info,
             .lock_file = lock_file,
+            .ev_queue = queue,
         };
     }
 };
@@ -107,11 +109,11 @@ pub const WidowContext = struct {
 // Functions
 //------------
 
-pub fn createWidowContext(a: mem.Allocator, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
+pub fn createWidowContext(a: mem.Allocator, queue: *common.event.EventQueue, comptime ctxt_options: common.WidowContextOptions) (mem.Allocator.Error ||
     WidowContextError || WindowError)!*WidowContext {
     const ctx = try a.create(WidowContext);
     errdefer a.destroy(ctx);
-    ctx.* = try WidowContext.init(a, ctxt_options);
+    ctx.* = try WidowContext.init(a, queue, ctxt_options);
     // register helper properties
     _ = win32_gfx.SetPropW(
         ctx.helper_window,

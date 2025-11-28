@@ -596,7 +596,6 @@ pub const Win32Canvas = union(Win32CanvasTag) {
 
 pub const Window = struct {
     ctx: *WidowContext,
-    ev_queue: ?*common.event.EventQueue,
     handle: win32.HWND,
     data: WindowData,
     win32: WindowWin32Data,
@@ -620,7 +619,6 @@ pub const Window = struct {
         errdefer ctx.allocator.destroy(self);
 
         self.ctx = ctx;
-        self.ev_queue = null;
         self.data = data.*;
         self.fb_cfg = fb_cfg.*;
 
@@ -798,7 +796,6 @@ pub const Window = struct {
             @panic("the window canvas should be destroyed before calling deinit on the window");
         }
 
-        self.ev_queue = null;
         // Clean up code
         if (self.data.flags.is_fullscreen) {
             // release the currently occupied monitor
@@ -875,26 +872,11 @@ pub const Window = struct {
         }
     }
 
-    pub inline fn getEventQueue(self: *Self) ?*common.event.EventQueue {
-        return self.ev_queue;
-    }
-
-    pub inline fn setEventQueue(
-        self: *Self,
-        q: ?*common.event.EventQueue,
-    ) ?*common.event.EventQueue {
-        const ret = self.ev_queue;
-        self.ev_queue = q;
-        return ret;
-    }
-
     /// Add an event to the events queue.
     pub fn sendEvent(self: *Self, event: *const common.event.Event) void {
-        if (self.ev_queue) |q| {
-            q.queueEvent(event) catch |err| {
-                utils.postWindowErrorMsg(err, self.handle);
-            };
-        }
+        self.ctx.ev_queue.queueEvent(event) catch |err| {
+            utils.postWindowErrorMsg(err, self.handle);
+        };
     }
 
     pub fn waitEvent(self: *Self) WindowError!void {

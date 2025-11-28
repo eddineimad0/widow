@@ -1,7 +1,6 @@
 # General
-[ ] redo the tests.
 [ ] should singletons (driver, keymap, ...) be thread-local ?
-[ ] should the event queue be moved to the context ?
+[x] should the event queue be moved to the context ?, yes it should.
 [ ] window Display changing events
 [ ] notifyMonitorChange event
 [x] Widow Context init need to be easier and more

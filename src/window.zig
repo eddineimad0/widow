@@ -16,7 +16,6 @@ const WidowContext = platform.WidowContext;
 
 pub const WindowBuilder = struct {
     title: []const u8,
-    ev_queue: ?*EventQueue,
     attribs: common.window_data.WindowData,
     fbcfg: common.fb.FBConfig,
     const Self = @This();
@@ -33,7 +32,6 @@ pub const WindowBuilder = struct {
     pub fn init() Self {
         return Self{
             .title = "",
-            .ev_queue = null,
             // Defalut attributes
             .attribs = common.window_data.WindowData{
                 .id = 0,
@@ -109,14 +107,13 @@ pub const WindowBuilder = struct {
     /// 'OutOfMemory': function could fail due to memory allocation.
     pub fn build(self: *Self, ctx: *WidowContext, id: ?usize) !Window {
         // The Window should copy the title.
-        var w = try Window.init(
+        const w = try Window.init(
             ctx,
             id,
             self.title,
             &self.attribs,
             &self.fbcfg,
         );
-        if (self.ev_queue) |q| _ = w.setEventQueue(q);
         return w;
     }
 
@@ -243,14 +240,6 @@ pub const WindowBuilder = struct {
         self.fbcfg = cfg.*;
         return self;
     }
-
-    /// Specify the event queue where window event will be posted
-    /// # Parameters
-    /// `ev_queue`: a pointer to an event queue struct
-    pub fn withEventQueue(self: *Self, ev_queue: *EventQueue) *Self {
-        self.ev_queue = ev_queue;
-        return self;
-    }
 };
 
 pub const Window = struct {
@@ -290,23 +279,6 @@ pub const Window = struct {
     pub fn deinit(self: *Self) void {
         self.impl.deinit();
         self.impl = undefined;
-    }
-
-    /// Returns a pointer to the current queue the window is using
-    /// for sending events
-    pub inline fn getEventQueue(self: *const Self) ?*EventQueue {
-        return self.impl.getEventQueue();
-    }
-
-    /// Sets a pointer the queue where the window events will be sent,
-    /// and returns the previous queue pointer.
-    /// By default there is no registered queue and the windo simply discards
-    /// all events.
-    /// caller must guarantee the queue outlives the window.
-    /// # Paramters
-    /// `queue` a optional pointer to the queue that will be used.
-    pub inline fn setEventQueue(self: *Self, queue: ?*EventQueue) ?*EventQueue {
-        return self.impl.setEventQueue(queue);
     }
 
     /// Process pending events and posts them to

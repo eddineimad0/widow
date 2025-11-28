@@ -89,11 +89,11 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = try widow.createWidowContext(allocator, .{});
-    defer widow.destroyWidowContext(allocator, ctx);
-
     var ev_queue = try EventQueue.init(allocator, 256);
     defer ev_queue.deinit();
+
+    const ctx = try widow.createWidowContext(allocator, &ev_queue, .{});
+    defer widow.destroyWidowContext(allocator, ctx);
 
     var builder = widow.WindowBuilder.init();
     var mywindow = builder.withTitle("Software rendered Window")
@@ -101,7 +101,6 @@ pub fn main() !void {
         .withPosition(200, 200)
         .withDecoration(true)
         .withResize(true)
-        .withEventQueue(&ev_queue)
         .withFrameBuffer(&.{
             .depth_bits = 24,
             .stencil_bits = 8,
