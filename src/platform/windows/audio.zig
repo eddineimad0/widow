@@ -20,6 +20,7 @@ pub const DEVICE_STATE_UNPLUGGED = @as(u32, 8);
 
 const WasapiError = error{
     COMCreateFail,
+    COMInitFail,
     WasapiDeviceInitFail,
     WasapiDeviceActivateFail,
     WasapiSetEventFail,
@@ -160,6 +161,7 @@ pub const Win32AudioSink = struct {
         _ = sink.wasapi.device_enumerator.IUnknown.Release();
         win32.CloseHandle(sink.wasapi.buffer_ready_event);
         win32.CloseHandle(sink.wasapi.notification_client.default_device_change_event);
+        win32_ole.CoUninitialize();
     }
 
     pub fn update(sink: *Win32AudioSink) Win32AudioSinkError!void {
@@ -292,7 +294,10 @@ pub const Win32AudioSink = struct {
 };
 
 pub fn createAudioSink(desc: common_audio.AudioSinkDescription, sbuff: *common_audio.StreamBuffer, err_wr: *io.Writer) Win32AudioSinkError!Win32AudioSink {
-    // NOTE: COM is already intialized when WidowContext is created so skip doing that
+    const result = win32_ole.CoInitializeEx(null, win32.COINIT.MULTITHREADED);
+    if (result != win32.S_OK and result != win32.S_FALSE) {
+        return WasapiError.COMInitFail;
+    }
 
     var device_enumerator: ?*win32_com.IMMDeviceEnumerator = null;
     var device: ?*win32_com.IMMDevice = null;

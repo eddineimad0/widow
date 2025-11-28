@@ -12,10 +12,17 @@ pub fn main() !void {
     defer std.debug.assert(gpa_allocator.deinit() == .ok);
     const allocator = gpa_allocator.allocator();
 
-    const ctx = widow.createWidowContext(allocator, .{ .force_single_instance = true }) catch |err| {
+    var ev_queue = try EventQueue.init(allocator, 256);
+    defer ev_queue.deinit();
+
+    const ctx = widow.createWidowContext(allocator, &ev_queue, .{ .force_single_instance = true }) catch |err| {
         if (err == error.Instance_Already_Exists) {
             // only allow one instance
-            widow.dialog.showMessageDialog("Another instance of audio_stream.exe is already running\n only one can run at a time");
+            widow.dialog.showMessageDialog(
+                \\Another instance of audio_stream is already running
+                \\ only one can run at a time
+            );
+
             return;
         }
         return err;

@@ -380,7 +380,7 @@ pub fn getPlatformInfo(allocator: mem.Allocator) !Win32EnvInfo {
 
     // COM intialize
     const result = ole32.CoInitializeEx(null, win32.COINIT.MULTITHREADED);
-    if (result == win32.S_OK) {
+    if (result == win32.S_OK or result == win32.S_FALSE) {
         pinfo.com_supported = true;
     }
 
